@@ -97,5 +97,5 @@ pnpm run test:coverage # Coverage report
 | Service | URL |
 |---------|-----|
 | Next.js App | http://localhost:3000 |
-| Supabase Studio | http://localhost:56423 |
-| Inbucket (Test Emails) | http://localhost:56424 |
+| Supabase Studio | http://localhost:58823 |
+| Inbucket (Test Emails) | http://localhost:58824 |

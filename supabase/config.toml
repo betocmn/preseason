@@ -2,14 +2,14 @@ project_id = "preseason"
 
 [api]
 enabled = true
-port = 56421
+port = 58821
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [db]
-port = 56422
-shadow_port = 56420
+port = 58822
+shadow_port = 58820
 major_version = 17
 
 [db.seed]
@@ -18,12 +18,12 @@ sql_paths = ["./seed.sql"]
 
 [studio]
 enabled = true
-port = 56423
+port = 58823
 api_url = "http://127.0.0.1"
 
 [inbucket]
 enabled = true
-port = 56424
+port = 58824
 
 [storage]
 enabled = true
@@ -50,5 +50,5 @@ otp_expiry = 3600
 
 [analytics]
 enabled = true
-port = 56427
+port = 58827
 backend = "postgres"

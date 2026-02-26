@@ -130,8 +130,8 @@ pnpm run preview # Build and start production server
 
 ### Local Testing
 
-- Supabase Studio: http://localhost:56423
-- Inbucket (test emails): http://localhost:56424
+- Supabase Studio: http://localhost:58823
+- Inbucket (test emails): http://localhost:58824
 - Next.js app: http://localhost:3000
 
 ## Important Notes
