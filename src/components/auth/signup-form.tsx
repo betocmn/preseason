@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useTranslations } from 'next-intl'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -16,70 +16,40 @@ import {
   FormMessage,
 } from '~/components/ui/form'
 import { Input } from '~/components/ui/input'
-import { useRouter } from '~/i18n/navigation'
 import { auth } from '~/lib/auth-client'
 import { api } from '~/trpc/react'
 
-function useSignUpSchemas() {
-  const t = useTranslations('auth.validation')
-  const profileSchema = z.object({
-    firstName: z.string().min(1, t('firstNameRequired')).max(100),
-    lastName: z.string().min(1, t('lastNameRequired')).max(100),
-    birthDate: z.string().refine(
-      (date) => {
-        const birth = new Date(date)
-        const today = new Date()
-        const age = today.getFullYear() - birth.getFullYear()
-        const monthDiff = today.getMonth() - birth.getMonth()
-        const dayDiff = today.getDate() - birth.getDate()
-        const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age
-        return actualAge >= 18
-      },
-      { message: t('ageRestriction') },
-    ),
-    email: z.string().email(t('emailRequired')),
-  })
-  const otpSchema = z.object({
-    otp: z.string().length(6, t('otpLength')),
-  })
-  return { profileSchema, otpSchema }
-}
+const profileSchema = z.object({
+  displayName: z.string().min(1, 'Display name is required').max(150),
+  email: z.string().email('Please enter a valid email'),
+})
 
-function useSignUpErrorMessage() {
-  const t = useTranslations('auth.errors')
-  return (error: unknown): string => {
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase()
-      if (message.includes('already registered') || message.includes('already exists')) {
-        return t('accountExists')
-      }
-      if (message.includes('rate limit') || message.includes('too many')) {
-        return t('rateLimit')
-      }
-      if (message.includes('expired')) {
-        return t('expired')
-      }
-      if (message.includes('invalid') || message.includes('otp')) {
-        return t('invalidOtp')
-      }
-      return error.message
+const otpSchema = z.object({
+  otp: z.string().length(6, 'Code must be 6 digits'),
+})
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('already registered') || message.includes('already exists')) {
+      return 'An account with this email already exists'
     }
-    return t('unexpected')
+    if (message.includes('rate limit') || message.includes('too many')) {
+      return 'Too many attempts. Please try again later.'
+    }
+    if (message.includes('expired')) {
+      return 'Code has expired. Please request a new one.'
+    }
+    if (message.includes('invalid') || message.includes('otp')) {
+      return 'Invalid verification code'
+    }
+    return error.message
   }
-}
-
-function getMaxBirthDate(): string {
-  const date = new Date()
-  date.setFullYear(date.getFullYear() - 18)
-  return date.toISOString().split('T')[0] ?? ''
+  return 'An unexpected error occurred'
 }
 
 export function SignUpForm() {
   const router = useRouter()
-  const t = useTranslations('auth')
-  const tCommon = useTranslations('common')
-  const { profileSchema, otpSchema } = useSignUpSchemas()
-  const getErrorMessage = useSignUpErrorMessage()
   const [step, setStep] = useState<'profile' | 'otp'>('profile')
   const [profileData, setProfileData] = useState<z.infer<typeof profileSchema> | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -89,9 +59,7 @@ export function SignUpForm() {
   const profileForm = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      firstName: '',
-      lastName: '',
-      birthDate: '',
+      displayName: '',
       email: '',
     },
   })
@@ -107,7 +75,7 @@ export function SignUpForm() {
       await auth.signUpWithOtp(values.email)
       setProfileData(values)
       setStep('otp')
-      toast.success(t('codeSent'))
+      toast.success('Verification code sent!')
     } catch (error) {
       toast.error(getErrorMessage(error))
     } finally {
@@ -123,18 +91,16 @@ export function SignUpForm() {
       const { user } = await auth.verifyOtp(profileData.email, values.otp)
 
       if (!user) {
-        throw new Error(t('errors.createFailed'))
+        throw new Error('Failed to create account')
       }
 
       await createProfile.mutateAsync({
         id: user.id,
         email: profileData.email,
-        firstName: profileData.firstName,
-        lastName: profileData.lastName,
-        birthDate: profileData.birthDate,
+        displayName: profileData.displayName,
       })
 
-      toast.success(t('signUpSuccess'))
+      toast.success('Account created successfully!')
       router.push('/')
       router.refresh()
     } catch (error) {
@@ -148,16 +114,16 @@ export function SignUpForm() {
     return (
       <form onSubmit={otpForm.handleSubmit(onOtpSubmit)} className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          {t('codeSentTo', { email: profileData?.email ?? '' })}
+          We sent a code to {profileData?.email ?? ''}
         </p>
         <div className="space-y-2">
           <label htmlFor="otp" className="text-sm font-medium leading-none">
-            {t('verificationCode')}
+            Verification code
           </label>
           <Input
             id="otp"
             type="text"
-            placeholder={t('otpPlaceholder')}
+            placeholder="000000"
             maxLength={6}
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -170,12 +136,8 @@ export function SignUpForm() {
             </p>
           )}
         </div>
-        <Button
-          type="submit"
-          className="w-full bg-coral text-coral-foreground hover:bg-coral/90"
-          disabled={isLoading}
-        >
-          {isLoading ? t('creatingAccount') : t('verifyAndCreate')}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Creating account...' : 'Verify & create account'}
         </Button>
         <Button
           type="button"
@@ -186,7 +148,7 @@ export function SignUpForm() {
             otpForm.reset()
           }}
         >
-          {tCommon('back')}
+          Back
         </Button>
       </form>
     )
@@ -197,46 +159,12 @@ export function SignUpForm() {
       <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
         <FormField
           control={profileForm.control}
-          name="firstName"
+          name="displayName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('firstName')}</FormLabel>
+              <FormLabel>Display name</FormLabel>
               <FormControl>
-                <Input
-                  placeholder={t('firstNamePlaceholder')}
-                  autoComplete="given-name"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={profileForm.control}
-          name="lastName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('lastName')}</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder={t('lastNamePlaceholder')}
-                  autoComplete="family-name"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={profileForm.control}
-          name="birthDate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('dateOfBirth')}</FormLabel>
-              <FormControl>
-                <Input type="date" max={getMaxBirthDate()} autoComplete="bday" {...field} />
+                <Input placeholder="Your name" autoComplete="name" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -247,25 +175,16 @@ export function SignUpForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('email')}</FormLabel>
+              <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input
-                  placeholder={t('emailPlaceholder')}
-                  type="email"
-                  autoComplete="email"
-                  {...field}
-                />
+                <Input placeholder="you@example.com" type="email" autoComplete="email" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button
-          type="submit"
-          className="w-full bg-coral text-coral-foreground hover:bg-coral/90"
-          disabled={isLoading}
-        >
-          {isLoading ? t('sendingCode') : t('continue')}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Sending code...' : 'Continue'}
         </Button>
       </form>
     </Form>

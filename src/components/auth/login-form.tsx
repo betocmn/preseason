@@ -1,8 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useSearchParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -17,50 +16,39 @@ import {
   FormMessage,
 } from '~/components/ui/form'
 import { Input } from '~/components/ui/input'
-import { useRouter } from '~/i18n/navigation'
 import { auth } from '~/lib/auth-client'
 
-function useAuthSchemas() {
-  const t = useTranslations('auth.validation')
-  const emailSchema = z.object({
-    email: z.string().email(t('emailRequired')),
-  })
-  const otpSchema = z.object({
-    otp: z.string().length(6, t('otpLength')),
-  })
-  return { emailSchema, otpSchema }
-}
+const emailSchema = z.object({
+  email: z.string().email('Please enter a valid email'),
+})
 
-function useErrorMessage() {
-  const t = useTranslations('auth.errors')
-  return (error: unknown): string => {
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase()
-      if (message.includes('user not found') || message.includes('signups not allowed')) {
-        return t('noAccount')
-      }
-      if (message.includes('rate limit') || message.includes('too many')) {
-        return t('rateLimit')
-      }
-      if (message.includes('expired')) {
-        return t('expired')
-      }
-      if (message.includes('invalid') || message.includes('otp')) {
-        return t('invalidOtp')
-      }
-      return error.message
+const otpSchema = z.object({
+  otp: z.string().length(6, 'Code must be 6 digits'),
+})
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('user not found') || message.includes('signups not allowed')) {
+      return 'No account found with this email'
     }
-    return t('unexpected')
+    if (message.includes('rate limit') || message.includes('too many')) {
+      return 'Too many attempts. Please try again later.'
+    }
+    if (message.includes('expired')) {
+      return 'Code has expired. Please request a new one.'
+    }
+    if (message.includes('invalid') || message.includes('otp')) {
+      return 'Invalid verification code'
+    }
+    return error.message
   }
+  return 'An unexpected error occurred'
 }
 
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const t = useTranslations('auth')
-  const tCommon = useTranslations('common')
-  const { emailSchema, otpSchema } = useAuthSchemas()
-  const getErrorMessage = useErrorMessage()
   const [step, setStep] = useState<'email' | 'otp'>('email')
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -81,7 +69,7 @@ export function LoginForm() {
       await auth.signInWithOtp(values.email)
       setEmail(values.email)
       setStep('otp')
-      toast.success(t('codeSent'))
+      toast.success('Verification code sent!')
     } catch (error) {
       toast.error(getErrorMessage(error))
     } finally {
@@ -93,7 +81,7 @@ export function LoginForm() {
     setIsLoading(true)
     try {
       await auth.verifyOtp(email, values.otp)
-      toast.success(t('signInSuccess'))
+      toast.success('Signed in successfully!')
       const redirectTo = searchParams.get('redirectTo') ?? '/'
       router.push(redirectTo)
       router.refresh()
@@ -107,15 +95,15 @@ export function LoginForm() {
   if (step === 'otp') {
     return (
       <form onSubmit={otpForm.handleSubmit(onOtpSubmit)} className="space-y-4">
-        <p className="text-sm text-muted-foreground">{t('codeSentTo', { email })}</p>
+        <p className="text-sm text-muted-foreground">We sent a code to {email}</p>
         <div className="space-y-2">
           <label htmlFor="otp" className="text-sm font-medium leading-none">
-            {t('verificationCode')}
+            Verification code
           </label>
           <Input
             id="otp"
             type="text"
-            placeholder={t('otpPlaceholder')}
+            placeholder="000000"
             maxLength={6}
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -128,12 +116,8 @@ export function LoginForm() {
             </p>
           )}
         </div>
-        <Button
-          type="submit"
-          className="w-full bg-coral text-coral-foreground hover:bg-coral/90"
-          disabled={isLoading}
-        >
-          {isLoading ? t('verifying') : t('verify')}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Verifying...' : 'Verify'}
         </Button>
         <Button
           type="button"
@@ -144,7 +128,7 @@ export function LoginForm() {
             otpForm.reset()
           }}
         >
-          {tCommon('back')}
+          Back
         </Button>
       </form>
     )
@@ -158,25 +142,16 @@ export function LoginForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('email')}</FormLabel>
+              <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input
-                  placeholder={t('emailPlaceholder')}
-                  type="email"
-                  autoComplete="email"
-                  {...field}
-                />
+                <Input placeholder="you@example.com" type="email" autoComplete="email" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button
-          type="submit"
-          className="w-full bg-coral text-coral-foreground hover:bg-coral/90"
-          disabled={isLoading}
-        >
-          {isLoading ? t('sending') : t('sendCode')}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Sending...' : 'Send code'}
         </Button>
       </form>
     </Form>

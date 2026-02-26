@@ -10,9 +10,7 @@ export const userRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         email: z.string().email(),
-        firstName: z.string().min(1).max(100),
-        lastName: z.string().min(1).max(100),
-        birthDate: z.string(),
+        displayName: z.string().min(1).max(150),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -21,10 +19,8 @@ export const userRouter = createTRPCRouter({
         .values({
           id: input.id,
           email: input.email,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          birthDate: input.birthDate,
-          role: 'attendee',
+          displayName: input.displayName,
+          role: 'user',
         })
         .returning()
 
@@ -44,16 +40,14 @@ export const userRouter = createTRPCRouter({
   updateProfile: protectedProcedure
     .input(
       z.object({
-        firstName: z.string().min(1, 'First name is required').max(100),
-        lastName: z.string().min(1, 'Last name is required').max(100),
+        displayName: z.string().min(1, 'Display name is required').max(150),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const updated = await ctx.db
         .update(userProfiles)
         .set({
-          firstName: input.firstName,
-          lastName: input.lastName,
+          displayName: input.displayName,
         })
         .where(eq(userProfiles.id, ctx.user.id))
         .returning()
