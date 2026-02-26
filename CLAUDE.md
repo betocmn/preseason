@@ -139,3 +139,4 @@ pnpm run preview # Build and start production server
 - **Never** use `pnpm run db:push` - always use generate + migrate
 - Tests use Testcontainers for PostgreSQL (Docker required)
 - All timestamps stored as UTC in the database
+- **Never** add AI attribution (e.g. `Co-Authored-By`) to git commit messages
