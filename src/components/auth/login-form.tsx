@@ -82,7 +82,8 @@ export function LoginForm() {
     try {
       await auth.verifyOtp(email, values.otp)
       toast.success('Signed in successfully!')
-      const redirectTo = searchParams.get('redirectTo') ?? '/'
+      const raw = searchParams.get('redirectTo') ?? '/'
+      const redirectTo = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
       router.push(redirectTo)
       router.refresh()
     } catch (error) {

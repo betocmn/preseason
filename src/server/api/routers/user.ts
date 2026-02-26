@@ -1,24 +1,29 @@
 import { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
+import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc'
 import { userProfiles } from '~/server/db/schema'
 
 export const userRouter = createTRPCRouter({
-  createProfile: publicProcedure
+  createProfile: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
-        email: z.string().email(),
         displayName: z.string().min(1).max(150),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.user.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'User email is required',
+        })
+      }
+
       const profile = await ctx.db
         .insert(userProfiles)
         .values({
-          id: input.id,
-          email: input.email,
+          id: ctx.user.id,
+          email: ctx.user.email,
           displayName: input.displayName,
           role: 'user',
         })

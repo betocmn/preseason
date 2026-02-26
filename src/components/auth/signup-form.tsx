@@ -95,8 +95,6 @@ export function SignUpForm() {
       }
 
       await createProfile.mutateAsync({
-        id: user.id,
-        email: profileData.email,
         displayName: profileData.displayName,
       })
 
