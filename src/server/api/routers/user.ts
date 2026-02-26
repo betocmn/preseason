@@ -1,30 +1,31 @@
 import { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
+import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc'
 import { userProfiles } from '~/server/db/schema'
 
 export const userRouter = createTRPCRouter({
-  createProfile: publicProcedure
+  createProfile: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
-        email: z.string().email(),
-        firstName: z.string().min(1).max(100),
-        lastName: z.string().min(1).max(100),
-        birthDate: z.string(),
+        displayName: z.string().min(1).max(150),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.user.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'User email is required',
+        })
+      }
+
       const profile = await ctx.db
         .insert(userProfiles)
         .values({
-          id: input.id,
-          email: input.email,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          birthDate: input.birthDate,
-          role: 'attendee',
+          id: ctx.user.id,
+          email: ctx.user.email,
+          displayName: input.displayName,
+          role: 'user',
         })
         .returning()
 
@@ -44,16 +45,14 @@ export const userRouter = createTRPCRouter({
   updateProfile: protectedProcedure
     .input(
       z.object({
-        firstName: z.string().min(1, 'First name is required').max(100),
-        lastName: z.string().min(1, 'Last name is required').max(100),
+        displayName: z.string().min(1, 'Display name is required').max(150),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const updated = await ctx.db
         .update(userProfiles)
         .set({
-          firstName: input.firstName,
-          lastName: input.lastName,
+          displayName: input.displayName,
         })
         .where(eq(userProfiles.id, ctx.user.id))
         .returning()

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-Wine2cents - A wine rating and review web application for wine fair attendees and producers.
+Preseason — A website that tracks what tools/services LLMs recommend when given vibe-coding prompts. Think of it as a mix between an RL gym and a SaaS comparison site, with a Kalshi-inspired match/game UI.
 
-**Stack:** T3 Stack (Next.js 15 App Router, Drizzle ORM, PostgreSQL via Supabase, Tailwind v4, TypeScript)
+**Stack:** Next.js 15 App Router, tRPC v11, Drizzle ORM, Supabase (PostgreSQL + Auth), Tailwind CSS v4, shadcn/ui, Vitest + Testcontainers, OpenRouter, Promptfoo
 
 ## Common Commands
 
@@ -66,10 +66,16 @@ pnpm run preview # Build and start production server
 ### Directory Structure
 
 - **`src/app/`** - Next.js App Router pages
+  - `(public)/` - Public-facing pages (homepage, feed, rankings, matches)
+  - `admin/` - Admin dashboard and CRUD pages
+  - `provider/` - Provider portal for tool companies
+  - `login/`, `signup/` - Auth pages
 - **`src/server/`** - Server-side code
   - `db/` - Drizzle schema and client
+  - `api/` - tRPC routers and helpers
 - **`src/components/`** - React components
   - `ui/` - shadcn/ui components
+  - `auth/` - Auth forms
 - **`src/lib/`** - Utilities
   - `auth.ts` - Supabase auth helpers
   - `supabase/` - Supabase client setup
@@ -79,7 +85,7 @@ pnpm run preview # Build and start production server
 
 #### Database Schema
 
-- All tables use `wine_fair_*` prefix (enforced by `pgTableCreator`)
+- All tables use `preseason_*` prefix (enforced by `pgTableCreator`)
 - Schema in `src/server/db/schema.ts`
 - Migrations generated in `drizzle/` directory
 - **Migration workflow:**
@@ -93,7 +99,8 @@ pnpm run preview # Build and start production server
 - Uses Supabase email OTP authentication
 - Auth utilities in `src/lib/auth.ts`
 - Protected routes via `src/middleware.ts`
-- **Permissions reference:** `docs/implementation/permissions.md` — role definitions, route access matrix, API permission matrix, and the pattern for adding permissions to new procedures
+- Roles: `admin`, `provider`, `critic`, `user`
+- Route protection: `/admin` (admin only), `/provider` (provider only)
 
 #### Component Patterns
 
@@ -101,16 +108,8 @@ pnpm run preview # Build and start production server
 - Add `"use client"` only when needed for hooks/state/events
 - Tailwind with `cn()` helper for conditional classes
 - shadcn/ui components in `src/components/ui/`
-
-#### Internationalization (i18n)
-
-- **All user-facing strings must be translated** — never hardcode English in components
-- Add strings to both `messages/en.json` and `messages/bg.json`
-- Client components: `useTranslations('namespace')` from `next-intl`
-- Server components: `await getTranslations('namespace')` from `next-intl/server`
-- Use `Link`, `useRouter`, `usePathname` from `~/i18n/navigation` (not `next/link` or `next/navigation`)
-- Run `pnpm run i18n:verify` to check key parity between locales
-- See `docs/guides/how-translations-work.md` for full details
+- English only (no i18n)
+- Dark mode default, with light mode toggle (next-themes)
 
 ## Development Workflow
 
@@ -131,8 +130,8 @@ pnpm run preview # Build and start production server
 
 ### Local Testing
 
-- Supabase Studio: http://localhost:56423
-- Inbucket (test emails): http://localhost:56424
+- Supabase Studio: http://localhost:58823
+- Inbucket (test emails): http://localhost:58824
 - Next.js app: http://localhost:3000
 
 ## Important Notes
