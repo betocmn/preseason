@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '~/lib/supabase/middleware'
 
-const publicRoutes = ['/login', '/signup']
+const publicRoutes = ['/', '/login', '/signup']
 
 export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request)
