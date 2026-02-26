@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "[ -f $CONDUCTOR_ROOT_PATH/.env ] && cp $CONDUCTOR_ROOT_PATH/.env .env; [ -f $CONDUCTOR_ROOT_PATH/.env.local ] && cp $CONDUCTOR_ROOT_PATH/.env.local .env.local; pnpm install",
+    "run": "pnpm run dev",
+    "archive": ""
+  }
+}
