@@ -7,5 +7,5 @@ export default {
   dbCredentials: {
     url: env.DATABASE_URL,
   },
-  tablesFilter: ['wine_fair_*'],
+  tablesFilter: ['preseason_*'],
 } satisfies Config

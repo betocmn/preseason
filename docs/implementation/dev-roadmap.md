@@ -1,853 +1,538 @@
-# Wine2cents Development Roadmap
+# Preseason Development Roadmap
 
 ## Overview
 
-This roadmap breaks the Wine2cents MVP into agent-promptable phases. Each phase is a self-contained unit of work that a coding agent can complete in one session, including writing tests.
+This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is a self-contained unit of work that a coding agent can complete in one session, including writing tests.
+
+**What is Preseason?** A website that tracks what tools/services LLMs recommend when given vibe-coding prompts. Think of it as a mix between an RL gym and a SaaS comparison site, with a Kalshi-inspired match/game UI.
+
+**Core flow:**
+1. We maintain a collection of vibe-coding prompts ("Build me a real estate website with admin area...")
+2. An automated daily cron runs these against multiple LLMs via OpenRouter (evaluated with Promptfoo)
+3. Each LLM recommends 3rd party tools (Supabase, Resend, Stripe, etc.) per category
+4. The public website displays results in a feed with category filtering, tool rankings, head-to-head matches, and verified critic comments
+5. Provider portal for tool companies to see detailed recommendation analytics
+6. Admin area for managing prompts, tools, runs, matches, critics, etc.
 
 **Status legend:** `[DONE]` `[TODO]` `[TBD]` (decision pending)
 
-**Tech stack:** Next.js 15 App Router, tRPC v11, Drizzle ORM, Supabase (PostgreSQL + Auth), Tailwind CSS v4, shadcn/ui, Vitest + Testcontainers
+**Tech stack:** Next.js 15 App Router, tRPC v11, Drizzle ORM, Supabase (PostgreSQL + Auth), Tailwind CSS v4, shadcn/ui, Vitest + Testcontainers, OpenRouter, Promptfoo
 
 **Conventions:**
-- All tables use `wine_fair_*` prefix (via `pgTableCreator`)
+- All tables use `preseason_*` prefix (via `pgTableCreator`)
 - Migrations: edit `schema.ts` → `pnpm run db:generate` → `pnpm run db:migrate`
 - Tests use Testcontainers for PostgreSQL (Docker required)
+- English only (no i18n)
+- Dark mode default, with light mode toggle
 
 ---
 
-## Sprint 1: Foundation & Authentication (Weeks 1–2) `[DONE]`
+## Step 1: Rebrand & Cleanup (Wine Fair → Preseason) `[TODO]`
 
-### Phase 1.1: Email OTP Authentication `[DONE]`
+**Goal:** Strip all wine-domain code, rename prefixes, remove i18n, establish new project identity. No new features — just a clean slate that builds and passes checks.
 
-- [x] Login page with email OTP (6-digit code)
-- [x] Signup page with profile collection (firstName, lastName, birthDate, email)
-- [x] OTP verification flow
-- [x] Supabase auth integration (server + client helpers)
-- [x] Protected routes via middleware (redirects unauthenticated users to /login)
-- [x] Auth callback route
+### 1.1 Rename Identifiers & Config
 
-**Key files:** `src/app/login/`, `src/app/signup/`, `src/components/auth/`, `src/lib/auth.ts`, `src/lib/supabase/`, `src/middleware.ts`
+- [ ] `src/server/db/schema.ts` — Change `pgTableCreator` prefix from `wine_fair_` to `preseason_`
+- [ ] `src/server/db/schema.ts` — Drop ALL wine-domain tables (wine, producer, fair, region, grape_variety, review, favorite + all junction tables). Keep only `userProfiles` table (will be adapted in Step 2)
+- [ ] `src/server/db/schema.ts` — Update `userRoleEnum` from `['admin', 'producer', 'attendee']` to `['admin', 'provider', 'critic', 'user']`
+- [ ] `src/server/db/schema.ts` — Remove `wineTypeEnum` and all wine-related enums
+- [ ] `drizzle.config.ts` — Change `tablesFilter` from `['wine_fair_*']` to `['preseason_*']`
+- [ ] `supabase/config.toml` — Change `project_id` from `wine2cents` to `preseason`
+- [ ] `package.json` — Change `name` from `cancun` to `preseason`. Remove `i18n:verify` script
+- [ ] `src/app/layout.tsx` — Change metadata title/description to "Preseason"
+- [ ] `src/env.js` — Add `OPENROUTER_API_KEY` server env var
 
----
+### 1.2 Remove i18n
 
-### Phase 1.2: User Profiles & Database Foundation `[DONE]`
+- [ ] `next.config.js` — Remove `withNextIntl` plugin wrapper
+- [ ] `package.json` — Remove `next-intl` dependency
+- [ ] `src/middleware.ts` — Remove i18n middleware, simplify to pure Supabase auth + route protection
+- [ ] Delete `src/i18n/` directory (routing.ts, request.ts, navigation.ts)
+- [ ] Delete `messages/` directory (en.json, bg.json)
+- [ ] Delete `src/components/language-switcher.tsx`
+- [ ] Delete `scripts/verify-translations.ts`
+- [ ] Strip all `useTranslations()` / `getTranslations()` from auth components, replace with plain English strings
+- [ ] Replace `Link`, `useRouter`, `usePathname` from `~/i18n/navigation` with standard `next/link` and `next/navigation`
 
-- [x] `wine_fair_user_profile` table (id, email, firstName, lastName, birthDate, role, timestamps)
-- [x] Role enum: admin, producer, attendee
-- [x] tRPC user router with `createProfile` and `getProfile`
-- [x] Seed script for admin users
-- [x] Migrations applied
+### 1.3 Restructure Routes
 
-**Key files:** `src/server/db/schema.ts`, `src/server/api/routers/user.ts`, `src/server/db/seed.ts`
+- [ ] Move `src/app/[locale]/(attendee)/` → `src/app/(public)/` (remove locale segment)
+- [ ] Move `src/app/[locale]/manage/` → `src/app/admin/`
+- [ ] Move `src/app/[locale]/login/` → `src/app/login/`
+- [ ] Move `src/app/[locale]/signup/` → `src/app/signup/`
+- [ ] Create `src/app/provider/` shell (layout + empty dashboard page)
+- [ ] Merge `src/app/[locale]/layout.tsx` into `src/app/layout.tsx` (remove `NextIntlClientProvider`, keep `TRPCReactProvider`, `Toaster`, theme provider)
+- [ ] Delete `src/app/[locale]/` directory after migration
 
----
+### 1.4 Remove Wine-Domain Code
 
-### Phase 1.3: App Layouts & Navigation `[DONE]`
+- [ ] Delete all wine routers: `src/server/api/routers/wine.ts`, `fair.ts`, `producer.ts`, `review.ts`, `favorite.ts`, `region.ts`, `grape-variety.ts` + all `.test.ts` counterparts
+- [ ] Delete `src/server/api/routers/homepage.test.ts`
+- [ ] Delete all attendee components: `src/components/attendee/` directory
+- [ ] Delete `src/lib/wine-type-styles.ts`
+- [ ] Update `src/server/api/root.ts` — Remove all wine routers, keep only `userRouter`
+- [ ] Update `src/server/api/helpers/auth.ts` — Update role types to match new enum
+- [ ] Clean `src/server/api/routers/user.ts` — Remove wine-related logic if any
 
-- [x] Attendee layout with HeaderNav (desktop) and BottomNav (mobile)
-- [x] BottomNav tabs: Home, Search, My Reviews, My Favorites, Profile
-- [x] Admin layout with sidebar (Wine Fairs, Attendees, Wines, Producers)
-- [x] Role-based routing (admin → `/manage`, attendee → `/`)
+### 1.5 Update Documentation & Seed
 
-**Key files:** `src/app/(attendee)/layout.tsx`, `src/app/manage/layout.tsx`, `src/components/attendee/`, `src/components/manage/`
+- [ ] Rewrite `CLAUDE.md` for Preseason context
+- [ ] Rewrite `AGENTS.md` for Preseason context
+- [ ] Rewrite `README.md` for Preseason
+- [ ] Simplify `src/server/db/seed.ts` — Keep admin user seeding only, remove all wine seed data
+- [ ] Delete old migration files in `drizzle/` (start fresh)
+- [ ] Update `src/test/db.ts` — Remove wine table CREATE TABLEs, keep only user_profile
+- [ ] Update/remove `src/test/db-schema.test.ts` and `src/test/example.test.ts`
+- [ ] Delete `src/middleware.test.ts` or update for new route structure
 
----
+### 1.6 Replace Public Shell Pages
 
-### Phase 1.4: Stub Pages & Homepage `[DONE]`
+- [ ] `src/app/(public)/page.tsx` — Simple "Preseason" placeholder homepage
+- [ ] `src/app/(public)/layout.tsx` — Basic public layout with navbar placeholder
+- [ ] `src/app/admin/dashboard/page.tsx` — Simple "Admin Dashboard" placeholder
+- [ ] `src/app/admin/layout.tsx` — Adapt admin layout, update sidebar nav items
+- [ ] `src/app/provider/page.tsx` — Simple "Provider Dashboard" placeholder
+- [ ] `src/app/provider/layout.tsx` — Basic provider layout
+- [ ] Clean up admin stubs: update nav for Preseason menu items (Prompts, Tools, Categories, LLMs, Runs, Matches, Critics, Users)
 
-- [x] Homepage with Welcome Hero and Quick Actions (Scan Wine, Browse Wines)
-- [x] Stub pages for /search, /profile, /reviews, /favorites (ComingSoonAttendee)
-- [x] Admin stubs for /manage/wines, /manage/producers, /manage/attendees, /manage/fairs, /manage/settings
-- [x] Admin dashboard with mock stat cards
+**Key files:** `src/server/db/schema.ts`, `drizzle.config.ts`, `src/middleware.ts`, `next.config.js`, `package.json`, `src/app/layout.tsx`
 
-**Key files:** `src/app/(attendee)/page.tsx`, `src/app/manage/dashboard/page.tsx`
-
----
-
-### Phase 1.5: Profile Page `[DONE]`
-
-- [x] Replace /profile stub with real profile page
-- [x] Display user info (name, email, birth date, role)
-- [x] Edit form for first name, last name
-- [x] Logout button
-- [x] Language preference selector (prep for i18n, stored in profile or localStorage)
-- [x] Add `updateProfile` mutation to user tRPC router
-- [x] Tests: integration test for updateProfile mutation, component test for form validation
-
-**Key files:** `src/components/attendee/profile-view.tsx`, `src/components/attendee/profile-edit-form.tsx`, `src/app/(attendee)/profile/page.tsx`, `src/server/api/routers/user.ts`
-
-**Depends on:** Phase 1.2
-
----
-
-### Phase 1.6: Sprint 1 Test Hardening `[DONE]`
-
-- [x] Update `src/test/db.ts` to match current schema (added `cleanTestDatabase` helper, correct types)
-- [x] Update or replace `src/test/example.test.ts` with current-schema tests
-- [x] Add tests for user tRPC router: createProfile (valid, invalid, duplicate), getProfile (existing, non-existing)
-- [x] Add test for middleware redirect logic
-
-**Key files created:** `src/middleware.test.ts`
-**Key files modified:** `src/test/db.ts`, `src/test/example.test.ts`, `src/test/setup.ts`, `src/server/api/routers/user.test.ts`
-
-**Depends on:** Phase 1.2
+**Verify:** `pnpm run check` passes, `pnpm run build` succeeds, auth flow works (login/signup/redirect), empty shell pages render for all three layouts (public, admin, provider)
 
 ---
 
-## Sprint 2: Core Data Models & Search (Weeks 3–4) `[DONE]`
+## Step 2: Database Schema & Seed Data `[TODO]`
 
-### Phase 2.1: Producer & Wine Database Schema `[DONE]`
+**Goal:** Design and implement the full Preseason database schema. Create seed data for all reference tables.
 
-- [x] Create `wineTypeEnum` pgEnum: white, red, rose, orange, sparkling, dessert
-- [x] Create `wine_fair_producer` table (id, name, region, description, website, imageUrl, userId FK nullable, timestamps)
-- [x] Create `wine_fair_wine` table (id, name, vintage, type, grapeVariety, alcoholPercent, region, description, imageUrl, producerId FK, parentWineId self-referential FK nullable, price nullable, fermentationContainer nullable, oakAging nullable, leesContact nullable, sedimentContact nullable, timestamps)
-- [x] Define Drizzle relations for producer ↔ wine, wine ↔ parentWine, userProfile ↔ producer
-- [x] Run `pnpm run db:generate` and `pnpm run db:migrate`
-- [x] Update `src/test/db.ts` to create new tables in test container
-- [x] Tests: basic smoke tests for insert/query producers and wines, enum values, vintage linking
+### 2.1 Core Domain Tables
 
-**Note:** Added `description` text column to wines table (not in original spec) for producer tasting notes.
+- [ ] Adapt `preseason_user_profile` — Drop `birthDate`, rename `firstName`/`lastName` to `displayName` varchar(150), add `avatarUrl` varchar(512), `bio` text, `company` varchar(255), `website` varchar(255)
+- [ ] Create `preseason_category` table — `id` uuid PK, `name` varchar(100) unique, `slug` varchar(100) unique, `description` text, `icon` varchar(50) (lucide icon name), `displayOrder` integer, timestamps
+- [ ] Create `preseason_tool` table — `id` uuid PK, `name` varchar(255) unique, `slug` varchar(255) unique, `description` text, `website` varchar(512), `logoUrl` varchar(512), `isVerified` boolean default false, `providerUserId` uuid FK nullable, `aliases` text[] (for name normalization), timestamps
+- [ ] Create `preseason_tool_category` junction — `id` uuid PK, `toolId` FK, `categoryId` FK, `isPrimary` boolean default false, unique on (toolId, categoryId)
+- [ ] Create `preseason_llm` table — `id` uuid PK, `name` varchar(255), `slug` varchar(255) unique, `provider` varchar(100), `modelId` varchar(255) (OpenRouter model ID), `isActive` boolean default true, timestamps
+- [ ] Create `preseason_prompt` table — `id` uuid PK, `title` varchar(255), `slug` varchar(255) unique, `content` text (full prompt), `description` text, `expectedCategories` text[], `isActive` boolean default true, timestamps
 
-**Key files modified:** `src/server/db/schema.ts`, `src/test/db.ts`
-**Key files created:** `src/test/db-schema.test.ts`, `drizzle/0003_sudden_tiger_shark.sql`
+### 2.2 Run & Recommendation Tables
 
----
+- [ ] Create `run_status` enum: `pending`, `running`, `completed`, `failed`
+- [ ] Create `parse_status` enum: `pending`, `success`, `failed`
+- [ ] Create `preseason_run` table — `id` uuid PK, `startedAt` timestamptz, `completedAt` timestamptz, `status` run_status default 'pending', `trigger` varchar(50) default 'cron' (cron | manual), `promptCount` integer, `llmCount` integer, `errorLog` text, `createdAt` timestamptz
+- [ ] Create `preseason_run_result` table — `id` uuid PK, `runId` FK, `promptId` FK, `llmId` FK, `rawResponse` text, `parseStatus` parse_status default 'pending', `evalScore` real, `evalDetails` jsonb, `responseTimeMs` integer, `createdAt` timestamptz. Unique on (runId, promptId, llmId)
+- [ ] Create `preseason_recommendation` table — `id` uuid PK, `runResultId` FK (cascade delete), `toolId` FK, `categoryId` FK, `confidence` real, `reasoning` text, `rank` integer, `createdAt` timestamptz. Index on (toolId, categoryId)
 
-### Phase 2.2: Fair Database Schema `[DONE]`
+### 2.3 Match Tables
 
-- [x] Create `wine_fair_fair` table (id, name, description, location, startDate, endDate, isActive boolean, imageUrl, timestamps)
-- [x] Create `wine_fair_fair_wine` junction table (id, fairId FK, wineId FK, createdAt) with unique constraint on (fairId, wineId)
-- [x] Create `wine_fair_fair_producer` junction table (id, fairId FK, producerId FK, boothNumber nullable, createdAt) with unique constraint on (fairId, producerId)
-- [x] Define Drizzle relations for fair ↔ wine, fair ↔ producer
-- [x] Run `pnpm run db:generate` and `pnpm run db:migrate`
-- [x] Tests: junction table insert/query, unique constraint violation, cascade delete
+- [ ] Create `match_status` enum: `active`, `settled`, `archived`
+- [ ] Create `preseason_match` table — `id` uuid PK, `toolAId` FK, `toolBId` FK, `categoryId` FK, `status` match_status default 'active', `startedAt` timestamptz, `settledAt` timestamptz, `periodStart` date, `periodEnd` date, `toolAScore` integer default 0, `toolBScore` integer default 0, `totalPrompts` integer default 0, `winnerToolId` FK nullable. Unique on (toolAId, toolBId, categoryId, periodStart)
 
-**Note:** Moved `boothNumber` from `fair_wine` to `fair_producer` — at wine fairs, producers have a booth/stand where all their wines are displayed, so the booth belongs to the producer, not individual wines.
+### 2.4 Critic & Comment Tables
 
-**Key files modified:** `src/server/db/schema.ts`, `src/test/db.ts`, `src/test/db-schema.test.ts`
-**Key files created:** `drizzle/0004_nebulous_shen.sql`
+- [ ] Create `comment_target` enum: `recommendation`, `match`, `tool`
+- [ ] Create `preseason_critic_profile` table — `id` uuid PK, `userId` FK unique (cascade delete), `title` varchar(255), `expertiseAreas` text[], `excludedCategories` text[] (conflict of interest), `verifiedAt` timestamptz, `verifiedBy` FK nullable, `isActive` boolean default true, timestamps
+- [ ] Create `preseason_comment` table — `id` uuid PK, `criticId` FK (cascade delete), `targetType` comment_target, `targetId` uuid, `content` text, `isPinned` boolean default false, timestamps. Index on (targetType, targetId)
 
-**Depends on:** Phase 2.1
+### 2.5 Relations & Indexes
 
----
+- [ ] Define all Drizzle relations: category ↔ tool (many-to-many via tool_category), tool ↔ provider user, llm ↔ run_result, prompt ↔ run_result, run ↔ run_result, run_result ↔ recommendation, recommendation ↔ tool, recommendation ↔ category, match ↔ tools, critic_profile ↔ user_profile, comment ↔ critic_profile
+- [ ] Add performance indexes on: `recommendation(toolId, categoryId)`, `recommendation(runResultId)`, `run_result(runId)`, `comment(targetType, targetId)`, `match(status)`, `match(categoryId)`
 
-### Phase 2.3: Producer tRPC Router `[DONE]`
+### 2.6 Seed Data
 
-- [x] Create producer router with procedures: `list` (paginated, filterable by region), `getById`, `create` (admin/producer only), `update` (admin/producer only), `delete` (admin only)
-- [x] Register in app router
-- [x] Tests: all CRUD operations, authorization checks (attendee cannot create), pagination
+- [ ] Seed ~20 initial categories:
+  - Authentication (`auth`), Database (`database`), ORM / Data Access (`orm`), Email (`email`), Payments (`payments`), File Storage (`storage`), Hosting / Deployment (`hosting`), CSS / Styling (`styling`), UI Components (`ui-components`), State Management (`state`), API Framework (`api`), CMS (`cms`), Search (`search`), Analytics (`analytics`), Monitoring / Error Tracking (`monitoring`), AI / LLM Integration (`ai`), Realtime (`realtime`), Testing (`testing`), CI/CD (`ci-cd`), Background Jobs (`jobs`), Notifications (`notifications`)
+- [ ] Seed ~30-40 popular tools with category assignments:
+  - Auth: Supabase Auth, Clerk, Auth0, NextAuth.js, Firebase Auth, Lucia
+  - Database: Supabase, PlanetScale, Neon, Firebase, MongoDB Atlas, Turso
+  - ORM: Prisma, Drizzle, Kysely, TypeORM
+  - Email: Resend, SendGrid, Postmark, Amazon SES, Mailgun
+  - Payments: Stripe, Paddle, LemonSqueezy, PayPal
+  - Storage: Supabase Storage, Cloudinary, UploadThing, AWS S3, Cloudflare R2
+  - Hosting: Vercel, Netlify, Railway, Fly.io, Render, Cloudflare Pages
+  - Styling: Tailwind CSS, Bootstrap, Panda CSS
+  - UI Components: shadcn/ui, Radix UI, Chakra UI, MUI, Ant Design, Mantine
+  - API: tRPC, GraphQL (Apollo), REST (Express/Hono)
+  - Analytics: PostHog, Plausible, Mixpanel, Google Analytics
+  - Monitoring: Sentry, LogRocket, Datadog
+  - AI: OpenAI, Anthropic, Replicate, Hugging Face
+  - Realtime: Pusher, Ably, Supabase Realtime, Socket.io
+  - Search: Algolia, Typesense, Meilisearch, Elasticsearch
+  - Testing: Vitest, Jest, Playwright, Cypress
+  - CI/CD: GitHub Actions, Vercel CI, CircleCI
+  - Jobs: Inngest, Trigger.dev, BullMQ, Quirrel
+  - CMS: Sanity, Contentful, Strapi, Payload CMS
+  - Notifications: Novu, OneSignal, Firebase Cloud Messaging
+- [ ] Seed ~5-8 LLMs with OpenRouter model IDs:
+  - Claude 3.5 Sonnet (`anthropic/claude-3.5-sonnet`), GPT-4o (`openai/gpt-4o`), Gemini 1.5 Pro (`google/gemini-pro-1.5`), Llama 3.1 70B (`meta-llama/llama-3.1-70b-instruct`), Claude 3 Opus (`anthropic/claude-3-opus`), GPT-4o Mini (`openai/gpt-4o-mini`), Mistral Large (`mistralai/mistral-large-latest`), DeepSeek V2.5 (`deepseek/deepseek-chat`)
+- [ ] Seed 10-20 vibe-coding prompts (varied categories):
+  - "Create a real estate website with admin area for uploading listings"
+  - "Build a SaaS application with user authentication, subscription billing, and a dashboard"
+  - "Create a blog platform with a CMS, comments, and email newsletter"
+  - "Build an e-commerce store with product catalog, shopping cart, and payment processing"
+  - "Create a project management tool like Trello with real-time collaboration"
+  - "Build a social media platform with user profiles, posts, likes, and comments"
+  - "Create a job board where companies post positions and applicants apply"
+  - "Build a restaurant reservation system with email confirmations"
+  - "Create an online learning platform with courses, quizzes, and certificates"
+  - "Build a multi-tenant CRM with contact management and email integration"
+  - "Create a weather dashboard that pulls data from external APIs"
+  - "Build a chat application with real-time messaging and file sharing"
+  - "Create a fitness tracking app with workout logging and progress charts"
+  - "Build a URL shortener with analytics tracking"
+  - "Create a documentation site with search, versioning, and dark mode"
+- [ ] Seed admin user
+- [ ] Make seed script idempotent (check before insert)
 
-**Note:** Added shared auth helper (`src/server/api/helpers/auth.ts`) with `getUserProfile` and `requireRole` functions used by all routers for role-based authorization.
+### 2.7 Test Infrastructure
 
-**Key files created:** `src/server/api/routers/producer.ts`, `src/server/api/routers/producer.test.ts`, `src/server/api/helpers/auth.ts`
-**Key files modified:** `src/server/api/root.ts`
+- [ ] Rewrite `src/test/db.ts` — New CREATE TABLE statements for all Preseason tables
+- [ ] Write `src/test/db-schema.test.ts` — Smoke tests for all tables: insert/query, enum values, unique constraints, FK cascades, junction table operations
 
-**Depends on:** Phase 2.1
+**Key files modified:** `src/server/db/schema.ts`, `src/server/db/seed.ts`, `src/test/db.ts`
+**Key files created:** `drizzle/0001_*.sql` (fresh migration), `src/test/db-schema.test.ts`
 
----
+**Verify:** `pnpm run db:generate` produces correct migration, `pnpm run db:migrate` succeeds, `pnpm run db:seed` populates all tables, `pnpm run test` passes schema tests
 
-### Phase 2.4: Wine tRPC Router `[DONE]`
-
-- [x] Create wine router with procedures: `list` (paginated, filters for type/grape/region/price/producer), `getById` (joins producer info), `create` (admin/producer), `update` (admin/producer), `delete` (admin), `search` (text search across name, grape, producer name, region)
-- [x] Register in app router
-- [x] Tests: CRUD, all filter combinations, text search matching, authorization
-
-**Note:** Search uses `ilike` with LEFT JOIN on producers table for cross-table text search. SQL special characters (`%`, `_`) are escaped in search input.
-
-**Key files created:** `src/server/api/routers/wine.ts`, `src/server/api/routers/wine.test.ts`
-**Key files modified:** `src/server/api/root.ts`
-
-**Depends on:** Phase 2.1, Phase 2.3
-
----
-
-### Phase 2.5: Fair tRPC Router `[DONE]`
-
-- [x] Create fair router with procedures: `list` (all or active-only), `getById` (with wines and producers), `create`/`update`/`delete` (admin only), `addWine`/`removeWine` (admin/producer), `addProducer`/`removeProducer` (admin)
-- [x] Register in app router
-- [x] Tests: CRUD, junction table operations, active fair filter
-
-**Note:** `getById` uses nested eager loading via Drizzle relational queries for producers and wines. Junction table operations catch unique constraint violations and return CONFLICT errors. `create` validates endDate >= startDate via Zod refinement.
-
-**Key files created:** `src/server/api/routers/fair.ts`, `src/server/api/routers/fair.test.ts`
-**Key files modified:** `src/server/api/root.ts`
-
-**Depends on:** Phase 2.2
-
----
-
-### Phase 2.6: Seed Data Expansion `[DONE]`
-
-- [x] Add sample producers (7 Bulgarian wineries: Bessa Valley, Todoroff, Midalidare, Edoardo Miroglio, Villa Yustina, Rossidi, Zagreus)
-- [x] Add sample wines (24 across producers, varied types/grapes/vintages including vintage linking)
-- [x] Add 2 sample fairs with wines and producers assigned (Sofia Wine Festival active, Plovdiv Wine & Food inactive)
-- [x] Add 4 sample attendee users
-- [x] Make seed script idempotent (skip existing records via checks before insert and onConflictDoNothing)
-
-**Note:** Wine types covered: red, white, rosé, orange, sparkling, dessert. Bulgarian grape varieties included: Mavrud, Rubin, Dimyat, Rkatsiteli. Vintage linking demonstrated with Enira 2020/2021. Fair assignments include booth numbers for producers and all wines assigned to their respective fairs.
-
-**Key files modified:** `src/server/db/seed.ts`
-
-**Depends on:** Phase 2.1, Phase 2.2
-
----
-
-### Phase 2.7: Schema Normalization — Grape Varieties, Regions & Wine One-Liner `[DONE]`
-
-- [x] Create `wine_fair_region` table (id, name, country nullable, description nullable, timestamps) with unique constraint on name
-- [x] Create `wine_fair_grape_variety` table (id, name, description nullable, timestamps) with unique constraint on name
-- [x] Create `wine_fair_wine_grape_variety` junction table (id, wineId FK, grapeVarietyId FK, createdAt) with unique constraint on (wineId, grapeVarietyId) — enables wines to have one or multiple grape types
-- [x] Replace `region` varchar on `wine_fair_wine` with `regionId` FK referencing `wine_fair_region`
-- [x] Replace `region` varchar on `wine_fair_producer` with `regionId` FK referencing `wine_fair_region`
-- [x] Remove `grapeVariety` varchar from `wine_fair_wine` (replaced by junction table)
-- [x] Add `oneLiner` optional varchar(280) to `wine_fair_wine` — a short tagline/description for the wine
-- [x] Define Drizzle relations for region ↔ wine, region ↔ producer, wine ↔ grapeVariety (many-to-many)
-- [x] Run `pnpm run db:generate` and `pnpm run db:migrate`
-- [x] Update seed data to use new region and grape variety tables
-- [x] Update producer tRPC router (filter by regionId instead of region string)
-- [x] Update wine tRPC router (filter/search using grape variety junction, regionId, include grapeVarieties in getById)
-- [x] Update existing tests to reflect new schema structure
-- [x] Tests: region and grape variety CRUD, many-to-many grape assignment, wine one-liner, updated router filters
-
-**Note:** Wine search now queries across normalized tables: grape variety names via junction table join, region names via region table join, in addition to wine name and producer name. Wine list filtering by grape variety uses a two-step approach (find matching wine IDs from junction table, then filter). Seed data includes 3 Bulgarian regions, 18 grape varieties (4 Bulgarian + 14 international), and oneLiner for all 24 wines.
-
-**Key files modified:** `src/server/db/schema.ts`, `src/server/db/seed.ts`, `src/server/api/routers/producer.ts`, `src/server/api/routers/wine.ts`, `src/test/db.ts`, `src/test/db-schema.test.ts`, `src/server/api/routers/producer.test.ts`, `src/server/api/routers/wine.test.ts`, `src/server/api/routers/fair.test.ts`
-**Key files created:** `drizzle/0005_dear_darwin.sql`
-
-**Depends on:** Phase 2.1, Phase 2.6
+**Depends on:** Step 1
 
 ---
 
-### Phase 2.8: Search Page UI `[DONE]`
+## Step 3: tRPC API Layer `[TODO]`
 
-- [x] Replace /search stub with functional search page
-- [x] Search bar component with text input and submit (debounced 300ms)
-- [x] Filter panel (collapsible on mobile via Sheet): wine type dropdown, price range selector (below 9 / 9–18 / above 18 EUR), grape variety dropdown, region dropdown, producer dropdown
-- [x] Wine card component showing: image (Next.js Image with placeholder), name, vintage, type badge, one-liner, alc%, producer, region, price
-- [x] Paginated results list with load-more button
-- [x] Empty state and loading skeleton
-- [x] Tests: region router (4 tests), grape variety router (4 tests), wine list with producer/region names (2 tests), wine search with filters (5 tests)
+**Goal:** Build all tRPC routers for managing and querying domain entities. Admin CRUD, provider-scoped reads, and public queries.
 
-**Note:** Created `region` and `grapeVariety` tRPC routers with `list` procedures for filter dropdown data. Enhanced `wine.list` to join producer and region names (return shape changed to `{ wine, producerName, regionName }`). Enhanced `wine.search` to accept optional filter parameters (type, grapeVarietyId, regionId, minPrice, maxPrice, producerId) and return regionName. Search page uses `wine.search` when text is present, `wine.list` when only filters are active. Installed shadcn/ui select, badge, and skeleton components.
+### 3.1 Reference Data Routers
 
-**Key files created:** `src/server/api/routers/region.ts`, `src/server/api/routers/grape-variety.ts`, `src/server/api/routers/region.test.ts`, `src/server/api/routers/grape-variety.test.ts`, `src/components/attendee/search-bar.tsx`, `src/components/attendee/search-filters.tsx`, `src/components/attendee/wine-card.tsx`, `src/components/attendee/wine-card-list.tsx`, `src/components/attendee/wine-card-skeleton.tsx`, `src/components/attendee/search-empty-state.tsx`
-**Key files modified:** `src/app/(attendee)/search/page.tsx`, `src/server/api/routers/wine.ts`, `src/server/api/routers/wine.test.ts`, `src/server/api/root.ts`
+- [ ] Create `src/server/api/routers/category.ts` — `list` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin)
+- [ ] Create `src/server/api/routers/tool.ts` — `list` (public, filterable by category slug), `getBySlug` (public, with categories), `search` (public, text search across name/aliases), `create` (admin), `update` (admin), `delete` (admin), `verify` (admin, sets isVerified=true)
+- [ ] Create `src/server/api/routers/llm.ts` — `listActive` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
+- [ ] Create `src/server/api/routers/prompt.ts` — `listActive` (public, with descriptions only), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
 
-**Depends on:** Phase 2.4, Phase 2.7
+### 3.2 Run & Recommendation Routers
 
----
+- [ ] Create `src/server/api/routers/run.ts` — `listRecent` (public, paginated), `getById` (public, with run_results summary), `triggerManual` (admin, calls automation runner)
+- [ ] Create `src/server/api/routers/recommendation.ts` — `getFeed` (public, paginated, filterable by category/tool/llm/date range), `getStats` (public, aggregated recommendation rates per tool per category over configurable time window), `getTrending` (public, tools with biggest rate changes)
 
-### Phase 2.9: Homepage Dynamic Content `[DONE]`
+### 3.3 Match & Ranking Routers
 
-- [x] Replace static homepage with dynamic data from tRPC
-- [x] Show active fair info (name, dates, location) from fair router
-- [x] Show recently added or featured wines
-- [x] Update "Current Fair" card with real data (or hide if no active fair)
-- [x] Tests: homepage renders fair data, handles no-active-fair state
+- [ ] Create `src/server/api/routers/match.ts` — `listActive` (public), `listSettled` (public, paginated), `getById` (public, with per-LLM breakdown and per-prompt breakdown), `create` (admin), `settle` (admin)
+- [ ] Create `src/server/api/routers/ranking.ts` — `byCategorySlug` (public, tool rankings with recommendation rate, trend, consistency score over rolling window), `overall` (public, cross-category tool ranking)
 
-**Note:** Homepage uses server-side tRPC calls (`fair.list` with `activeOnly: true`, `fair.getById`) and client-side `wine.listRecent` query. `ActiveFairCard` component shows name, dates, location, producer/wine counts with graceful no-active-fair placeholder. `FeaturedWines` component renders recently added wines with loading skeleton. Comprehensive test coverage in `homepage.test.ts` and `wine.test.ts`.
+### 3.4 Critic & Comment Routers
 
-**Key files created:** `src/components/attendee/active-fair-card.tsx`, `src/components/attendee/featured-wines.tsx`, `src/server/api/routers/homepage.test.ts`
-**Key files modified:** `src/app/[locale]/(attendee)/page.tsx`, `src/server/api/routers/wine.ts`, `src/server/api/routers/wine.test.ts`
+- [ ] Create `src/server/api/routers/critic.ts` — `list` (public, verified critics with expertise), `getById` (public, with comments), `verify` (admin), `unverify` (admin), `updateOwn` (critic role, own profile)
+- [ ] Create `src/server/api/routers/comment.ts` — `listByTarget` (public, by targetType + targetId), `create` (critic, with conflict-of-interest enforcement via excludedCategories), `update` (critic, own only), `delete` (critic own or admin)
 
-**Depends on:** Phase 2.5, Phase 2.6
+### 3.5 User Router Updates
 
----
+- [ ] Adapt `src/server/api/routers/user.ts` — Update `createProfile` input (drop birthDate, add displayName), update `updateProfile`, add `getProfile`
 
-### Phase 2.10: i18n Setup & English Strings `[DONE]`
+### 3.6 Register All Routers
 
-- [x] Set up internationalization framework (`next-intl` with URL-prefix locale routing)
-- [x] Extract all hardcoded English strings into translation file (`messages/en.json`)
-- [x] Language switcher in profile page (`src/components/language-switcher.tsx`)
-- [x] Configure locale-aware routing (`/en/...`, `/bg/...` via `[locale]` route segment)
-- [x] Combined i18n middleware with Supabase auth middleware
-- [x] All ~200 strings across ~30 files extracted into namespaced message keys
-- [x] Middleware tests updated for locale-prefixed paths
+- [ ] Update `src/server/api/root.ts` — Register all new routers: category, tool, llm, prompt, run, recommendation, match, ranking, critic, comment, user
 
-**Key files created:** `src/i18n/routing.ts`, `src/i18n/request.ts`, `src/i18n/navigation.ts`, `messages/en.json`, `src/components/language-switcher.tsx`
-**Key files modified:** `src/app/layout.tsx`, `src/app/[locale]/layout.tsx`, `src/middleware.ts`, `next.config.js`, all UI components
+### 3.7 Tests
 
-**Depends on:** None
+- [ ] One `.test.ts` file per router using Testcontainers pattern from existing codebase
+- [ ] Test: public read operations, admin CRUD with role enforcement, provider-scoped access, critic conflict-of-interest on comments, pagination/filtering, edge cases (not found, duplicate, unauthorized)
+- [ ] Target: ~100+ test cases across all routers
+
+**Key files created:** `src/server/api/routers/{category,tool,llm,prompt,run,recommendation,match,ranking,critic,comment}.ts` + `.test.ts` counterparts
+**Key files modified:** `src/server/api/root.ts`, `src/server/api/routers/user.ts`
+
+**Reuse:** Zod validation patterns, `requireRole` helper, pagination with limit/offset, test helpers from existing wine routers (adapt, don't copy wine logic)
+
+**Verify:** `pnpm run test` — all router tests pass
+
+**Depends on:** Step 2
 
 ---
 
-### Phase 2.11: Bulgarian Translation `[DONE]`
+## Step 4: Automation Engine (OpenRouter + Promptfoo + Cron) `[TODO]`
 
-- [x] Add Bulgarian translation file with all UI strings (`messages/bg.json`)
-- [x] Translate all ~200 strings: error messages, labels, buttons, system messages
-- [x] Translation verification script (`scripts/verify-translations.ts`)
-- [x] `pnpm run i18n:verify` command to check key parity between locales
+**Goal:** Build the automated system that runs prompts against LLMs daily, parses responses, extracts recommendations, evaluates quality, and manages matches.
 
-**Key files created:** `messages/bg.json`, `scripts/verify-translations.ts`
+### 4.1 OpenRouter Client
 
-**Depends on:** Phase 2.10
+- [ ] Create `src/server/automation/openrouter.ts` — Uses `openai` npm package with OpenRouter base URL (`https://openrouter.ai/api/v1`). Function: `queryLLM(modelId, systemPrompt, userPrompt)` → returns `{ response: string, responseTimeMs: number }`
+- [ ] System prompt template requests structured JSON output:
+  ```
+  You are an expert software architect evaluating third-party tools for web development.
+  Given a project description, recommend the best tool/service for each relevant category.
+  Respond in JSON: { recommendations: [{ category: "<slug>", tool: "<name>", reasoning: "<1-2 sentences>", confidence: <0.0-1.0> }] }
+  Available categories: <list>
+  Rules: only 3rd-party tools, one per category, only categories the project needs
+  ```
 
----
+### 4.2 Response Parser
 
-## Sprint 3: Wine Details & Rating System (Weeks 5–6) `[TODO]`
+- [ ] Create `src/server/automation/parser.ts` — Extracts tool recommendations from LLM responses
+  - Primary: `JSON.parse` structured output
+  - Fallback: regex extraction from markdown/prose + fuzzy tool name matching against DB
+  - Tool name normalization via `aliases` column on tool table
+  - Auto-creates unknown tools with `isVerified=false` and flags for admin review
+- [ ] Map category slugs from response to category IDs in DB
+- [ ] Return array of `{ toolId, categoryId, confidence, reasoning, rank }`
 
-### Phase 3.1: Review & Favorites Database Schema `[DONE]`
+### 4.3 Promptfoo Integration
 
-- [x] Create `wine_fair_review` table (id, userId FK, wineId FK, rating integer 1–5, notes text nullable, voiceNoteUrl varchar nullable, createdAt, updatedAt) with unique constraint on (userId, wineId)
-- [x] Flatten characteristic ratings into review table as nullable columns (colorRating, aromaRating, acidityRating, tanninsRating, bodyRating, flavorRating — all integer 1–5) instead of separate `wine_fair_review_characteristic` table
-- [x] Create `wine_fair_favorite` table (id, userId FK, wineId FK, createdAt) with unique constraint on (userId, wineId)
-- [x] Define Drizzle relations (review ↔ user, review ↔ wine, favorite ↔ user, favorite ↔ wine, plus reverse many() on userProfiles and wines)
-- [x] Run `pnpm run db:generate` and `pnpm run db:migrate`
-- [x] Tests: insert/query reviews with characteristics, favorites unique constraint, cascade delete
+- [ ] Create `src/server/automation/promptfoo-eval.ts` — Evaluates each LLM response for quality/relevance
+  - Score: 0-1 based on response format compliance, category coverage, reasoning quality
+  - Returns `{ score: number, details: object }`
 
-**Note:** Replaced the originally planned separate `wine_fair_review_characteristic` table (1:1 with reviews) with nullable columns directly on the review table. This eliminates a JOIN on every review query, simplifies CRUD to single operations, and is the standard approach for 1:1 optional data. Both tables use `onDelete: 'cascade'` for userId and wineId FKs. Favorites table omits `updatedAt` since favorites are only created/deleted (toggle semantics).
+### 4.4 Run Orchestrator
 
-**Key files modified:** `src/server/db/schema.ts`, `src/test/db.ts`
-**Key files created:** `drizzle/0006_brave_scorpion.sql`
+- [ ] Create `src/server/automation/runner.ts` — Full pipeline orchestrator:
+  1. Create `run` record with status `running`
+  2. Fetch all active prompts and active LLMs
+  3. For each prompt × LLM pair: call OpenRouter, store `run_result` with raw response
+  4. Parse each response into `recommendation` rows
+  5. Run Promptfoo eval, update `evalScore` and `evalDetails`
+  6. Handle per-pair failures gracefully (log error, continue with next pair)
+  7. Update `run` status to `completed` (or `failed` if all pairs failed)
 
-**Depends on:** Phase 2.1
+### 4.5 Match Management
 
----
+- [ ] Create `src/server/automation/match-settler.ts` — For each active match past `periodEnd`: tally recommendation counts for both tools in the category over the period, set scores, determine winner, update status to `settled`
+- [ ] Create `src/server/automation/match-generator.ts` — Scan for tool pairs in the same category with N+ recommendations but no active match. Auto-create matches with configurable period (default: 7-day rolling windows)
 
-### Phase 3.2: Review tRPC Router `[DONE]`
+### 4.6 Cron Endpoints
 
-- [x] Create review router: `create` (with characteristics, protected, any authenticated user), `update` (own only), `delete` (own only), `getByWine` (all reviews for a wine with reviewer firstName/lastName), `getMyReviews` (paginated with wine/producer/region details), `getByIdWithDetails` (single review with nested wine + user data via Drizzle relational queries)
-- [x] Register in app router
-- [x] Tests: all CRUD, ownership validation, review-with-characteristics creation, cascade deletes, pagination, auth checks (31 tests)
+- [ ] Create `src/app/api/cron/run/route.ts` — POST endpoint protected by `CRON_SECRET` header. Calls runner orchestrator. Can be triggered by Vercel Cron, GitHub Actions, or any external scheduler
+- [ ] Create `src/app/api/cron/settle/route.ts` — POST endpoint for match settlement + new match generation. Runs after daily run completes
 
-**Note:** `create` uses `getUserProfile` to validate profile exists before insert, catches unique constraint violations and returns CONFLICT. `update`/`delete` use ownership checks (`review.userId !== ctx.user.id` → FORBIDDEN). `getByWine` uses INNER JOIN with userProfiles for reviewer names. `getByIdWithDetails` uses Drizzle relational queries with nested wine (producer, region, grapeVarieties) and user (id, firstName, lastName only — no email/birthDate exposed).
+### 4.7 Dependencies & Config
 
-**Key files created:** `src/server/api/routers/review.ts`, `src/server/api/routers/review.test.ts`
-**Key files modified:** `src/server/api/root.ts`
+- [ ] Add `openai` npm package (for OpenRouter API compatibility)
+- [ ] Add `OPENROUTER_API_KEY` to `.env.example`
+- [ ] Add `CRON_SECRET` to `.env.example` and `src/env.js`
 
-**Depends on:** Phase 3.1
+### 4.8 Tests
 
----
+- [ ] `src/server/automation/__tests__/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
+- [ ] `src/server/automation/__tests__/runner.test.ts` — Integration tests with mocked OpenRouter (no real API calls)
+- [ ] `src/server/automation/__tests__/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
 
-### Phase 3.3: Favorites tRPC Router `[DONE]`
+**Key files created:** `src/server/automation/` (6 files), `src/app/api/cron/` (2 routes), 3 test files
 
-- [x] Create favorites router: `toggle` (add/remove, protected), `getMyFavorites` (paginated with wine/producer/region details), `isFavorited` (check for specific wine)
-- [x] Register in app router
-- [x] Tests: toggle add, toggle remove, double-toggle idempotency, list pagination, isFavorited check, user isolation, cascade deletes, auth checks (16 tests)
+**Verify:** Trigger manual run, verify data flows through pipeline (run → run_result → recommendation), match settlement produces correct scores
 
-**Note:** `toggle` uses query-then-insert/delete approach — checks for existing favorite, deletes if found (returns `{ favorited: false }`), inserts if not (returns `{ favorited: true }`). Unique constraint provides safety net for race conditions. All procedures are `protectedProcedure` with no role restriction. `getMyFavorites` joins wines + producers + regions for full wine context.
-
-**Key files created:** `src/server/api/routers/favorite.ts`, `src/server/api/routers/favorite.test.ts`
-**Key files modified:** `src/server/api/root.ts`
-
-**Depends on:** Phase 3.1
-
----
-
-### Phase 3.4: Wine Detail Page `[DONE]`
-
-- [x] New route `/wine/[id]` with server component fetching wine data
-- [x] Wine detail view: image (placeholder if none), name, vintage, type, grape, alc%, producer, region
-- [x] Display average rating and review count (via new `review.getStats` tRPC procedure)
-- [x] "Add to Favorites" toggle button with optimistic updates
-- [x] Other users' reviews for this wine (paginated, load more)
-- [x] Link wine cards in search results to this detail page (already existed in wine-card.tsx)
-- [x] Tests: `review.getStats` tests (average/count, zero reviews, wine isolation, public access)
-
-**Note:** Added `review.getStats` public procedure using SQL `AVG()`/`COUNT()` for efficient server-side computation. Wine detail page is a server component; interactive parts (favorite button, reviews section) are client components. Extracted `wineTypeBadgeStyles` to shared `src/lib/wine-type-styles.ts`. Wine type translations duplicated in `wineDetail` namespace for i18n separation.
-
-**Key files created:** `src/app/[locale]/(attendee)/wine/[id]/page.tsx`, `src/components/attendee/favorite-button.tsx`, `src/components/attendee/wine-reviews-section.tsx`, `src/components/attendee/review-card.tsx`, `src/lib/wine-type-styles.ts`
-**Key files modified:** `src/server/api/routers/review.ts`, `src/server/api/routers/review.test.ts`, `src/components/attendee/wine-card.tsx`, `messages/en.json`, `messages/bg.json`
-
-**Depends on:** Phase 2.4, Phase 3.2, Phase 3.3
+**Depends on:** Steps 2 and 3
 
 ---
 
-### Phase 3.5: Star Rating Component `[DONE]`
+## Step 5: Public Website UI `[TODO]`
 
-- [x] Reusable 5-star rating component (interactive mode: clickable, hover preview)
-- [x] Display-only mode for showing existing ratings
-- [x] Show average rating with review count label (used on wine detail page)
-- [x] Animated star fill on hover/click via CSS clip-path for partial fills
-- [x] Three size variants (sm, md, lg) and accessibility support
+**Goal:** Build the main public-facing website. Dark-mode-first, Kalshi-inspired design.
 
-**Note:** Uses `Star` icon from lucide-react with `clip-path` CSS for fractional star fills (e.g., 3.7 average). Interactive mode renders buttons with hover preview state; display mode renders spans. Amber-400 fill color, muted-foreground/30 empty color.
+### 5.1 Theme & Layout
 
-**Key files created:** `src/components/ui/star-rating.tsx`
+- [ ] Update `src/app/globals.css` — Dark-mode-first color scheme: dark navy/charcoal backgrounds, bright green/red for trends, white/off-white text. Keep shadcn/ui CSS variable system
+- [ ] Add `ThemeProvider` from `next-themes` to root layout with dark default
+- [ ] Create `src/components/public/public-navbar.tsx` — Logo, category tabs/dropdown, dark/light toggle, Login CTA
+- [ ] Create `src/components/public/public-footer.tsx` — Links, branding
+- [ ] Update `src/app/(public)/layout.tsx` — Navbar + main + footer
 
-**Depends on:** None (standalone)
+### 5.2 Homepage
 
----
+- [ ] `src/app/(public)/page.tsx` — Hero section ("What tools do AI models actually recommend?"), live feed of recent recommendations (last 24h), trending matches sidebar, top tools by category cards
+- [ ] Create `src/components/public/hero-section.tsx`
 
-### Phase 3.6: Characteristic Sliders Component `[TODO]`
+### 5.3 Feed Page
 
-- [ ] Slider components for 6 wine characteristics: color, aroma, acidity, tannins, body, flavor
-- [ ] Each slider ranges 1–5 with visual labels
-- [ ] Grouped form section component
-- [ ] Both edit and display (read-only) modes
-- [ ] Add shadcn/ui slider if not already present
-- [ ] Tests: slider value changes, form state management
+- [ ] `src/app/(public)/feed/page.tsx` — Full recommendation feed, paginated with load-more
+- [ ] Create `src/components/public/feed-filters.tsx` — Filter by category, LLM, tool, date range
+- [ ] Create `src/components/public/recommendation-card.tsx` — Shows prompt title, LLM name, recommended tool with logo, category badge, reasoning excerpt, confidence indicator
 
-**Key files to create:** `src/components/ui/characteristic-slider.tsx`, `src/components/attendee/characteristics-form.tsx`
+### 5.4 Rankings Pages
 
-**Depends on:** None (standalone)
+- [ ] `src/app/(public)/rankings/page.tsx` — Category selector → tool ranking table
+- [ ] `src/app/(public)/rankings/[categorySlug]/page.tsx` — Category-specific ranking with historical chart
+- [ ] Create `src/components/public/ranking-table.tsx` — Rank, tool name+logo, recommendation rate %, trend arrow, LLM breakdown
+- [ ] Create `src/components/public/trend-indicator.tsx` — Up/down/flat arrows with color
 
----
+### 5.5 Match Pages
 
-### Phase 3.7: Review Form & Submission `[TODO]`
+- [ ] `src/app/(public)/matches/page.tsx` — Grid of active match cards, filter by category
+- [ ] `src/app/(public)/matches/[id]/page.tsx` — Match detail: percentage bar, per-LLM breakdown, per-prompt breakdown, critic comments section
+- [ ] Create `src/components/public/match-card.tsx` — Kalshi-style: two tools with logos, percentage bar, category badge, period dates
+- [ ] Create `src/components/public/percentage-bar.tsx` — Animated split bar showing tool A vs tool B percentages
 
-- [ ] Full review form on wine detail page combining: star rating, characteristic sliders, text notes textarea, save button
-- [ ] Form validation with Zod (rating required, characteristics optional, notes optional)
-- [ ] Success/error toast notifications via Sonner
-- [ ] Edit mode: pre-populate form when user has existing review
-- [ ] Tests: form validation, submission flow, edit mode pre-population
+### 5.6 Entity Detail Pages
 
-**Key files to create:** `src/components/attendee/review-form.tsx`
-**Key files to modify:** `src/app/(attendee)/wine/[id]/page.tsx`
+- [ ] `src/app/(public)/tool/[slug]/page.tsx` — Tool profile: description, categories, recommendation rate chart, which LLMs recommend it, recent matches, critic comments
+- [ ] `src/app/(public)/llm/[slug]/page.tsx` — LLM profile: what it tends to recommend per category, consistency stats
+- [ ] `src/app/(public)/prompt/[slug]/page.tsx` — Prompt detail: how different LLMs responded, latest run results
+- [ ] Create `src/components/public/tool-badge.tsx` — Tool logo + name badge
+- [ ] Create `src/components/public/category-pill.tsx` — Category colored pill
 
-**Depends on:** Phase 3.2, Phase 3.4, Phase 3.5, Phase 3.6
+### 5.7 Shared Components
 
----
+- [ ] Loading skeletons for all data-fetching sections
+- [ ] Empty states for pages with no data yet
+- [ ] Responsive design: mobile-first, tablet, desktop
 
-### Phase 3.8: Swipe Navigation Between Wines `[TODO]`
+**Key files created:** ~15 page files in `src/app/(public)/`, ~12 components in `src/components/public/`
+**Key files modified:** `src/app/globals.css`, `src/app/(public)/layout.tsx`, `src/app/layout.tsx`
 
-- [ ] From search results, swipe left/right between wine detail pages
-- [ ] Touch gesture handling for mobile
-- [ ] Wine count indicator (e.g., "3 of 12")
-- [ ] Preload adjacent wines for smooth transitions
-- [ ] Tests: gesture detection, navigation state
+**Verify:** `pnpm run build` succeeds, visual review of all pages, responsive design check, dark/light toggle works
 
-**Key files to create:** `src/components/attendee/wine-swipe-container.tsx`
-**Key files to modify:** `src/app/(attendee)/wine/[id]/page.tsx`
-
-**TBD: Swipe library** — Options: (a) custom touch event handlers with CSS transforms, (b) `react-swipeable`, (c) `embla-carousel`. Recommendation: start with custom handlers; switch to `embla-carousel` if complex.
-
-**Depends on:** Phase 3.4
+**Depends on:** Step 3 (API layer for data). Step 4 ideally complete so there's real data, but can build with seed data.
 
 ---
 
-## Sprint 4: User Features & Reviews (Weeks 7–8) `[TODO]`
+## Step 6: Admin & Provider Areas `[TODO]`
 
-### Phase 4.1: My Reviews Page `[TODO]`
+**Goal:** Admin dashboard for managing all entities. Provider portal for tool companies to see their analytics.
 
-- [ ] Replace /reviews stub with functional page
-- [ ] List all wines reviewed by current user: wine card (name, vintage, producer), star rating, date
-- [ ] Sort by most recent
-- [ ] Tap to expand showing full review (characteristics, notes)
-- [ ] Edit button → navigate to wine detail with review form in edit mode
-- [ ] Delete button with confirmation dialog
-- [ ] Empty state when no reviews
-- [ ] Tests: review list renders, edit navigation, delete confirmation flow
+### 6.1 Admin Dashboard & Navigation
 
-**Key files to create:** `src/components/attendee/review-list.tsx`, `src/components/attendee/review-list-item.tsx`
-**Key files to modify:** `src/app/(attendee)/reviews/page.tsx`
+- [ ] Update `src/app/admin/layout.tsx` — Adapted from existing manage layout
+- [ ] Update admin sidebar navigation items: Dashboard, Prompts, Tools, Categories, LLMs, Runs, Matches, Critics, Users
+- [ ] `src/app/admin/page.tsx` or `src/app/admin/dashboard/page.tsx` — Stats overview: total tools, total LLMs, total prompts, total runs, active matches, system health
 
-**Depends on:** Phase 3.2, Phase 3.7
+### 6.2 Admin CRUD Pages
 
----
+- [ ] `src/app/admin/prompts/page.tsx` — List, create, edit, toggle active, preview prompt content
+- [ ] `src/app/admin/tools/page.tsx` — List (filterable), create, edit, verify, assign categories
+- [ ] `src/app/admin/categories/page.tsx` — List, create, edit, reorder (display order)
+- [ ] `src/app/admin/llms/page.tsx` — List, create, edit, toggle active
+- [ ] `src/app/admin/runs/page.tsx` — Run history with status badges, drill into run details, "Trigger Manual Run" button
+- [ ] `src/app/admin/matches/page.tsx` — List active/settled, create manual match, settle
+- [ ] `src/app/admin/critics/page.tsx` — List, verify/unverify, view comments
+- [ ] `src/app/admin/users/page.tsx` — List, change roles (user → provider, user → critic, etc.)
 
-### Phase 4.2: My Favorites Page `[TODO]`
+### 6.3 Admin Components
 
-- [ ] Replace /favorites stub with functional page
-- [ ] List all favorited wines as wine cards
-- [ ] Remove from favorites button on each card
-- [ ] Tap card to navigate to wine detail
-- [ ] Empty state when no favorites
-- [ ] Tests: favorites list renders, unfavorite removes from list, empty state
+- [ ] Create `src/components/admin/data-table.tsx` — Generic admin table with sort, filter, pagination (reuse shadcn table)
+- [ ] Create `src/components/admin/stat-card.tsx` — Dashboard stat card
+- [ ] Create `src/components/admin/run-status-badge.tsx` — Color-coded run status
 
-**Key files to create:** `src/components/attendee/favorites-list.tsx`
-**Key files to modify:** `src/app/(attendee)/favorites/page.tsx`
+### 6.4 Provider Portal
 
-**Depends on:** Phase 3.3, Phase 2.8
+- [ ] `src/app/provider/layout.tsx` — Simpler layout, scoped to provider's tool
+- [ ] `src/app/provider/page.tsx` — Provider dashboard: their tool's recommendation stats, trend chart, category breakdown, which LLMs recommend them
+- [ ] `src/app/provider/matches/page.tsx` — Matches involving their tool
+- [ ] `src/app/provider/analytics/page.tsx` — Detailed analytics: recommendation rate over time, per-prompt breakdown, head-to-head comparisons
 
----
+### 6.5 Role-Based Routing
 
-### Phase 4.3: User Profile Enhancements `[TODO]`
+- [ ] Update `src/middleware.ts` — Route protection for `/admin` (admin role only), `/provider` (provider role only)
+- [ ] Role-based redirects after login: admin → `/admin`, provider → `/provider`, others → `/`
 
-- [ ] Show review statistics on profile: total reviews, average rating given, favorite wine type
-- [ ] Show account creation date
-- [ ] Add privacy policy link
-- [ ] Add "Delete Account" option with confirmation dialog
-- [ ] Add `getStats` query and `deleteAccount` mutation to user router
-- [ ] Tests: stats calculation, delete account cascade behavior
+**Key files created:** ~10 admin pages, ~4 provider pages, ~5 admin/provider components
+**Key files modified:** `src/middleware.ts`, `src/app/admin/layout.tsx`
 
-**Key files to modify:** `src/app/(attendee)/profile/page.tsx`, `src/server/api/routers/user.ts`
+**Reuse:** Admin layout/sidebar pattern from `src/components/manage/admin-layout.tsx` (same structure, new nav items)
 
-**Depends on:** Phase 1.6, Phase 3.1
+**Verify:** Admin CRUD flows work end-to-end, non-admin users blocked from `/admin`, provider can only see own tool's data, role-based redirects work
 
----
-
-### Phase 4.4: Privacy Policy Page `[TODO]`
-
-- [ ] Static privacy policy page at `/privacy`
-- [ ] GDPR compliance text (data collection, storage, user rights, contact info)
-- [ ] Link from profile page
-- [ ] Tests: page renders, links work
-
-**Key files to create:** `src/app/privacy/page.tsx`
-
-**Depends on:** None
+**Depends on:** Steps 3 and 5
 
 ---
 
-## Sprint 5: Producer & Admin Features (Weeks 9–10) `[TODO]`
+## Step 7: Critics, Comments & Polish `[TODO]`
 
-### Phase 5.1: Producer Layout & Dashboard `[TODO]`
+**Goal:** Verified critic flow, commenting system, SEO, performance optimization, error handling, and final polish.
 
-- [ ] New route group `/produce` for producer-role users
-- [ ] Producer dashboard showing: their wines count, average ratings, fair participation
-- [ ] Producer sidebar navigation (My Wines, Fairs, Profile)
-- [ ] Role-based redirect: producer → `/produce`
-- [ ] Update middleware for `/produce` protected routes
-- [ ] Tests: role-based routing (producer sees producer UI)
+### 7.1 Critic System
 
-**Key files to create:** `src/app/produce/layout.tsx`, `src/app/produce/page.tsx`, `src/components/producer/producer-layout.tsx`, `src/components/producer/producer-sidebar.tsx`
-**Key files to modify:** `src/middleware.ts`
+- [ ] `src/app/(public)/critics/page.tsx` — Public critic directory: verified critics with photo, bio, expertise areas
+- [ ] `src/app/(public)/critic/[id]/page.tsx` — Critic profile: bio, expertise, all their comments
 
-**Depends on:** Phase 2.3
+### 7.2 Comment Threads
 
----
+- [ ] Create `src/components/public/comment-section.tsx` — Comment thread component, used on match detail, tool profile, recommendation views
+- [ ] Create `src/components/public/comment-form.tsx` — Comment creation form (only visible to verified critics, disabled for conflicted categories)
+- [ ] Create `src/components/public/critic-badge.tsx` — Verified critic badge with title/company
+- [ ] Integrate comment sections into match detail, tool profile, and recommendation pages
 
-### Phase 5.2: Producer Wine Management `[TODO]`
+### 7.3 SEO & Social
 
-- [ ] Wine list page showing producer's own wines
-- [ ] Create wine form with all fields: name, vintage, type, grape, alc%, region, image upload, plus backend-only fields (fermentation container, oak aging, lees contact, sediment contact)
-- [ ] Edit wine page
-- [ ] Delete wine with confirmation
-- [ ] Vintage linking: select an existing wine as parent when creating a new vintage
-- [ ] Tests: wine form validation, create/update flow, vintage linking
+- [ ] Create `src/app/api/og/route.tsx` — Open Graph image generation for tool pages, match pages (for social sharing)
+- [ ] Create `src/app/sitemap.ts` — Dynamic sitemap covering tools, matches, categories, prompts
+- [ ] Create `src/app/robots.ts` — Robots.txt
+- [ ] Add `<head>` metadata (title, description, OG tags) to every page
 
-**Key files to create:** `src/app/produce/wines/page.tsx`, `src/app/produce/wines/new/page.tsx`, `src/app/produce/wines/[id]/edit/page.tsx`, `src/components/producer/wine-form.tsx`, `src/components/producer/wine-list.tsx`
+### 7.4 Error Handling & Loading States
 
-**TBD: Image upload** — Options: (a) Supabase Storage with signed URLs, (b) Cloudinary, (c) UploadThing. Recommendation: Supabase Storage since already in the stack.
+- [ ] Add loading skeletons for all data-fetching pages
+- [ ] Add error boundaries with meaningful error states
+- [ ] Add empty states for all pages when no data exists
+- [ ] Add rate limiting on cron endpoints
 
-**Depends on:** Phase 2.4, Phase 5.1
+### 7.5 Performance & Logging
 
----
+- [ ] Ensure recommendation aggregation queries have proper database indexes
+- [ ] Add logging for automation pipeline (run results, parse failures, API errors)
+- [ ] Mobile-responsive pass on all pages
 
-### Phase 5.3: Producer Fair Participation `[TODO]`
+**Key files created:** 2 critic pages, 3 comment components, OG route, sitemap, robots
+**Key files modified:** Various public pages to add comment sections
 
-- [ ] View upcoming/active fairs
-- [ ] Select existing wines from catalog to present at a fair (no duplicates)
-- [ ] View booth info
-- [ ] View attendee ratings for their wines at a fair
-- [ ] Tests: wine-to-fair assignment, duplicate prevention
+**Verify:** Full end-to-end flow: admin creates prompt → triggers run → results appear in feed → match auto-creates → critic comments → provider views analytics. Lighthouse performance audit. Mobile responsive check.
 
-**Key files to create:** `src/app/produce/fairs/page.tsx`, `src/app/produce/fairs/[id]/page.tsx`, `src/components/producer/fair-wine-selector.tsx`
-
-**Depends on:** Phase 2.5, Phase 5.1, Phase 5.2
+**Depends on:** Steps 5 and 6
 
 ---
 
-### Phase 5.4: Admin Wine Management `[TODO]`
+## Dependency Graph
 
-- [ ] Replace /manage/wines stub with data table (sortable, filterable, searchable)
-- [ ] Create/edit/delete any wine (admin overrides ownership)
-- [ ] Assign wine to producer
-- [ ] Bulk import placeholder (UI with instructions, actual import TBD)
-- [ ] Add shadcn/ui data table if needed
-- [ ] Tests: table rendering, CRUD operations, filter/sort
+```
+Step 1 (Rebrand & Cleanup)
+  └→ Step 2 (Database Schema & Seed)
+       └→ Step 3 (tRPC API Layer)
+            ├→ Step 4 (Automation Engine) ──┐
+            └→ Step 5 (Public Website UI) ──┤
+                                            └→ Step 6 (Admin & Provider)
+                                                 └→ Step 7 (Critics & Polish)
+```
 
-**Key files to create:** `src/components/manage/wines-table.tsx`, `src/components/manage/wine-admin-form.tsx`
-**Key files to modify:** `src/app/manage/wines/page.tsx`
-
-**Depends on:** Phase 2.4
-
----
-
-### Phase 5.5: Admin Producer Management `[TODO]`
-
-- [ ] Replace /manage/producers stub with data table
-- [ ] Create/edit/delete producers
-- [ ] Assign user account to producer profile
-- [ ] View producer's wines inline
-- [ ] Tests: table rendering, CRUD operations
-
-**Key files to create:** `src/components/manage/producers-table.tsx`, `src/components/manage/producer-admin-form.tsx`
-**Key files to modify:** `src/app/manage/producers/page.tsx`
-
-**Depends on:** Phase 2.3
+**Parallelism:** Steps 4 and 5 can be worked on simultaneously after Step 3 is complete.
 
 ---
 
-### Phase 5.6: Admin Fair Management `[TODO]`
+## Initial Tool Categories
 
-- [ ] Replace /manage/fairs stub with data table
-- [ ] Create/edit/delete fairs
-- [ ] Toggle active fair
-- [ ] Manage wines and producers in a fair
-- [ ] View fair analytics (attendee count, reviews submitted)
-- [ ] Tests: CRUD, active fair toggle, analytics queries
-
-**Key files to create:** `src/components/manage/fairs-table.tsx`, `src/components/manage/fair-admin-form.tsx`, `src/components/manage/fair-detail-admin.tsx`
-**Key files to modify:** `src/app/manage/fairs/page.tsx`
-
-**Depends on:** Phase 2.5
-
----
-
-### Phase 5.7: Admin Attendee Management `[TODO]`
-
-- [ ] Replace /manage/attendees stub with data table
-- [ ] View attendee profiles, reviews, favorites
-- [ ] Change user roles (promote to producer, etc.)
-- [ ] Disable/enable accounts
-- [ ] Add admin-only `listUsers` and `updateRole` to user router
-- [ ] Tests: user listing, role change, authorization checks
-
-**Key files to create:** `src/components/manage/attendees-table.tsx`
-**Key files to modify:** `src/app/manage/attendees/page.tsx`, `src/server/api/routers/user.ts`
-
-**Depends on:** Phase 1.2
-
----
-
-### Phase 5.8: Admin Dashboard with Real Data `[TODO]`
-
-- [ ] Replace mock data with real tRPC queries
-- [ ] Stats cards: total producers, total wines, active fairs, registered attendees
-- [ ] Latest ratings list from actual reviews
-- [ ] Create `stats` tRPC router for aggregate queries
-- [ ] Tests: stats queries return correct counts
-
-**Key files to create:** `src/server/api/routers/stats.ts`
-**Key files to modify:** `src/app/manage/dashboard/page.tsx`, `src/server/api/root.ts`
-
-**Depends on:** Phase 3.1, Phase 5.4, Phase 5.5, Phase 5.6
-
----
-
-## Sprint 6: Export, Share & Polish (Weeks 11–12) `[TODO]`
-
-### Phase 6.1: PDF Review Export `[TODO]`
-
-- [ ] Generate PDF containing all of a user's reviews
-- [ ] Include per review: wine name, vintage, producer, rating, characteristics, notes, date
-- [ ] Wine2cents branding/header
-- [ ] Download button on /reviews page
-- [ ] Tests: PDF generation produces valid output, includes correct review data
-
-**TBD: PDF library** — Options: (a) `@react-pdf/renderer` (React-based, client-side), (b) `jsPDF` (lightweight), (c) `puppeteer` (server-side HTML-to-PDF), (d) `pdfmake` (declarative). Recommendation: `@react-pdf/renderer` for React ecosystem fit.
-
-**Key files to create:** `src/components/attendee/review-pdf.tsx`
-**Key files to modify:** `src/app/(attendee)/reviews/page.tsx`
-
-**Depends on:** Phase 4.1
-
----
-
-### Phase 6.2: Share Reviews `[TODO]`
-
-- [ ] Share button on /reviews page using Web Share API (native sharing on mobile for WhatsApp, Viber, email)
-- [ ] Desktop fallback: email link, copy link
-- [ ] Share the generated PDF or a summary link
-- [ ] Tests: Web Share API detection, fallback behavior
-
-**Key files to create:** `src/components/attendee/share-reviews.tsx`, `src/lib/share.ts`
-**Key files to modify:** `src/app/(attendee)/reviews/page.tsx`
-
-**Depends on:** Phase 6.1
-
----
-
-### Phase 6.3: Label Scanning & Camera `[TODO]`
-
-- [ ] Camera button on homepage opens device camera (WebRTC / getUserMedia)
-- [ ] Capture wine label image
-- [ ] Send image to OCR service to extract wine name / producer
-- [ ] Auto-populate search with extracted text
-- [ ] Graceful fallback if OCR fails or camera not available
-- [ ] Tests: camera permission handling, OCR response parsing, search redirect
-
-**TBD: OCR technology** — Options: (a) Google Cloud Vision API (high accuracy, paid), (b) Tesseract.js (client-side, free, lower accuracy), (c) AWS Textract (paid), (d) Azure Computer Vision (paid). Recommendation: Google Cloud Vision API for best accuracy on wine labels. Consider Tesseract.js as a free fallback.
-
-**Key files to create:** `src/app/(attendee)/scan/page.tsx`, `src/components/attendee/camera-capture.tsx`, `src/components/attendee/label-scanner.tsx`, `src/lib/ocr.ts`
-**Optionally:** `src/server/api/routers/scan.ts` (if server-side OCR)
-
-**Depends on:** Phase 2.8
-
----
-
-### Phase 6.4: Voice Command Search `[TODO]`
-
-- [ ] Voice button on homepage captures speech input
-- [ ] Convert speech to text
-- [ ] Auto-populate search bar with transcript and trigger search
-- [ ] Visual feedback during recording (pulsing mic icon, transcript preview)
-- [ ] Tests: Speech API availability detection, transcript handling
-
-**TBD: Speech-to-text** — Options: (a) Web Speech API (browser-native, free, Chrome/Safari), (b) Whisper API (OpenAI, paid, higher accuracy), (c) Google Speech-to-Text (paid). Recommendation: Web Speech API for MVP (free, good enough); Whisper as future upgrade.
-
-**Key files to create:** `src/components/attendee/voice-search.tsx`, `src/lib/speech.ts`
-**Key files to modify:** `src/app/(attendee)/page.tsx` or search page
-
-**Depends on:** Phase 2.8
-
----
-
-### Phase 6.5: UI Polish & Accessibility `[TODO]`
-
-- [ ] Review all pages for mobile / tablet / desktop responsiveness
-- [ ] Add loading states and skeleton screens for all data-fetching pages
-- [ ] Add error boundaries and fallback UI
-- [ ] Add empty states for all list pages (reviews, favorites, search results)
-- [ ] Consistent spacing, typography, color usage
-- [ ] Accessibility audit: aria labels, keyboard navigation, contrast ratios
-- [ ] Tests: accessibility tests with @testing-library
-
-**Key files to modify:** various components across the project
-
-**Depends on:** All previous phases
-
----
-
-### Phase 6.6: Production Deployment `[TODO]`
-
-- [ ] Set up Vercel production deployment
-- [ ] Configure Supabase production project
-- [ ] Document all required environment variables in `.env.example`
-- [ ] Database migration strategy for production
-- [ ] Image optimization configuration (Vercel Image Optimization)
-- [ ] Error monitoring setup (e.g., Sentry — TBD)
-- [ ] Performance baseline (Core Web Vitals)
-
-**Key files to modify:** `next.config.js`, `.env.example`
-
-**Depends on:** All previous phases
-
----
-
-## Post-MVP: Sprint 7 — AI Recommendations (Weeks 13–14) `[TODO]`
-
-### Phase 7.1: User Preference Analysis `[TODO]`
-
-- [ ] Aggregate user review data to build preference profiles
-- [ ] Calculate preferred wine types, grape varieties, regions, characteristic ranges
-- [ ] Store computed preferences (new table or materialized view)
-- [ ] Tests: preference calculation from review data
-
-**TBD: Computation approach** — Options: (a) PostgreSQL aggregate queries from tRPC, (b) materialized views, (c) background jobs (Inngest, BullMQ). Recommendation: PostgreSQL aggregates first; materialized views if slow.
-
-**Key files to create:** `src/server/api/routers/recommendations.ts`
-
-**Depends on:** Phase 3.1, Phase 3.2
-
----
-
-### Phase 7.2: Recommendation Engine `[TODO]`
-
-- [ ] Wine similarity algorithm based on type, grape, region, characteristic scores
-- [ ] "Next Wine to Try" — recommend wines at the active fair that match preferences and haven't been tried
-- [ ] API endpoint returning top N recommendations with explanation text
-- [ ] Tests: recommendation logic, filtering already-reviewed wines
-
-**TBD: Algorithm** — Options: (a) content-based filtering (cosine similarity on attributes), (b) collaborative filtering (users who liked X liked Y), (c) LLM-based (send profile + catalog to Claude/GPT). Recommendation: content-based for MVP (simpler, works with small data); collaborative when userbase grows.
-
-**Key files to modify:** `src/server/api/routers/recommendations.ts`
-
-**Depends on:** Phase 7.1
-
----
-
-### Phase 7.3: Recommendation UI `[TODO]`
-
-- [ ] "Recommended for You" section on homepage
-- [ ] "Try Next" card on wine detail page
-- [ ] Explanation text ("Based on your love for Sangiovese...")
-- [ ] Dismissible recommendation cards
-- [ ] Feedback loop (helpful? yes/no)
-- [ ] Tests: recommendation card renders, dismiss works, feedback submission
-
-**Key files to create:** `src/components/attendee/recommendation-card.tsx`, `src/components/attendee/recommendations-section.tsx`
-**Key files to modify:** `src/app/(attendee)/page.tsx`, `src/app/(attendee)/wine/[id]/page.tsx`
-
-**Depends on:** Phase 7.2
-
----
-
-## Post-MVP: Sprint 8 — Advanced Features (Weeks 15–16) `[TODO]`
-
-### Phase 8.1: Gamification System `[TODO]`
-
-- [ ] Points system: earn points for reviews, fair attendance, favorites
-- [ ] Achievement badges (first review, 10 reviews, all wines at a fair, etc.)
-- [ ] Leaderboard
-- [ ] Display on profile page
-- [ ] New schema tables: `wine_fair_achievement`, `wine_fair_user_achievement`, `wine_fair_points_log`
-
-**Depends on:** Phase 3.2, Phase 4.3
-
----
-
-### Phase 8.2: Enhanced User Profiles `[TODO]`
-
-- [ ] Optional fields: age, gender, city
-- [ ] Fun questionnaires about food/drink preferences
-- [ ] Taste profile visualization (radar chart of preferred characteristics)
-
-**Depends on:** Phase 4.3, Phase 7.1
-
----
-
-### Phase 8.3: Ticket Integration `[TODO]`
-
-- [ ] Integration with Urbo ticketing platform for Bulgarian wine fairs
-- [ ] Show ticket status within the app
-- [ ] QR code scanning for fair entry
-
-**TBD: Urbo API** — Need to investigate whether Urbo (https://urboapp.com/) has a public API. May need deep link integration or a generic ticketing approach instead.
-
-**Depends on:** Phase 2.5
-
----
-
-### Phase 8.4: Voice Notes for Reviews `[TODO]`
-
-- [ ] Record voice notes during wine review via MediaRecorder API
-- [ ] Store audio files in Supabase Storage
-- [ ] Playback on review detail page
-- [ ] Optional transcription to text notes
-
-**TBD: Transcription** — Options: (a) Whisper API for transcription, (b) browser-native (limited). Recommendation: Supabase Storage for audio files + optional Whisper transcription.
-
-**Key files to create:** `src/components/attendee/voice-note-recorder.tsx`, `src/lib/audio.ts`
-
-**Depends on:** Phase 3.7
-
----
-
-### Phase 8.5: Wine Sales Platform `[TODO]`
-
-- [ ] E-commerce for exclusive wines ("wine of the month")
-- [ ] Product pages, cart, checkout
-- [ ] Pre-orders, limited quantity tracking, countdowns
-- [ ] Dynamic pricing algorithm
-- [ ] Targeted offers based on user preferences
-
-**TBD: Payment processing** — Options: Stripe, PayPal, local Bulgarian payment providers. This is the largest post-MVP feature and will need its own detailed planning.
-
-**Depends on:** Phase 5.2, Phase 7.1
-
----
-
-### Phase 8.6: Google OAuth Integration `[TODO]` *(optional)*
-
-- [ ] Add "Sign in with Google" button to login page
-- [ ] Add "Sign up with Google" option to signup page
-- [ ] Implement `signInWithGoogle` in auth client helpers
-- [ ] Handle OAuth callback in `/auth/callback/route.ts`
-- [ ] Configure Supabase Google OAuth provider (document required env vars)
-- [ ] Tests: unit test for Google auth methods (mock Supabase), integration test for callback route
-
-**Key files to modify:** `src/components/auth/login-form.tsx`, `src/components/auth/signup-form.tsx`, `src/lib/auth-client.ts`, `src/app/auth/callback/route.ts`
-
-**Depends on:** Phase 1.1, Supabase dashboard configuration for Google OAuth credentials
-
----
-
-## TBD Decisions Summary
-
-| Decision | Options | Recommended | Phase |
+| # | Category | Slug | Examples |
 |---|---|---|---|
-| Image upload | Supabase Storage, Cloudinary, UploadThing | Supabase Storage | 5.2 |
-| OCR for label scanning | Google Cloud Vision, Tesseract.js, AWS Textract, Azure CV | Google Cloud Vision | 6.3 |
-| i18n library | next-intl, next-i18next, react-i18next, Paraglide.js | next-intl | 2.10 |
-| PDF generation | @react-pdf/renderer, jsPDF, puppeteer, pdfmake | @react-pdf/renderer | 6.1 |
-| Speech-to-text | Web Speech API, Whisper API, Google Speech-to-Text | Web Speech API | 6.4 |
-| Swipe navigation | Custom handlers, react-swipeable, embla-carousel | Custom → embla | 3.8 |
-| Recommendation algorithm | Content-based, Collaborative, LLM-based | Content-based | 7.2 |
-| Preference computation | PostgreSQL aggregates, Materialized views, Background jobs | PostgreSQL aggregates | 7.1 |
-| Urbo ticket integration | Direct API, Deep links, Generic ticketing | Investigate API | 8.3 |
-| Voice note transcription | Whisper API, Browser-native | Whisper API | 8.4 |
-| Payment processing | Stripe, PayPal, Local providers | Stripe | 8.5 |
-| Error monitoring | Sentry, LogRocket, Datadog | Sentry | 6.6 |
+| 1 | Authentication | `auth` | Clerk, Auth0, Supabase Auth, NextAuth.js |
+| 2 | Database | `database` | Supabase, PlanetScale, Neon, MongoDB Atlas |
+| 3 | ORM / Data Access | `orm` | Prisma, Drizzle, Kysely |
+| 4 | Email | `email` | Resend, SendGrid, Postmark |
+| 5 | Payments | `payments` | Stripe, Paddle, LemonSqueezy |
+| 6 | File Storage | `storage` | Supabase Storage, Cloudinary, UploadThing, S3 |
+| 7 | Hosting / Deployment | `hosting` | Vercel, Netlify, Railway, Fly.io |
+| 8 | CSS / Styling | `styling` | Tailwind CSS, Bootstrap, Panda CSS |
+| 9 | UI Components | `ui-components` | shadcn/ui, Radix UI, Chakra UI, MUI |
+| 10 | State Management | `state` | Zustand, Jotai, Redux Toolkit |
+| 11 | API Framework | `api` | tRPC, GraphQL (Apollo), REST (Hono) |
+| 12 | CMS | `cms` | Sanity, Contentful, Strapi, Payload |
+| 13 | Search | `search` | Algolia, Typesense, Meilisearch |
+| 14 | Analytics | `analytics` | PostHog, Plausible, Mixpanel |
+| 15 | Monitoring / Error Tracking | `monitoring` | Sentry, LogRocket, Datadog |
+| 16 | AI / LLM Integration | `ai` | OpenAI, Anthropic, Replicate |
+| 17 | Realtime | `realtime` | Pusher, Ably, Supabase Realtime |
+| 18 | Testing | `testing` | Vitest, Jest, Playwright, Cypress |
+| 19 | CI/CD | `ci-cd` | GitHub Actions, Vercel CI |
+| 20 | Background Jobs | `jobs` | Inngest, Trigger.dev, BullMQ |
+| 21 | Notifications | `notifications` | Novu, OneSignal |
+
+---
+
+## Key Technical Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| LLM Gateway | OpenRouter | Single API for all models, unified billing, model switching |
+| LLM Evaluation | Promptfoo | Industry standard for LLM eval, structured scoring |
+| Response Parsing | Structured JSON output with regex fallback | Most LLMs support structured output; fallback handles edge cases |
+| Unknown Tools | Auto-create as unverified, flag for admin | Keeps system self-extending as LLMs recommend new tools |
+| Match Scoring | Recommendation count over time period | Objective metric from data, not user votes |
+| Match Creation | Auto-generated when tool pairs have enough data | Scales without manual curation |
+| Dark Mode | Default via next-themes | Developer audience preference, Kalshi inspiration |
+| i18n | Dropped (English only) | Global dev audience, simplifies codebase |
+| Auth | Supabase OTP (kept from wine project) | Works well, already implemented |
+| Table Prefix | `preseason_*` | Multi-project schema safety via pgTableCreator |

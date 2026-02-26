@@ -22,7 +22,7 @@ export async function getUserProfile(db: Database, userId: string) {
 export async function requireRole(
   db: Database,
   userId: string,
-  allowedRoles: Array<'admin' | 'producer' | 'attendee'>,
+  allowedRoles: Array<'admin' | 'provider' | 'critic' | 'user'>,
 ) {
   const profile = await getUserProfile(db, userId)
   if (!allowedRoles.includes(profile.role)) {
