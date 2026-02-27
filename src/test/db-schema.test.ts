@@ -584,12 +584,15 @@ describe('Database Schema', () => {
   describe('Matches', () => {
     it('should create with FK references and defaults', async () => {
       const db = getTestDb()
-      const toolA = first(
-        await db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
-      )
-      const toolB = first(
-        await db.insert(tools).values({ name: 'PlanetScale', slug: 'planetscale' }).returning(),
-      )
+      const [inserted1, inserted2] = await Promise.all([
+        db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
+        db.insert(tools).values({ name: 'PlanetScale', slug: 'planetscale' }).returning(),
+      ])
+      // Canonical ordering: toolAId < toolBId
+      const [toolA, toolB] =
+        first(inserted1).id < first(inserted2).id
+          ? [first(inserted1), first(inserted2)]
+          : [first(inserted2), first(inserted1)]
       const cat = first(
         await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
       )
@@ -613,10 +616,15 @@ describe('Database Schema', () => {
 
     it('should enforce unique (toolAId, toolBId, categoryId, periodStart)', async () => {
       const db = getTestDb()
-      const toolA = first(
-        await db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
-      )
-      const toolB = first(await db.insert(tools).values({ name: 'Neon', slug: 'neon' }).returning())
+      const [inserted1, inserted2] = await Promise.all([
+        db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
+        db.insert(tools).values({ name: 'Neon', slug: 'neon' }).returning(),
+      ])
+      // Canonical ordering: toolAId < toolBId
+      const [toolA, toolB] =
+        first(inserted1).id < first(inserted2).id
+          ? [first(inserted1), first(inserted2)]
+          : [first(inserted2), first(inserted1)]
       const cat = first(
         await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
       )
@@ -639,10 +647,15 @@ describe('Database Schema', () => {
 
     it('should support all match status values', async () => {
       const db = getTestDb()
-      const toolA = first(
-        await db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
-      )
-      const toolB = first(await db.insert(tools).values({ name: 'Neon', slug: 'neon' }).returning())
+      const [inserted1, inserted2] = await Promise.all([
+        db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
+        db.insert(tools).values({ name: 'Neon', slug: 'neon' }).returning(),
+      ])
+      // Canonical ordering: toolAId < toolBId
+      const [toolA, toolB] =
+        first(inserted1).id < first(inserted2).id
+          ? [first(inserted1), first(inserted2)]
+          : [first(inserted2), first(inserted1)]
       const cat = first(
         await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
       )

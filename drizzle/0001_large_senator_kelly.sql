@@ -1,0 +1,1 @@
+ALTER TABLE "preseason_match" ADD CONSTRAINT "match_tool_order_chk" CHECK (tool_a_id < tool_b_id);
