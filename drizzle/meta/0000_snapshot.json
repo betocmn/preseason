@@ -1,5 +1,5 @@
 {
-  "id": "df0bed69-3596-4096-a8a0-2391e94c0831",
+  "id": "1e7ebc3e-a497-47bb-abd7-6ea111e16e70",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -314,8 +314,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "preseason_critic_profile_verified_by_preseason_user_profile_id_fk": {
-          "name": "preseason_critic_profile_verified_by_preseason_user_profile_id_fk",
+        "critic_verified_by_user_fk": {
+          "name": "critic_verified_by_user_fk",
           "tableFrom": "preseason_critic_profile",
           "tableTo": "preseason_user_profile",
           "columnsFrom": ["verified_by"],
@@ -657,11 +657,13 @@
           "primaryKey": false,
           "notNull": true
         },
-        "content": {
-          "name": "content",
-          "type": "text",
+        "level": {
+          "name": "level",
+          "type": "prompt_level",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'vibe-coder'"
         },
         "description": {
           "name": "description",
@@ -696,17 +698,23 @@
         }
       },
       "indexes": {
-        "prompt_slug_idx": {
-          "name": "prompt_slug_idx",
+        "prompt_slug_level_idx": {
+          "name": "prompt_slug_level_idx",
           "columns": [
             {
               "expression": "slug",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "level",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -729,13 +737,7 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "preseason_prompt_slug_unique": {
-          "name": "preseason_prompt_slug_unique",
-          "nullsNotDistinct": false,
-          "columns": ["slug"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -833,15 +835,6 @@
         }
       },
       "foreignKeys": {
-        "preseason_recommendation_run_result_id_preseason_run_result_id_fk": {
-          "name": "preseason_recommendation_run_result_id_preseason_run_result_id_fk",
-          "tableFrom": "preseason_recommendation",
-          "tableTo": "preseason_run_result",
-          "columnsFrom": ["run_result_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "preseason_recommendation_tool_id_preseason_tool_id_fk": {
           "name": "preseason_recommendation_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_recommendation",
@@ -856,6 +849,15 @@
           "tableFrom": "preseason_recommendation",
           "tableTo": "preseason_category",
           "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "recommendation_run_result_fk": {
+          "name": "recommendation_run_result_fk",
+          "tableFrom": "preseason_recommendation",
+          "tableTo": "preseason_run_result",
+          "columnsFrom": ["run_result_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -909,18 +911,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
-        },
-        "eval_score": {
-          "name": "eval_score",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "eval_details": {
-          "name": "eval_details",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "response_time_ms": {
           "name": "response_time_ms",
@@ -1457,6 +1447,11 @@
       "name": "parse_status",
       "schema": "public",
       "values": ["pending", "success", "failed"]
+    },
+    "public.prompt_level": {
+      "name": "prompt_level",
+      "schema": "public",
+      "values": ["software-dev-beginner", "software-dev-experienced", "vibe-coder"]
     },
     "public.run_status": {
       "name": "run_status",

@@ -1,0 +1,1 @@
+Create a job board where companies post positions and applicants apply. Include company profiles, resume uploads, application tracking, email notifications, search with filters, and saved job listings.

@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm'
 import {
+  foreignKey,
   index,
   pgEnum,
   pgTableCreator,
@@ -24,6 +25,11 @@ export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'comple
 export const parseStatusEnum = pgEnum('parse_status', ['pending', 'success', 'failed'])
 export const matchStatusEnum = pgEnum('match_status', ['active', 'settled', 'archived'])
 export const commentTargetEnum = pgEnum('comment_target', ['recommendation', 'match', 'tool'])
+export const promptLevelEnum = pgEnum('prompt_level', [
+  'software-dev-beginner',
+  'software-dev-experienced',
+  'vibe-coder',
+])
 
 // ============================================================================
 // USER & AUTH TABLES
@@ -153,8 +159,8 @@ export const prompts = createTable(
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
     title: d.varchar({ length: 255 }).notNull(),
-    slug: d.varchar({ length: 255 }).notNull().unique(),
-    content: d.text().notNull(),
+    slug: d.varchar({ length: 255 }).notNull(),
+    level: promptLevelEnum().notNull().default('vibe-coder'),
     description: d.text(),
     expectedCategories: d.text('expected_categories').array(),
     isActive: d.boolean('is_active').notNull().default(true),
@@ -164,7 +170,10 @@ export const prompts = createTable(
       .notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
   }),
-  (t) => [index('prompt_slug_idx').on(t.slug), index('prompt_is_active_idx').on(t.isActive)],
+  (t) => [
+    uniqueIndex('prompt_slug_level_idx').on(t.slug, t.level),
+    index('prompt_is_active_idx').on(t.isActive),
+  ],
 )
 
 // ============================================================================
@@ -208,8 +217,6 @@ export const runResults = createTable(
       .references(() => llms.id, { onDelete: 'cascade' }),
     rawResponse: d.text('raw_response'),
     parseStatus: parseStatusEnum('parse_status').notNull().default('pending'),
-    evalScore: d.real('eval_score'),
-    evalDetails: d.jsonb('eval_details'),
     responseTimeMs: d.integer('response_time_ms'),
     createdAt: d
       .timestamp({ withTimezone: true })
@@ -226,10 +233,7 @@ export const recommendations = createTable(
   'recommendation',
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
-    runResultId: d
-      .uuid('run_result_id')
-      .notNull()
-      .references(() => runResults.id, { onDelete: 'cascade' }),
+    runResultId: d.uuid('run_result_id').notNull(),
     toolId: d
       .uuid('tool_id')
       .notNull()
@@ -247,6 +251,11 @@ export const recommendations = createTable(
       .notNull(),
   }),
   (t) => [
+    foreignKey({
+      name: 'recommendation_run_result_fk',
+      columns: [t.runResultId],
+      foreignColumns: [runResults.id],
+    }).onDelete('cascade'),
     index('recommendation_tool_category_idx').on(t.toolId, t.categoryId),
     index('recommendation_run_result_id_idx').on(t.runResultId),
   ],
@@ -311,7 +320,7 @@ export const criticProfiles = createTable(
     expertiseAreas: d.text('expertise_areas').array(),
     excludedCategories: d.text('excluded_categories').array(),
     verifiedAt: d.timestamp('verified_at', { withTimezone: true }),
-    verifiedBy: d.uuid('verified_by').references(() => userProfiles.id, { onDelete: 'set null' }),
+    verifiedBy: d.uuid('verified_by'),
     isActive: d.boolean('is_active').notNull().default(true),
     createdAt: d
       .timestamp({ withTimezone: true })
@@ -319,7 +328,14 @@ export const criticProfiles = createTable(
       .notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
   }),
-  (t) => [index('critic_profile_user_id_idx').on(t.userId)],
+  (t) => [
+    foreignKey({
+      name: 'critic_verified_by_user_fk',
+      columns: [t.verifiedBy],
+      foreignColumns: [userProfiles.id],
+    }).onDelete('set null'),
+    index('critic_profile_user_id_idx').on(t.userId),
+  ],
 )
 
 export const comments = createTable(
@@ -352,7 +368,11 @@ export const comments = createTable(
 
 export const userProfileRelations = relations(userProfiles, ({ one, many }) => ({
   tools: many(tools),
-  criticProfile: one(criticProfiles),
+  criticProfile: one(criticProfiles, {
+    fields: [userProfiles.id],
+    references: [criticProfiles.userId],
+    relationName: 'criticUser',
+  }),
 }))
 
 export const categoryRelations = relations(categories, ({ many }) => ({
@@ -450,6 +470,7 @@ export const criticProfileRelations = relations(criticProfiles, ({ one, many }) 
   user: one(userProfiles, {
     fields: [criticProfiles.userId],
     references: [userProfiles.id],
+    relationName: 'criticUser',
   }),
   verifier: one(userProfiles, {
     fields: [criticProfiles.verifiedBy],

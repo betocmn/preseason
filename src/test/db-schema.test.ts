@@ -296,7 +296,6 @@ describe('Database Schema', () => {
       await db.insert(prompts).values({
         title: 'Real Estate Website',
         slug: 'real-estate-website',
-        content: 'Build a real estate website with admin area',
         description: 'A typical real estate site project',
       })
 
@@ -310,12 +309,55 @@ describe('Database Schema', () => {
       await db.insert(prompts).values({
         title: 'SaaS App',
         slug: 'saas-app',
-        content: 'Build a SaaS app with auth and billing',
         expectedCategories: ['auth', 'payments', 'database'],
       })
 
       const result = await db.select().from(prompts)
       expect(result[0]?.expectedCategories).toEqual(['auth', 'payments', 'database'])
+    })
+
+    it('should default level to vibe-coder', async () => {
+      const db = getTestDb()
+      await db.insert(prompts).values({
+        title: 'Test Prompt',
+        slug: 'test-prompt',
+      })
+
+      const result = await db.select().from(prompts)
+      expect(result[0]?.level).toBe('vibe-coder')
+    })
+
+    it('should allow same slug with different levels', async () => {
+      const db = getTestDb()
+      await db.insert(prompts).values({
+        title: 'Real Estate Website',
+        slug: 'real-estate-website',
+        level: 'vibe-coder',
+      })
+      await db.insert(prompts).values({
+        title: 'Real Estate Website',
+        slug: 'real-estate-website',
+        level: 'software-dev-beginner',
+      })
+
+      const result = await db.select().from(prompts)
+      expect(result).toHaveLength(2)
+    })
+
+    it('should enforce unique (slug, level)', async () => {
+      const db = getTestDb()
+      await db.insert(prompts).values({
+        title: 'Test',
+        slug: 'test',
+        level: 'vibe-coder',
+      })
+      await expect(
+        db.insert(prompts).values({
+          title: 'Test Duplicate',
+          slug: 'test',
+          level: 'vibe-coder',
+        }),
+      ).rejects.toThrow()
     })
   })
 
@@ -354,10 +396,7 @@ describe('Database Schema', () => {
       const db = getTestDb()
       const run = first(await db.insert(runs).values({}).returning())
       const prompt = first(
-        await db
-          .insert(prompts)
-          .values({ title: 'Test', slug: 'test', content: 'Test prompt' })
-          .returning(),
+        await db.insert(prompts).values({ title: 'Test', slug: 'test' }).returning(),
       )
       const llm = first(
         await db
@@ -376,25 +415,19 @@ describe('Database Schema', () => {
         promptId: prompt.id,
         llmId: llm.id,
         rawResponse: '{"recommendations":[]}',
-        evalScore: 0.85,
-        evalDetails: { format: 'json', coverage: 0.9 },
         responseTimeMs: 1500,
       })
 
       const result = await db.select().from(runResults)
       expect(result).toHaveLength(1)
       expect(result[0]?.parseStatus).toBe('pending')
-      expect(result[0]?.evalScore).toBeCloseTo(0.85)
     })
 
     it('should enforce unique (runId, promptId, llmId)', async () => {
       const db = getTestDb()
       const run = first(await db.insert(runs).values({}).returning())
       const prompt = first(
-        await db
-          .insert(prompts)
-          .values({ title: 'Test', slug: 'test', content: 'Test' })
-          .returning(),
+        await db.insert(prompts).values({ title: 'Test', slug: 'test' }).returning(),
       )
       const llm = first(
         await db
@@ -426,10 +459,7 @@ describe('Database Schema', () => {
       const db = getTestDb()
       const run = first(await db.insert(runs).values({}).returning())
       const prompt = first(
-        await db
-          .insert(prompts)
-          .values({ title: 'Test', slug: 'test', content: 'Test' })
-          .returning(),
+        await db.insert(prompts).values({ title: 'Test', slug: 'test' }).returning(),
       )
       const llm = first(
         await db
@@ -464,10 +494,7 @@ describe('Database Schema', () => {
       const db = getTestDb()
       const run = first(await db.insert(runs).values({}).returning())
       const prompt = first(
-        await db
-          .insert(prompts)
-          .values({ title: 'Test', slug: 'test', content: 'Test' })
-          .returning(),
+        await db.insert(prompts).values({ title: 'Test', slug: 'test' }).returning(),
       )
       const llm = first(
         await db
@@ -512,10 +539,7 @@ describe('Database Schema', () => {
       const db = getTestDb()
       const run = first(await db.insert(runs).values({}).returning())
       const prompt = first(
-        await db
-          .insert(prompts)
-          .values({ title: 'Test', slug: 'test', content: 'Test' })
-          .returning(),
+        await db.insert(prompts).values({ title: 'Test', slug: 'test' }).returning(),
       )
       const llm = first(
         await db

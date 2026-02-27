@@ -1,0 +1,1 @@
+Create a fitness tracking app with workout logging and progress charts. Include exercise library, custom workout plans, body measurements, goal setting, social challenges, and integration with wearable devices.
