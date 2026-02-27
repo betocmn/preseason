@@ -180,7 +180,7 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
       "status" match_status NOT NULL DEFAULT 'active',
       "started_at" timestamp with time zone,
       "settled_at" timestamp with time zone,
-      "period_start" date,
+      "period_start" date NOT NULL,
       "period_end" date,
       "tool_a_score" integer NOT NULL DEFAULT 0,
       "tool_b_score" integer NOT NULL DEFAULT 0,

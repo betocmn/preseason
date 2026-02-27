@@ -61,7 +61,7 @@ CREATE TABLE "preseason_match" (
 	"status" "match_status" DEFAULT 'active' NOT NULL,
 	"started_at" timestamp with time zone,
 	"settled_at" timestamp with time zone,
-	"period_start" date,
+	"period_start" date NOT NULL,
 	"period_end" date,
 	"tool_a_score" integer DEFAULT 0 NOT NULL,
 	"tool_b_score" integer DEFAULT 0 NOT NULL,
