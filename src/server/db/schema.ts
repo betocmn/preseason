@@ -275,7 +275,7 @@ export const matches = createTable(
     status: matchStatusEnum().notNull().default('active'),
     startedAt: d.timestamp('started_at', { withTimezone: true }),
     settledAt: d.timestamp('settled_at', { withTimezone: true }),
-    periodStart: d.date('period_start'),
+    periodStart: d.date('period_start').notNull(),
     periodEnd: d.date('period_end'),
     toolAScore: d.integer('tool_a_score').notNull().default(0),
     toolBScore: d.integer('tool_b_score').notNull().default(0),
