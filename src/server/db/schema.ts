@@ -1,5 +1,6 @@
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import {
+  check,
   foreignKey,
   index,
   pgEnum,
@@ -298,6 +299,7 @@ export const matches = createTable(
       t.categoryId,
       t.periodStart,
     ),
+    check('match_tool_order_chk', sql`tool_a_id < tool_b_id`),
     index('match_status_idx').on(t.status),
     index('match_category_id_idx').on(t.categoryId),
   ],
