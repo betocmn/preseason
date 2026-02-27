@@ -1,6 +1,7 @@
 CREATE TYPE "public"."comment_target" AS ENUM('recommendation', 'match', 'tool');--> statement-breakpoint
 CREATE TYPE "public"."match_status" AS ENUM('active', 'settled', 'archived');--> statement-breakpoint
 CREATE TYPE "public"."parse_status" AS ENUM('pending', 'success', 'failed');--> statement-breakpoint
+CREATE TYPE "public"."prompt_level" AS ENUM('software-dev-beginner', 'software-dev-experienced', 'vibe-coder');--> statement-breakpoint
 CREATE TYPE "public"."run_status" AS ENUM('pending', 'running', 'completed', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('admin', 'provider', 'critic', 'user');--> statement-breakpoint
 CREATE TABLE "preseason_category" (
@@ -73,13 +74,12 @@ CREATE TABLE "preseason_prompt" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"title" varchar(255) NOT NULL,
 	"slug" varchar(255) NOT NULL,
-	"content" text NOT NULL,
+	"level" "prompt_level" DEFAULT 'vibe-coder' NOT NULL,
 	"description" text,
 	"expected_categories" text[],
 	"is_active" boolean DEFAULT true NOT NULL,
 	"createdAt" timestamp with time zone NOT NULL,
-	"updatedAt" timestamp with time zone,
-	CONSTRAINT "preseason_prompt_slug_unique" UNIQUE("slug")
+	"updatedAt" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "preseason_recommendation" (
@@ -100,8 +100,6 @@ CREATE TABLE "preseason_run_result" (
 	"llm_id" uuid NOT NULL,
 	"raw_response" text,
 	"parse_status" "parse_status" DEFAULT 'pending' NOT NULL,
-	"eval_score" real,
-	"eval_details" jsonb,
 	"response_time_ms" integer,
 	"createdAt" timestamp with time zone NOT NULL
 );
@@ -157,14 +155,14 @@ CREATE TABLE "preseason_user_profile" (
 --> statement-breakpoint
 ALTER TABLE "preseason_comment" ADD CONSTRAINT "preseason_comment_critic_id_preseason_critic_profile_id_fk" FOREIGN KEY ("critic_id") REFERENCES "public"."preseason_critic_profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_critic_profile" ADD CONSTRAINT "preseason_critic_profile_user_id_preseason_user_profile_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."preseason_user_profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "preseason_critic_profile" ADD CONSTRAINT "preseason_critic_profile_verified_by_preseason_user_profile_id_fk" FOREIGN KEY ("verified_by") REFERENCES "public"."preseason_user_profile"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "preseason_critic_profile" ADD CONSTRAINT "critic_verified_by_user_fk" FOREIGN KEY ("verified_by") REFERENCES "public"."preseason_user_profile"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_match" ADD CONSTRAINT "preseason_match_tool_a_id_preseason_tool_id_fk" FOREIGN KEY ("tool_a_id") REFERENCES "public"."preseason_tool"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_match" ADD CONSTRAINT "preseason_match_tool_b_id_preseason_tool_id_fk" FOREIGN KEY ("tool_b_id") REFERENCES "public"."preseason_tool"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_match" ADD CONSTRAINT "preseason_match_category_id_preseason_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."preseason_category"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_match" ADD CONSTRAINT "preseason_match_winner_tool_id_preseason_tool_id_fk" FOREIGN KEY ("winner_tool_id") REFERENCES "public"."preseason_tool"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "preseason_recommendation" ADD CONSTRAINT "preseason_recommendation_run_result_id_preseason_run_result_id_fk" FOREIGN KEY ("run_result_id") REFERENCES "public"."preseason_run_result"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_recommendation" ADD CONSTRAINT "preseason_recommendation_tool_id_preseason_tool_id_fk" FOREIGN KEY ("tool_id") REFERENCES "public"."preseason_tool"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_recommendation" ADD CONSTRAINT "preseason_recommendation_category_id_preseason_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."preseason_category"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "preseason_recommendation" ADD CONSTRAINT "recommendation_run_result_fk" FOREIGN KEY ("run_result_id") REFERENCES "public"."preseason_run_result"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_run_result" ADD CONSTRAINT "preseason_run_result_run_id_preseason_run_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."preseason_run"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_run_result" ADD CONSTRAINT "preseason_run_result_prompt_id_preseason_prompt_id_fk" FOREIGN KEY ("prompt_id") REFERENCES "public"."preseason_prompt"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "preseason_run_result" ADD CONSTRAINT "preseason_run_result_llm_id_preseason_llm_id_fk" FOREIGN KEY ("llm_id") REFERENCES "public"."preseason_llm"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -181,7 +179,7 @@ CREATE INDEX "llm_is_active_idx" ON "preseason_llm" USING btree ("is_active");--
 CREATE UNIQUE INDEX "match_tools_category_period_idx" ON "preseason_match" USING btree ("tool_a_id","tool_b_id","category_id","period_start");--> statement-breakpoint
 CREATE INDEX "match_status_idx" ON "preseason_match" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "match_category_id_idx" ON "preseason_match" USING btree ("category_id");--> statement-breakpoint
-CREATE INDEX "prompt_slug_idx" ON "preseason_prompt" USING btree ("slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "prompt_slug_level_idx" ON "preseason_prompt" USING btree ("slug","level");--> statement-breakpoint
 CREATE INDEX "prompt_is_active_idx" ON "preseason_prompt" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "recommendation_tool_category_idx" ON "preseason_recommendation" USING btree ("tool_id","category_id");--> statement-breakpoint
 CREATE INDEX "recommendation_run_result_id_idx" ON "preseason_recommendation" USING btree ("run_result_id");--> statement-breakpoint
