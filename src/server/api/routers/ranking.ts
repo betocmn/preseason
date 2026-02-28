@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from 'drizzle-orm'
+import { and, eq, gte, lt, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, llms, recommendations, runResults, tools } from '~/server/db/schema'
@@ -63,7 +63,7 @@ export const rankingRouter = createTRPCRouter({
             and(
               eq(recommendations.categoryId, category.id),
               gte(recommendations.createdAt, previousStart),
-              lte(recommendations.createdAt, currentStart),
+              lt(recommendations.createdAt, currentStart),
             ),
           ),
       ])
@@ -166,7 +166,7 @@ export const rankingRouter = createTRPCRouter({
           .where(
             and(
               gte(recommendations.createdAt, previousStart),
-              lte(recommendations.createdAt, currentStart),
+              lt(recommendations.createdAt, currentStart),
             ),
           ),
       ])
