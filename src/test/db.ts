@@ -1,8 +1,9 @@
+import { join } from 'node:path'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import * as schema from '~/server/db/schema'
-import { userProfiles } from '~/server/db/schema'
 
 type TestDatabase = PostgresJsDatabase<typeof schema> & { $client: postgres.Sql }
 
@@ -21,39 +22,28 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
   sql = postgres(connectionString, { max: 1 })
   testDb = drizzle(sql, { schema })
 
-  // Create enums
-  await sql`
-    DO $$ BEGIN
-      CREATE TYPE user_role AS ENUM ('admin', 'provider', 'critic', 'user');
-    EXCEPTION
-      WHEN duplicate_object THEN null;
-    END $$;
-  `
-
-  // Create user_profile table
-  await sql`
-    CREATE TABLE IF NOT EXISTS "preseason_user_profile" (
-      "id" uuid PRIMARY KEY NOT NULL,
-      "email" varchar(255) NOT NULL UNIQUE,
-      "display_name" varchar(150) NOT NULL,
-      "avatar_url" varchar(512),
-      "bio" text,
-      "company" varchar(255),
-      "website" varchar(255),
-      "role" user_role NOT NULL DEFAULT 'user',
-      "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-      "updatedAt" timestamp with time zone
-    )
-  `
-  await sql`CREATE INDEX IF NOT EXISTS "user_profile_email_idx" ON "preseason_user_profile" ("email")`
-  await sql`CREATE INDEX IF NOT EXISTS "user_profile_role_idx" ON "preseason_user_profile" ("role")`
+  await migrate(testDb, {
+    migrationsFolder: join(import.meta.dirname, '../../drizzle'),
+  })
 
   return testDb
 }
 
 export async function cleanTestDatabase(): Promise<void> {
   const db = getTestDb()
-  await db.delete(userProfiles)
+  // Delete in reverse FK-dependency order
+  await db.delete(schema.comments)
+  await db.delete(schema.criticProfiles)
+  await db.delete(schema.matches)
+  await db.delete(schema.recommendations)
+  await db.delete(schema.runResults)
+  await db.delete(schema.runs)
+  await db.delete(schema.toolCategories)
+  await db.delete(schema.prompts)
+  await db.delete(schema.llms)
+  await db.delete(schema.tools)
+  await db.delete(schema.categories)
+  await db.delete(schema.userProfiles)
 }
 
 export async function teardownTestDatabase(): Promise<void> {

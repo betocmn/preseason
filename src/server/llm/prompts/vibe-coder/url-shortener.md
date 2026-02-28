@@ -1,0 +1,1 @@
+Build a URL shortener with analytics tracking. Include custom short URLs, click analytics with geographic data, link expiration, QR code generation, API access, and a dashboard showing link performance.
