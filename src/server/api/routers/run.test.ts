@@ -102,32 +102,43 @@ describe('runRouter', () => {
     const caller = createTestCaller(authUser)
     const db = getTestDb()
 
-    await db.insert(prompts).values([
-      { title: 'Prompt A', slug: 'prompt-a', level: 'vibe-coder', isActive: true },
-      { title: 'Prompt B', slug: 'prompt-b', level: 'vibe-coder', isActive: false },
-    ])
-    await db.insert(llms).values([
-      {
-        name: 'GPT-4o',
-        slug: 'gpt-4o',
-        provider: 'OpenAI',
-        modelId: 'openai/gpt-4o',
-        isActive: true,
-      },
-      {
-        name: 'Inactive',
-        slug: 'inactive',
-        provider: 'OpenAI',
-        modelId: 'openai/inactive',
-        isActive: false,
-      },
-    ])
+    const [activePrompt, inactivePrompt] = await db
+      .insert(prompts)
+      .values([
+        { title: 'Prompt A', slug: 'prompt-a', level: 'vibe-coder', isActive: true },
+        { title: 'Prompt B', slug: 'prompt-b', level: 'vibe-coder', isActive: false },
+      ])
+      .returning()
+    const [activeLlm, inactiveLlm] = await db
+      .insert(llms)
+      .values([
+        {
+          name: 'GPT-4o',
+          slug: 'gpt-4o',
+          provider: 'OpenAI',
+          modelId: 'openai/gpt-4o',
+          isActive: true,
+        },
+        {
+          name: 'Inactive',
+          slug: 'inactive',
+          provider: 'OpenAI',
+          modelId: 'openai/inactive',
+          isActive: false,
+        },
+      ])
+      .returning()
 
-    const result = await caller.run.triggerManual()
+    const result = await caller.run.triggerManual({
+      promptIds: [activePrompt?.id ?? '', inactivePrompt?.id ?? ''],
+      llmIds: [activeLlm?.id ?? '', inactiveLlm?.id ?? ''],
+    })
     expect(result.queued).toBe(true)
     expect(result.run?.trigger).toBe('manual')
     expect(result.run?.promptCount).toBe(1)
     expect(result.run?.llmCount).toBe(1)
+    expect(result.run?.promptIds).toEqual([activePrompt?.id ?? ''])
+    expect(result.run?.llmIds).toEqual([activeLlm?.id ?? ''])
   })
 
   it('rejects triggerManual for non-admin users', async () => {

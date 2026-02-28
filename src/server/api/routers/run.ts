@@ -107,19 +107,23 @@ export const runRouter = createTRPCRouter({
         ? and(eq(llms.isActive, true), inArray(llms.id, selectedLlmIds))
         : eq(llms.isActive, true)
 
-      const [promptCountResult, llmCountResult] = await Promise.all([
-        ctx.db.select({ count: sql<number>`count(*)` }).from(prompts).where(promptCondition),
-        ctx.db.select({ count: sql<number>`count(*)` }).from(llms).where(llmCondition),
+      const [selectedPrompts, selectedLlms] = await Promise.all([
+        ctx.db.select({ id: prompts.id }).from(prompts).where(promptCondition),
+        ctx.db.select({ id: llms.id }).from(llms).where(llmCondition),
       ])
 
-      const promptCount = Number(promptCountResult[0]?.count ?? 0)
-      const llmCount = Number(llmCountResult[0]?.count ?? 0)
+      const promptIds = selectedPrompts.map((prompt) => prompt.id)
+      const llmIds = selectedLlms.map((llm) => llm.id)
+      const promptCount = promptIds.length
+      const llmCount = llmIds.length
 
       const inserted = await ctx.db
         .insert(runs)
         .values({
           status: 'pending',
           trigger: 'manual',
+          promptIds,
+          llmIds,
           promptCount,
           llmCount,
           startedAt: new Date(),

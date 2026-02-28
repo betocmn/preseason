@@ -376,6 +376,19 @@ describe('Database Schema', () => {
       expect(result[0]?.trigger).toBe('cron')
     })
 
+    it('should persist manual prompt and llm selection ids', async () => {
+      const db = getTestDb()
+      await db.insert(runs).values({
+        trigger: 'manual',
+        promptIds: ['11111111-1111-1111-1111-111111111111'],
+        llmIds: ['22222222-2222-2222-2222-222222222222'],
+      })
+
+      const result = await db.select().from(runs)
+      expect(result[0]?.promptIds).toEqual(['11111111-1111-1111-1111-111111111111'])
+      expect(result[0]?.llmIds).toEqual(['22222222-2222-2222-2222-222222222222'])
+    })
+
     it('should support all run status values', async () => {
       const db = getTestDb()
       const statusValues = ['pending', 'running', 'completed', 'failed'] as const
