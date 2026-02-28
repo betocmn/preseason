@@ -41,6 +41,7 @@ describe('criticRouter', () => {
     const critics = await caller.critic.list()
     expect(critics).toHaveLength(1)
     expect(critics[0]?.title).toBe('Verified Critic')
+    expect(critics[0]?.user).not.toHaveProperty('email')
   })
 
   it('returns critic profile with comments', async () => {
@@ -68,6 +69,7 @@ describe('criticRouter', () => {
     const result = await caller.critic.getById({ id: critic?.id ?? '' })
     expect(result.id).toBe(critic?.id)
     expect(result.comments).toHaveLength(1)
+    expect(result.user).not.toHaveProperty('email')
   })
 
   it('verifies and unverifies critics as admin', async () => {

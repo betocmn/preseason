@@ -23,13 +23,24 @@ const updateOwnInput = z
     },
   )
 
+const publicUserColumns = {
+  id: true,
+  displayName: true,
+  avatarUrl: true,
+  bio: true,
+  company: true,
+  website: true,
+} as const
+
 export const criticRouter = createTRPCRouter({
   list: publicProcedure.query(async ({ ctx }) => {
     return ctx.db.query.criticProfiles.findMany({
       where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
       orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
       with: {
-        user: true,
+        user: {
+          columns: publicUserColumns,
+        },
       },
     })
   }),
@@ -40,7 +51,9 @@ export const criticRouter = createTRPCRouter({
       const critic = await ctx.db.query.criticProfiles.findFirst({
         where: eq(criticProfiles.id, input.id),
         with: {
-          user: true,
+          user: {
+            columns: publicUserColumns,
+          },
           comments: {
             orderBy: [desc(comments.createdAt)],
           },

@@ -14,6 +14,14 @@ import {
 } from '~/server/db/schema'
 
 const targetTypeSchema = z.enum(['recommendation', 'match', 'tool'])
+const publicUserColumns = {
+  id: true,
+  displayName: true,
+  avatarUrl: true,
+  bio: true,
+  company: true,
+  website: true,
+} as const
 
 async function resolveTargetCategorySlugs(
   db: typeof import('~/server/db').db,
@@ -91,7 +99,9 @@ export const commentRouter = createTRPCRouter({
         with: {
           critic: {
             with: {
-              user: true,
+              user: {
+                columns: publicUserColumns,
+              },
             },
           },
         },
