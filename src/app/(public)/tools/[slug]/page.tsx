@@ -3,14 +3,12 @@ import { CheckCircle, ExternalLink } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { CategoryPill } from '~/components/public/category-pill'
+import { CommentList } from '~/components/public/comment-list'
+import { MatchCard } from '~/components/public/match-card'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
-import { CategoryPill } from '~/components/public/category-pill'
-import { CommentList } from '~/components/public/comment-list'
-import { EmptyState } from '~/components/public/empty-state'
-import { MatchCard } from '~/components/public/match-card'
-import { TrendIndicator } from '~/components/public/trend-indicator'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -35,13 +33,14 @@ export default async function ToolDetailPage({ params }: Props) {
   const { slug } = await params
   const caller = await api()
 
-  let tool
-  try {
-    tool = await caller.tool.getBySlug({ slug })
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
-    throw error
-  }
+  const tool = await (async () => {
+    try {
+      return await caller.tool.getBySlug({ slug })
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
+      throw error
+    }
+  })()
 
   const [stats, activeMatches, comments] = await Promise.all([
     caller.recommendation.getStats({ days: 30 }),
@@ -50,9 +49,7 @@ export default async function ToolDetailPage({ params }: Props) {
   ])
 
   const toolStats = stats.items.filter((item) => item.tool.id === tool.id)
-  const toolMatches = activeMatches.filter(
-    (m) => m.toolA.id === tool.id || m.toolB.id === tool.id,
-  )
+  const toolMatches = activeMatches.filter((m) => m.toolA.id === tool.id || m.toolB.id === tool.id)
 
   const toolCategories = tool.toolCategories?.map((tc) => tc.category) ?? []
 
@@ -70,9 +67,7 @@ export default async function ToolDetailPage({ params }: Props) {
           )}
         </div>
 
-        {tool.description && (
-          <p className="mb-3 text-muted-foreground">{tool.description}</p>
-        )}
+        {tool.description && <p className="mb-3 text-muted-foreground">{tool.description}</p>}
 
         <div className="mb-3 flex flex-wrap gap-2">
           {toolCategories.map((cat) => (

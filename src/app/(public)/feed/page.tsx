@@ -9,10 +9,7 @@ export const metadata: Metadata = {
 
 export default async function FeedPage() {
   const caller = await api()
-  const [categories, llms] = await Promise.all([
-    caller.category.list(),
-    caller.llm.listActive(),
-  ])
+  const [categories, llms] = await Promise.all([caller.category.list(), caller.llm.listActive()])
 
   return (
     <div className="container py-8">

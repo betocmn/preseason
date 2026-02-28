@@ -15,7 +15,12 @@ type CategorySidebarProps = {
   className?: string
 }
 
-export function CategorySidebar({ categories, activeSlug, basePath, className }: CategorySidebarProps) {
+export function CategorySidebar({
+  categories,
+  activeSlug,
+  basePath,
+  className,
+}: CategorySidebarProps) {
   return (
     <nav className={cn('space-y-0.5', className)}>
       <Link

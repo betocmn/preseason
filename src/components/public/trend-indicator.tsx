@@ -16,7 +16,13 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
 
   if (isUp) {
     return (
-      <span className={cn('inline-flex items-center gap-0.5 font-medium text-trend-up', textSize, className)}>
+      <span
+        className={cn(
+          'inline-flex items-center gap-0.5 font-medium text-trend-up',
+          textSize,
+          className,
+        )}
+      >
         <ArrowUp className={iconSize} />
         {pct}%
       </span>
@@ -25,7 +31,13 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
 
   if (isDown) {
     return (
-      <span className={cn('inline-flex items-center gap-0.5 font-medium text-trend-down', textSize, className)}>
+      <span
+        className={cn(
+          'inline-flex items-center gap-0.5 font-medium text-trend-down',
+          textSize,
+          className,
+        )}
+      >
         <ArrowDown className={iconSize} />
         {pct}%
       </span>
@@ -33,7 +45,13 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
   }
 
   return (
-    <span className={cn('inline-flex items-center gap-0.5 font-medium text-trend-flat', textSize, className)}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 font-medium text-trend-flat',
+        textSize,
+        className,
+      )}
+    >
       <Minus className={iconSize} />
       0.0%
     </span>

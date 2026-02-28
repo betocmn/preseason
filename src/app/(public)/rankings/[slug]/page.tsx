@@ -41,16 +41,10 @@ export default async function CategoryRankingPage({ params }: Props) {
       <h1 className="mb-6 text-2xl font-bold">Rankings</h1>
       <div className="flex gap-8">
         <aside className="hidden w-48 shrink-0 md:block">
-          <CategorySidebar
-            categories={categories}
-            activeSlug={slug}
-            basePath="/rankings"
-          />
+          <CategorySidebar categories={categories} activeSlug={slug} basePath="/rankings" />
         </aside>
         <div className="min-w-0 flex-1">
-          <h2 className="mb-4 text-lg font-semibold">
-            {ranking.category.name} (30 days)
-          </h2>
+          <h2 className="mb-4 text-lg font-semibold">{ranking.category.name} (30 days)</h2>
           {ranking.items.length > 0 ? (
             <RankingTable items={ranking.items} />
           ) : (

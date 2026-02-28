@@ -1,12 +1,12 @@
 import { TRPCError } from '@trpc/server'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Badge } from '~/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { CommentList } from '~/components/public/comment-list'
 import { MatchBreakdown } from '~/components/public/match-breakdown'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -31,13 +31,14 @@ export default async function MatchDetailPage({ params }: Props) {
   const { id } = await params
   const caller = await api()
 
-  let matchData
-  try {
-    matchData = await caller.match.getById({ id })
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
-    throw error
-  }
+  const matchData = await (async () => {
+    try {
+      return await caller.match.getById({ id })
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
+      throw error
+    }
+  })()
 
   const { match, breakdown } = matchData
   const comments = await caller.comment.listByTarget({ targetType: 'match', targetId: id })
@@ -84,7 +85,8 @@ export default async function MatchDetailPage({ params }: Props) {
           Period: {match.periodStart}
           {match.periodEnd ? ` - ${match.periodEnd}` : ' - ongoing'}
           {' | '}
-          {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts} prompts
+          {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts}{' '}
+          prompts
         </p>
       </div>
 

@@ -31,7 +31,9 @@ export function PercentageBar({
           className={cn(
             'flex items-center justify-center font-medium transition-all',
             textClass,
-            pctA >= pctB ? 'bg-trend-up text-trend-up-foreground' : 'bg-muted text-muted-foreground',
+            pctA >= pctB
+              ? 'bg-trend-up text-trend-up-foreground'
+              : 'bg-muted text-muted-foreground',
           )}
           style={{ width: `${Math.max(pctA, 5)}%` }}
         >
