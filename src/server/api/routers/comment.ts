@@ -122,10 +122,10 @@ export const commentRouter = createTRPCRouter({
       const critic = await ctx.db.query.criticProfiles.findFirst({
         where: eq(criticProfiles.userId, ctx.user.id),
       })
-      if (!critic || !critic.isActive) {
+      if (!critic || !critic.isActive || !critic.verifiedAt) {
         throw new TRPCError({
           code: 'FORBIDDEN',
-          message: 'Active critic profile required',
+          message: 'Active verified critic profile required',
         })
       }
 
