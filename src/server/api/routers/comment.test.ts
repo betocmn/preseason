@@ -116,6 +116,7 @@ describe('commentRouter', () => {
     expect(result).toHaveLength(1)
     expect(result[0]?.content).toBe('Good tool')
     expect(result[0]?.critic.user.id).toBe(criticUser.profile?.id)
+    expect(result[0]?.critic.user).not.toHaveProperty('email')
   })
 
   it('enforces conflict-of-interest exclusions on create', async () => {
