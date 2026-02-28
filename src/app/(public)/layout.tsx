@@ -1,15 +1,12 @@
+import { Navbar } from '~/components/public/navbar'
+import { Footer } from '~/components/public/footer'
+
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-          <span className="text-xl font-bold">Preseason</span>
-          <a href="/login" className="text-sm text-muted-foreground hover:text-foreground">
-            Sign in
-          </a>
-        </div>
-      </nav>
-      <main>{children}</main>
+    <div className="flex min-h-screen flex-col bg-background">
+      <Navbar />
+      <main className="flex-1">{children}</main>
+      <Footer />
     </div>
   )
 }
