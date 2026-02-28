@@ -1,0 +1,128 @@
+import OpenAI from 'openai'
+import { env } from '~/env'
+
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+const CLIENT_TITLE = 'Preseason'
+
+export type OpenRouterMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export type OpenRouterCompletionResponse = {
+  content: string
+  model: string
+  finishReason: string
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  latencyMs: number
+}
+
+let client: OpenAI | null = null
+
+function resolveHttpReferer() {
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+    process.env.VERCEL_URL
+
+  if (!raw) {
+    return undefined
+  }
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw
+  }
+
+  return `https://${raw}`
+}
+
+function getClient() {
+  if (client) {
+    return client
+  }
+
+  if (!env.OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured')
+  }
+
+  const referer = resolveHttpReferer()
+
+  client = new OpenAI({
+    apiKey: env.OPENROUTER_API_KEY,
+    baseURL: OPENROUTER_BASE_URL,
+    defaultHeaders: {
+      ...(referer ? { 'HTTP-Referer': referer } : {}),
+      'X-OpenRouter-Title': CLIENT_TITLE,
+      'X-Title': CLIENT_TITLE,
+    },
+  })
+
+  return client
+}
+
+function getContent(choice: OpenAI.Chat.Completions.ChatCompletion.Choice | undefined) {
+  if (!choice) {
+    return ''
+  }
+
+  const content = choice.message.content
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (!Array.isArray(content)) {
+    return ''
+  }
+
+  return content
+    .map((entry) => (typeof entry === 'object' && 'text' in entry ? entry.text : ''))
+    .join('\n')
+    .trim()
+}
+
+function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return 'Unknown OpenRouter error'
+  }
+
+  if ('message' in error && typeof error.message === 'string') {
+    const status = 'status' in error && typeof error.status === 'number' ? ` (status ${error.status})` : ''
+    return `${error.message}${status}`
+  }
+
+  return 'Unknown OpenRouter error'
+}
+
+export async function complete(
+  model: string,
+  messages: OpenRouterMessage[],
+): Promise<OpenRouterCompletionResponse> {
+  const startedAt = Date.now()
+
+  try {
+    const response = await getClient().chat.completions.create({
+      model,
+      messages,
+    })
+
+    const firstChoice = response.choices[0]
+
+    return {
+      content: getContent(firstChoice),
+      model: response.model,
+      finishReason: firstChoice?.finish_reason ?? 'unknown',
+      usage: {
+        promptTokens: response.usage?.prompt_tokens ?? 0,
+        completionTokens: response.usage?.completion_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0,
+      },
+      latencyMs: Date.now() - startedAt,
+    }
+  } catch (error) {
+    throw new Error(`OpenRouter completion failed: ${getErrorMessage(error)}`)
+  }
+}
