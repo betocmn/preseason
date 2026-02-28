@@ -127,6 +127,8 @@ pnpm run preview # Build and start production server
 - Prefix unused vars with `_`
 - Use Zod for input validation
 - Always pair `update`/`delete` with `.where()`
+- Place tests as colocated `*.test.ts` files next to implementation files
+- Keep `src/test/` for shared test infra/utilities only; avoid `__test__` and `__tests__` folders in app code
 
 ### Local Testing
 
