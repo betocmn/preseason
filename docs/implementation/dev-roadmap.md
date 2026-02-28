@@ -254,10 +254,36 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 **Goal:** Build the automated system that runs prompts against LLMs daily, parses responses, extracts recommendations, and manages matches. Promptfoo evals are separate (CLI-only, see `src/server/llm/evals/`) and not part of this step.
 
-### 4.1 OpenRouter Client
+### 4.1 LLM Service — Provider Pattern
 
-- [ ] Implement `src/server/llm/service/index.ts` — Uses `openai` npm package with OpenRouter base URL (`https://openrouter.ai/api/v1`). Function: `queryLLM(modelId, systemPrompt, userPrompt)` → returns `{ response: string, responseTimeMs: number }`
-- [ ] System prompt template in `src/server/llm/service/system-prompt.ts` — Requests structured JSON output:
+Architecture: each LLM provider (Anthropic, OpenAI, Google, etc.) gets its own provider class that wraps a shared OpenRouter HTTP client. All providers go through OpenRouter today, but the abstraction allows swapping to direct SDKs per-provider in the future without changing the caller interface.
+
+```
+Runner/Service                      LlmService                     OpenRouter
+       │                               │                               │
+       ├── complete(provider, model) ──►│                               │
+       │                               ├── get provider (anthropic)    │
+       │                               ├── prepend system prompt       │
+       │                               ├── POST /chat/completions ────►│
+       │                               │◄─── response ─────────────────┤
+       │◄──── CompletionResponse ──────┤                               │
+```
+
+- [ ] Create `src/server/llm/service/types.ts` — Shared types:
+  - `ProviderId` = `'anthropic' | 'openai' | 'google' | 'meta' | 'mistral' | 'deepseek'`
+  - `CompletionRequest` = `{ model: string, systemPrompt: string, userPrompt: string }`
+  - `CompletionResponse` = `{ content: string, model: string, provider: ProviderId, finishReason: string, usage: { promptTokens, completionTokens, totalTokens }, latencyMs: number }`
+- [ ] Create `src/server/llm/service/openrouter-client.ts` — Low-level HTTP client using `openai` npm package with OpenRouter base URL (`https://openrouter.ai/api/v1`). Single function: `complete(model, messages)` → handles OpenRouter-specific concerns (prefixing, headers, error handling, timing)
+- [ ] Create `src/server/llm/service/providers/base.ts` — Abstract base with `complete(request: CompletionRequest): Promise<CompletionResponse>`. Delegates to `openrouter-client` with provider-specific model prefix (e.g. `anthropic/claude-3.5-sonnet`)
+- [ ] Create provider implementations (one file each, extend base):
+  - `src/server/llm/service/providers/anthropic.ts` — prefix `anthropic/`, models from DB
+  - `src/server/llm/service/providers/openai.ts` — prefix `openai/`
+  - `src/server/llm/service/providers/google.ts` — prefix `google/`
+  - `src/server/llm/service/providers/meta.ts` — prefix `meta-llama/`
+  - `src/server/llm/service/providers/mistral.ts` — prefix `mistralai/`
+  - `src/server/llm/service/providers/deepseek.ts` — prefix `deepseek/`
+- [ ] Implement `src/server/llm/service/index.ts` — `LlmService` that resolves the correct provider from the `provider` column on `preseason_llm` table, then calls `provider.complete()`. Simple factory: `getProvider(providerId: ProviderId): BaseLlmProvider`
+- [ ] Create `src/server/llm/service/system-prompt.ts` — System prompt template that requests structured JSON output:
   ```
   You are an expert software architect evaluating third-party tools for web development.
   Given a project description, recommend the best tool/service for each relevant category.
@@ -283,7 +309,7 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
   2. Update run status to `running`
   3. Fetch prompts and LLMs from the run's `promptIds`/`llmIds` arrays
   4. Load prompt content from markdown files via `getPromptContent(slug, level)`
-  5. For each prompt × LLM pair: call OpenRouter, store `run_result` with raw response
+  5. For each prompt × LLM pair: resolve provider from LLM record's `provider` field, call `llmService.complete()`, store `run_result` with raw response
   6. Parse each response into `recommendation` rows
   7. Handle per-pair failures gracefully (log error, continue with next pair)
   8. Update `run` status to `completed` (or `failed` if all pairs failed)
@@ -314,8 +340,9 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ### 4.7 Tests
 
+- [ ] `src/server/llm/service/__tests__/providers.test.ts` — Test each provider prefixes models correctly, test factory resolution, test error handling
 - [ ] `src/server/llm/automation/__tests__/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
-- [ ] `src/server/llm/automation/__tests__/runner.test.ts` — Integration tests with mocked OpenRouter (no real API calls)
+- [ ] `src/server/llm/automation/__tests__/runner.test.ts` — Integration tests with mocked LlmService (no real API calls)
 - [ ] `src/server/llm/automation/__tests__/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
 
 **Directory structure after this step:**
@@ -326,9 +353,21 @@ src/server/llm/
 ├── prompts/                        (existing, prompt markdown files)
 │   ├── index.ts
 │   └── vibe-coder/*.md
-├── service/                        (OpenRouter client)
-│   ├── index.ts
-│   └── system-prompt.ts
+├── service/                        (LLM service + provider pattern)
+│   ├── index.ts                    (LlmService — factory + complete())
+│   ├── types.ts                    (shared types)
+│   ├── openrouter-client.ts        (low-level OpenRouter HTTP client)
+│   ├── system-prompt.ts            (system prompt template)
+│   ├── providers/
+│   │   ├── base.ts                 (abstract base provider)
+│   │   ├── anthropic.ts
+│   │   ├── openai.ts
+│   │   ├── google.ts
+│   │   ├── meta.ts
+│   │   ├── mistral.ts
+│   │   └── deepseek.ts
+│   └── __tests__/
+│       └── providers.test.ts
 └── automation/                     (pipeline orchestration)
     ├── runner.ts
     ├── parser.ts
@@ -340,7 +379,7 @@ src/server/llm/
         └── match-settler.test.ts
 ```
 
-**Key files created:** `src/server/llm/service/` (2 files), `src/server/llm/automation/` (4 files + 3 test files), `src/app/api/cron/` (2 routes), `vercel.json`
+**Key files created:** `src/server/llm/service/` (10 files + 1 test), `src/server/llm/automation/` (4 files + 3 tests), `src/app/api/cron/` (2 routes), `vercel.json`
 **Key files modified:** `src/env.js`, `package.json`
 
 **Verify:** Trigger manual run via admin, verify data flows through pipeline (run → run_result → recommendation), match settlement produces correct scores, Vercel Cron config validates
