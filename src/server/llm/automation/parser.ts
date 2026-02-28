@@ -48,11 +48,7 @@ export type ParserOptions = {
 }
 
 function normalizeLoose(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[`*_~]/g, '')
-    .replace(/\s+/g, ' ')
+  return value.toLowerCase().trim().replace(/[`*~]/g, '').replace(/\s+/g, ' ')
 }
 
 function normalizeKey(value: string) {
@@ -291,39 +287,41 @@ function toCandidatesFromStructuredObject(value: unknown): RecommendationCandida
   const record = value as Record<string, unknown>
 
   if (Array.isArray(record.recommendations)) {
-    return record.recommendations
-      .map((entry) => {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          return null
-        }
+    const structuredRecommendations: RecommendationCandidate[] = []
 
-        const recommendation = entry as Record<string, unknown>
-        const category =
-          typeof recommendation.category === 'string'
-            ? recommendation.category
-            : typeof recommendation.categorySlug === 'string'
-              ? recommendation.categorySlug
-              : null
-        const tool =
-          typeof recommendation.tool === 'string'
-            ? recommendation.tool
-            : typeof recommendation.toolName === 'string'
-              ? recommendation.toolName
-              : null
+    for (const entry of record.recommendations) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue
+      }
 
-        if (!category || !tool) {
-          return null
-        }
+      const recommendation = entry as Record<string, unknown>
+      const category =
+        typeof recommendation.category === 'string'
+          ? recommendation.category
+          : typeof recommendation.categorySlug === 'string'
+            ? recommendation.categorySlug
+            : null
+      const tool =
+        typeof recommendation.tool === 'string'
+          ? recommendation.tool
+          : typeof recommendation.toolName === 'string'
+            ? recommendation.toolName
+            : null
 
-        return {
-          category,
-          tool,
-          confidence: parseConfidence(recommendation.confidence),
-          reasoning:
-            normalizeReasoning(recommendation.reasoning) ?? normalizeReasoning(recommendation.reason),
-        } satisfies RecommendationCandidate
+      if (!category || !tool) {
+        continue
+      }
+
+      structuredRecommendations.push({
+        category,
+        tool,
+        confidence: parseConfidence(recommendation.confidence),
+        reasoning:
+          normalizeReasoning(recommendation.reasoning) ?? normalizeReasoning(recommendation.reason),
       })
-      .filter((entry): entry is RecommendationCandidate => entry !== null)
+    }
+
+    return structuredRecommendations
   }
 
   const category =
@@ -363,9 +361,7 @@ function extractStructuredCandidates(rawContent: string): RecommendationCandidat
       if (extracted.length > 0) {
         return extracted
       }
-    } catch {
-      continue
-    }
+    } catch {}
   }
 
   return []
@@ -396,6 +392,14 @@ function extractFromLine(line: string): RecommendationCandidate | null {
         return null
       }
 
+      const separatorRegex = /^-+$/
+      if (
+        separatorRegex.test(rawCategory.replace(/\s+/g, '')) ||
+        separatorRegex.test(rawTool.replace(/\s+/g, ''))
+      ) {
+        return null
+      }
+
       return {
         category: rawCategory,
         tool: rawTool,
@@ -405,7 +409,7 @@ function extractFromLine(line: string): RecommendationCandidate | null {
   }
 
   const directMatch = cleaned.match(
-    /^\*{0,2}\s*([a-z0-9][a-z0-9\s\-/]+?)\s*\*{0,2}\s*(?::|=>|->|-)\s*([^|-]+?)(?:\s*[-|]\s*(.+))?$/i,
+    /^\*{0,2}\s*([a-z0-9][a-z0-9\s_\-/]+?)\s*\*{0,2}\s*(?::|=>|->|-)\s*([^|-]+?)(?:\s*[-|]\s*(.+))?$/i,
   )
 
   if (directMatch) {
@@ -422,7 +426,7 @@ function extractFromLine(line: string): RecommendationCandidate | null {
     }
   }
 
-  const proseMatch = cleaned.match(/^for\s+([a-z0-9\s\-]+),\s*([^,.]+)(?:[,.]\s*(.+))?$/i)
+  const proseMatch = cleaned.match(/^for\s+([a-z0-9\s-]+),\s*([^,.]+)(?:[,.]\s*(.+))?$/i)
   if (proseMatch) {
     const [, rawCategory, rawTool, rawReasoning] = proseMatch
     if (!rawCategory || !rawTool) {
@@ -589,8 +593,12 @@ export async function parseRecommendations(
   }
 
   const [categoryRows, toolRows] = await Promise.all([
-    database.select({ id: categories.id, slug: categories.slug, name: categories.name }).from(categories),
-    database.select({ id: tools.id, name: tools.name, slug: tools.slug, aliases: tools.aliases }).from(tools),
+    database
+      .select({ id: categories.id, slug: categories.slug, name: categories.name })
+      .from(categories),
+    database
+      .select({ id: tools.id, name: tools.name, slug: tools.slug, aliases: tools.aliases })
+      .from(tools),
   ])
 
   const categoryLookup = createCategoryLookup(categoryRows)

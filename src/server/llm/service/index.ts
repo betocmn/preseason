@@ -1,5 +1,5 @@
 import { AnthropicProvider } from '~/server/llm/service/providers/anthropic'
-import { BaseLlmProvider } from '~/server/llm/service/providers/base'
+import type { BaseLlmProvider } from '~/server/llm/service/providers/base'
 import { DeepSeekProvider } from '~/server/llm/service/providers/deepseek'
 import { GoogleProvider } from '~/server/llm/service/providers/google'
 import { MetaProvider } from '~/server/llm/service/providers/meta'
@@ -48,10 +48,7 @@ export class LlmService {
     return this.providers[providerId]
   }
 
-  async complete(
-    provider: string,
-    request: CompletionRequest,
-  ): Promise<CompletionResponse> {
+  async complete(provider: string, request: CompletionRequest): Promise<CompletionResponse> {
     const normalizedProvider = normalizeProviderId(provider)
     return this.getProvider(normalizedProvider).complete(request)
   }
