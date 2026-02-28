@@ -250,14 +250,14 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ---
 
-## Step 4: Automation Engine (OpenRouter + Promptfoo + Cron) `[TODO]`
+## Step 4: Automation Engine (OpenRouter + Cron) `[TODO]`
 
-**Goal:** Build the automated system that runs prompts against LLMs daily, parses responses, extracts recommendations, evaluates quality, and manages matches.
+**Goal:** Build the automated system that runs prompts against LLMs daily, parses responses, extracts recommendations, and manages matches. Promptfoo evals are separate (CLI-only, see `src/server/llm/evals/`) and not part of this step.
 
 ### 4.1 OpenRouter Client
 
-- [ ] Create `src/server/automation/openrouter.ts` — Uses `openai` npm package with OpenRouter base URL (`https://openrouter.ai/api/v1`). Function: `queryLLM(modelId, systemPrompt, userPrompt)` → returns `{ response: string, responseTimeMs: number }`
-- [ ] System prompt template requests structured JSON output:
+- [ ] Implement `src/server/llm/service/index.ts` — Uses `openai` npm package with OpenRouter base URL (`https://openrouter.ai/api/v1`). Function: `queryLLM(modelId, systemPrompt, userPrompt)` → returns `{ response: string, responseTimeMs: number }`
+- [ ] System prompt template in `src/server/llm/service/system-prompt.ts` — Requests structured JSON output:
   ```
   You are an expert software architect evaluating third-party tools for web development.
   Given a project description, recommend the best tool/service for each relevant category.
@@ -268,7 +268,7 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ### 4.2 Response Parser
 
-- [ ] Create `src/server/automation/parser.ts` — Extracts tool recommendations from LLM responses
+- [ ] Create `src/server/llm/automation/parser.ts` — Extracts tool recommendations from LLM responses
   - Primary: `JSON.parse` structured output
   - Fallback: regex extraction from markdown/prose + fuzzy tool name matching against DB
   - Tool name normalization via `aliases` column on tool table
@@ -276,48 +276,74 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 - [ ] Map category slugs from response to category IDs in DB
 - [ ] Return array of `{ toolId, categoryId, confidence, reasoning, rank }`
 
-### 4.3 Promptfoo Integration
+### 4.3 Run Orchestrator
 
-- [ ] Create `src/server/automation/promptfoo-eval.ts` — Evaluates each LLM response for quality/relevance
-  - Score: 0-1 based on response format compliance, category coverage, reasoning quality
-  - Returns `{ score: number, details: object }`
+- [ ] Create `src/server/llm/automation/runner.ts` — Full pipeline orchestrator:
+  1. Accept a run ID (created by `run.triggerManual` or cron endpoint) with status `pending`
+  2. Update run status to `running`
+  3. Fetch prompts and LLMs from the run's `promptIds`/`llmIds` arrays
+  4. Load prompt content from markdown files via `getPromptContent(slug, level)`
+  5. For each prompt × LLM pair: call OpenRouter, store `run_result` with raw response
+  6. Parse each response into `recommendation` rows
+  7. Handle per-pair failures gracefully (log error, continue with next pair)
+  8. Update `run` status to `completed` (or `failed` if all pairs failed)
 
-### 4.4 Run Orchestrator
+### 4.4 Match Management
 
-- [ ] Create `src/server/automation/runner.ts` — Full pipeline orchestrator:
-  1. Create `run` record with status `running`
-  2. Fetch all active prompts and active LLMs
-  3. For each prompt × LLM pair: call OpenRouter, store `run_result` with raw response
-  4. Parse each response into `recommendation` rows
-  5. Run Promptfoo eval, update `evalScore` and `evalDetails`
-  6. Handle per-pair failures gracefully (log error, continue with next pair)
-  7. Update `run` status to `completed` (or `failed` if all pairs failed)
+- [ ] Create `src/server/llm/automation/match-settler.ts` — For each active match past `periodEnd`: tally recommendation counts for both tools in the category over the period, set scores, determine winner, update status to `settled`
+- [ ] Create `src/server/llm/automation/match-generator.ts` — Scan for tool pairs in the same category with N+ recommendations but no active match. Auto-create matches with configurable period (default: 7-day rolling windows)
 
-### 4.5 Match Management
+### 4.5 Vercel Cron Endpoints
 
-- [ ] Create `src/server/automation/match-settler.ts` — For each active match past `periodEnd`: tally recommendation counts for both tools in the category over the period, set scores, determine winner, update status to `settled`
-- [ ] Create `src/server/automation/match-generator.ts` — Scan for tool pairs in the same category with N+ recommendations but no active match. Auto-create matches with configurable period (default: 7-day rolling windows)
+- [ ] Create `src/app/api/cron/run/route.ts` — GET endpoint protected by `CRON_SECRET` via `Authorization: Bearer <token>` header. Creates a run record with all active prompts/LLMs, then calls the runner orchestrator. Vercel Cron calls this daily
+- [ ] Create `src/app/api/cron/settle/route.ts` — GET endpoint protected by `CRON_SECRET`. Runs match settlement + new match generation. Vercel Cron calls this daily after the run cron
+- [ ] Add `vercel.json` with cron schedule configuration:
+  ```json
+  {
+    "crons": [
+      { "path": "/api/cron/run", "schedule": "0 6 * * *" },
+      { "path": "/api/cron/settle", "schedule": "0 8 * * *" }
+    ]
+  }
+  ```
 
-### 4.6 Cron Endpoints
-
-- [ ] Create `src/app/api/cron/run/route.ts` — POST endpoint protected by `CRON_SECRET` header. Calls runner orchestrator. Can be triggered by Vercel Cron, GitHub Actions, or any external scheduler
-- [ ] Create `src/app/api/cron/settle/route.ts` — POST endpoint for match settlement + new match generation. Runs after daily run completes
-
-### 4.7 Dependencies & Config
+### 4.6 Dependencies & Config
 
 - [ ] Add `openai` npm package (for OpenRouter API compatibility)
-- [ ] Add `OPENROUTER_API_KEY` to `.env.example`
-- [ ] Add `CRON_SECRET` to `.env.example` and `src/env.js`
+- [ ] Add `CRON_SECRET` to `.env.example` and `src/env.js` (`OPENROUTER_API_KEY` already exists)
 
-### 4.8 Tests
+### 4.7 Tests
 
-- [ ] `src/server/automation/__tests__/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
-- [ ] `src/server/automation/__tests__/runner.test.ts` — Integration tests with mocked OpenRouter (no real API calls)
-- [ ] `src/server/automation/__tests__/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
+- [ ] `src/server/llm/automation/__tests__/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
+- [ ] `src/server/llm/automation/__tests__/runner.test.ts` — Integration tests with mocked OpenRouter (no real API calls)
+- [ ] `src/server/llm/automation/__tests__/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
 
-**Key files created:** `src/server/automation/` (6 files), `src/app/api/cron/` (2 routes), 3 test files
+**Directory structure after this step:**
+```
+src/server/llm/
+├── evals/                          (existing, CLI-only Promptfoo config)
+│   └── promptfooconfig.yaml
+├── prompts/                        (existing, prompt markdown files)
+│   ├── index.ts
+│   └── vibe-coder/*.md
+├── service/                        (OpenRouter client)
+│   ├── index.ts
+│   └── system-prompt.ts
+└── automation/                     (pipeline orchestration)
+    ├── runner.ts
+    ├── parser.ts
+    ├── match-settler.ts
+    ├── match-generator.ts
+    └── __tests__/
+        ├── parser.test.ts
+        ├── runner.test.ts
+        └── match-settler.test.ts
+```
 
-**Verify:** Trigger manual run, verify data flows through pipeline (run → run_result → recommendation), match settlement produces correct scores
+**Key files created:** `src/server/llm/service/` (2 files), `src/server/llm/automation/` (4 files + 3 test files), `src/app/api/cron/` (2 routes), `vercel.json`
+**Key files modified:** `src/env.js`, `package.json`
+
+**Verify:** Trigger manual run via admin, verify data flows through pipeline (run → run_result → recommendation), match settlement produces correct scores, Vercel Cron config validates
 
 **Depends on:** Steps 2 and 3
 
