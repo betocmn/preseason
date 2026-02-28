@@ -20,6 +20,8 @@ Preseason — Tracks what tools LLMs recommend for vibe-coding prompts. See `CLA
 - Run `pnpm run check` before committing (lint + typecheck)
 - Run `pnpm run test` to verify tests pass
 - Run `pnpm run format` to format code
+- Place tests as colocated `*.test.ts` files next to implementation files
+- Use `src/test/` only for shared test infra/utilities; do not use `__test__` or `__tests__` folders in app code
 - English only — no i18n, plain strings in components
 - **Never** add AI attribution (e.g. `Co-Authored-By`) to git commit messages
 
