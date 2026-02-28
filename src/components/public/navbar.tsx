@@ -1,8 +1,8 @@
 import { Activity, BarChart3, Menu, Swords } from 'lucide-react'
 import Link from 'next/link'
+import { ThemeToggle } from '~/components/public/theme-toggle'
 import { Button } from '~/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '~/components/ui/sheet'
-import { ThemeToggle } from '~/components/public/theme-toggle'
 
 const navLinks = [
   { href: '/feed', label: 'Feed', icon: Activity },
@@ -55,10 +55,7 @@ export function Navbar() {
                   </Link>
                 ))}
                 <hr className="my-2" />
-                <Link
-                  href="/login"
-                  className="rounded-md px-3 py-2 text-sm hover:bg-accent"
-                >
+                <Link href="/login" className="rounded-md px-3 py-2 text-sm hover:bg-accent">
                   Sign in
                 </Link>
               </nav>

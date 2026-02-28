@@ -1,3 +1,4 @@
+import { PercentageBar } from '~/components/public/percentage-bar'
 import {
   Table,
   TableBody,
@@ -6,7 +7,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
-import { PercentageBar } from '~/components/public/percentage-bar'
 
 type ByLlmEntry = {
   llm: { id: string; name: string; slug: string }

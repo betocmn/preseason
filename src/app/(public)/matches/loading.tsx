@@ -7,8 +7,8 @@ export default function MatchesLoading() {
       <Skeleton className="mb-6 h-10 w-[200px]" />
       <Skeleton className="mb-4 h-6 w-40" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-40 w-full" />
+        {Array.from({ length: 6 }, (_, i) => `skeleton-${i}`).map((key) => (
+          <Skeleton key={key} className="h-40 w-full" />
         ))}
       </div>
     </div>

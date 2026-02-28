@@ -1,7 +1,7 @@
 import { MessageSquare } from 'lucide-react'
+import { EmptyState } from '~/components/public/empty-state'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Separator } from '~/components/ui/separator'
-import { EmptyState } from '~/components/public/empty-state'
 
 type Comment = {
   id: string
@@ -61,9 +61,7 @@ export function CommentList({ comments }: CommentListProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium">
-                  {comment.critic.user.displayName}
-                </span>
+                <span className="text-sm font-medium">{comment.critic.user.displayName}</span>
                 {comment.critic.title && (
                   <span className="text-xs text-muted-foreground">{comment.critic.title}</span>
                 )}

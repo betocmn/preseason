@@ -1,12 +1,12 @@
 import { ArrowRight, Swords, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
-import { Button } from '~/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { EmptyState } from '~/components/public/empty-state'
 import { MatchCard } from '~/components/public/match-card'
 import { RecommendationCard } from '~/components/public/recommendation-card'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { TrendIndicator } from '~/components/public/trend-indicator'
+import { Button } from '~/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
 export default async function HomePage() {
@@ -30,7 +30,8 @@ export default async function HomePage() {
           What tools do AI models actually recommend?
         </h1>
         <p className="mx-auto mb-6 max-w-2xl text-lg text-muted-foreground">
-          We run vibe-coding prompts against top LLMs daily and track which third-party tools they recommend. Browse rankings, matches, and trends.
+          We run vibe-coding prompts against top LLMs daily and track which third-party tools they
+          recommend. Browse rankings, matches, and trends.
         </p>
         <div className="flex items-center justify-center gap-3">
           <Button asChild>

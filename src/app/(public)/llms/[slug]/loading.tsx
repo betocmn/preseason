@@ -9,8 +9,8 @@ export default function LlmDetailLoading() {
       </div>
       <Skeleton className="mb-4 h-6 w-56" />
       <div className="space-y-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-48 w-full" />
+        {Array.from({ length: 3 }, (_, i) => `skeleton-${i}`).map((key) => (
+          <Skeleton key={key} className="h-48 w-full" />
         ))}
       </div>
     </div>

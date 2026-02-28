@@ -1,9 +1,9 @@
 import { Users } from 'lucide-react'
 import type { Metadata } from 'next'
+import { EmptyState } from '~/components/public/empty-state'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { EmptyState } from '~/components/public/empty-state'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {

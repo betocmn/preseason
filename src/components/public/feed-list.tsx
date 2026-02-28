@@ -1,10 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { EmptyState } from '~/components/public/empty-state'
 import { LoadMoreButton } from '~/components/public/load-more-button'
 import { RecommendationCard } from '~/components/public/recommendation-card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 import { api } from '~/trpc/react'
 
 type Category = { id: string; name: string; slug: string }

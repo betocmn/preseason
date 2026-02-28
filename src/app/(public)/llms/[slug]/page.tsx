@@ -2,10 +2,10 @@ import { TRPCError } from '@trpc/server'
 import { Bot } from 'lucide-react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Badge } from '~/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { EmptyState } from '~/components/public/empty-state'
 import { RecommendationCard } from '~/components/public/recommendation-card'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -30,13 +30,14 @@ export default async function LlmDetailPage({ params }: Props) {
   const { slug } = await params
   const caller = await api()
 
-  let llm
-  try {
-    llm = await caller.llm.getBySlug({ slug })
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
-    throw error
-  }
+  const llm = await (async () => {
+    try {
+      return await caller.llm.getBySlug({ slug })
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
+      throw error
+    }
+  })()
 
   const feed = await caller.recommendation.getFeed({
     limit: 50,

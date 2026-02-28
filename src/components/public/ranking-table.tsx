@@ -1,3 +1,5 @@
+import { ToolBadge } from '~/components/public/tool-badge'
+import { TrendIndicator } from '~/components/public/trend-indicator'
 import {
   Table,
   TableBody,
@@ -6,8 +8,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
-import { ToolBadge } from '~/components/public/tool-badge'
-import { TrendIndicator } from '~/components/public/trend-indicator'
 import { cn } from '~/lib/utils'
 
 type RankingItem = {
@@ -45,9 +45,7 @@ export function RankingTable({ items, showCategoryCoverage, className }: Ranking
         <TableBody>
           {items.map((item, index) => (
             <TableRow key={item.tool.id}>
-              <TableCell className="font-medium text-muted-foreground">
-                {index + 1}
-              </TableCell>
+              <TableCell className="font-medium text-muted-foreground">{index + 1}</TableCell>
               <TableCell>
                 <ToolBadge name={item.tool.name} slug={item.tool.slug} />
               </TableCell>

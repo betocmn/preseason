@@ -17,13 +17,15 @@ export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolB
   return (
     <Link
       href={`/tools/${slug}`}
-      className={cn('inline-flex items-center gap-1.5 font-medium hover:underline', textSize, className)}
+      className={cn(
+        'inline-flex items-center gap-1.5 font-medium hover:underline',
+        textSize,
+        className,
+      )}
     >
       <Avatar className={avatarSize}>
         {logoUrl && <AvatarImage src={logoUrl} alt={name} />}
-        <AvatarFallback className="text-[10px]">
-          {name.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
+        <AvatarFallback className="text-[10px]">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
       </Avatar>
       {name}
     </Link>

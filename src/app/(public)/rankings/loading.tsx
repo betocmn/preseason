@@ -6,8 +6,8 @@ export default function RankingsLoading() {
       <Skeleton className="mb-6 h-8 w-48" />
       <div className="flex gap-8">
         <div className="hidden w-48 space-y-2 md:block">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full" />
+          {Array.from({ length: 10 }, (_, i) => `skeleton-${i}`).map((key) => (
+            <Skeleton key={key} className="h-8 w-full" />
           ))}
         </div>
         <div className="flex-1">

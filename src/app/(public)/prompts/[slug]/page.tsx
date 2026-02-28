@@ -2,9 +2,9 @@ import { TRPCError } from '@trpc/server'
 import { FileText } from 'lucide-react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { EmptyState } from '~/components/public/empty-state'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
-import { EmptyState } from '~/components/public/empty-state'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -29,13 +29,14 @@ export default async function PromptDetailPage({ params }: Props) {
   const { slug } = await params
   const caller = await api()
 
-  let prompt
-  try {
-    prompt = await caller.prompt.getBySlug({ slug })
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
-    throw error
-  }
+  const prompt = await (async () => {
+    try {
+      return await caller.prompt.getBySlug({ slug })
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
+      throw error
+    }
+  })()
 
   return (
     <div className="container max-w-4xl py-8">
@@ -49,7 +50,9 @@ export default async function PromptDetailPage({ params }: Props) {
           {prompt.isActive ? (
             <Badge className="bg-trend-up text-trend-up-foreground text-xs">Active</Badge>
           ) : (
-            <Badge variant="outline" className="text-xs">Inactive</Badge>
+            <Badge variant="outline" className="text-xs">
+              Inactive
+            </Badge>
           )}
         </div>
       </div>

@@ -1,9 +1,9 @@
 import { Bot, FileText } from 'lucide-react'
 import Link from 'next/link'
-import { Badge } from '~/components/ui/badge'
-import { Card, CardContent } from '~/components/ui/card'
 import { CategoryPill } from '~/components/public/category-pill'
 import { ToolBadge } from '~/components/public/tool-badge'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent } from '~/components/ui/card'
 import { cn } from '~/lib/utils'
 
 type RecommendationCardProps = {
@@ -63,9 +63,7 @@ export function RecommendationCard({
                 </Link>
               </span>
             </div>
-            {reasoning && (
-              <p className="line-clamp-2 text-sm text-muted-foreground">{reasoning}</p>
-            )}
+            {reasoning && <p className="line-clamp-2 text-sm text-muted-foreground">{reasoning}</p>}
           </div>
           <div className="flex flex-col items-end gap-1">
             {confidence !== null && (

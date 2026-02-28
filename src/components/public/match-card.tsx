@@ -1,7 +1,7 @@
 import Link from 'next/link'
+import { PercentageBar } from '~/components/public/percentage-bar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { PercentageBar } from '~/components/public/percentage-bar'
 import { cn } from '~/lib/utils'
 
 type MatchCardProps = {
@@ -42,9 +42,7 @@ export function MatchCard({
               {category.name}
             </Badge>
             {isActive ? (
-              <Badge className="bg-trend-up text-trend-up-foreground text-xs">
-                ACTIVE
-              </Badge>
+              <Badge className="bg-trend-up text-trend-up-foreground text-xs">ACTIVE</Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
                 SETTLED

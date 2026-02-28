@@ -9,8 +9,8 @@ export default function FeedLoading() {
         <Skeleton className="h-10 w-[180px]" />
       </div>
       <div className="space-y-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
+        {Array.from({ length: 8 }, (_, i) => `skeleton-${i}`).map((key) => (
+          <Skeleton key={key} className="h-24 w-full" />
         ))}
       </div>
     </div>
