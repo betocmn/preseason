@@ -27,74 +27,74 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ---
 
-## Step 1: Rebrand & Cleanup (Wine Fair → Preseason) `[TODO]`
+## Step 1: Rebrand & Cleanup (Wine Fair → Preseason) `[DONE]`
 
 **Goal:** Strip all wine-domain code, rename prefixes, remove i18n, establish new project identity. No new features — just a clean slate that builds and passes checks.
 
 ### 1.1 Rename Identifiers & Config
 
-- [ ] `src/server/db/schema.ts` — Change `pgTableCreator` prefix from `wine_fair_` to `preseason_`
-- [ ] `src/server/db/schema.ts` — Drop ALL wine-domain tables (wine, producer, fair, region, grape_variety, review, favorite + all junction tables). Keep only `userProfiles` table (will be adapted in Step 2)
-- [ ] `src/server/db/schema.ts` — Update `userRoleEnum` from `['admin', 'producer', 'attendee']` to `['admin', 'provider', 'critic', 'user']`
-- [ ] `src/server/db/schema.ts` — Remove `wineTypeEnum` and all wine-related enums
-- [ ] `drizzle.config.ts` — Change `tablesFilter` from `['wine_fair_*']` to `['preseason_*']`
-- [ ] `supabase/config.toml` — Change `project_id` from `wine2cents` to `preseason`
-- [ ] `package.json` — Change `name` from `cancun` to `preseason`. Remove `i18n:verify` script
-- [ ] `src/app/layout.tsx` — Change metadata title/description to "Preseason"
-- [ ] `src/env.js` — Add `OPENROUTER_API_KEY` server env var
+- [x] `src/server/db/schema.ts` — Change `pgTableCreator` prefix from `wine_fair_` to `preseason_`
+- [x] `src/server/db/schema.ts` — Drop ALL wine-domain tables (wine, producer, fair, region, grape_variety, review, favorite + all junction tables). Keep only `userProfiles` table (will be adapted in Step 2)
+- [x] `src/server/db/schema.ts` — Update `userRoleEnum` from `['admin', 'producer', 'attendee']` to `['admin', 'provider', 'critic', 'user']`
+- [x] `src/server/db/schema.ts` — Remove `wineTypeEnum` and all wine-related enums
+- [x] `drizzle.config.ts` — Change `tablesFilter` from `['wine_fair_*']` to `['preseason_*']`
+- [x] `supabase/config.toml` — Change `project_id` from `wine2cents` to `preseason`
+- [x] `package.json` — Change `name` from `cancun` to `preseason`. Remove `i18n:verify` script
+- [x] `src/app/layout.tsx` — Change metadata title/description to "Preseason"
+- [x] `src/env.js` — Add `OPENROUTER_API_KEY` server env var
 
 ### 1.2 Remove i18n
 
-- [ ] `next.config.js` — Remove `withNextIntl` plugin wrapper
-- [ ] `package.json` — Remove `next-intl` dependency
-- [ ] `src/middleware.ts` — Remove i18n middleware, simplify to pure Supabase auth + route protection
-- [ ] Delete `src/i18n/` directory (routing.ts, request.ts, navigation.ts)
-- [ ] Delete `messages/` directory (en.json, bg.json)
-- [ ] Delete `src/components/language-switcher.tsx`
-- [ ] Delete `scripts/verify-translations.ts`
-- [ ] Strip all `useTranslations()` / `getTranslations()` from auth components, replace with plain English strings
-- [ ] Replace `Link`, `useRouter`, `usePathname` from `~/i18n/navigation` with standard `next/link` and `next/navigation`
+- [x] `next.config.js` — Remove `withNextIntl` plugin wrapper
+- [x] `package.json` — Remove `next-intl` dependency
+- [x] `src/middleware.ts` — Remove i18n middleware, simplify to pure Supabase auth + route protection
+- [x] Delete `src/i18n/` directory (routing.ts, request.ts, navigation.ts)
+- [x] Delete `messages/` directory (en.json, bg.json)
+- [x] Delete `src/components/language-switcher.tsx`
+- [x] Delete `scripts/verify-translations.ts`
+- [x] Strip all `useTranslations()` / `getTranslations()` from auth components, replace with plain English strings
+- [x] Replace `Link`, `useRouter`, `usePathname` from `~/i18n/navigation` with standard `next/link` and `next/navigation`
 
 ### 1.3 Restructure Routes
 
-- [ ] Move `src/app/[locale]/(attendee)/` → `src/app/(public)/` (remove locale segment)
-- [ ] Move `src/app/[locale]/manage/` → `src/app/admin/`
-- [ ] Move `src/app/[locale]/login/` → `src/app/login/`
-- [ ] Move `src/app/[locale]/signup/` → `src/app/signup/`
-- [ ] Create `src/app/provider/` shell (layout + empty dashboard page)
-- [ ] Merge `src/app/[locale]/layout.tsx` into `src/app/layout.tsx` (remove `NextIntlClientProvider`, keep `TRPCReactProvider`, `Toaster`, theme provider)
-- [ ] Delete `src/app/[locale]/` directory after migration
+- [x] Move `src/app/[locale]/(attendee)/` → `src/app/(public)/` (remove locale segment)
+- [x] Move `src/app/[locale]/manage/` → `src/app/admin/`
+- [x] Move `src/app/[locale]/login/` → `src/app/login/`
+- [x] Move `src/app/[locale]/signup/` → `src/app/signup/`
+- [x] Create `src/app/provider/` shell (layout + empty dashboard page)
+- [x] Merge `src/app/[locale]/layout.tsx` into `src/app/layout.tsx` (remove `NextIntlClientProvider`, keep `TRPCReactProvider`, `Toaster`, theme provider)
+- [x] Delete `src/app/[locale]/` directory after migration
 
 ### 1.4 Remove Wine-Domain Code
 
-- [ ] Delete all wine routers: `src/server/api/routers/wine.ts`, `fair.ts`, `producer.ts`, `review.ts`, `favorite.ts`, `region.ts`, `grape-variety.ts` + all `.test.ts` counterparts
-- [ ] Delete `src/server/api/routers/homepage.test.ts`
-- [ ] Delete all attendee components: `src/components/attendee/` directory
-- [ ] Delete `src/lib/wine-type-styles.ts`
-- [ ] Update `src/server/api/root.ts` — Remove all wine routers, keep only `userRouter`
-- [ ] Update `src/server/api/helpers/auth.ts` — Update role types to match new enum
-- [ ] Clean `src/server/api/routers/user.ts` — Remove wine-related logic if any
+- [x] Delete all wine routers: `src/server/api/routers/wine.ts`, `fair.ts`, `producer.ts`, `review.ts`, `favorite.ts`, `region.ts`, `grape-variety.ts` + all `.test.ts` counterparts
+- [x] Delete `src/server/api/routers/homepage.test.ts`
+- [x] Delete all attendee components: `src/components/attendee/` directory
+- [x] Delete `src/lib/wine-type-styles.ts`
+- [x] Update `src/server/api/root.ts` — Remove all wine routers, keep only `userRouter`
+- [x] Update `src/server/api/helpers/auth.ts` — Update role types to match new enum
+- [x] Clean `src/server/api/routers/user.ts` — Remove wine-related logic if any
 
 ### 1.5 Update Documentation & Seed
 
-- [ ] Rewrite `CLAUDE.md` for Preseason context
-- [ ] Rewrite `AGENTS.md` for Preseason context
-- [ ] Rewrite `README.md` for Preseason
-- [ ] Simplify `src/server/db/seed.ts` — Keep admin user seeding only, remove all wine seed data
-- [ ] Delete old migration files in `drizzle/` (start fresh)
-- [ ] Update `src/test/db.ts` — Remove wine table CREATE TABLEs, keep only user_profile
-- [ ] Update/remove `src/test/db-schema.test.ts` and `src/test/example.test.ts`
-- [ ] Delete `src/middleware.test.ts` or update for new route structure
+- [x] Rewrite `CLAUDE.md` for Preseason context
+- [x] Rewrite `AGENTS.md` for Preseason context
+- [x] Rewrite `README.md` for Preseason
+- [x] Simplify `src/server/db/seed.ts` — Keep admin user seeding only, remove all wine seed data
+- [x] Delete old migration files in `drizzle/` (start fresh)
+- [x] Update `src/test/db.ts` — Remove wine table CREATE TABLEs, keep only user_profile
+- [x] Update/remove `src/test/db-schema.test.ts` and `src/test/example.test.ts`
+- [x] Delete `src/middleware.test.ts` or update for new route structure
 
 ### 1.6 Replace Public Shell Pages
 
-- [ ] `src/app/(public)/page.tsx` — Simple "Preseason" placeholder homepage
-- [ ] `src/app/(public)/layout.tsx` — Basic public layout with navbar placeholder
-- [ ] `src/app/admin/dashboard/page.tsx` — Simple "Admin Dashboard" placeholder
-- [ ] `src/app/admin/layout.tsx` — Adapt admin layout, update sidebar nav items
-- [ ] `src/app/provider/page.tsx` — Simple "Provider Dashboard" placeholder
-- [ ] `src/app/provider/layout.tsx` — Basic provider layout
-- [ ] Clean up admin stubs: update nav for Preseason menu items (Prompts, Tools, Categories, LLMs, Runs, Matches, Critics, Users)
+- [x] `src/app/(public)/page.tsx` — Simple "Preseason" placeholder homepage
+- [x] `src/app/(public)/layout.tsx` — Basic public layout with navbar placeholder
+- [x] `src/app/admin/dashboard/page.tsx` — Simple "Admin Dashboard" placeholder
+- [x] `src/app/admin/layout.tsx` — Adapt admin layout, update sidebar nav items
+- [x] `src/app/provider/page.tsx` — Simple "Provider Dashboard" placeholder
+- [x] `src/app/provider/layout.tsx` — Basic provider layout
+- [x] Clean up admin stubs: update nav for Preseason menu items (Prompts, Tools, Categories, LLMs, Runs, Matches, Critics, Users)
 
 **Key files:** `src/server/db/schema.ts`, `drizzle.config.ts`, `src/middleware.ts`, `next.config.js`, `package.json`, `src/app/layout.tsx`
 
@@ -227,7 +227,7 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ### 3.5 User Router Updates
 
-- [ ] Adapt `src/server/api/routers/user.ts` — Update `createProfile` input (drop birthDate, add displayName), update `updateProfile`, add `getProfile`
+- [x] Adapt `src/server/api/routers/user.ts` — Update `createProfile` input (drop birthDate, add displayName), update `updateProfile`, add `getProfile`
 
 ### 3.6 Register All Routers
 

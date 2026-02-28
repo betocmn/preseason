@@ -9,6 +9,10 @@ export const userRouter = createTRPCRouter({
     .input(
       z.object({
         displayName: z.string().min(1).max(150),
+        avatarUrl: z.string().url().max(512).optional(),
+        bio: z.string().max(5000).optional(),
+        company: z.string().max(255).optional(),
+        website: z.string().url().max(255).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -25,6 +29,10 @@ export const userRouter = createTRPCRouter({
           id: ctx.user.id,
           email: ctx.user.email,
           displayName: input.displayName,
+          avatarUrl: input.avatarUrl,
+          bio: input.bio,
+          company: input.company,
+          website: input.website,
           role: 'user',
         })
         .returning()
@@ -44,16 +52,30 @@ export const userRouter = createTRPCRouter({
 
   updateProfile: protectedProcedure
     .input(
-      z.object({
-        displayName: z.string().min(1, 'Display name is required').max(150),
-      }),
+      z
+        .object({
+          displayName: z.string().min(1).max(150).optional(),
+          avatarUrl: z.string().url().max(512).nullable().optional(),
+          bio: z.string().max(5000).nullable().optional(),
+          company: z.string().max(255).nullable().optional(),
+          website: z.string().url().max(255).nullable().optional(),
+        })
+        .refine(
+          (input) =>
+            input.displayName !== undefined ||
+            input.avatarUrl !== undefined ||
+            input.bio !== undefined ||
+            input.company !== undefined ||
+            input.website !== undefined,
+          {
+            message: 'At least one field is required',
+          },
+        ),
     )
     .mutation(async ({ ctx, input }) => {
       const updated = await ctx.db
         .update(userProfiles)
-        .set({
-          displayName: input.displayName,
-        })
+        .set(input)
         .where(eq(userProfiles.id, ctx.user.id))
         .returning()
 
