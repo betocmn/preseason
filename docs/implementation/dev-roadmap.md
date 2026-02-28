@@ -199,31 +199,31 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ---
 
-## Step 3: tRPC API Layer `[TODO]`
+## Step 3: tRPC API Layer `[DONE]`
 
 **Goal:** Build all tRPC routers for managing and querying domain entities. Admin CRUD, provider-scoped reads, and public queries.
 
 ### 3.1 Reference Data Routers
 
-- [ ] Create `src/server/api/routers/category.ts` — `list` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin)
-- [ ] Create `src/server/api/routers/tool.ts` — `list` (public, filterable by category slug), `getBySlug` (public, with categories), `search` (public, text search across name/aliases), `create` (admin), `update` (admin), `delete` (admin), `verify` (admin, sets isVerified=true)
-- [ ] Create `src/server/api/routers/llm.ts` — `listActive` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
-- [ ] Create `src/server/api/routers/prompt.ts` — `listActive` (public, with descriptions only), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
+- [x] Create `src/server/api/routers/category.ts` — `list` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin)
+- [x] Create `src/server/api/routers/tool.ts` — `list` (public, filterable by category slug), `getBySlug` (public, with categories), `search` (public, text search across name/aliases), `create` (admin), `update` (admin), `delete` (admin), `verify` (admin, sets isVerified=true)
+- [x] Create `src/server/api/routers/llm.ts` — `listActive` (public), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
+- [x] Create `src/server/api/routers/prompt.ts` — `listActive` (public, with descriptions only), `getBySlug` (public), `create` (admin), `update` (admin), `delete` (admin), `toggleActive` (admin)
 
 ### 3.2 Run & Recommendation Routers
 
-- [ ] Create `src/server/api/routers/run.ts` — `listRecent` (public, paginated), `getById` (public, with run_results summary), `triggerManual` (admin, calls automation runner)
-- [ ] Create `src/server/api/routers/recommendation.ts` — `getFeed` (public, paginated, filterable by category/tool/llm/date range), `getStats` (public, aggregated recommendation rates per tool per category over configurable time window), `getTrending` (public, tools with biggest rate changes)
+- [x] Create `src/server/api/routers/run.ts` — `listRecent` (public, paginated), `getById` (public, with run_results summary), `triggerManual` (admin, calls automation runner)
+- [x] Create `src/server/api/routers/recommendation.ts` — `getFeed` (public, paginated, filterable by category/tool/llm/date range), `getStats` (public, aggregated recommendation rates per tool per category over configurable time window), `getTrending` (public, tools with biggest rate changes)
 
 ### 3.3 Match & Ranking Routers
 
-- [ ] Create `src/server/api/routers/match.ts` — `listActive` (public), `listSettled` (public, paginated), `getById` (public, with per-LLM breakdown and per-prompt breakdown), `create` (admin), `settle` (admin)
-- [ ] Create `src/server/api/routers/ranking.ts` — `byCategorySlug` (public, tool rankings with recommendation rate, trend, consistency score over rolling window), `overall` (public, cross-category tool ranking)
+- [x] Create `src/server/api/routers/match.ts` — `listActive` (public), `listSettled` (public, paginated), `getById` (public, with per-LLM breakdown and per-prompt breakdown), `create` (admin), `settle` (admin)
+- [x] Create `src/server/api/routers/ranking.ts` — `byCategorySlug` (public, tool rankings with recommendation rate, trend, consistency score over rolling window), `overall` (public, cross-category tool ranking)
 
 ### 3.4 Critic & Comment Routers
 
-- [ ] Create `src/server/api/routers/critic.ts` — `list` (public, verified critics with expertise), `getById` (public, with comments), `verify` (admin), `unverify` (admin), `updateOwn` (critic role, own profile)
-- [ ] Create `src/server/api/routers/comment.ts` — `listByTarget` (public, by targetType + targetId), `create` (critic, with conflict-of-interest enforcement via excludedCategories), `update` (critic, own only), `delete` (critic own or admin)
+- [x] Create `src/server/api/routers/critic.ts` — `list` (public, verified critics with expertise), `getById` (public, with comments), `verify` (admin), `unverify` (admin), `updateOwn` (critic role, own profile)
+- [x] Create `src/server/api/routers/comment.ts` — `listByTarget` (public, by targetType + targetId), `create` (critic, with conflict-of-interest enforcement via excludedCategories), `update` (critic, own only), `delete` (critic own or admin)
 
 ### 3.5 User Router Updates
 
@@ -231,13 +231,13 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ### 3.6 Register All Routers
 
-- [ ] Update `src/server/api/root.ts` — Register all new routers: category, tool, llm, prompt, run, recommendation, match, ranking, critic, comment, user
+- [x] Update `src/server/api/root.ts` — Register all new routers: category, tool, llm, prompt, run, recommendation, match, ranking, critic, comment, user
 
 ### 3.7 Tests
 
-- [ ] One `.test.ts` file per router using Testcontainers pattern from existing codebase
-- [ ] Test: public read operations, admin CRUD with role enforcement, provider-scoped access, critic conflict-of-interest on comments, pagination/filtering, edge cases (not found, duplicate, unauthorized)
-- [ ] Target: ~100+ test cases across all routers
+- [x] One `.test.ts` file per router using Testcontainers pattern from existing codebase
+- [x] Test: public read operations, admin CRUD with role enforcement, provider-scoped access, critic conflict-of-interest on comments, pagination/filtering, edge cases (not found, duplicate, unauthorized)
+- [x] Target: ~100+ test cases across all routers
 
 **Key files created:** `src/server/api/routers/{category,tool,llm,prompt,run,recommendation,match,ranking,critic,comment}.ts` + `.test.ts` counterparts
 **Key files modified:** `src/server/api/root.ts`, `src/server/api/routers/user.ts`
