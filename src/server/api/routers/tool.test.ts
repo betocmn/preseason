@@ -1,0 +1,174 @@
+import type { TRPCError } from '@trpc/server'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { cleanTestDatabase, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { createTestCaller, seedUser } from '~/test/trpc'
+
+describe('toolRouter', () => {
+  beforeAll(async () => {
+    await setupTestDatabase()
+  }, 120_000)
+
+  afterAll(async () => {
+    await teardownTestDatabase()
+  })
+
+  beforeEach(async () => {
+    await cleanTestDatabase()
+  })
+
+  it('lists publicly with category filter', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    const authCategory = await adminCaller.category.create({
+      name: 'Authentication',
+      slug: 'auth',
+      description: 'Auth',
+      icon: 'lock',
+      displayOrder: 1,
+    })
+    const dbCategory = await adminCaller.category.create({
+      name: 'Database',
+      slug: 'database',
+      description: 'DB',
+      icon: 'database',
+      displayOrder: 2,
+    })
+    if (!authCategory || !dbCategory) {
+      throw new Error('Expected categories to be created')
+    }
+
+    await adminCaller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [authCategory.id],
+    })
+    await adminCaller.tool.create({
+      name: 'Supabase',
+      slug: 'supabase',
+      categoryIds: [dbCategory.id],
+    })
+
+    const caller = createTestCaller(null)
+    const authTools = await caller.tool.list({ categorySlug: 'auth', limit: 10, offset: 0 })
+
+    expect(authTools.total).toBe(1)
+    expect(authTools.items[0]?.slug).toBe('clerk')
+  })
+
+  it('searches by aliases and slug', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+    const category = await adminCaller.category.create({
+      name: 'Authentication',
+      slug: 'auth',
+      description: 'Auth',
+      icon: 'lock',
+      displayOrder: 1,
+    })
+    if (!category) {
+      throw new Error('Expected category to be created')
+    }
+
+    await adminCaller.tool.create({
+      name: 'NextAuth.js',
+      slug: 'nextauth',
+      aliases: ['authjs', 'next-auth'],
+      categoryIds: [category.id],
+    })
+
+    const caller = createTestCaller(null)
+    const aliasSearch = await caller.tool.search({ query: 'authjs', limit: 10 })
+    const slugSearch = await caller.tool.search({ query: 'nextauth', limit: 10 })
+
+    expect(aliasSearch[0]?.slug).toBe('nextauth')
+    expect(slugSearch[0]?.slug).toBe('nextauth')
+  })
+
+  it('supports admin CRUD and verify', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    const category = await adminCaller.category.create({
+      name: 'Payments',
+      slug: 'payments',
+      description: 'Payments',
+      icon: 'credit-card',
+      displayOrder: 1,
+    })
+    if (!category) {
+      throw new Error('Expected category to be created')
+    }
+
+    const created = await adminCaller.tool.create({
+      name: 'Stripe',
+      slug: 'stripe',
+      categoryIds: [category.id],
+    })
+    expect(created?.slug).toBe('stripe')
+    expect(created?.isVerified).toBe(false)
+
+    const updated = await adminCaller.tool.update({
+      id: created?.id ?? '',
+      description: 'Payment platform',
+      aliases: ['stripe-payments'],
+    })
+    expect(updated.description).toBe('Payment platform')
+
+    const verified = await adminCaller.tool.verify({ id: created?.id ?? '' })
+    expect(verified.isVerified).toBe(true)
+
+    const deleted = await adminCaller.tool.delete({ id: created?.id ?? '' })
+    expect(deleted.success).toBe(true)
+  })
+
+  it('enforces provider-scoped listMine', async () => {
+    const { authUser: adminAuth, profile: adminProfile } = await seedUser({ role: 'admin' })
+    const { profile: providerOne } = await seedUser({ role: 'provider' })
+    const { profile: providerTwo } = await seedUser({ role: 'provider' })
+    const adminCaller = createTestCaller(adminAuth)
+
+    await adminCaller.tool.create({
+      name: 'ProviderOne Tool',
+      slug: 'provider-one-tool',
+      providerUserId: providerOne.id,
+    })
+    await adminCaller.tool.create({
+      name: 'ProviderTwo Tool',
+      slug: 'provider-two-tool',
+      providerUserId: providerTwo.id,
+    })
+
+    const providerOneCaller = createTestCaller({
+      ...adminAuth,
+      id: providerOne.id,
+      email: providerOne.email,
+    })
+    const providerMine = await providerOneCaller.tool.listMine({ limit: 20, offset: 0 })
+    expect(providerMine.total).toBe(1)
+    expect(providerMine.items[0]?.providerUserId).toBe(providerOne.id)
+
+    const adminMine = await adminCaller.tool.listMine({
+      providerUserId: providerTwo.id,
+      limit: 20,
+      offset: 0,
+    })
+    expect(adminProfile.role).toBe('admin')
+    expect(adminMine.total).toBe(1)
+    expect(adminMine.items[0]?.providerUserId).toBe(providerTwo.id)
+  })
+
+  it('rejects non-admin mutations', async () => {
+    const { authUser } = await seedUser({ role: 'provider' })
+    const caller = createTestCaller(authUser)
+
+    await expect(
+      caller.tool.create({
+        name: 'Blocked',
+        slug: 'blocked',
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
+  })
+})
