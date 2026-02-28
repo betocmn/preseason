@@ -189,6 +189,8 @@ export const runs = createTable(
     completedAt: d.timestamp('completed_at', { withTimezone: true }),
     status: runStatusEnum().notNull().default('pending'),
     trigger: d.varchar({ length: 50 }).notNull().default('cron'),
+    promptIds: d.uuid('prompt_ids').array(),
+    llmIds: d.uuid('llm_ids').array(),
     promptCount: d.integer('prompt_count'),
     llmCount: d.integer('llm_count'),
     errorLog: d.text('error_log'),
