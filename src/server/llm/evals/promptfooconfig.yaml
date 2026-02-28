@@ -1,0 +1,97 @@
+# Promptfoo config for ad-hoc evaluation of vibe-coding prompts
+# Run: npx promptfoo eval --config src/server/llm/evals/promptfooconfig.yaml
+# View: npx promptfoo view
+
+description: "Preseason vibe-coding prompt evaluation"
+
+prompts:
+  - file://src/server/llm/prompts/vibe-coder/real-estate-website.md
+  - file://src/server/llm/prompts/vibe-coder/saas-application.md
+  - file://src/server/llm/prompts/vibe-coder/blog-platform-cms.md
+  - file://src/server/llm/prompts/vibe-coder/ecommerce-store.md
+  - file://src/server/llm/prompts/vibe-coder/project-management-tool.md
+  - file://src/server/llm/prompts/vibe-coder/social-media-platform.md
+  - file://src/server/llm/prompts/vibe-coder/job-board.md
+  - file://src/server/llm/prompts/vibe-coder/restaurant-reservation-system.md
+  - file://src/server/llm/prompts/vibe-coder/online-learning-platform.md
+  - file://src/server/llm/prompts/vibe-coder/multi-tenant-crm.md
+  - file://src/server/llm/prompts/vibe-coder/weather-dashboard.md
+  - file://src/server/llm/prompts/vibe-coder/chat-application.md
+  - file://src/server/llm/prompts/vibe-coder/fitness-tracking-app.md
+  - file://src/server/llm/prompts/vibe-coder/url-shortener.md
+  - file://src/server/llm/prompts/vibe-coder/documentation-site.md
+
+providers:
+  - id: openrouter:anthropic/claude-3.5-sonnet
+    label: Claude 3.5 Sonnet
+  - id: openrouter:openai/gpt-4o
+    label: GPT-4o
+  - id: openrouter:google/gemini-pro-1.5
+    label: Gemini 1.5 Pro
+  - id: openrouter:meta-llama/llama-3.1-70b-instruct
+    label: Llama 3.1 70B
+  - id: openrouter:anthropic/claude-3-opus
+    label: Claude 3 Opus
+  - id: openrouter:openai/gpt-4o-mini
+    label: GPT-4o Mini
+  - id: openrouter:mistralai/mistral-large-latest
+    label: Mistral Large
+  - id: openrouter:deepseek/deepseek-chat
+    label: DeepSeek V2.5
+
+defaultTest:
+  assert:
+    - type: javascript
+      value: |
+        const text = output.trim();
+        try {
+          JSON.parse(text);
+          return { pass: true, score: 1.0, reason: 'Valid JSON response' };
+        } catch {
+          const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (jsonMatch) {
+            try {
+              JSON.parse(jsonMatch[1].trim());
+              return { pass: true, score: 0.8, reason: 'Valid JSON found in code block' };
+            } catch {
+              return { pass: false, score: 0, reason: 'JSON in code block is malformed' };
+            }
+          }
+          return { pass: false, score: 0, reason: 'Response is not valid JSON' };
+        }
+
+    - type: javascript
+      value: |
+        const lower = output.toLowerCase();
+        const hasTools = lower.includes('supabase') || lower.includes('stripe') ||
+          lower.includes('vercel') || lower.includes('prisma') || lower.includes('drizzle') ||
+          lower.includes('tailwind') || lower.includes('clerk') || lower.includes('resend') ||
+          lower.includes('nextauth') || lower.includes('firebase');
+        return {
+          pass: hasTools,
+          score: hasTools ? 1.0 : 0,
+          reason: hasTools ? 'Response includes tool recommendations' : 'No recognizable tool names found'
+        };
+
+    - type: javascript
+      value: |
+        const lower = output.toLowerCase();
+        const categories = ['auth', 'database', 'hosting', 'payments', 'email',
+          'storage', 'styling', 'ui', 'api', 'analytics', 'monitoring', 'cms',
+          'search', 'realtime', 'testing', 'notifications'];
+        const found = categories.filter(c => lower.includes(c));
+        const score = Math.min(found.length / 3, 1.0);
+        return {
+          pass: found.length >= 2,
+          score,
+          reason: `Found ${found.length} categories: ${found.join(', ')}`
+        };
+
+    - type: javascript
+      value: |
+        const len = output.length;
+        if (len < 100) return { pass: false, score: 0, reason: `Response too short (${len} chars)` };
+        if (len < 500) return { pass: true, score: 0.5, reason: `Response is short (${len} chars)` };
+        return { pass: true, score: 1.0, reason: `Response length OK (${len} chars)` };
+
+outputPath: ./promptfoo-results.json

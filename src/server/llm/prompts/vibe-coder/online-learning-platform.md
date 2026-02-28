@@ -1,0 +1,1 @@
+Create an online learning platform with courses, quizzes, and certificates. Include video hosting, progress tracking, discussion forums, instructor dashboards, payment for premium courses, and completion certificates.

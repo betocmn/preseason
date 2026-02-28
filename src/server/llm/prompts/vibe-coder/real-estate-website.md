@@ -1,0 +1,1 @@
+Create a real estate website with an admin area for uploading listings. Include property search with filters, image galleries, agent profiles, and a contact form. The site should have user authentication for saved searches and favorites.

@@ -102,48 +102,48 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
 
 ---
 
-## Step 2: Database Schema & Seed Data `[TODO]`
+## Step 2: Database Schema & Seed Data `[DONE]`
 
 **Goal:** Design and implement the full Preseason database schema. Create seed data for all reference tables.
 
 ### 2.1 Core Domain Tables
 
-- [ ] Adapt `preseason_user_profile` — Drop `birthDate`, rename `firstName`/`lastName` to `displayName` varchar(150), add `avatarUrl` varchar(512), `bio` text, `company` varchar(255), `website` varchar(255)
-- [ ] Create `preseason_category` table — `id` uuid PK, `name` varchar(100) unique, `slug` varchar(100) unique, `description` text, `icon` varchar(50) (lucide icon name), `displayOrder` integer, timestamps
-- [ ] Create `preseason_tool` table — `id` uuid PK, `name` varchar(255) unique, `slug` varchar(255) unique, `description` text, `website` varchar(512), `logoUrl` varchar(512), `isVerified` boolean default false, `providerUserId` uuid FK nullable, `aliases` text[] (for name normalization), timestamps
-- [ ] Create `preseason_tool_category` junction — `id` uuid PK, `toolId` FK, `categoryId` FK, `isPrimary` boolean default false, unique on (toolId, categoryId)
-- [ ] Create `preseason_llm` table — `id` uuid PK, `name` varchar(255), `slug` varchar(255) unique, `provider` varchar(100), `modelId` varchar(255) (OpenRouter model ID), `isActive` boolean default true, timestamps
-- [ ] Create `preseason_prompt` table — `id` uuid PK, `title` varchar(255), `slug` varchar(255) unique, `content` text (full prompt), `description` text, `expectedCategories` text[], `isActive` boolean default true, timestamps
+- [x] Adapt `preseason_user_profile` — Drop `birthDate`, rename `firstName`/`lastName` to `displayName` varchar(150), add `avatarUrl` varchar(512), `bio` text, `company` varchar(255), `website` varchar(255)
+- [x] Create `preseason_category` table — `id` uuid PK, `name` varchar(100) unique, `slug` varchar(100) unique, `description` text, `icon` varchar(50) (lucide icon name), `displayOrder` integer, timestamps
+- [x] Create `preseason_tool` table — `id` uuid PK, `name` varchar(255) unique, `slug` varchar(255) unique, `description` text, `website` varchar(512), `logoUrl` varchar(512), `isVerified` boolean default false, `providerUserId` uuid FK nullable, `aliases` text[] (for name normalization), timestamps
+- [x] Create `preseason_tool_category` junction — `id` uuid PK, `toolId` FK, `categoryId` FK, `isPrimary` boolean default false, unique on (toolId, categoryId)
+- [x] Create `preseason_llm` table — `id` uuid PK, `name` varchar(255), `slug` varchar(255) unique, `provider` varchar(100), `modelId` varchar(255) (OpenRouter model ID), `isActive` boolean default true, timestamps
+- [x] Create `preseason_prompt` table — `id` uuid PK, `title` varchar(255), `slug` varchar(255) unique, `content` text (full prompt), `description` text, `expectedCategories` text[], `isActive` boolean default true, timestamps
 
 ### 2.2 Run & Recommendation Tables
 
-- [ ] Create `run_status` enum: `pending`, `running`, `completed`, `failed`
-- [ ] Create `parse_status` enum: `pending`, `success`, `failed`
-- [ ] Create `preseason_run` table — `id` uuid PK, `startedAt` timestamptz, `completedAt` timestamptz, `status` run_status default 'pending', `trigger` varchar(50) default 'cron' (cron | manual), `promptCount` integer, `llmCount` integer, `errorLog` text, `createdAt` timestamptz
-- [ ] Create `preseason_run_result` table — `id` uuid PK, `runId` FK, `promptId` FK, `llmId` FK, `rawResponse` text, `parseStatus` parse_status default 'pending', `evalScore` real, `evalDetails` jsonb, `responseTimeMs` integer, `createdAt` timestamptz. Unique on (runId, promptId, llmId)
-- [ ] Create `preseason_recommendation` table — `id` uuid PK, `runResultId` FK (cascade delete), `toolId` FK, `categoryId` FK, `confidence` real, `reasoning` text, `rank` integer, `createdAt` timestamptz. Index on (toolId, categoryId)
+- [x] Create `run_status` enum: `pending`, `running`, `completed`, `failed`
+- [x] Create `parse_status` enum: `pending`, `success`, `failed`
+- [x] Create `preseason_run` table — `id` uuid PK, `startedAt` timestamptz, `completedAt` timestamptz, `status` run_status default 'pending', `trigger` varchar(50) default 'cron' (cron | manual), `promptCount` integer, `llmCount` integer, `errorLog` text, `createdAt` timestamptz
+- [x] Create `preseason_run_result` table — `id` uuid PK, `runId` FK, `promptId` FK, `llmId` FK, `rawResponse` text, `parseStatus` parse_status default 'pending', `evalScore` real, `evalDetails` jsonb, `responseTimeMs` integer, `createdAt` timestamptz. Unique on (runId, promptId, llmId)
+- [x] Create `preseason_recommendation` table — `id` uuid PK, `runResultId` FK (cascade delete), `toolId` FK, `categoryId` FK, `confidence` real, `reasoning` text, `rank` integer, `createdAt` timestamptz. Index on (toolId, categoryId)
 
 ### 2.3 Match Tables
 
-- [ ] Create `match_status` enum: `active`, `settled`, `archived`
-- [ ] Create `preseason_match` table — `id` uuid PK, `toolAId` FK, `toolBId` FK, `categoryId` FK, `status` match_status default 'active', `startedAt` timestamptz, `settledAt` timestamptz, `periodStart` date, `periodEnd` date, `toolAScore` integer default 0, `toolBScore` integer default 0, `totalPrompts` integer default 0, `winnerToolId` FK nullable. Unique on (toolAId, toolBId, categoryId, periodStart)
+- [x] Create `match_status` enum: `active`, `settled`, `archived`
+- [x] Create `preseason_match` table — `id` uuid PK, `toolAId` FK, `toolBId` FK, `categoryId` FK, `status` match_status default 'active', `startedAt` timestamptz, `settledAt` timestamptz, `periodStart` date, `periodEnd` date, `toolAScore` integer default 0, `toolBScore` integer default 0, `totalPrompts` integer default 0, `winnerToolId` FK nullable. Unique on (toolAId, toolBId, categoryId, periodStart)
 
 ### 2.4 Critic & Comment Tables
 
-- [ ] Create `comment_target` enum: `recommendation`, `match`, `tool`
-- [ ] Create `preseason_critic_profile` table — `id` uuid PK, `userId` FK unique (cascade delete), `title` varchar(255), `expertiseAreas` text[], `excludedCategories` text[] (conflict of interest), `verifiedAt` timestamptz, `verifiedBy` FK nullable, `isActive` boolean default true, timestamps
-- [ ] Create `preseason_comment` table — `id` uuid PK, `criticId` FK (cascade delete), `targetType` comment_target, `targetId` uuid, `content` text, `isPinned` boolean default false, timestamps. Index on (targetType, targetId)
+- [x] Create `comment_target` enum: `recommendation`, `match`, `tool`
+- [x] Create `preseason_critic_profile` table — `id` uuid PK, `userId` FK unique (cascade delete), `title` varchar(255), `expertiseAreas` text[], `excludedCategories` text[] (conflict of interest), `verifiedAt` timestamptz, `verifiedBy` FK nullable, `isActive` boolean default true, timestamps
+- [x] Create `preseason_comment` table — `id` uuid PK, `criticId` FK (cascade delete), `targetType` comment_target, `targetId` uuid, `content` text, `isPinned` boolean default false, timestamps. Index on (targetType, targetId)
 
 ### 2.5 Relations & Indexes
 
-- [ ] Define all Drizzle relations: category ↔ tool (many-to-many via tool_category), tool ↔ provider user, llm ↔ run_result, prompt ↔ run_result, run ↔ run_result, run_result ↔ recommendation, recommendation ↔ tool, recommendation ↔ category, match ↔ tools, critic_profile ↔ user_profile, comment ↔ critic_profile
-- [ ] Add performance indexes on: `recommendation(toolId, categoryId)`, `recommendation(runResultId)`, `run_result(runId)`, `comment(targetType, targetId)`, `match(status)`, `match(categoryId)`
+- [x] Define all Drizzle relations: category ↔ tool (many-to-many via tool_category), tool ↔ provider user, llm ↔ run_result, prompt ↔ run_result, run ↔ run_result, run_result ↔ recommendation, recommendation ↔ tool, recommendation ↔ category, match ↔ tools, critic_profile ↔ user_profile, comment ↔ critic_profile
+- [x] Add performance indexes on: `recommendation(toolId, categoryId)`, `recommendation(runResultId)`, `run_result(runId)`, `comment(targetType, targetId)`, `match(status)`, `match(categoryId)`
 
 ### 2.6 Seed Data
 
-- [ ] Seed ~20 initial categories:
+- [x] Seed ~20 initial categories:
   - Authentication (`auth`), Database (`database`), ORM / Data Access (`orm`), Email (`email`), Payments (`payments`), File Storage (`storage`), Hosting / Deployment (`hosting`), CSS / Styling (`styling`), UI Components (`ui-components`), State Management (`state`), API Framework (`api`), CMS (`cms`), Search (`search`), Analytics (`analytics`), Monitoring / Error Tracking (`monitoring`), AI / LLM Integration (`ai`), Realtime (`realtime`), Testing (`testing`), CI/CD (`ci-cd`), Background Jobs (`jobs`), Notifications (`notifications`)
-- [ ] Seed ~30-40 popular tools with category assignments:
+- [x] Seed ~30-40 popular tools with category assignments:
   - Auth: Supabase Auth, Clerk, Auth0, NextAuth.js, Firebase Auth, Lucia
   - Database: Supabase, PlanetScale, Neon, Firebase, MongoDB Atlas, Turso
   - ORM: Prisma, Drizzle, Kysely, TypeORM
@@ -164,9 +164,9 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
   - Jobs: Inngest, Trigger.dev, BullMQ, Quirrel
   - CMS: Sanity, Contentful, Strapi, Payload CMS
   - Notifications: Novu, OneSignal, Firebase Cloud Messaging
-- [ ] Seed ~5-8 LLMs with OpenRouter model IDs:
+- [x] Seed ~5-8 LLMs with OpenRouter model IDs:
   - Claude 3.5 Sonnet (`anthropic/claude-3.5-sonnet`), GPT-4o (`openai/gpt-4o`), Gemini 1.5 Pro (`google/gemini-pro-1.5`), Llama 3.1 70B (`meta-llama/llama-3.1-70b-instruct`), Claude 3 Opus (`anthropic/claude-3-opus`), GPT-4o Mini (`openai/gpt-4o-mini`), Mistral Large (`mistralai/mistral-large-latest`), DeepSeek V2.5 (`deepseek/deepseek-chat`)
-- [ ] Seed 10-20 vibe-coding prompts (varied categories):
+- [x] Seed 10-20 vibe-coding prompts (varied categories):
   - "Create a real estate website with admin area for uploading listings"
   - "Build a SaaS application with user authentication, subscription billing, and a dashboard"
   - "Create a blog platform with a CMS, comments, and email newsletter"
@@ -182,16 +182,16 @@ This roadmap breaks the Preseason MVP into agent-promptable steps. Each step is 
   - "Create a fitness tracking app with workout logging and progress charts"
   - "Build a URL shortener with analytics tracking"
   - "Create a documentation site with search, versioning, and dark mode"
-- [ ] Seed admin user
-- [ ] Make seed script idempotent (check before insert)
+- [x] Seed admin user
+- [x] Make seed script idempotent (check before insert)
 
 ### 2.7 Test Infrastructure
 
-- [ ] Rewrite `src/test/db.ts` — New CREATE TABLE statements for all Preseason tables
-- [ ] Write `src/test/db-schema.test.ts` — Smoke tests for all tables: insert/query, enum values, unique constraints, FK cascades, junction table operations
+- [x] Rewrite `src/test/db.ts` — New CREATE TABLE statements for all Preseason tables
+- [x] Write `src/test/db-schema.test.ts` — Smoke tests for all tables: insert/query, enum values, unique constraints, FK cascades, junction table operations
 
 **Key files modified:** `src/server/db/schema.ts`, `src/server/db/seed.ts`, `src/test/db.ts`
-**Key files created:** `drizzle/0001_*.sql` (fresh migration), `src/test/db-schema.test.ts`
+**Key files created:** `drizzle/0000_flaky_la_nuit.sql` (fresh migration), `src/test/db-schema.test.ts`
 
 **Verify:** `pnpm run db:generate` produces correct migration, `pnpm run db:migrate` succeeds, `pnpm run db:seed` populates all tables, `pnpm run test` passes schema tests
 
