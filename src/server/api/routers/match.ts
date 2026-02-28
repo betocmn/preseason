@@ -303,6 +303,12 @@ export const matchRouter = createTRPCRouter({
           message: 'Match not found',
         })
       }
+      if (match.status !== 'active') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only active matches can be settled',
+        })
+      }
 
       const settledAt = new Date()
       const periodEnd = match.periodEnd ?? toDateString(settledAt)
