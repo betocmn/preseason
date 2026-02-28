@@ -177,6 +177,7 @@ export const rankingRouter = createTRPCRouter({
       const categoriesByTool = new Map<string, Set<string>>()
       const toolMeta = new Map<string, { id: string; name: string; slug: string }>()
       const allCurrentLlms = new Set<string>()
+      const allCurrentCategories = new Set<string>()
 
       for (const row of currentRows) {
         currentCounts.set(row.toolId, (currentCounts.get(row.toolId) ?? 0) + 1)
@@ -185,6 +186,7 @@ export const rankingRouter = createTRPCRouter({
         if (!categoriesByTool.has(row.toolId)) categoriesByTool.set(row.toolId, new Set())
         categoriesByTool.get(row.toolId)?.add(row.categoryId)
         allCurrentLlms.add(row.llmId)
+        allCurrentCategories.add(row.categoryId)
         toolMeta.set(row.toolId, {
           id: row.toolId,
           name: row.toolName,
@@ -208,7 +210,9 @@ export const rankingRouter = createTRPCRouter({
         const consistencyScore =
           allCurrentLlms.size > 0 ? (llmsByTool.get(tool.id)?.size ?? 0) / allCurrentLlms.size : 0
         const categoryCoverage = categoriesByTool.get(tool.id)?.size ?? 0
-        const score = recommendationRate * 0.6 + consistencyScore * 0.3 + categoryCoverage * 0.1
+        const normalizedCoverage =
+          allCurrentCategories.size > 0 ? categoryCoverage / allCurrentCategories.size : 0
+        const score = recommendationRate * 0.6 + consistencyScore * 0.3 + normalizedCoverage * 0.1
 
         return {
           tool,

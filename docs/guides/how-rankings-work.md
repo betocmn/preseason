@@ -69,7 +69,8 @@ Ranks tools across all categories using a composite score.
 Same as by-category, plus:
 
 - **categoryCoverage** — number of distinct categories in which the tool was recommended
-- **score** — weighted composite: `recommendationRate * 0.6 + consistencyScore * 0.3 + categoryCoverage * 0.1`
+- **normalizedCoverage** — `categoryCoverage / totalDistinctCategories` (0-1)
+- **score** — weighted composite: `recommendationRate * 0.6 + consistencyScore * 0.3 + normalizedCoverage * 0.1`
 
 ### Sort order
 
