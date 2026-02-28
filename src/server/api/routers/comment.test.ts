@@ -127,6 +127,7 @@ describe('commentRouter', () => {
     await db.insert(criticProfiles).values({
       userId: criticUser.profile?.id ?? '',
       isActive: true,
+      verifiedAt: new Date(),
       excludedCategories: ['auth'],
     })
 
@@ -150,6 +151,29 @@ describe('commentRouter', () => {
       throw new Error('Expected comment to be created')
     }
     expect(allowed.content).toBe('Allowed')
+  })
+
+  it('blocks unverified critics from creating comments', async () => {
+    const db = getTestDb()
+    const { dbRecommendation } = await seedRecommendationTarget()
+
+    const criticUser = await seedUser({ role: 'critic' })
+    await db.insert(criticProfiles).values({
+      userId: criticUser.profile?.id ?? '',
+      isActive: true,
+      verifiedAt: null,
+    })
+
+    const caller = createTestCaller(criticUser.authUser)
+    await expect(
+      caller.comment.create({
+        targetType: 'recommendation',
+        targetId: dbRecommendation?.id ?? '',
+        content: 'Should fail',
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
   })
 
   it('allows critics to update/delete own comments only', async () => {
