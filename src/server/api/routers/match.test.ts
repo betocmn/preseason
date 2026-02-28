@@ -225,6 +225,37 @@ describe('matchRouter', () => {
     expect(detailsAfterSettlement.breakdown.totals.toolB).toBe(settled.breakdown.totals.toolB)
   })
 
+  it('rejects settling match that is already settled', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchFixture()
+    const db = getTestDb()
+
+    const settledMatch = (
+      await db
+        .insert(matches)
+        .values({
+          toolAId: fixture.toolA?.id ?? '',
+          toolBId: fixture.toolB?.id ?? '',
+          categoryId: fixture.category?.id ?? '',
+          status: 'settled',
+          periodStart: '2025-01-01',
+          periodEnd: '2025-01-07',
+          settledAt: new Date('2025-01-07T12:00:00.000Z'),
+          toolAScore: 3,
+          toolBScore: 1,
+          totalPrompts: 2,
+          winnerToolId: fixture.toolA?.id ?? null,
+        })
+        .returning()
+    )[0]
+
+    await expect(caller.match.settle({ id: settledMatch?.id ?? '' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Only active matches can be settled',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('rejects create when periodEnd is before periodStart', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
