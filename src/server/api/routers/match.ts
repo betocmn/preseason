@@ -247,6 +247,12 @@ export const matchRouter = createTRPCRouter({
           message: 'Match tools must be different',
         })
       }
+      if (input.periodEnd && input.periodEnd < input.periodStart) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Match period end must be on or after period start',
+        })
+      }
 
       const [toolAId, toolBId] =
         input.toolAId < input.toolBId

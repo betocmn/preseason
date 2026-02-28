@@ -172,6 +172,24 @@ describe('matchRouter', () => {
     expect(settled.match?.winnerToolId).toBe(fixture.toolA?.id)
   })
 
+  it('rejects create when periodEnd is before periodStart', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchFixture()
+
+    await expect(
+      caller.match.create({
+        toolAId: fixture.toolA?.id ?? '',
+        toolBId: fixture.toolB?.id ?? '',
+        categoryId: fixture.category?.id ?? '',
+        periodStart: new Date('2025-01-07'),
+        periodEnd: new Date('2025-01-01'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('rejects create for non-admin', async () => {
     const { authUser } = await seedUser({ role: 'user' })
     const caller = createTestCaller(authUser)
