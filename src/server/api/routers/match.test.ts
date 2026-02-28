@@ -172,6 +172,59 @@ describe('matchRouter', () => {
     expect(settled.match?.winnerToolId).toBe(fixture.toolA?.id)
   })
 
+  it('freezes settled breakdown when match started without periodEnd', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchFixture()
+    const db = getTestDb()
+
+    const match = (
+      await db
+        .insert(matches)
+        .values({
+          toolAId: fixture.toolA?.id ?? '',
+          toolBId: fixture.toolB?.id ?? '',
+          categoryId: fixture.category?.id ?? '',
+          status: 'active',
+          periodStart: '2025-01-01',
+          periodEnd: null,
+        })
+        .returning()
+    )[0]
+
+    await db.insert(recommendations).values([
+      {
+        runResultId: fixture.rrA?.id ?? '',
+        toolId: fixture.toolA?.id ?? '',
+        categoryId: fixture.category?.id ?? '',
+      },
+    ])
+
+    const settled = await caller.match.settle({ id: match?.id ?? '' })
+    expect(settled.match?.status).toBe('settled')
+    expect(settled.match?.periodEnd).toBe(
+      (settled.match?.settledAt ?? new Date()).toISOString().slice(0, 10),
+    )
+
+    const createdAfterSettlement = new Date(
+      (settled.match?.settledAt ?? new Date()).getTime() + 1_000,
+    )
+    await db.insert(recommendations).values([
+      {
+        runResultId: fixture.rrA?.id ?? '',
+        toolId: fixture.toolB?.id ?? '',
+        categoryId: fixture.category?.id ?? '',
+        createdAt: createdAfterSettlement,
+      },
+    ])
+
+    const detailsAfterSettlement = await createTestCaller(null).match.getById({
+      id: match?.id ?? '',
+    })
+    expect(detailsAfterSettlement.breakdown.totals.toolA).toBe(settled.breakdown.totals.toolA)
+    expect(detailsAfterSettlement.breakdown.totals.toolB).toBe(settled.breakdown.totals.toolB)
+  })
+
   it('rejects create when periodEnd is before periodStart', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

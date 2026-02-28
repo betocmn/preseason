@@ -10,9 +10,15 @@ function toDateString(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
-function getMatchRange(periodStart: string, periodEnd: string | null) {
+function getMatchRange(periodStart: string, periodEnd: string | null, settledAt: Date | null) {
   const start = new Date(`${periodStart}T00:00:00.000Z`)
-  const end = periodEnd ? new Date(`${periodEnd}T23:59:59.999Z`) : new Date()
+  if (periodEnd) {
+    const periodEndAt = new Date(`${periodEnd}T23:59:59.999Z`)
+    if (!settledAt) return { start, end: periodEndAt }
+    return { start, end: periodEndAt < settledAt ? periodEndAt : settledAt }
+  }
+
+  const end = settledAt ?? new Date()
   return { start, end }
 }
 
@@ -20,7 +26,7 @@ async function buildBreakdown(
   db: typeof import('~/server/db').db,
   match: typeof matches.$inferSelect,
 ) {
-  const range = getMatchRange(match.periodStart, match.periodEnd)
+  const range = getMatchRange(match.periodStart, match.periodEnd, match.settledAt)
   const rows = await db
     .select({
       toolId: recommendations.toolId,
@@ -298,7 +304,9 @@ export const matchRouter = createTRPCRouter({
         })
       }
 
-      const breakdown = await buildBreakdown(ctx.db, match)
+      const settledAt = new Date()
+      const periodEnd = match.periodEnd ?? toDateString(settledAt)
+      const breakdown = await buildBreakdown(ctx.db, { ...match, periodEnd, settledAt })
       const winnerToolId =
         breakdown.totals.toolA === breakdown.totals.toolB
           ? null
@@ -310,7 +318,8 @@ export const matchRouter = createTRPCRouter({
         .update(matches)
         .set({
           status: 'settled',
-          settledAt: new Date(),
+          settledAt,
+          periodEnd,
           toolAScore: breakdown.totals.toolA,
           toolBScore: breakdown.totals.toolB,
           totalPrompts: breakdown.totals.prompts,
