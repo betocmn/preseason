@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   categories,
   llms,
@@ -150,6 +150,42 @@ describe('rankingRouter', () => {
     expect(overall.items.length).toBeGreaterThan(0)
     expect(overall.items[0]?.tool.slug).toBe('clerk')
     expect(overall.items[0]?.categoryCoverage).toBe(2)
+  })
+
+  it('treats the window boundary as current-period only', async () => {
+    const fixture = await seedRankingFixture()
+    const db = getTestDb()
+    const fixedNow = new Date('2026-01-31T12:00:00.000Z')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(fixedNow)
+
+    try {
+      const currentStart = new Date(fixedNow)
+      currentStart.setDate(currentStart.getDate() - 30)
+
+      await db.insert(recommendations).values({
+        runResultId: fixture.rrA?.id ?? '',
+        toolId: fixture.toolA?.id ?? '',
+        categoryId: fixture.authCategory?.id ?? '',
+        createdAt: currentStart,
+      })
+
+      const caller = createTestCaller(null)
+      const categoryRanking = await caller.ranking.byCategorySlug({
+        categorySlug: 'auth',
+        days: 30,
+        limit: 10,
+      })
+      const overallRanking = await caller.ranking.overall({
+        days: 30,
+        limit: 10,
+      })
+
+      expect(categoryRanking.items[0]?.trend).toBe(1)
+      expect(overallRanking.items[0]?.trend).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('returns empty result for unknown category slug', async () => {
