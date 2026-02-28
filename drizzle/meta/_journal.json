@@ -15,6 +15,13 @@
       "when": 1772230990384,
       "tag": "0001_large_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772273095390,
+      "tag": "0002_fluffy_diamondback",
+      "breakpoints": true
     }
   ]
 }
