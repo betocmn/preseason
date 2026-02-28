@@ -1,8 +1,8 @@
 import { eq, inArray } from 'drizzle-orm'
 import { db } from '~/server/db'
 import { categories, llms, prompts, recommendations, runResults, runs } from '~/server/db/schema'
-import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
 import { parseRecommendations } from '~/server/llm/automation/parser'
+import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
 import { LlmService } from '~/server/llm/service'
 import { buildSystemPrompt } from '~/server/llm/service/system-prompt'
 

@@ -1,4 +1,11 @@
-export const PROVIDER_IDS = ['anthropic', 'openai', 'google', 'meta', 'mistral', 'deepseek'] as const
+export const PROVIDER_IDS = [
+  'anthropic',
+  'openai',
+  'google',
+  'meta',
+  'mistral',
+  'deepseek',
+] as const
 
 export type ProviderId = (typeof PROVIDER_IDS)[number]
 

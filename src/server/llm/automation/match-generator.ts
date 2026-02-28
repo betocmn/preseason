@@ -96,7 +96,9 @@ export async function generateMatches(
   }> = []
 
   for (const [categoryId, toolIds] of toolsByCategory) {
-    const uniqueToolIds = Array.from(new Set(toolIds)).sort((left, right) => left.localeCompare(right))
+    const uniqueToolIds = Array.from(new Set(toolIds)).sort((left, right) =>
+      left.localeCompare(right),
+    )
 
     for (let leftIndex = 0; leftIndex < uniqueToolIds.length; leftIndex += 1) {
       const leftId = uniqueToolIds[leftIndex]

@@ -70,18 +70,7 @@ function getContent(choice: OpenAI.Chat.Completions.ChatCompletion.Choice | unde
   }
 
   const content = choice.message.content
-  if (typeof content === 'string') {
-    return content
-  }
-
-  if (!Array.isArray(content)) {
-    return ''
-  }
-
-  return content
-    .map((entry) => (typeof entry === 'object' && 'text' in entry ? entry.text : ''))
-    .join('\n')
-    .trim()
+  return typeof content === 'string' ? content : ''
 }
 
 function getErrorMessage(error: unknown) {
@@ -90,7 +79,8 @@ function getErrorMessage(error: unknown) {
   }
 
   if ('message' in error && typeof error.message === 'string') {
-    const status = 'status' in error && typeof error.status === 'number' ? ` (status ${error.status})` : ''
+    const status =
+      'status' in error && typeof error.status === 'number' ? ` (status ${error.status})` : ''
     return `${error.message}${status}`
   }
 
