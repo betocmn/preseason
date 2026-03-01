@@ -82,6 +82,14 @@ pnpm run db:migrate   # Apply migrations
 pnpm run db:seed      # Seed data
 ```
 
+## Guides
+
+- [How Prompts Work](docs/guides/how-prompts-work.md)
+- [How Evals Work](docs/guides/how-evals-work.md)
+- [How Rankings Work](docs/guides/how-rankings-work.md)
+- [How LLM Service Works](docs/guides/how-llm-service-works.md)
+- [How Automation Works](docs/guides/how-automation-works.md)
+
 ## Testing
 
 Uses **Vitest** with Testcontainers for PostgreSQL (Docker required).
