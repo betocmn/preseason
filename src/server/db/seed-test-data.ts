@@ -144,14 +144,14 @@ async function cleanTestData() {
 
 async function loadExistingData() {
   console.log('Loading existing seed data...')
-  const allCategories = await db.select().from(schema.categories)
+  const allSubcategories = await db.select().from(schema.subcategories)
   const allTools = await db.select().from(schema.tools)
   const allLlms = await db.select().from(schema.llms)
   const allPrompts = await db.select().from(schema.prompts)
   const allToolCategories = await db.select().from(schema.toolCategories)
 
   if (
-    allCategories.length === 0 ||
+    allSubcategories.length === 0 ||
     allTools.length === 0 ||
     allLlms.length === 0 ||
     allPrompts.length === 0
@@ -161,24 +161,24 @@ async function loadExistingData() {
   }
 
   console.log(
-    `  ${allCategories.length} categories, ${allTools.length} tools, ${allLlms.length} LLMs, ${allPrompts.length} prompts`,
+    `  ${allSubcategories.length} subcategories, ${allTools.length} tools, ${allLlms.length} LLMs, ${allPrompts.length} prompts`,
   )
 
   // Build lookup maps
-  const catBySlug = new Map(allCategories.map((c) => [c.slug, c]))
+  const catBySlug = new Map(allSubcategories.map((c) => [c.slug, c]))
   const toolBySlug = new Map(allTools.map((t) => [t.slug, t]))
 
   // Build category -> tool IDs map from toolCategories
   const catTools = new Map<string, string[]>()
   for (const tc of allToolCategories) {
-    const cat = allCategories.find((c) => c.id === tc.categoryId)
+    const cat = allSubcategories.find((c) => c.id === tc.categoryId)
     if (!cat) continue
     const existing = catTools.get(cat.slug) ?? []
     existing.push(tc.toolId)
     catTools.set(cat.slug, existing)
   }
 
-  return { allCategories, allTools, allLlms, allPrompts, catBySlug, toolBySlug, catTools }
+  return { allSubcategories, allTools, allLlms, allPrompts, catBySlug, toolBySlug, catTools }
 }
 
 function pickToolForCategory(
