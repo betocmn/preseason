@@ -4,11 +4,11 @@ import { z } from 'zod'
 import { getUserProfile, requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
-  categories,
   comments,
   criticProfiles,
   matches,
   recommendations,
+  subcategories,
   toolCategories,
   tools,
 } from '~/server/db/schema'
@@ -39,8 +39,8 @@ async function resolveTargetCategorySlugs(
       })
     }
 
-    const category = await db.query.categories.findFirst({
-      where: eq(categories.id, recommendation.categoryId),
+    const category = await db.query.subcategories.findFirst({
+      where: eq(subcategories.id, recommendation.categoryId),
     })
     return category ? [category.slug] : []
   }
@@ -56,8 +56,8 @@ async function resolveTargetCategorySlugs(
       })
     }
 
-    const category = await db.query.categories.findFirst({
-      where: eq(categories.id, match.categoryId),
+    const category = await db.query.subcategories.findFirst({
+      where: eq(subcategories.id, match.categoryId),
     })
     return category ? [category.slug] : []
   }
@@ -72,15 +72,15 @@ async function resolveTargetCategorySlugs(
     })
   }
 
-  const categoriesForTool = await db
+  const subcategoriesForTool = await db
     .select({
-      slug: categories.slug,
+      slug: subcategories.slug,
     })
     .from(toolCategories)
-    .innerJoin(categories, eq(toolCategories.categoryId, categories.id))
+    .innerJoin(subcategories, eq(toolCategories.categoryId, subcategories.id))
     .where(eq(toolCategories.toolId, targetId))
 
-  return categoriesForTool.map((category) => category.slug)
+  return subcategoriesForTool.map((sc) => sc.slug)
 }
 
 export const commentRouter = createTRPCRouter({
