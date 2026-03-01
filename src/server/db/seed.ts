@@ -31,7 +31,91 @@ const ADMIN_USERS = [
   { email: 'elliott@vinte.ai', displayName: 'Elliott' },
 ]
 
-const CATEGORIES = [
+const CATEGORY_GROUPS = [
+  {
+    name: 'Devtools',
+    slug: 'devtools',
+    description: 'Developer tools and infrastructure',
+    icon: 'code',
+    displayOrder: 1,
+  },
+  {
+    name: 'Salestech',
+    slug: 'salestech',
+    description: 'Sales technology and CRM tools',
+    icon: 'briefcase',
+    displayOrder: 2,
+  },
+  {
+    name: 'Martech',
+    slug: 'martech',
+    description: 'Marketing technology and automation',
+    icon: 'megaphone',
+    displayOrder: 3,
+  },
+  {
+    name: 'Fintech',
+    slug: 'fintech',
+    description: 'Financial technology and payments',
+    icon: 'dollar-sign',
+    displayOrder: 4,
+  },
+  {
+    name: 'HR Tech',
+    slug: 'hr-tech',
+    description: 'Human resources technology',
+    icon: 'users',
+    displayOrder: 5,
+  },
+  {
+    name: 'Healthcare',
+    slug: 'healthcare',
+    description: 'Healthcare technology and services',
+    icon: 'heart-pulse',
+    displayOrder: 6,
+  },
+  {
+    name: 'Edtech',
+    slug: 'edtech',
+    description: 'Education technology and learning platforms',
+    icon: 'graduation-cap',
+    displayOrder: 7,
+  },
+  {
+    name: 'Cybersecurity',
+    slug: 'cybersecurity',
+    description: 'Cybersecurity tools and services',
+    icon: 'shield',
+    displayOrder: 8,
+  },
+]
+
+// Map each subcategory slug to its parent category group slug
+const SUBCATEGORY_GROUP_MAP: Record<string, string> = {
+  auth: 'devtools',
+  database: 'devtools',
+  orm: 'devtools',
+  email: 'devtools',
+  payments: 'devtools',
+  storage: 'devtools',
+  hosting: 'devtools',
+  styling: 'devtools',
+  'ui-components': 'devtools',
+  state: 'devtools',
+  api: 'devtools',
+  cms: 'devtools',
+  search: 'devtools',
+  analytics: 'devtools',
+  monitoring: 'devtools',
+  ai: 'devtools',
+  realtime: 'devtools',
+  testing: 'devtools',
+  'ci-cd': 'devtools',
+  jobs: 'devtools',
+  notifications: 'devtools',
+}
+
+const SUBCATEGORIES = [
   {
     name: 'Authentication',
     slug: 'auth',
@@ -1132,10 +1216,28 @@ async function seedAdminUsers() {
   }
 }
 
-async function seedCategories() {
-  console.log('Seeding categories...')
-  await db.insert(schema.categories).values(CATEGORIES).onConflictDoNothing()
-  console.log(`  ${CATEGORIES.length} categories ready`)
+async function seedCategoryGroups() {
+  console.log('Seeding category groups...')
+  await db.insert(schema.categories).values(CATEGORY_GROUPS).onConflictDoNothing()
+  console.log(`  ${CATEGORY_GROUPS.length} category groups ready`)
+}
+
+async function seedSubcategories() {
+  console.log('Seeding subcategories...')
+  const allGroups = await db.select().from(schema.categories)
+  const groupMap = new Map(allGroups.map((g) => [g.slug, g.id]))
+
+  const values = SUBCATEGORIES.map((sub) => {
+    const groupSlug = SUBCATEGORY_GROUP_MAP[sub.slug] ?? 'devtools'
+    const categoryId = groupMap.get(groupSlug)
+    if (!categoryId) {
+      throw new Error(`Category group not found for slug: ${groupSlug}`)
+    }
+    return { ...sub, categoryId }
+  })
+
+  await db.insert(schema.subcategories).values(values).onConflictDoNothing()
+  console.log(`  ${SUBCATEGORIES.length} subcategories ready`)
 }
 
 async function seedTools() {
@@ -1155,10 +1257,10 @@ async function seedTools() {
 async function seedToolCategories() {
   console.log('Seeding tool-category assignments...')
 
-  // Query back all categories and tools to get their IDs
-  const allCategories = await db.select().from(schema.categories)
+  // Query back all subcategories and tools to get their IDs
+  const allSubcategories = await db.select().from(schema.subcategories)
   const allTools = await db.select().from(schema.tools)
-  const catMap = new Map(allCategories.map((c) => [c.slug, c.id]))
+  const catMap = new Map(allSubcategories.map((c) => [c.slug, c.id]))
   const toolMap = new Map(allTools.map((t) => [t.slug, t.id]))
 
   let count = 0
@@ -1198,7 +1300,8 @@ async function seedPrompts() {
 
 async function seed() {
   await seedAdminUsers()
-  await seedCategories()
+  await seedCategoryGroups()
+  await seedSubcategories()
   await seedTools()
   await seedToolCategories()
   await seedLlms()

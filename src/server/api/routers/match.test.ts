@@ -8,6 +8,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -28,8 +29,15 @@ describe('matchRouter', () => {
 
   async function seedMatchFixture() {
     const db = getTestDb()
+    const [group] = await db
+      .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
     const category = (
-      await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning()
+      await db
+        .insert(subcategories)
+        .values({ name: 'Database', slug: 'database', categoryId: group?.id ?? '' })
+        .returning()
     )[0]
     const [rawToolA, rawToolB] = await db
       .insert(tools)

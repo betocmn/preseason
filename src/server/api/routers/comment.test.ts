@@ -9,6 +9,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   toolCategories,
   tools,
 } from '~/server/db/schema'
@@ -30,11 +31,15 @@ describe('commentRouter', () => {
 
   async function seedRecommendationTarget() {
     const db = getTestDb()
-    const [authCategory, dbCategory] = await db
+    const [group] = await db
       .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
+    const [authCategory, dbCategory] = await db
+      .insert(subcategories)
       .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
+        { name: 'Authentication', slug: 'auth', categoryId: group?.id ?? '' },
+        { name: 'Database', slug: 'database', categoryId: group?.id ?? '' },
       ])
       .returning()
     const [tool] = await db

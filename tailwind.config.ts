@@ -51,15 +51,18 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        coral: {
-          DEFAULT: 'hsl(var(--coral))',
-          foreground: 'hsl(var(--coral-foreground))',
-          muted: 'hsl(var(--coral-muted))',
-        },
-        teal: {
-          DEFAULT: 'hsl(var(--teal))',
-          foreground: 'hsl(var(--teal-foreground))',
-          muted: 'hsl(var(--teal-muted))',
+        trend: {
+          up: {
+            DEFAULT: 'hsl(var(--trend-up))',
+            foreground: 'hsl(var(--trend-up-foreground))',
+            muted: 'hsl(var(--trend-up-muted))',
+          },
+          down: {
+            DEFAULT: 'hsl(var(--trend-down))',
+            foreground: 'hsl(var(--trend-down-foreground))',
+            muted: 'hsl(var(--trend-down-muted))',
+          },
+          flat: 'hsl(var(--trend-flat))',
         },
       },
       borderRadius: {

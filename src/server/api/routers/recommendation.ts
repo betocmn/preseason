@@ -9,6 +9,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { PROMPT_LEVELS } from '~/server/llm/prompts'
@@ -39,8 +40,8 @@ export const recommendationRouter = createTRPCRouter({
       let llmId: string | undefined
 
       if (input.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) {
           return { items: [], total: 0, limit: input.limit, offset: input.offset }
@@ -95,9 +96,10 @@ export const recommendationRouter = createTRPCRouter({
           toolId: tools.id,
           toolName: tools.name,
           toolSlug: tools.slug,
-          categoryId: categories.id,
-          categoryName: categories.name,
-          categorySlug: categories.slug,
+          categoryId: subcategories.id,
+          categoryName: subcategories.name,
+          categorySlug: subcategories.slug,
+          categoryGroupSlug: categories.slug,
           llmId: llms.id,
           llmName: llms.name,
           llmSlug: llms.slug,
@@ -109,7 +111,8 @@ export const recommendationRouter = createTRPCRouter({
         })
         .from(recommendations)
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
-        .innerJoin(categories, eq(recommendations.categoryId, categories.id))
+        .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
+        .innerJoin(categories, eq(subcategories.categoryId, categories.id))
         .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
         .innerJoin(llms, eq(runResults.llmId, llms.id))
         .innerJoin(prompts, eq(runResults.promptId, prompts.id))
@@ -135,6 +138,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.categoryId,
             name: row.categoryName,
             slug: row.categorySlug,
+            groupSlug: row.categoryGroupSlug,
           },
           llm: {
             id: row.llmId,
@@ -170,8 +174,8 @@ export const recommendationRouter = createTRPCRouter({
 
       let categoryId: string | undefined
       if (input.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) {
           return {
@@ -189,13 +193,15 @@ export const recommendationRouter = createTRPCRouter({
           toolId: tools.id,
           toolName: tools.name,
           toolSlug: tools.slug,
-          categoryId: categories.id,
-          categoryName: categories.name,
-          categorySlug: categories.slug,
+          categoryId: subcategories.id,
+          categoryName: subcategories.name,
+          categorySlug: subcategories.slug,
+          categoryGroupSlug: categories.slug,
         })
         .from(recommendations)
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
-        .innerJoin(categories, eq(recommendations.categoryId, categories.id))
+        .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
+        .innerJoin(categories, eq(subcategories.categoryId, categories.id))
         .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
         .innerJoin(prompts, eq(runResults.promptId, prompts.id))
         .where(
@@ -231,6 +237,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.categoryId,
             name: row.categoryName,
             slug: row.categorySlug,
+            groupSlug: row.categoryGroupSlug,
           },
           tool: {
             id: row.toolId,
@@ -271,8 +278,8 @@ export const recommendationRouter = createTRPCRouter({
 
       let categoryId: string | undefined
       if (input.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) {
           return {

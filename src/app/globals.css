@@ -4,67 +4,65 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 210 11% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 210 11% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 210 11% 15%;
+    --primary: 210 11% 15%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 210 11% 15%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 14% 45%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 210 11% 15%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 210 11% 15%;
+    --radius: 0.375rem;
 
-    /* Coral theme (Airbnb coral/salmon) */
-    --coral: 358 100% 67%;
-    --coral-foreground: 0 0% 100%;
-    --coral-muted: 358 100% 96%;
-
-    /* Teal theme (Airbnb teal) */
-    --teal: 173 100% 33%;
-    --teal-foreground: 0 0% 100%;
-    --teal-muted: 173 60% 95%;
+    /* Trend colors — subtle, used sparingly */
+    --trend-up: 152 56% 40%;
+    --trend-up-foreground: 0 0% 100%;
+    --trend-up-muted: 152 30% 94%;
+    --trend-down: 0 72% 51%;
+    --trend-down-foreground: 0 0% 100%;
+    --trend-down-muted: 0 30% 95%;
+    --trend-flat: 215 14% 55%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 220 13% 9%;
+    --foreground: 220 14% 96%;
+    --card: 220 13% 11%;
+    --card-foreground: 220 14% 96%;
+    --popover: 220 13% 11%;
+    --popover-foreground: 220 14% 96%;
+    --primary: 220 14% 96%;
+    --primary-foreground: 220 13% 9%;
+    --secondary: 220 13% 16%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 220 13% 16%;
+    --muted-foreground: 218 11% 55%;
+    --accent: 220 13% 16%;
+    --accent-foreground: 220 14% 96%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 220 14% 96%;
+    --border: 220 13% 18%;
+    --input: 220 13% 18%;
+    --ring: 220 14% 80%;
 
-    /* Coral theme - dark mode */
-    --coral: 358 85% 60%;
-    --coral-foreground: 0 0% 100%;
-    --coral-muted: 358 30% 18%;
-
-    /* Teal theme - dark mode */
-    --teal: 173 80% 45%;
-    --teal-foreground: 0 0% 100%;
-    --teal-muted: 173 25% 18%;
+    /* Trend colors — dark mode */
+    --trend-up: 152 50% 45%;
+    --trend-up-foreground: 0 0% 100%;
+    --trend-up-muted: 152 25% 15%;
+    --trend-down: 0 72% 55%;
+    --trend-down-foreground: 0 0% 100%;
+    --trend-down-muted: 0 25% 15%;
+    --trend-flat: 215 14% 60%;
   }
 }
 

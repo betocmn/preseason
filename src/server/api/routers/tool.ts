@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { categories, toolCategories, tools } from '~/server/db/schema'
+import { subcategories, toolCategories, tools } from '~/server/db/schema'
 
 const createToolInput = z.object({
   name: z.string().min(1).max(255),
@@ -50,9 +50,9 @@ type Database = typeof import('~/server/db').db
 async function validateCategoryIds(db: Database, categoryIds: string[]) {
   if (categoryIds.length === 0) return
   const existing = await db
-    .select({ id: categories.id })
-    .from(categories)
-    .where(inArray(categories.id, categoryIds))
+    .select({ id: subcategories.id })
+    .from(subcategories)
+    .where(inArray(subcategories.id, categoryIds))
 
   const existingIds = new Set(existing.map((row) => row.id))
   const missingIds = categoryIds.filter((id) => !existingIds.has(id))
@@ -70,7 +70,11 @@ async function getToolWithCategories(db: Database, toolId: string) {
     with: {
       toolCategories: {
         with: {
-          category: true,
+          category: {
+            with: {
+              categoryGroup: true,
+            },
+          },
         },
       },
     },
@@ -88,8 +92,8 @@ export const toolRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       let categoryId: string | undefined
       if (input.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) {
           return {
@@ -138,7 +142,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -160,7 +168,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -194,7 +206,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -226,7 +242,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
