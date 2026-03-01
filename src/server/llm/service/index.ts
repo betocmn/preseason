@@ -13,14 +13,21 @@ const PROVIDER_ALIASES: Record<string, ProviderId> = {
   google: 'google',
   gemini: 'google',
   meta: 'meta',
-  'meta-llama': 'meta',
+  metallama: 'meta',
   mistral: 'mistral',
   mistralai: 'mistral',
   deepseek: 'deepseek',
 }
 
+function normalizeProviderKey(provider: string) {
+  return provider
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
 export function normalizeProviderId(provider: string): ProviderId {
-  const normalized = provider.trim().toLowerCase().replace(/\s+/g, '')
+  const normalized = normalizeProviderKey(provider)
   const providerId = PROVIDER_ALIASES[normalized]
 
   if (!providerId) {
