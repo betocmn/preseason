@@ -42,6 +42,8 @@ The prompt text is NOT stored in the database.
 
 Prompts vary by who's asking. A vibe-coder says "Build me a website to sell houses" while an experienced dev might say "Create a real estate platform with MLS API integration, SSR for SEO, and role-based access for agents." Different phrasing can produce different tool recommendations.
 
+Prompt level is part of the analysis dimension. Recommendation feeds and rankings can be filtered by level so results are not mixed across very different user profiles.
+
 | Level | Description |
 |-------|-------------|
 | `vibe-coder` | Non-technical user describing what they want built |

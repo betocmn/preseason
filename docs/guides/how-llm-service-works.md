@@ -118,11 +118,18 @@ Supported aliases currently include:
 
 If provider is unknown, service throws `Unsupported provider`.
 
-## System prompt builder
+## System prompt builders
 
-`src/server/llm/service/system-prompt.ts` builds a strict JSON instruction prompt using current category slugs from DB.
+`src/server/llm/service/system-prompt.ts` provides two prompt builders:
 
-Response contract requested from the model:
+- `buildGenerationSystemPrompt(level)`:
+  - Level-aware (`vibe-coder`, `software-dev-beginner`, `software-dev-experienced`)
+  - Minimal instructions so responses resemble real user interactions
+- `buildExtractionSystemPrompt(categorySlugs)`:
+  - Strict JSON + category-constrained format
+  - Used only for fallback extraction when primary parsing fails
+
+Fallback extraction contract:
 
 ```json
 {"recommendations":[{"category":"<slug>","tool":"<name>","reasoning":"<1-2 sentences>","confidence":0.0}]}
