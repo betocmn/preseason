@@ -26,7 +26,7 @@ const db = drizzle(conn, { schema })
 // SEED DATA
 // ============================================================================
 
-const ADMIN_USERS: { email: string; displayName: string }[] = []
+const ADMIN_USERS = [{ email: 'humberto.mn@gmail.com', displayName: 'Beto' }]
 
 const CATEGORY_GROUPS = [
   {

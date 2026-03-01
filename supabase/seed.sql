@@ -6,7 +6,7 @@ DECLARE
   user_id uuid;
   user_email text;
 BEGIN
-  FOR user_email IN SELECT unnest(ARRAY[]::text[])
+  FOR user_email IN SELECT unnest(ARRAY['humberto.mn@gmail.com'])
   LOOP
     IF EXISTS (SELECT 1 FROM auth.users WHERE email = user_email) THEN
       CONTINUE;
