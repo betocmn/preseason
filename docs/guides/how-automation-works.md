@@ -59,13 +59,15 @@ Vercel Cron /api/cron/settle
 1. Load run by ID.
 2. Set run status to `running` and set `startedAt`.
 3. Load selected prompts (`run.promptIds`) and llms (`run.llmIds`).
-4. Build system prompt from category slugs.
+4. Build extraction system prompt from category slugs.
 5. For each prompt:
    - Load markdown content via `getPromptContent(slug, level)`.
+   - Build generation system prompt from prompt `level`.
 6. For each prompt x llm pair:
-   - Call `llmService.complete(provider, ...)`.
+   - Call `llmService.complete(provider, ...)` with generation prompt.
    - Upsert `run_result` for `(runId, promptId, llmId)`.
    - Parse content via `parseRecommendations`.
+   - If parse returns no candidates, run one fallback extraction completion with strict JSON/category instructions.
    - Replace existing recommendations for that run result and insert parsed rows.
    - Mark `run_result.parseStatus = success`.
 7. On pair failures:

@@ -1,7 +1,10 @@
 import { and, eq, gte, lt, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { categories, llms, recommendations, runResults, tools } from '~/server/db/schema'
+import { categories, llms, prompts, recommendations, runResults, tools } from '~/server/db/schema'
+import { PROMPT_LEVELS } from '~/server/llm/prompts'
+
+const promptLevelSchema = z.enum(PROMPT_LEVELS)
 
 function daysAgo(days: number) {
   const date = new Date()
@@ -16,6 +19,7 @@ export const rankingRouter = createTRPCRouter({
         categorySlug: z.string().min(1).max(100),
         days: z.number().int().min(1).max(365).default(30),
         limit: z.number().int().min(1).max(100).default(50),
+        level: promptLevelSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -47,11 +51,13 @@ export const rankingRouter = createTRPCRouter({
           .innerJoin(tools, eq(recommendations.toolId, tools.id))
           .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
           .innerJoin(llms, eq(runResults.llmId, llms.id))
+          .innerJoin(prompts, eq(runResults.promptId, prompts.id))
           .where(
             and(
               eq(recommendations.categoryId, category.id),
               gte(recommendations.createdAt, currentStart),
               lte(recommendations.createdAt, now),
+              input.level ? eq(prompts.level, input.level) : undefined,
             ),
           ),
         ctx.db
@@ -59,11 +65,14 @@ export const rankingRouter = createTRPCRouter({
             toolId: recommendations.toolId,
           })
           .from(recommendations)
+          .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+          .innerJoin(prompts, eq(runResults.promptId, prompts.id))
           .where(
             and(
               eq(recommendations.categoryId, category.id),
               gte(recommendations.createdAt, previousStart),
               lt(recommendations.createdAt, currentStart),
+              input.level ? eq(prompts.level, input.level) : undefined,
             ),
           ),
       ])
@@ -133,6 +142,7 @@ export const rankingRouter = createTRPCRouter({
       z.object({
         days: z.number().int().min(1).max(365).default(30),
         limit: z.number().int().min(1).max(100).default(50),
+        level: promptLevelSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -155,18 +165,26 @@ export const rankingRouter = createTRPCRouter({
           .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
           .innerJoin(llms, eq(runResults.llmId, llms.id))
           .innerJoin(categories, eq(recommendations.categoryId, categories.id))
+          .innerJoin(prompts, eq(runResults.promptId, prompts.id))
           .where(
-            and(gte(recommendations.createdAt, currentStart), lte(recommendations.createdAt, now)),
+            and(
+              gte(recommendations.createdAt, currentStart),
+              lte(recommendations.createdAt, now),
+              input.level ? eq(prompts.level, input.level) : undefined,
+            ),
           ),
         ctx.db
           .select({
             toolId: recommendations.toolId,
           })
           .from(recommendations)
+          .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+          .innerJoin(prompts, eq(runResults.promptId, prompts.id))
           .where(
             and(
               gte(recommendations.createdAt, previousStart),
               lt(recommendations.createdAt, currentStart),
+              input.level ? eq(prompts.level, input.level) : undefined,
             ),
           ),
       ])

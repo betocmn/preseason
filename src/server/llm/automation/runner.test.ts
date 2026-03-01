@@ -214,6 +214,93 @@ describe('runAutomation', () => {
     expect(persistedRunResults.some((entry) => entry.parseStatus === 'success')).toBe(true)
   })
 
+  it('uses fallback extraction when primary response is not parseable', async () => {
+    const database = getTestDb()
+
+    await database
+      .insert(categories)
+      .values([{ name: 'Authentication', slug: 'auth' }])
+      .returning()
+    await database
+      .insert(tools)
+      .values([{ name: 'Clerk', slug: 'clerk' }])
+      .returning()
+
+    const [prompt] = await database
+      .insert(prompts)
+      .values([
+        {
+          title: 'Chat Application',
+          slug: 'chat-application',
+          level: 'vibe-coder',
+          isActive: true,
+        },
+      ])
+      .returning()
+
+    const [llm] = await database
+      .insert(llms)
+      .values([
+        {
+          name: 'GPT-4o',
+          slug: 'gpt-4o',
+          provider: 'OpenAI',
+          modelId: 'gpt-4o',
+          isActive: true,
+        },
+      ])
+      .returning()
+
+    const [run] = await database
+      .insert(runs)
+      .values([
+        {
+          status: 'pending',
+          trigger: 'manual',
+          promptIds: [prompt?.id ?? ''],
+          llmIds: [llm?.id ?? ''],
+          promptCount: 1,
+          llmCount: 1,
+        },
+      ])
+      .returning()
+
+    const mockService = {
+      complete: vi
+        .fn()
+        .mockResolvedValueOnce({
+          content: 'You can use managed services to move fast.',
+          model: 'openai/gpt-4o',
+          provider: 'openai',
+          finishReason: 'stop',
+          usage: { promptTokens: 10, completionTokens: 8, totalTokens: 18 },
+          latencyMs: 25,
+        })
+        .mockResolvedValueOnce({
+          content: '{"recommendations":[{"category":"auth","tool":"Clerk"}]}',
+          model: 'openai/gpt-4o',
+          provider: 'openai',
+          finishReason: 'stop',
+          usage: { promptTokens: 12, completionTokens: 10, totalTokens: 22 },
+          latencyMs: 35,
+        }),
+    }
+
+    const summary = await runAutomation(run?.id ?? '', {
+      database,
+      llmService: mockService as never,
+      now: () => new Date('2026-02-28T12:00:00.000Z'),
+    })
+
+    expect(summary.status).toBe('completed')
+    expect(summary.recommendationCount).toBe(1)
+    expect(mockService.complete).toHaveBeenCalledTimes(2)
+
+    const persistedRunResults = await database.select().from(runResults)
+    expect(persistedRunResults[0]?.responseTimeMs).toBe(60)
+    expect(persistedRunResults[0]?.rawResponse).toContain('--- FALLBACK_EXTRACTION_RESPONSE ---')
+  })
+
   it('marks run as failed when no prompts or llms are configured', async () => {
     const database = getTestDb()
 

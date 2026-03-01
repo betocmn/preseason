@@ -2,9 +2,12 @@ import { eq, inArray } from 'drizzle-orm'
 import { db } from '~/server/db'
 import { categories, llms, prompts, recommendations, runResults, runs } from '~/server/db/schema'
 import { parseRecommendations } from '~/server/llm/automation/parser'
-import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
+import { getPromptContent, isPromptLevel, type PromptLevel } from '~/server/llm/prompts'
 import { LlmService } from '~/server/llm/service'
-import { buildSystemPrompt } from '~/server/llm/service/system-prompt'
+import {
+  buildExtractionSystemPrompt,
+  buildGenerationSystemPrompt,
+} from '~/server/llm/service/system-prompt'
 
 type DatabaseClient = typeof db
 
@@ -32,6 +35,22 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Unknown error'
+}
+
+function resolvePromptLevel(level: string): PromptLevel {
+  return isPromptLevel(level) ? level : 'vibe-coder'
+}
+
+function buildExtractionUserPrompt(userPrompt: string, assistantResponse: string) {
+  return [
+    'Project request:',
+    userPrompt,
+    '',
+    'Assistant response:',
+    assistantResponse,
+    '',
+    'Extract recommendations into JSON only.',
+  ].join('\n')
 }
 
 async function upsertRunResult(
@@ -149,13 +168,15 @@ export async function runAutomation(
 
     const totalPairs = selectedPrompts.length * selectedLlms.length
 
-    const systemPrompt = buildSystemPrompt(categoryRows.map((category) => category.slug))
+    const extractionSystemPrompt = buildExtractionSystemPrompt(
+      categoryRows.map((category) => category.slug),
+    )
 
     for (const prompt of selectedPrompts) {
       let userPrompt: string | null = null
 
       try {
-        userPrompt = await getPromptContent(prompt.slug, prompt.level as PromptLevel)
+        userPrompt = await getPromptContent(prompt.slug, resolvePromptLevel(prompt.level))
       } catch (error) {
         const message = getErrorMessage(error)
 
@@ -176,27 +197,55 @@ export async function runAutomation(
         continue
       }
 
+      const generationSystemPrompt = buildGenerationSystemPrompt(resolvePromptLevel(prompt.level))
+
       for (const llm of selectedLlms) {
         const pairStartedAt = Date.now()
 
         try {
-          const completion = await llmService.complete(llm.provider, {
+          const primaryCompletion = await llmService.complete(llm.provider, {
             model: llm.modelId,
-            systemPrompt,
+            systemPrompt: generationSystemPrompt,
             userPrompt,
           })
+
+          let rawResponse = primaryCompletion.content
+          let responseTimeMs = primaryCompletion.latencyMs
+          let parsedRecommendations = await parseRecommendations(primaryCompletion.content, {
+            database,
+          })
+
+          if (parsedRecommendations.length === 0) {
+            try {
+              const extractionCompletion = await llmService.complete(llm.provider, {
+                model: llm.modelId,
+                systemPrompt: extractionSystemPrompt,
+                userPrompt: buildExtractionUserPrompt(userPrompt, primaryCompletion.content),
+              })
+
+              parsedRecommendations = await parseRecommendations(extractionCompletion.content, {
+                database,
+              })
+              responseTimeMs += extractionCompletion.latencyMs
+              rawResponse = [
+                primaryCompletion.content,
+                '',
+                '--- FALLBACK_EXTRACTION_RESPONSE ---',
+                extractionCompletion.content,
+              ].join('\n')
+            } catch (error) {
+              const message = getErrorMessage(error)
+              errors.push(`[${prompt.slug} x ${llm.slug}] Fallback extraction failed: ${message}`)
+            }
+          }
 
           const runResult = await upsertRunResult(database, {
             runId: run.id,
             promptId: prompt.id,
             llmId: llm.id,
-            rawResponse: completion.content,
+            rawResponse,
             parseStatus: 'pending',
-            responseTimeMs: completion.latencyMs,
-          })
-
-          const parsedRecommendations = await parseRecommendations(completion.content, {
-            database,
+            responseTimeMs,
           })
 
           await database
