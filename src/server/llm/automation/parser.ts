@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '~/server/db'
-import { categories, toolCategories, tools } from '~/server/db/schema'
+import { subcategories, toolCategories, tools } from '~/server/db/schema'
 
 const AUTO_CREATED_TOOL_DESCRIPTION = 'Auto-created from LLM response. Requires admin review.'
 
@@ -656,8 +656,8 @@ export async function parseRecommendations(
 
   const [categoryRows, toolRows] = await Promise.all([
     database
-      .select({ id: categories.id, slug: categories.slug, name: categories.name })
-      .from(categories),
+      .select({ id: subcategories.id, slug: subcategories.slug, name: subcategories.name })
+      .from(subcategories),
     database
       .select({ id: tools.id, name: tools.name, slug: tools.slug, aliases: tools.aliases })
       .from(tools),

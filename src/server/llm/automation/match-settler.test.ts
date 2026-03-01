@@ -7,6 +7,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { settleExpiredMatches } from '~/server/llm/automation/match-settler'
@@ -28,9 +29,14 @@ describe('settleExpiredMatches', () => {
   async function seedFixture() {
     const database = getTestDb()
 
-    const [category] = await database
+    const [group] = await database
       .insert(categories)
-      .values([{ name: 'Database', slug: 'database' }])
+      .values([{ name: 'Devtools', slug: 'devtools', displayOrder: 1 }])
+      .returning()
+
+    const [category] = await database
+      .insert(subcategories)
+      .values([{ name: 'Database', slug: 'database', categoryId: group?.id ?? '' }])
       .returning()
 
     const [rawToolA, rawToolB] = await database

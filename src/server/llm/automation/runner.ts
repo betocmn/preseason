@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm'
 import { db } from '~/server/db'
-import { categories, llms, prompts, recommendations, runResults, runs } from '~/server/db/schema'
+import { llms, prompts, recommendations, runResults, runs, subcategories } from '~/server/db/schema'
 import { parseRecommendations } from '~/server/llm/automation/parser'
 import { getPromptContent, isPromptLevel, type PromptLevel } from '~/server/llm/prompts'
 import { LlmService } from '~/server/llm/service'
@@ -163,7 +163,7 @@ export async function runAutomation(
         .select({ id: llms.id, slug: llms.slug, provider: llms.provider, modelId: llms.modelId })
         .from(llms)
         .where(inArray(llms.id, llmIds)),
-      database.select({ slug: categories.slug }).from(categories),
+      database.select({ slug: subcategories.slug }).from(subcategories),
     ])
 
     const totalPairs = selectedPrompts.length * selectedLlms.length

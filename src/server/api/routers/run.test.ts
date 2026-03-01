@@ -7,6 +7,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -72,12 +73,18 @@ describe('runRouter', () => {
         .returning()
     )[0]
 
+    const [group] = await db
+      .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
+
     const authCategory = (
       await db
-        .insert(categories)
+        .insert(subcategories)
         .values({
           name: 'Authentication',
           slug: 'auth',
+          categoryId: group?.id ?? '',
         })
         .returning()
     )[0]

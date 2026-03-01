@@ -42,6 +42,7 @@ export async function cleanTestDatabase(): Promise<void> {
   await db.delete(schema.prompts)
   await db.delete(schema.llms)
   await db.delete(schema.tools)
+  await db.delete(schema.subcategories)
   await db.delete(schema.categories)
   await db.delete(schema.userProfiles)
 }

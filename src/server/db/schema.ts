@@ -66,11 +66,11 @@ export const userProfiles = createTable(
 )
 
 // ============================================================================
-// CATEGORIES & TOOLS
+// CATEGORIES (GROUPS) & SUBCATEGORIES
 // ============================================================================
 
 export const categories = createTable(
-  'category',
+  'category_group',
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
     name: d.varchar({ length: 100 }).notNull().unique(),
@@ -85,8 +85,34 @@ export const categories = createTable(
     updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
   }),
   (t) => [
+    index('category_group_slug_idx').on(t.slug),
+    index('category_group_display_order_idx').on(t.displayOrder),
+  ],
+)
+
+export const subcategories = createTable(
+  'category',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    categoryId: d
+      .uuid('category_group_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'cascade' }),
+    name: d.varchar({ length: 100 }).notNull().unique(),
+    slug: d.varchar({ length: 100 }).notNull().unique(),
+    description: d.text(),
+    icon: d.varchar({ length: 50 }),
+    displayOrder: d.integer('display_order').notNull().default(0),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  }),
+  (t) => [
     index('category_slug_idx').on(t.slug),
     index('category_display_order_idx').on(t.displayOrder),
+    index('category_group_id_idx').on(t.categoryId),
   ],
 )
 
@@ -127,7 +153,7 @@ export const toolCategories = createTable(
     categoryId: d
       .uuid('category_id')
       .notNull()
-      .references(() => categories.id, { onDelete: 'cascade' }),
+      .references(() => subcategories.id, { onDelete: 'cascade' }),
     isPrimary: d.boolean('is_primary').notNull().default(false),
   }),
   (t) => [uniqueIndex('tool_category_tool_category_idx').on(t.toolId, t.categoryId)],
@@ -244,7 +270,7 @@ export const recommendations = createTable(
     categoryId: d
       .uuid('category_id')
       .notNull()
-      .references(() => categories.id, { onDelete: 'cascade' }),
+      .references(() => subcategories.id, { onDelete: 'cascade' }),
     confidence: d.real(),
     reasoning: d.text(),
     rank: d.integer(),
@@ -283,7 +309,7 @@ export const matches = createTable(
     categoryId: d
       .uuid('category_id')
       .notNull()
-      .references(() => categories.id, { onDelete: 'cascade' }),
+      .references(() => subcategories.id, { onDelete: 'cascade' }),
     status: matchStatusEnum().notNull().default('active'),
     startedAt: d.timestamp('started_at', { withTimezone: true }),
     settledAt: d.timestamp('settled_at', { withTimezone: true }),
@@ -380,6 +406,14 @@ export const userProfileRelations = relations(userProfiles, ({ one, many }) => (
 }))
 
 export const categoryRelations = relations(categories, ({ many }) => ({
+  subcategories: many(subcategories),
+}))
+
+export const subcategoryRelations = relations(subcategories, ({ one, many }) => ({
+  categoryGroup: one(categories, {
+    fields: [subcategories.categoryId],
+    references: [categories.id],
+  }),
   toolCategories: many(toolCategories),
   recommendations: many(recommendations),
   matches: many(matches),
@@ -399,9 +433,9 @@ export const toolCategoryRelations = relations(toolCategories, ({ one }) => ({
     fields: [toolCategories.toolId],
     references: [tools.id],
   }),
-  category: one(categories, {
+  category: one(subcategories, {
     fields: [toolCategories.categoryId],
-    references: [categories.id],
+    references: [subcategories.id],
   }),
 }))
 
@@ -442,9 +476,9 @@ export const recommendationRelations = relations(recommendations, ({ one }) => (
     fields: [recommendations.toolId],
     references: [tools.id],
   }),
-  category: one(categories, {
+  category: one(subcategories, {
     fields: [recommendations.categoryId],
-    references: [categories.id],
+    references: [subcategories.id],
   }),
 }))
 
@@ -459,9 +493,9 @@ export const matchRelations = relations(matches, ({ one }) => ({
     references: [tools.id],
     relationName: 'matchToolB',
   }),
-  category: one(categories, {
+  category: one(subcategories, {
     fields: [matches.categoryId],
-    references: [categories.id],
+    references: [subcategories.id],
   }),
   winner: one(tools, {
     fields: [matches.winnerToolId],

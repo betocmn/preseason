@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { categories, tools } from '~/server/db/schema'
+import { categories, subcategories, tools } from '~/server/db/schema'
 import {
   __private__,
   extractRecommendationCandidates,
@@ -19,6 +19,25 @@ describe('parser', () => {
   beforeEach(async () => {
     await cleanTestDatabase()
   })
+
+  async function seedGroup() {
+    const database = getTestDb()
+    const [group] = await database
+      .insert(categories)
+      .values([{ name: 'Devtools', slug: 'devtools', displayOrder: 1 }])
+      .returning()
+    return group
+  }
+
+  async function seedSubcategories(values: Array<{ name: string; slug: string }>) {
+    const database = getTestDb()
+    const group = await seedGroup()
+
+    return database
+      .insert(subcategories)
+      .values(values.map((value) => ({ ...value, categoryId: group?.id ?? '' })))
+      .returning()
+  }
 
   it.each([
     {
@@ -144,13 +163,10 @@ describe('parser', () => {
   it('maps category slugs and aliases to existing tool ids', async () => {
     const database = getTestDb()
 
-    const [authCategory, databaseCategory] = await database
-      .insert(categories)
-      .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
-      ])
-      .returning()
+    const [authCategory, databaseCategory] = await seedSubcategories([
+      { name: 'Authentication', slug: 'auth' },
+      { name: 'Database', slug: 'database' },
+    ])
 
     const [clerk, supabase] = await database
       .insert(tools)
@@ -181,10 +197,7 @@ describe('parser', () => {
   it('creates unknown tools and marks them unverified for admin review', async () => {
     const database = getTestDb()
 
-    const [authCategory] = await database
-      .insert(categories)
-      .values([{ name: 'Authentication', slug: 'auth' }])
-      .returning()
+    const [authCategory] = await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
 
     const parsed = await parseRecommendations(
       '{"recommendations":[{"category":"auth","tool":"Authly"}]}',
@@ -206,10 +219,7 @@ describe('parser', () => {
   it('fuzzy matches similar tool names', async () => {
     const database = getTestDb()
 
-    const [databaseCategory] = await database
-      .insert(categories)
-      .values([{ name: 'Database', slug: 'database' }])
-      .returning()
+    const [databaseCategory] = await seedSubcategories([{ name: 'Database', slug: 'database' }])
 
     const [planetScale] = await database
       .insert(tools)
@@ -231,7 +241,7 @@ describe('parser', () => {
   it('ignores recommendations with unknown categories', async () => {
     const database = getTestDb()
 
-    await database.insert(categories).values([{ name: 'Authentication', slug: 'auth' }])
+    await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
     await database.insert(tools).values([{ name: 'Clerk', slug: 'clerk' }])
 
     const parsed = await parseRecommendations(
@@ -245,13 +255,10 @@ describe('parser', () => {
   it('returns ranked recommendations in order while deduping by category and tool', async () => {
     const database = getTestDb()
 
-    await database
-      .insert(categories)
-      .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
-      ])
-      .returning()
+    await seedSubcategories([
+      { name: 'Authentication', slug: 'auth' },
+      { name: 'Database', slug: 'database' },
+    ])
 
     await database
       .insert(tools)
@@ -274,7 +281,7 @@ describe('parser', () => {
   it('returns no recommendations for malformed and non-parseable responses', async () => {
     const database = getTestDb()
 
-    await database.insert(categories).values([{ name: 'Authentication', slug: 'auth' }])
+    await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
     await database.insert(tools).values([{ name: 'Clerk', slug: 'clerk' }])
 
     const parsed = await parseRecommendations('### output\n```\nnot json\n```', { database })

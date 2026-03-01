@@ -6,6 +6,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { runAutomation } from '~/server/llm/automation/runner'
@@ -24,16 +25,32 @@ describe('runAutomation', () => {
     await cleanTestDatabase()
   })
 
+  async function seedGroup() {
+    const database = getTestDb()
+    const [group] = await database
+      .insert(categories)
+      .values([{ name: 'Devtools', slug: 'devtools', displayOrder: 1 }])
+      .returning()
+    return group
+  }
+
+  async function seedSubcategories(values: Array<{ name: string; slug: string }>) {
+    const database = getTestDb()
+    const group = await seedGroup()
+
+    return database
+      .insert(subcategories)
+      .values(values.map((value) => ({ ...value, categoryId: group?.id ?? '' })))
+      .returning()
+  }
+
   it('executes run pipeline and persists run results and recommendations', async () => {
     const database = getTestDb()
 
-    await database
-      .insert(categories)
-      .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
-      ])
-      .returning()
+    await seedSubcategories([
+      { name: 'Authentication', slug: 'auth' },
+      { name: 'Database', slug: 'database' },
+    ])
 
     await database
       .insert(tools)
@@ -124,10 +141,7 @@ describe('runAutomation', () => {
   it('handles per-pair failures and continues processing', async () => {
     const database = getTestDb()
 
-    await database
-      .insert(categories)
-      .values([{ name: 'Authentication', slug: 'auth' }])
-      .returning()
+    await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
     await database
       .insert(tools)
       .values([{ name: 'Clerk', slug: 'clerk' }])
@@ -217,10 +231,7 @@ describe('runAutomation', () => {
   it('uses fallback extraction when primary response is not parseable', async () => {
     const database = getTestDb()
 
-    await database
-      .insert(categories)
-      .values([{ name: 'Authentication', slug: 'auth' }])
-      .returning()
+    await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
     await database
       .insert(tools)
       .values([{ name: 'Clerk', slug: 'clerk' }])
@@ -304,10 +315,7 @@ describe('runAutomation', () => {
   it('marks pair as failed when fallback extraction call throws', async () => {
     const database = getTestDb()
 
-    await database
-      .insert(categories)
-      .values([{ name: 'Authentication', slug: 'auth' }])
-      .returning()
+    await seedSubcategories([{ name: 'Authentication', slug: 'auth' }])
     await database
       .insert(tools)
       .values([{ name: 'Clerk', slug: 'clerk' }])
