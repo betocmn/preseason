@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import {
+  categories,
   llms,
   prompts,
   recommendations,
@@ -92,7 +93,7 @@ export const recommendationRouter = createTRPCRouter({
           categoryId: subcategories.id,
           categoryName: subcategories.name,
           categorySlug: subcategories.slug,
-          categoryGroupSlug: subcategories.categoryId,
+          categoryGroupSlug: categories.slug,
           llmId: llms.id,
           llmName: llms.name,
           llmSlug: llms.slug,
@@ -105,6 +106,7 @@ export const recommendationRouter = createTRPCRouter({
         .from(recommendations)
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
         .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
+        .innerJoin(categories, eq(subcategories.categoryId, categories.id))
         .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
         .innerJoin(llms, eq(runResults.llmId, llms.id))
         .innerJoin(prompts, eq(runResults.promptId, prompts.id))
@@ -130,6 +132,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.categoryId,
             name: row.categoryName,
             slug: row.categorySlug,
+            groupSlug: row.categoryGroupSlug,
           },
           llm: {
             id: row.llmId,
@@ -186,10 +189,12 @@ export const recommendationRouter = createTRPCRouter({
           categoryId: subcategories.id,
           categoryName: subcategories.name,
           categorySlug: subcategories.slug,
+          categoryGroupSlug: categories.slug,
         })
         .from(recommendations)
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
         .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
+        .innerJoin(categories, eq(subcategories.categoryId, categories.id))
         .where(
           and(
             gte(recommendations.createdAt, startDate),
@@ -222,6 +227,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.categoryId,
             name: row.categoryName,
             slug: row.categorySlug,
+            groupSlug: row.categoryGroupSlug,
           },
           tool: {
             id: row.toolId,

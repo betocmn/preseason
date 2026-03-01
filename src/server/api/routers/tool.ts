@@ -70,7 +70,11 @@ async function getToolWithCategories(db: Database, toolId: string) {
     with: {
       toolCategories: {
         with: {
-          category: true,
+          category: {
+            with: {
+              categoryGroup: true,
+            },
+          },
         },
       },
     },
@@ -138,7 +142,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -160,7 +168,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -194,7 +206,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },
@@ -226,7 +242,11 @@ export const toolRouter = createTRPCRouter({
         with: {
           toolCategories: {
             with: {
-              category: true,
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
             },
           },
         },

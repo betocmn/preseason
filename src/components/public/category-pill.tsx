@@ -11,7 +11,7 @@ type CategoryPillProps = {
 }
 
 export function CategoryPill({ name, slug, groupSlug, active, className }: CategoryPillProps) {
-  const href = groupSlug ? `/rankings/${groupSlug}/${slug}` : `/rankings/${slug}`
+  const href = groupSlug ? `/rankings/${groupSlug}/${slug}` : '/rankings'
 
   return (
     <Link
