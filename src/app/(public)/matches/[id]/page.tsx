@@ -52,7 +52,10 @@ export default async function MatchDetailPage({ params }: Props) {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{match.category.name}</Badge>
           {isActive ? (
-            <Badge className="bg-trend-up text-trend-up-foreground">ACTIVE</Badge>
+            <Badge variant="secondary" className="text-xs">
+              <span className="mr-1 h-1.5 w-1.5 rounded-full bg-trend-up inline-block" />
+              LIVE
+            </Badge>
           ) : (
             <Badge variant="outline">SETTLED</Badge>
           )}
@@ -76,7 +79,7 @@ export default async function MatchDetailPage({ params }: Props) {
         />
 
         {match.winnerToolId && (
-          <p className="mt-3 text-sm font-medium text-trend-up">
+          <p className="mt-3 text-sm font-medium text-foreground">
             Winner: {match.winnerToolId === match.toolA.id ? match.toolA.name : match.toolB.name}
           </p>
         )}

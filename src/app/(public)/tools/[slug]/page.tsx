@@ -60,7 +60,7 @@ export default async function ToolDetailPage({ params }: Props) {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{tool.name}</h1>
           {tool.isVerified && (
-            <Badge className="gap-1 bg-trend-up text-trend-up-foreground">
+            <Badge variant="secondary" className="gap-1 text-xs">
               <CheckCircle className="h-3 w-3" />
               Verified
             </Badge>
