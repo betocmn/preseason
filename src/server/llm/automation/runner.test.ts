@@ -301,6 +301,97 @@ describe('runAutomation', () => {
     expect(persistedRunResults[0]?.rawResponse).toContain('--- FALLBACK_EXTRACTION_RESPONSE ---')
   })
 
+  it('marks pair as failed when fallback extraction call throws', async () => {
+    const database = getTestDb()
+
+    await database
+      .insert(categories)
+      .values([{ name: 'Authentication', slug: 'auth' }])
+      .returning()
+    await database
+      .insert(tools)
+      .values([{ name: 'Clerk', slug: 'clerk' }])
+      .returning()
+
+    const [prompt] = await database
+      .insert(prompts)
+      .values([
+        {
+          title: 'Billing App',
+          slug: 'saas-application',
+          level: 'vibe-coder',
+          isActive: true,
+        },
+      ])
+      .returning()
+
+    const [llm] = await database
+      .insert(llms)
+      .values([
+        {
+          name: 'GPT-4o',
+          slug: 'gpt-4o',
+          provider: 'OpenAI',
+          modelId: 'gpt-4o',
+          isActive: true,
+        },
+      ])
+      .returning()
+
+    const [run] = await database
+      .insert(runs)
+      .values([
+        {
+          status: 'pending',
+          trigger: 'manual',
+          promptIds: [prompt?.id ?? ''],
+          llmIds: [llm?.id ?? ''],
+          promptCount: 1,
+          llmCount: 1,
+        },
+      ])
+      .returning()
+
+    const mockService = {
+      complete: vi
+        .fn()
+        .mockResolvedValueOnce({
+          content: 'I recommend a managed auth stack.',
+          model: 'openai/gpt-4o',
+          provider: 'openai',
+          finishReason: 'stop',
+          usage: { promptTokens: 9, completionTokens: 7, totalTokens: 16 },
+          latencyMs: 22,
+        })
+        .mockRejectedValueOnce(new Error('rate limited')),
+    }
+
+    const summary = await runAutomation(run?.id ?? '', {
+      database,
+      llmService: mockService as never,
+      now: () => new Date('2026-02-28T12:00:00.000Z'),
+    })
+
+    expect(summary.status).toBe('failed')
+    expect(summary.totalPairs).toBe(1)
+    expect(summary.succeededPairs).toBe(0)
+    expect(summary.failedPairs).toBe(1)
+    expect(
+      summary.errors.some((entry) => entry.includes('Fallback extraction failed: rate limited')),
+    ).toBe(true)
+    expect(mockService.complete).toHaveBeenCalledTimes(2)
+
+    const persistedRunResults = await database.select().from(runResults)
+    expect(persistedRunResults).toHaveLength(1)
+    expect(persistedRunResults[0]?.parseStatus).toBe('failed')
+    expect(persistedRunResults[0]?.rawResponse).toContain(
+      'RUN_PAIR_ERROR: Fallback extraction failed: rate limited',
+    )
+
+    const persistedRecommendations = await database.select().from(recommendations)
+    expect(persistedRecommendations).toHaveLength(0)
+  })
+
   it('marks run as failed when no prompts or llms are configured', async () => {
     const database = getTestDb()
 
