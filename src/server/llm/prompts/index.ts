@@ -3,7 +3,17 @@ import { join } from 'node:path'
 
 const PROMPTS_DIR = import.meta.dirname
 
-export type PromptLevel = 'software-dev-beginner' | 'software-dev-experienced' | 'vibe-coder'
+export const PROMPT_LEVELS = [
+  'software-dev-beginner',
+  'software-dev-experienced',
+  'vibe-coder',
+] as const
+
+export type PromptLevel = (typeof PROMPT_LEVELS)[number]
+
+export function isPromptLevel(value: string): value is PromptLevel {
+  return (PROMPT_LEVELS as readonly string[]).includes(value)
+}
 
 export async function getPromptContent(
   slug: string,

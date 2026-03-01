@@ -2,6 +2,12 @@
 
 Preseason tracks what tools and services LLMs recommend when given vibe-coding prompts. Think of it as a mix between an RL gym and a SaaS comparison site, with a Kalshi-inspired match/game UI.
 
+## How the Product Works
+
+Every day (or on manual trigger), Preseason runs a batch of real-world build prompts against a set of LLMs through OpenRouter. Each response is parsed into structured recommendations like "for category X, recommend tool Y," then stored with model, prompt, confidence, and reasoning metadata. This creates a continuously updated dataset of what major models are actually recommending in practice.
+
+The app then turns that dataset into public rankings, feed views, and head-to-head tool matches by category. Rankings measure recommendation frequency and consistency across models, while matches track which tool is winning over a defined period. Admins control active prompts/models and can review unknown tools auto-discovered from model output before they become part of ongoing comparisons.
+
 ## Setup Instructions
 
 ### Stack Overview
@@ -81,6 +87,16 @@ pnpm run db:generate  # Generate migration
 pnpm run db:migrate   # Apply migrations
 pnpm run db:seed      # Seed data
 ```
+
+## Guides
+
+- [How Prompts Work](docs/guides/how-prompts-work.md)
+- [How Evals Work](docs/guides/how-evals-work.md)
+- [How Rankings Work](docs/guides/how-rankings-work.md)
+- [How LLM Service Works](docs/guides/how-llm-service-works.md)
+- [How Automation Works](docs/guides/how-automation-works.md)
+- [Recommendation Methodology](docs/guides/recommendation-methodology.md)
+- [How to Manually Test Automation Locally](docs/guides/how-to-manually-test-automation-locally.md)
 
 ## Testing
 
