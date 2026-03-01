@@ -8,16 +8,15 @@ import { Button } from '~/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '~/components/ui/sheet'
 import { cn } from '~/lib/utils'
 
-const categories = [
-  { slug: 'devtools', label: 'Devtools' },
-  { slug: 'salestech', label: 'Salestech' },
-  { slug: 'martech', label: 'Martech' },
-  { slug: 'fintech', label: 'Fintech' },
-  { slug: 'hr-tech', label: 'HR Tech' },
-  { slug: 'healthcare', label: 'Healthcare' },
-  { slug: 'edtech', label: 'Edtech' },
-  { slug: 'cybersecurity', label: 'Cybersecurity' },
-]
+type CategoryGroup = {
+  id: string
+  name: string
+  slug: string
+}
+
+type NavbarProps = {
+  categoryGroups: CategoryGroup[]
+}
 
 const navLinks = [
   { href: '/feed', label: 'Feed' },
@@ -26,10 +25,10 @@ const navLinks = [
   { href: '/critics', label: 'Critics' },
 ]
 
-export function Navbar() {
+export function Navbar({ categoryGroups }: NavbarProps) {
   const pathname = usePathname()
 
-  const activeCategory = categories.find(
+  const activeGroup = categoryGroups.find(
     (c) => pathname === `/rankings/${c.slug}` || pathname.startsWith(`/rankings/${c.slug}/`),
   )
 
@@ -88,16 +87,16 @@ export function Navbar() {
                 ))}
                 <hr className="my-2" />
                 <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Categories</p>
-                {categories.map((cat) => (
+                {categoryGroups.map((group) => (
                   <Link
-                    key={cat.slug}
-                    href={`/rankings/${cat.slug}`}
+                    key={group.slug}
+                    href={`/rankings/${group.slug}`}
                     className={cn(
                       'rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent',
-                      activeCategory?.slug === cat.slug && 'bg-accent font-medium',
+                      activeGroup?.slug === group.slug && 'bg-accent font-medium',
                     )}
                   >
-                    {cat.label}
+                    {group.name}
                   </Link>
                 ))}
                 <hr className="my-2" />
@@ -117,18 +116,18 @@ export function Navbar() {
       <div className="border-t">
         <div className="container">
           <nav className="hidden items-center gap-0 overflow-x-auto md:flex">
-            {categories.map((cat) => (
+            {categoryGroups.map((group) => (
               <Link
-                key={cat.slug}
-                href={`/rankings/${cat.slug}`}
+                key={group.slug}
+                href={`/rankings/${group.slug}`}
                 className={cn(
                   'whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors hover:text-foreground',
-                  activeCategory?.slug === cat.slug
+                  activeGroup?.slug === group.slug
                     ? 'border-foreground text-foreground'
                     : 'border-transparent text-muted-foreground',
                 )}
               >
-                {cat.label}
+                {group.name}
               </Link>
             ))}
           </nav>
