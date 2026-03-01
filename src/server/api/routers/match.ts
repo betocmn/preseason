@@ -4,7 +4,14 @@ import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { categories, llms, matches, prompts, recommendations, runResults } from '~/server/db/schema'
+import {
+  llms,
+  matches,
+  prompts,
+  recommendations,
+  runResults,
+  subcategories,
+} from '~/server/db/schema'
 
 function toDateString(date: Date) {
   return date.toISOString().slice(0, 10)
@@ -134,8 +141,8 @@ export const matchRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       let categoryId: string | undefined
       if (input?.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) return []
         categoryId = category.id
@@ -165,8 +172,8 @@ export const matchRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       let categoryId: string | undefined
       if (input.categorySlug) {
-        const category = await ctx.db.query.categories.findFirst({
-          where: eq(categories.slug, input.categorySlug),
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
         })
         if (!category) {
           return {
