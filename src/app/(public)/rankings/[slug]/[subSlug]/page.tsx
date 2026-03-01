@@ -38,6 +38,9 @@ export default async function SubcategoryRankingPage({ params }: Props) {
   if (!ranking.category) {
     notFound()
   }
+  if (ranking.category.categoryGroup.slug !== slug) {
+    notFound()
+  }
 
   const subcategories = group?.subcategories ?? []
 

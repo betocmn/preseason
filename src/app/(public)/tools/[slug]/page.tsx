@@ -71,7 +71,12 @@ export default async function ToolDetailPage({ params }: Props) {
 
         <div className="mb-3 flex flex-wrap gap-2">
           {toolCategories.map((cat) => (
-            <CategoryPill key={cat.id} name={cat.name} slug={cat.slug} />
+            <CategoryPill
+              key={cat.id}
+              name={cat.name}
+              slug={cat.slug}
+              groupSlug={cat.categoryGroup?.slug}
+            />
           ))}
         </div>
 
@@ -95,7 +100,11 @@ export default async function ToolDetailPage({ params }: Props) {
             <div className="space-y-3">
               {toolStats.map((stat) => (
                 <div key={stat.category.id} className="flex items-center justify-between">
-                  <CategoryPill name={stat.category.name} slug={stat.category.slug} />
+                  <CategoryPill
+                    name={stat.category.name}
+                    slug={stat.category.slug}
+                    groupSlug={stat.category.groupSlug}
+                  />
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-medium">
                       {(stat.rate * 100).toFixed(1)}% rate

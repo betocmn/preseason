@@ -11,7 +11,7 @@ type RecommendationCardProps = {
   confidence: number | null
   reasoning: string | null
   tool: { id: string; name: string; slug: string }
-  category: { id: string; name: string; slug: string }
+  category: { id: string; name: string; slug: string; groupSlug: string }
   llm: { id: string; name: string; slug: string }
   prompt: { id: string; title: string; slug: string }
   createdAt: Date | null
@@ -47,7 +47,11 @@ export function RecommendationCard({
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <ToolBadge name={tool.name} slug={tool.slug} />
-              <CategoryPill name={category.name} slug={category.slug} />
+              <CategoryPill
+                name={category.name}
+                slug={category.slug}
+                groupSlug={category.groupSlug}
+              />
             </div>
             <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
