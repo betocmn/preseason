@@ -235,7 +235,7 @@ export async function runAutomation(
               ].join('\n')
             } catch (error) {
               const message = getErrorMessage(error)
-              errors.push(`[${prompt.slug} x ${llm.slug}] Fallback extraction failed: ${message}`)
+              throw new Error(`Fallback extraction failed: ${message}`)
             }
           }
 
