@@ -95,6 +95,7 @@ pnpm run db:seed      # Seed data
 - [How Rankings Work](docs/guides/how-rankings-work.md)
 - [How LLM Service Works](docs/guides/how-llm-service-works.md)
 - [How Automation Works](docs/guides/how-automation-works.md)
+- [How to Manually Test Automation Locally](docs/guides/how-to-manually-test-automation-locally.md)
 
 ## Testing
 
