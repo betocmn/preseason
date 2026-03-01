@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 
 export default async function RankingsPage() {
   const caller = await api()
-  const [ranking, categories] = await Promise.all([
+  const [ranking, groups] = await Promise.all([
     caller.ranking.overall({ days: 30, limit: 50 }),
-    caller.category.list(),
+    caller.category.listGroups(),
   ])
 
   return (
@@ -21,7 +21,7 @@ export default async function RankingsPage() {
       <h1 className="mb-6 text-2xl font-bold">Rankings</h1>
       <div className="flex gap-8">
         <aside className="hidden w-48 shrink-0 md:block">
-          <CategorySidebar categories={categories} basePath="/rankings" />
+          <CategorySidebar categories={groups} basePath="/rankings" />
         </aside>
         <div className="min-w-0 flex-1">
           <h2 className="mb-4 text-lg font-semibold">Overall Rankings (30 days)</h2>
