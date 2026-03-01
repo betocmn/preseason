@@ -70,6 +70,20 @@ describe('llm providers', () => {
     )
   })
 
+  it('rejects model ids that use a different provider namespace', async () => {
+    const provider = new OpenAiProvider()
+
+    await expect(
+      provider.complete({
+        model: 'anthropic/claude-3-5-sonnet',
+        systemPrompt: 'sys',
+        userPrompt: 'usr',
+      }),
+    ).rejects.toThrow('does not match provider')
+
+    expect(completeMock).not.toHaveBeenCalled()
+  })
+
   it('resolves provider aliases in the service factory', async () => {
     const service = new LlmService()
 
