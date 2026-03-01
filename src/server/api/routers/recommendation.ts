@@ -12,6 +12,9 @@ import {
   subcategories,
   tools,
 } from '~/server/db/schema'
+import { PROMPT_LEVELS } from '~/server/llm/prompts'
+
+const promptLevelSchema = z.enum(PROMPT_LEVELS)
 
 function daysAgo(days: number) {
   const date = new Date()
@@ -26,6 +29,7 @@ export const recommendationRouter = createTRPCRouter({
         categorySlug: z.string().min(1).max(100).optional(),
         toolSlug: z.string().min(1).max(255).optional(),
         llmSlug: z.string().min(1).max(255).optional(),
+        level: promptLevelSchema.optional(),
         dateFrom: z.coerce.date().optional(),
         dateTo: z.coerce.date().optional(),
       }),
@@ -69,6 +73,7 @@ export const recommendationRouter = createTRPCRouter({
         categoryId ? eq(recommendations.categoryId, categoryId) : undefined,
         toolId ? eq(recommendations.toolId, toolId) : undefined,
         llmId ? eq(runResults.llmId, llmId) : undefined,
+        input.level ? eq(prompts.level, input.level) : undefined,
         input.dateFrom ? gte(recommendations.createdAt, input.dateFrom) : undefined,
         input.dateTo ? lte(recommendations.createdAt, input.dateTo) : undefined,
       )
@@ -77,6 +82,7 @@ export const recommendationRouter = createTRPCRouter({
         .select({ count: sql<number>`count(*)` })
         .from(recommendations)
         .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+        .innerJoin(prompts, eq(runResults.promptId, prompts.id))
         .where(where)
       const total = Number(countRows[0]?.count ?? 0)
 
@@ -160,6 +166,7 @@ export const recommendationRouter = createTRPCRouter({
       z.object({
         days: z.number().int().min(1).max(365).default(30),
         categorySlug: z.string().min(1).max(100).optional(),
+        level: promptLevelSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -195,10 +202,13 @@ export const recommendationRouter = createTRPCRouter({
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
         .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
         .innerJoin(categories, eq(subcategories.categoryId, categories.id))
+        .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+        .innerJoin(prompts, eq(runResults.promptId, prompts.id))
         .where(
           and(
             gte(recommendations.createdAt, startDate),
             categoryId ? eq(recommendations.categoryId, categoryId) : undefined,
+            input.level ? eq(prompts.level, input.level) : undefined,
           ),
         )
 
@@ -257,6 +267,7 @@ export const recommendationRouter = createTRPCRouter({
         previousWindowDays: z.number().int().min(1).max(90).default(7),
         limit: z.number().int().min(1).max(100).default(10),
         categorySlug: z.string().min(1).max(100).optional(),
+        level: promptLevelSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -291,11 +302,14 @@ export const recommendationRouter = createTRPCRouter({
         })
         .from(recommendations)
         .innerJoin(tools, eq(recommendations.toolId, tools.id))
+        .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+        .innerJoin(prompts, eq(runResults.promptId, prompts.id))
         .where(
           and(
             gte(recommendations.createdAt, previousStart),
             lte(recommendations.createdAt, now),
             categoryId ? eq(recommendations.categoryId, categoryId) : undefined,
+            input.level ? eq(prompts.level, input.level) : undefined,
           ),
         )
 

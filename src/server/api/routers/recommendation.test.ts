@@ -57,17 +57,23 @@ describe('recommendationRouter', () => {
       ])
       .returning()
 
-    const prompt = (
-      await db
-        .insert(prompts)
-        .values({
-          title: 'Prompt',
-          slug: 'prompt',
+    const [vibePrompt, experiencedPrompt] = await db
+      .insert(prompts)
+      .values([
+        {
+          title: 'Vibe Prompt',
+          slug: 'prompt-vibe',
           level: 'vibe-coder',
           isActive: true,
-        })
-        .returning()
-    )[0]
+        },
+        {
+          title: 'Experienced Prompt',
+          slug: 'prompt-experienced',
+          level: 'software-dev-experienced',
+          isActive: true,
+        },
+      ])
+      .returning()
     const run = (await db.insert(runs).values({ status: 'completed' }).returning())[0]
 
     const [rrA, rrB] = await db
@@ -75,13 +81,13 @@ describe('recommendationRouter', () => {
       .values([
         {
           runId: run?.id ?? '',
-          promptId: prompt?.id ?? '',
+          promptId: vibePrompt?.id ?? '',
           llmId: llmA?.id ?? '',
           parseStatus: 'success',
         },
         {
           runId: run?.id ?? '',
-          promptId: prompt?.id ?? '',
+          promptId: experiencedPrompt?.id ?? '',
           llmId: llmB?.id ?? '',
           parseStatus: 'success',
         },
@@ -174,6 +180,51 @@ describe('recommendationRouter', () => {
     expect(stats.items[0]?.tool.slug).toBe('clerk')
     expect(stats.items[0]?.recommendationCount).toBe(2)
     expect(stats.items[0]?.rate).toBeCloseTo(2 / 3)
+  })
+
+  it('filters feed and stats by prompt level', async () => {
+    const fixture = await seedRecommendationFixture()
+    const db = getTestDb()
+    const now = new Date()
+
+    await db.insert(recommendations).values([
+      {
+        runResultId: fixture.rrA?.id ?? '',
+        toolId: fixture.toolA?.id ?? '',
+        categoryId: fixture.authCategory?.id ?? '',
+        createdAt: now,
+      },
+      {
+        runResultId: fixture.rrB?.id ?? '',
+        toolId: fixture.toolB?.id ?? '',
+        categoryId: fixture.authCategory?.id ?? '',
+        createdAt: now,
+      },
+    ])
+
+    const caller = createTestCaller(null)
+    const vibeFeed = await caller.recommendation.getFeed({
+      level: 'vibe-coder',
+      limit: 10,
+      offset: 0,
+    })
+    const experiencedFeed = await caller.recommendation.getFeed({
+      level: 'software-dev-experienced',
+      limit: 10,
+      offset: 0,
+    })
+    const vibeStats = await caller.recommendation.getStats({
+      days: 30,
+      level: 'vibe-coder',
+      categorySlug: 'auth',
+    })
+
+    expect(vibeFeed.total).toBe(1)
+    expect(vibeFeed.items[0]?.tool.slug).toBe('clerk')
+    expect(experiencedFeed.total).toBe(1)
+    expect(experiencedFeed.items[0]?.tool.slug).toBe('supabase')
+    expect(vibeStats.items).toHaveLength(1)
+    expect(vibeStats.items[0]?.tool.slug).toBe('clerk')
   })
 
   it('computes trending changes across windows', async () => {

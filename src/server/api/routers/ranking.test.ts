@@ -56,7 +56,7 @@ describe('rankingRouter', () => {
       .insert(prompts)
       .values([
         { title: 'Prompt A', slug: 'prompt-a', level: 'vibe-coder' },
-        { title: 'Prompt B', slug: 'prompt-b', level: 'vibe-coder' },
+        { title: 'Prompt B', slug: 'prompt-b', level: 'software-dev-experienced' },
       ])
       .returning()
     const run = (await db.insert(runs).values({ status: 'completed' }).returning())[0]
@@ -203,5 +203,44 @@ describe('rankingRouter', () => {
 
     expect(ranking.category).toBeNull()
     expect(ranking.items).toEqual([])
+  })
+
+  it('filters rankings by prompt level', async () => {
+    const fixture = await seedRankingFixture()
+    const db = getTestDb()
+    const now = new Date()
+
+    await db.insert(recommendations).values([
+      {
+        runResultId: fixture.rrA?.id ?? '',
+        toolId: fixture.toolA?.id ?? '',
+        categoryId: fixture.authCategory?.id ?? '',
+        createdAt: now,
+      },
+      {
+        runResultId: fixture.rrB?.id ?? '',
+        toolId: fixture.toolB?.id ?? '',
+        categoryId: fixture.authCategory?.id ?? '',
+        createdAt: now,
+      },
+    ])
+
+    const caller = createTestCaller(null)
+    const vibeCategoryRanking = await caller.ranking.byCategorySlug({
+      categorySlug: 'devtools',
+      days: 30,
+      limit: 10,
+      level: 'vibe-coder',
+    })
+    const experiencedOverall = await caller.ranking.overall({
+      days: 30,
+      limit: 10,
+      level: 'software-dev-experienced',
+    })
+
+    expect(vibeCategoryRanking.items).toHaveLength(1)
+    expect(vibeCategoryRanking.items[0]?.tool.slug).toBe('clerk')
+    expect(experiencedOverall.items).toHaveLength(1)
+    expect(experiencedOverall.items[0]?.tool.slug).toBe('supabase')
   })
 })
