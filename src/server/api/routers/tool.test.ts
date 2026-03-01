@@ -20,9 +20,16 @@ describe('toolRouter', () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
 
+    const group = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
+
     const authCategory = await adminCaller.category.create({
       name: 'Authentication',
       slug: 'auth',
+      categoryId: group.id,
       description: 'Auth',
       icon: 'lock',
       displayOrder: 1,
@@ -30,6 +37,7 @@ describe('toolRouter', () => {
     const dbCategory = await adminCaller.category.create({
       name: 'Database',
       slug: 'database',
+      categoryId: group.id,
       description: 'DB',
       icon: 'database',
       displayOrder: 2,
@@ -59,9 +67,16 @@ describe('toolRouter', () => {
   it('searches by aliases and slug', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
+
+    const group = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
     const category = await adminCaller.category.create({
       name: 'Authentication',
       slug: 'auth',
+      categoryId: group.id,
       description: 'Auth',
       icon: 'lock',
       displayOrder: 1,
@@ -89,9 +104,15 @@ describe('toolRouter', () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
 
+    const group = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
     const category = await adminCaller.category.create({
       name: 'Payments',
       slug: 'payments',
+      categoryId: group.id,
       description: 'Payments',
       icon: 'credit-card',
       displayOrder: 1,

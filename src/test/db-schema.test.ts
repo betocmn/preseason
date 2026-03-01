@@ -10,6 +10,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   toolCategories,
   tools,
   userProfiles,
@@ -21,6 +22,16 @@ function first<T>(rows: T[]): T {
   const row = rows[0]
   if (row === undefined) throw new Error('Expected at least one row')
   return row
+}
+
+/** Helper to insert a category group for FK-dependent tests */
+async function insertCategoryGroup(db: ReturnType<typeof getTestDb>) {
+  return first(
+    await db
+      .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning(),
+  )
 }
 
 describe('Database Schema', () => {
@@ -91,38 +102,107 @@ describe('Database Schema', () => {
   })
 
   // ========================================================================
-  // Categories
+  // Category Groups
   // ========================================================================
 
-  describe('Categories', () => {
-    it('should create and query categories', async () => {
+  describe('Category Groups', () => {
+    it('should create and query category groups', async () => {
       const db = getTestDb()
       await db.insert(categories).values({
-        name: 'Authentication',
-        slug: 'auth',
-        description: 'Auth tools',
-        icon: 'lock',
+        name: 'Devtools',
+        slug: 'devtools',
+        description: 'Developer tools',
+        icon: 'code',
         displayOrder: 1,
       })
 
       const result = await db.select().from(categories)
       expect(result).toHaveLength(1)
-      expect(result[0]?.name).toBe('Authentication')
-      expect(result[0]?.slug).toBe('auth')
+      expect(result[0]?.name).toBe('Devtools')
+      expect(result[0]?.slug).toBe('devtools')
       expect(result[0]?.displayOrder).toBe(1)
       expect(result[0]?.id).toBeDefined()
     })
 
     it('should enforce unique name constraint', async () => {
       const db = getTestDb()
-      await db.insert(categories).values({ name: 'Database', slug: 'database' })
-      await expect(db.insert(categories).values({ name: 'Database', slug: 'db' })).rejects.toThrow()
+      await db.insert(categories).values({ name: 'Devtools', slug: 'devtools' })
+      await expect(
+        db.insert(categories).values({ name: 'Devtools', slug: 'devtools-2' }),
+      ).rejects.toThrow()
     })
 
     it('should enforce unique slug constraint', async () => {
       const db = getTestDb()
-      await db.insert(categories).values({ name: 'Database', slug: 'database' })
-      await expect(db.insert(categories).values({ name: 'DB', slug: 'database' })).rejects.toThrow()
+      await db.insert(categories).values({ name: 'Devtools', slug: 'devtools' })
+      await expect(
+        db.insert(categories).values({ name: 'Dev Tools', slug: 'devtools' }),
+      ).rejects.toThrow()
+    })
+  })
+
+  // ========================================================================
+  // Subcategories
+  // ========================================================================
+
+  describe('Subcategories', () => {
+    it('should create and query subcategories with group reference', async () => {
+      const db = getTestDb()
+      const group = await insertCategoryGroup(db)
+
+      await db.insert(subcategories).values({
+        name: 'Authentication',
+        slug: 'auth',
+        categoryId: group.id,
+        description: 'Auth tools',
+        icon: 'lock',
+        displayOrder: 1,
+      })
+
+      const result = await db.select().from(subcategories)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.name).toBe('Authentication')
+      expect(result[0]?.slug).toBe('auth')
+      expect(result[0]?.categoryId).toBe(group.id)
+      expect(result[0]?.displayOrder).toBe(1)
+    })
+
+    it('should enforce unique name constraint', async () => {
+      const db = getTestDb()
+      const group = await insertCategoryGroup(db)
+      await db
+        .insert(subcategories)
+        .values({ name: 'Database', slug: 'database', categoryId: group.id })
+      await expect(
+        db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'db', categoryId: group.id }),
+      ).rejects.toThrow()
+    })
+
+    it('should enforce unique slug constraint', async () => {
+      const db = getTestDb()
+      const group = await insertCategoryGroup(db)
+      await db
+        .insert(subcategories)
+        .values({ name: 'Database', slug: 'database', categoryId: group.id })
+      await expect(
+        db
+          .insert(subcategories)
+          .values({ name: 'DB', slug: 'database', categoryId: group.id }),
+      ).rejects.toThrow()
+    })
+
+    it('should cascade delete when group is deleted', async () => {
+      const db = getTestDb()
+      const group = await insertCategoryGroup(db)
+      await db
+        .insert(subcategories)
+        .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+
+      await db.delete(categories).where(eq(categories.id, group.id))
+      const result = await db.select().from(subcategories)
+      expect(result).toHaveLength(0)
     })
   })
 
@@ -184,8 +264,12 @@ describe('Database Schema', () => {
   describe('Tool Categories', () => {
     it('should create junction records', async () => {
       const db = getTestDb()
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Auth', slug: 'auth' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+          .returning(),
       )
       const tool = first(
         await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning(),
@@ -204,8 +288,12 @@ describe('Database Schema', () => {
 
     it('should enforce unique (toolId, categoryId)', async () => {
       const db = getTestDb()
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Auth', slug: 'auth' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+          .returning(),
       )
       const tool = first(
         await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning(),
@@ -219,8 +307,12 @@ describe('Database Schema', () => {
 
     it('should cascade delete when tool is deleted', async () => {
       const db = getTestDb()
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Auth', slug: 'auth' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+          .returning(),
       )
       const tool = first(
         await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning(),
@@ -234,15 +326,19 @@ describe('Database Schema', () => {
 
     it('should cascade delete when category is deleted', async () => {
       const db = getTestDb()
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Auth', slug: 'auth' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+          .returning(),
       )
       const tool = first(
         await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning(),
       )
       await db.insert(toolCategories).values({ toolId: tool.id, categoryId: cat.id })
 
-      await db.delete(categories).where(eq(categories.id, cat.id))
+      await db.delete(subcategories).where(eq(subcategories.id, cat.id))
       const result = await db.select().from(toolCategories)
       expect(result).toHaveLength(0)
     })
@@ -529,8 +625,12 @@ describe('Database Schema', () => {
       const tool = first(
         await db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
       )
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'database', categoryId: group.id })
+          .returning(),
       )
 
       await db.insert(recommendations).values({
@@ -574,8 +674,12 @@ describe('Database Schema', () => {
       const tool = first(
         await db.insert(tools).values({ name: 'Supabase', slug: 'supabase' }).returning(),
       )
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'database', categoryId: group.id })
+          .returning(),
       )
 
       await db.insert(recommendations).values({
@@ -606,8 +710,12 @@ describe('Database Schema', () => {
         first(inserted1).id < first(inserted2).id
           ? [first(inserted1), first(inserted2)]
           : [first(inserted2), first(inserted1)]
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'database', categoryId: group.id })
+          .returning(),
       )
 
       await db.insert(matches).values({
@@ -638,8 +746,12 @@ describe('Database Schema', () => {
         first(inserted1).id < first(inserted2).id
           ? [first(inserted1), first(inserted2)]
           : [first(inserted2), first(inserted1)]
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'database', categoryId: group.id })
+          .returning(),
       )
 
       await db.insert(matches).values({
@@ -669,8 +781,12 @@ describe('Database Schema', () => {
         first(inserted1).id < first(inserted2).id
           ? [first(inserted1), first(inserted2)]
           : [first(inserted2), first(inserted1)]
+      const group = await insertCategoryGroup(db)
       const cat = first(
-        await db.insert(categories).values({ name: 'Database', slug: 'database' }).returning(),
+        await db
+          .insert(subcategories)
+          .values({ name: 'Database', slug: 'database', categoryId: group.id })
+          .returning(),
       )
 
       const statusValues = ['active', 'settled', 'archived'] as const

@@ -6,6 +6,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -27,11 +28,16 @@ describe('recommendationRouter', () => {
   async function seedRecommendationFixture() {
     const db = getTestDb()
 
-    const [authCategory, dbCategory] = await db
+    const [group] = await db
       .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
+
+    const [authCategory, dbCategory] = await db
+      .insert(subcategories)
       .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
+        { name: 'Authentication', slug: 'auth', categoryId: group?.id ?? '' },
+        { name: 'Database', slug: 'database', categoryId: group?.id ?? '' },
       ])
       .returning()
 
