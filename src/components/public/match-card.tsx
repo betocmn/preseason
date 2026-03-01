@@ -42,7 +42,10 @@ export function MatchCard({
               {category.name}
             </Badge>
             {isActive ? (
-              <Badge className="bg-trend-up text-trend-up-foreground text-xs">ACTIVE</Badge>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
+                LIVE
+              </span>
             ) : (
               <Badge variant="outline" className="text-xs">
                 SETTLED
@@ -63,7 +66,7 @@ export function MatchCard({
           />
 
           {winnerToolId && (
-            <p className="mt-2 text-xs text-trend-up">
+            <p className="mt-2 text-xs font-medium text-foreground">
               Winner: {winnerToolId === toolA.id ? toolA.name : toolB.name}
             </p>
           )}

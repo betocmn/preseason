@@ -48,7 +48,10 @@ export default async function PromptDetailPage({ params }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{prompt.level}</Badge>
           {prompt.isActive ? (
-            <Badge className="bg-trend-up text-trend-up-foreground text-xs">Active</Badge>
+            <Badge variant="secondary" className="text-xs">
+              <span className="mr-1 h-1.5 w-1.5 rounded-full bg-trend-up inline-block" />
+              Active
+            </Badge>
           ) : (
             <Badge variant="outline" className="text-xs">
               Inactive
