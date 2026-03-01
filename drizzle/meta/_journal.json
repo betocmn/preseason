@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1772193273633,
-      "tag": "0000_sparkling_nico_minoru",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772230990384,
-      "tag": "0001_large_senator_kelly",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1772273095390,
-      "tag": "0002_fluffy_diamondback",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1772364215153,
-      "tag": "0003_clear_wind_dancer",
+      "when": 1772365478088,
+      "tag": "0000_skinny_red_hulk",
       "breakpoints": true
     }
   ]
