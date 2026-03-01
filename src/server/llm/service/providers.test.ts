@@ -99,6 +99,7 @@ describe('llm providers', () => {
     expect(normalizeProviderId('OpenAI')).toBe('openai')
     expect(normalizeProviderId('Google')).toBe('google')
     expect(normalizeProviderId('Meta')).toBe('meta')
+    expect(normalizeProviderId('Meta Llama')).toBe('meta')
     expect(normalizeProviderId('Mistral AI')).toBe('mistral')
     expect(normalizeProviderId('DeepSeek')).toBe('deepseek')
   })
