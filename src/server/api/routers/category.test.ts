@@ -16,13 +16,20 @@ describe('categoryRouter', () => {
     await cleanTestDatabase()
   })
 
-  it('lists and fetches categories publicly', async () => {
+  it('lists and fetches subcategories publicly', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
+
+    const group = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
 
     await adminCaller.category.create({
       name: 'Authentication',
       slug: 'auth',
+      categoryId: group.id,
       description: 'Auth tools',
       icon: 'lock',
       displayOrder: 2,
@@ -30,6 +37,7 @@ describe('categoryRouter', () => {
     await adminCaller.category.create({
       name: 'Database',
       slug: 'database',
+      categoryId: group.id,
       description: 'Database tools',
       icon: 'database',
       displayOrder: 1,
@@ -45,13 +53,20 @@ describe('categoryRouter', () => {
     expect(bySlug.name).toBe('Authentication')
   })
 
-  it('creates, updates, and deletes as admin', async () => {
+  it('creates, updates, and deletes subcategories as admin', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
+
+    const group = await caller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
 
     const created = await caller.category.create({
       name: 'Payments',
       slug: 'payments',
+      categoryId: group.id,
       description: 'Payment providers',
       icon: 'credit-card',
       displayOrder: 5,
@@ -73,16 +88,48 @@ describe('categoryRouter', () => {
     expect(deleted.success).toBe(true)
   })
 
+  it('lists and manages category groups', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    const group1 = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 2,
+    })
+    await adminCaller.category.createGroup({
+      name: 'Salestech',
+      slug: 'salestech',
+      displayOrder: 1,
+    })
+
+    const caller = createTestCaller(null)
+    const groups = await caller.category.listGroups()
+    expect(groups).toHaveLength(2)
+    expect(groups[0]?.slug).toBe('salestech')
+    expect(groups[1]?.slug).toBe('devtools')
+
+    const bySlug = await caller.category.getGroupBySlug({ slug: 'devtools' })
+    expect(bySlug.name).toBe('Devtools')
+
+    const updated = await adminCaller.category.updateGroup({
+      id: group1.id,
+      description: 'Developer tools',
+    })
+    expect(updated.description).toBe('Developer tools')
+
+    const deleted = await adminCaller.category.deleteGroup({ id: group1.id })
+    expect(deleted.success).toBe(true)
+  })
+
   it('enforces admin role for mutations', async () => {
     const { authUser } = await seedUser({ role: 'user' })
     const caller = createTestCaller(authUser)
 
     await expect(
-      caller.category.create({
+      caller.category.createGroup({
         name: 'Analytics',
         slug: 'analytics',
-        description: 'Analytics tools',
-        icon: 'bar-chart',
         displayOrder: 1,
       }),
     ).rejects.toMatchObject({

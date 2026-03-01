@@ -6,6 +6,7 @@ import {
   recommendations,
   runResults,
   runs,
+  subcategories,
   tools,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -26,11 +27,15 @@ describe('rankingRouter', () => {
 
   async function seedRankingFixture() {
     const db = getTestDb()
-    const [authCategory, dbCategory] = await db
+    const [group] = await db
       .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
+    const [authCategory, dbCategory] = await db
+      .insert(subcategories)
       .values([
-        { name: 'Authentication', slug: 'auth' },
-        { name: 'Database', slug: 'database' },
+        { name: 'Authentication', slug: 'auth', categoryId: group?.id ?? '' },
+        { name: 'Database', slug: 'database', categoryId: group?.id ?? '' },
       ])
       .returning()
     const [toolA, toolB] = await db
@@ -103,8 +108,8 @@ describe('rankingRouter', () => {
     ])
 
     const caller = createTestCaller(null)
-    const ranking = await caller.ranking.byCategorySlug({
-      categorySlug: 'auth',
+    const ranking = await caller.ranking.bySubcategorySlug({
+      subcategorySlug: 'auth',
       days: 30,
       limit: 10,
     })
@@ -171,8 +176,8 @@ describe('rankingRouter', () => {
       })
 
       const caller = createTestCaller(null)
-      const categoryRanking = await caller.ranking.byCategorySlug({
-        categorySlug: 'auth',
+      const categoryRanking = await caller.ranking.bySubcategorySlug({
+        subcategorySlug: 'auth',
         days: 30,
         limit: 10,
       })
@@ -190,8 +195,8 @@ describe('rankingRouter', () => {
 
   it('returns empty result for unknown category slug', async () => {
     const caller = createTestCaller(null)
-    const ranking = await caller.ranking.byCategorySlug({
-      categorySlug: 'missing',
+    const ranking = await caller.ranking.bySubcategorySlug({
+      subcategorySlug: 'missing',
       days: 30,
       limit: 10,
     })
