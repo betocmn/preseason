@@ -174,9 +174,7 @@ describe('Database Schema', () => {
         .insert(subcategories)
         .values({ name: 'Database', slug: 'database', categoryId: group.id })
       await expect(
-        db
-          .insert(subcategories)
-          .values({ name: 'Database', slug: 'db', categoryId: group.id }),
+        db.insert(subcategories).values({ name: 'Database', slug: 'db', categoryId: group.id }),
       ).rejects.toThrow()
     })
 
@@ -187,18 +185,14 @@ describe('Database Schema', () => {
         .insert(subcategories)
         .values({ name: 'Database', slug: 'database', categoryId: group.id })
       await expect(
-        db
-          .insert(subcategories)
-          .values({ name: 'DB', slug: 'database', categoryId: group.id }),
+        db.insert(subcategories).values({ name: 'DB', slug: 'database', categoryId: group.id }),
       ).rejects.toThrow()
     })
 
     it('should cascade delete when group is deleted', async () => {
       const db = getTestDb()
       const group = await insertCategoryGroup(db)
-      await db
-        .insert(subcategories)
-        .values({ name: 'Auth', slug: 'auth', categoryId: group.id })
+      await db.insert(subcategories).values({ name: 'Auth', slug: 'auth', categoryId: group.id })
 
       await db.delete(categories).where(eq(categories.id, group.id))
       const result = await db.select().from(subcategories)

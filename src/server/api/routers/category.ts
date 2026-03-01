@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { asc, eq, sql } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -228,10 +228,7 @@ export const categoryRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
-      const deleted = await ctx.db
-        .delete(categories)
-        .where(eq(categories.id, input.id))
-        .returning()
+      const deleted = await ctx.db.delete(categories).where(eq(categories.id, input.id)).returning()
 
       if (!deleted[0]) {
         throw new TRPCError({

@@ -1,7 +1,14 @@
 import { and, eq, gte, inArray, lt, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { categories, llms, recommendations, runResults, subcategories, tools } from '~/server/db/schema'
+import {
+  categories,
+  llms,
+  recommendations,
+  runResults,
+  subcategories,
+  tools,
+} from '~/server/db/schema'
 
 function daysAgo(days: number) {
   const date = new Date()

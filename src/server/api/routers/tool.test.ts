@@ -25,6 +25,7 @@ describe('toolRouter', () => {
       slug: 'devtools',
       displayOrder: 1,
     })
+    if (!group) throw new Error('Expected group to be created')
 
     const authCategory = await adminCaller.category.create({
       name: 'Authentication',
@@ -73,6 +74,7 @@ describe('toolRouter', () => {
       slug: 'devtools',
       displayOrder: 1,
     })
+    if (!group) throw new Error('Expected group to be created')
     const category = await adminCaller.category.create({
       name: 'Authentication',
       slug: 'auth',
@@ -109,6 +111,7 @@ describe('toolRouter', () => {
       slug: 'devtools',
       displayOrder: 1,
     })
+    if (!group) throw new Error('Expected group to be created')
     const category = await adminCaller.category.create({
       name: 'Payments',
       slug: 'payments',
