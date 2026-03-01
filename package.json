@@ -10,6 +10,7 @@
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:seed": "dotenv -e .env.local -- tsx src/server/db/seed.ts",
+    "db:seed-test": "dotenv -e .env.local -- tsx src/server/db/seed-test-data.ts",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "dev": "next dev --turbo",
     "format": "biome format --write .",

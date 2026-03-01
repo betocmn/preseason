@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu, Search } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from '~/components/public/theme-toggle'
@@ -48,9 +48,7 @@ export function Navbar() {
               href={link.href}
               className={cn(
                 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground',
-                pathname.startsWith(link.href)
-                  ? 'text-foreground'
-                  : 'text-muted-foreground',
+                pathname.startsWith(link.href) ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
               {link.label}

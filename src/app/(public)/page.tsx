@@ -32,10 +32,7 @@ export default async function HomePage() {
                 <Swords className="h-4 w-4" />
                 Active Matches
               </h2>
-              <Link
-                href="/matches"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
                 View all
               </Link>
             </div>
@@ -70,10 +67,7 @@ export default async function HomePage() {
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold">Recent Recommendations</h2>
-              <Link
-                href="/feed"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <Link href="/feed" className="text-sm text-muted-foreground hover:text-foreground">
                 View feed
               </Link>
             </div>
