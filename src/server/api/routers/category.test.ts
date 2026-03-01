@@ -25,6 +25,7 @@ describe('categoryRouter', () => {
       slug: 'devtools',
       displayOrder: 1,
     })
+    if (!group) throw new Error('Expected group to be created')
 
     await adminCaller.category.create({
       name: 'Authentication',
@@ -62,6 +63,7 @@ describe('categoryRouter', () => {
       slug: 'devtools',
       displayOrder: 1,
     })
+    if (!group) throw new Error('Expected group to be created')
 
     const created = await caller.category.create({
       name: 'Payments',
@@ -97,6 +99,7 @@ describe('categoryRouter', () => {
       slug: 'devtools',
       displayOrder: 2,
     })
+    if (!group1) throw new Error('Expected group to be created')
     await adminCaller.category.createGroup({
       name: 'Salestech',
       slug: 'salestech',
