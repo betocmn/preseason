@@ -340,10 +340,10 @@ Runner/Service                      LlmService                     OpenRouter
 
 ### 4.7 Tests
 
-- [ ] `src/server/llm/service/__tests__/providers.test.ts` — Test each provider prefixes models correctly, test factory resolution, test error handling
-- [ ] `src/server/llm/automation/__tests__/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
-- [ ] `src/server/llm/automation/__tests__/runner.test.ts` — Integration tests with mocked LlmService (no real API calls)
-- [ ] `src/server/llm/automation/__tests__/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
+- [ ] `src/server/llm/service/providers.test.ts` — Test each provider prefixes models correctly, test factory resolution, test error handling
+- [ ] `src/server/llm/automation/parser.test.ts` — ~20 test cases: clean JSON, markdown-wrapped JSON, prose fallback, unknown tools, malformed responses, empty responses, alias matching
+- [ ] `src/server/llm/automation/runner.test.ts` — Integration tests with mocked LlmService (no real API calls)
+- [ ] `src/server/llm/automation/match-settler.test.ts` — Deterministic recommendation data → correct scores and winners
 
 **Directory structure after this step:**
 ```
@@ -366,17 +366,15 @@ src/server/llm/
 │   │   ├── meta.ts
 │   │   ├── mistral.ts
 │   │   └── deepseek.ts
-│   └── __tests__/
-│       └── providers.test.ts
+│   └── providers.test.ts
 └── automation/                     (pipeline orchestration)
     ├── runner.ts
+    ├── runner.test.ts
     ├── parser.ts
+    ├── parser.test.ts
     ├── match-settler.ts
-    ├── match-generator.ts
-    └── __tests__/
-        ├── parser.test.ts
-        ├── runner.test.ts
-        └── match-settler.test.ts
+    ├── match-settler.test.ts
+    └── match-generator.ts
 ```
 
 **Key files created:** `src/server/llm/service/` (10 files + 1 test), `src/server/llm/automation/` (4 files + 3 tests), `src/app/api/cron/` (2 routes), `vercel.json`
