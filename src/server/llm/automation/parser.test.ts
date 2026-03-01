@@ -63,8 +63,14 @@ describe('parser', () => {
     {
       name: 'for prose extraction',
       input: 'For auth, Clerk. For database, Supabase.',
-      expectedLength: 1,
+      expectedLength: 2,
       expectedFirst: { category: 'auth', tool: 'Clerk' },
+    },
+    {
+      name: 'hyphenated tool names remain intact',
+      input: '- auth: next-auth - battle tested',
+      expectedLength: 1,
+      expectedFirst: { category: 'auth', tool: 'next-auth' },
     },
     {
       name: 'json with duplicate entries gets deduped',
@@ -123,6 +129,16 @@ describe('parser', () => {
     expect(__private__.normalizeCategorySlug('UI Components')).toBe('ui-components')
     expect(__private__.normalizeCategorySlug(' monitoring_error ')).toBe('monitoring-error')
     expect(__private__.normalizeKey('Supabase Auth')).toBe('supabaseauth')
+  })
+
+  it('extracts multiple for clauses from a single line', () => {
+    const recommendations = extractRecommendationCandidates(
+      'For auth, Clerk. For database, Supabase.',
+    )
+
+    expect(recommendations).toHaveLength(2)
+    expect(recommendations[0]).toMatchObject({ category: 'auth', tool: 'Clerk' })
+    expect(recommendations[1]).toMatchObject({ category: 'database', tool: 'Supabase' })
   })
 
   it('maps category slugs and aliases to existing tool ids', async () => {

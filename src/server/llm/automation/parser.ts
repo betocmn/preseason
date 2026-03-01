@@ -374,6 +374,41 @@ function cleanupLine(line: string) {
     .trim()
 }
 
+function splitToolAndReasoning(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return { tool: '', reasoning: null as string | null }
+  }
+
+  const delimiters = [' | ', ' - ', ', ']
+  let splitIndex = -1
+  let splitDelimiter = ''
+
+  for (const delimiter of delimiters) {
+    const index = trimmed.indexOf(delimiter)
+    if (index <= 0) {
+      continue
+    }
+
+    if (splitIndex < 0 || index < splitIndex) {
+      splitIndex = index
+      splitDelimiter = delimiter
+    }
+  }
+
+  if (splitIndex < 0) {
+    return { tool: trimmed, reasoning: null as string | null }
+  }
+
+  const tool = trimmed.slice(0, splitIndex).trim()
+  const reasoning = trimmed.slice(splitIndex + splitDelimiter.length).trim()
+
+  return {
+    tool,
+    reasoning: reasoning.length > 0 ? reasoning : null,
+  }
+}
+
 function extractFromLine(line: string): RecommendationCandidate | null {
   const cleaned = cleanupLine(line)
   if (!cleaned) {
@@ -409,27 +444,17 @@ function extractFromLine(line: string): RecommendationCandidate | null {
   }
 
   const directMatch = cleaned.match(
-    /^\*{0,2}\s*([a-z0-9][a-z0-9\s_\-/]+?)\s*\*{0,2}\s*(?::|=>|->|-)\s*([^|-]+?)(?:\s*[-|]\s*(.+))?$/i,
+    /^\*{0,2}\s*([a-z0-9][a-z0-9\s_\-/]+?)\s*\*{0,2}\s*(?::|=>|->|-)\s*(.+)$/i,
   )
 
   if (directMatch) {
-    const [, rawCategory, rawTool, rawReasoning] = directMatch
-    if (!rawCategory || !rawTool) {
+    const [, rawCategory, rawToolWithReasoning] = directMatch
+    if (!rawCategory || !rawToolWithReasoning) {
       return null
     }
 
-    return {
-      category: rawCategory,
-      tool: rawTool,
-      reasoning: rawReasoning ? rawReasoning.trim() : null,
-      confidence: parseConfidence(rawReasoning),
-    }
-  }
-
-  const proseMatch = cleaned.match(/^for\s+([a-z0-9\s-]+),\s*([^,.]+)(?:[,.]\s*(.+))?$/i)
-  if (proseMatch) {
-    const [, rawCategory, rawTool, rawReasoning] = proseMatch
-    if (!rawCategory || !rawTool) {
+    const { tool: rawTool, reasoning: rawReasoning } = splitToolAndReasoning(rawToolWithReasoning)
+    if (!rawTool) {
       return null
     }
 
@@ -442,6 +467,41 @@ function extractFromLine(line: string): RecommendationCandidate | null {
   }
 
   return null
+}
+
+function extractForProseCandidates(rawContent: string) {
+  const clauses = rawContent
+    .split(/(?:\.(?=\s|$))|\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+
+  const candidates: RecommendationCandidate[] = []
+
+  for (const clause of clauses) {
+    const proseMatch = clause.match(/^for\s+([a-z0-9][a-z0-9\s-]*),\s*(.+)$/i)
+    if (!proseMatch) {
+      continue
+    }
+
+    const [, rawCategory, toolWithReasoning] = proseMatch
+    if (!rawCategory || !toolWithReasoning) {
+      continue
+    }
+
+    const { tool: rawTool, reasoning: rawReasoning } = splitToolAndReasoning(toolWithReasoning)
+    if (!rawTool) {
+      continue
+    }
+
+    candidates.push({
+      category: rawCategory,
+      tool: rawTool,
+      reasoning: rawReasoning ? rawReasoning.trim() : null,
+      confidence: parseConfidence(rawReasoning),
+    })
+  }
+
+  return candidates
 }
 
 function dedupeCandidates(candidates: RecommendationCandidate[]) {
@@ -462,12 +522,14 @@ function dedupeCandidates(candidates: RecommendationCandidate[]) {
 }
 
 function extractProseCandidates(rawContent: string) {
-  const parsed = rawContent
+  const lineCandidates = rawContent
     .split('\n')
     .map((line) => extractFromLine(line))
     .filter((line): line is RecommendationCandidate => line !== null)
 
-  return dedupeCandidates(parsed)
+  const proseCandidates = extractForProseCandidates(rawContent)
+
+  return dedupeCandidates([...lineCandidates, ...proseCandidates])
 }
 
 export function extractRecommendationCandidates(rawContent: string): RecommendationCandidate[] {
