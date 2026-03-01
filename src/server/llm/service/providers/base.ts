@@ -7,16 +7,36 @@ export abstract class BaseLlmProvider {
     private readonly modelPrefix: string,
   ) {}
 
+  private normalizeProviderToken(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+  }
+
   private normalizeModel(model: string) {
-    if (model.startsWith(`${this.modelPrefix}/`)) {
-      return model
+    const normalizedModel = model.trim()
+    if (!normalizedModel) {
+      throw new Error('Model id is required')
     }
 
-    if (model.includes('/')) {
-      return model
+    const [rawNamespace, ...rest] = normalizedModel.split('/')
+
+    if (rest.length === 0) {
+      return `${this.modelPrefix}/${normalizedModel}`
     }
 
-    return `${this.modelPrefix}/${model}`
+    const namespace = rawNamespace?.trim()
+    const modelName = rest.join('/').trim()
+    if (!namespace || !modelName) {
+      throw new Error(`Invalid model id: ${model}`)
+    }
+
+    const normalizedNamespace = this.normalizeProviderToken(namespace)
+    const expectedNamespace = this.normalizeProviderToken(this.modelPrefix)
+
+    if (normalizedNamespace !== expectedNamespace) {
+      throw new Error(`Model namespace "${namespace}" does not match provider "${this.provider}"`)
+    }
+
+    return `${namespace}/${modelName}`
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
