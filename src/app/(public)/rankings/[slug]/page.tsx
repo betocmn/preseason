@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { CategorySidebar } from '~/components/public/category-sidebar'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
+import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -27,36 +27,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CategoryGroupRankingPage({ params }: Props) {
   const { slug } = await params
   const caller = await api()
-  const [ranking, group] = await Promise.all([
+  const [ranking, groups] = await Promise.all([
     caller.ranking.byCategorySlug({ categorySlug: slug, days: 30 }),
-    caller.category.getGroupBySlug({ slug }).catch(() => null),
+    caller.category.listGroups(),
   ])
 
   if (!ranking.categoryGroup) {
     notFound()
   }
 
-  const subcategories = group?.subcategories ?? []
-
   return (
-    <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-bold">Rankings</h1>
-      <div className="flex gap-8">
-        <aside className="hidden w-48 shrink-0 md:block">
-          <CategorySidebar categories={subcategories} basePath={`/rankings/${slug}`} />
-        </aside>
-        <div className="min-w-0 flex-1">
-          <h2 className="mb-4 text-lg font-semibold">{ranking.categoryGroup.name} (30 days)</h2>
-          {ranking.items.length > 0 ? (
-            <RankingTable items={ranking.items} />
-          ) : (
-            <EmptyState
-              title={`No tools ranked in ${ranking.categoryGroup.name} yet`}
-              description="Rankings appear after LLM runs produce recommendations in this category."
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    <SidebarLayout groups={groups} section="rankings">
+      <h1 className="mb-6 text-xl font-bold tracking-tight">Rankings</h1>
+      <h2 className="mb-4 text-lg font-semibold">{ranking.categoryGroup.name} (30 days)</h2>
+      {ranking.items.length > 0 ? (
+        <RankingTable items={ranking.items} />
+      ) : (
+        <EmptyState
+          title={`No tools ranked in ${ranking.categoryGroup.name} yet`}
+          description="Rankings appear after LLM runs produce recommendations in this category."
+        />
+      )}
+    </SidebarLayout>
   )
 }
