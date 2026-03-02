@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
@@ -50,8 +51,6 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex < prompts.length - 1
 
-  const maxRate = Math.max(...current.topTools.map((t) => t.rate), 0.01)
-
   return (
     <div className="relative rounded-lg border bg-card">
       <div className="flex items-stretch">
@@ -69,7 +68,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
         </div>
 
         {/* Card content */}
-        <div className="min-w-0 flex-1 px-6 py-5">
+        <div className="min-w-0 flex-1 px-6 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex items-center gap-2">
@@ -82,22 +81,27 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
               </div>
               <h3 className="text-base font-medium leading-snug">{current.title}</h3>
               {current.description && (
-                <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
+                <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                   {current.description}
                 </p>
               )}
+              <Link
+                href={`/prompts/${current.slug}`}
+                className="mt-1.5 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
+              >
+                Read full prompt...
+              </Link>
             </div>
           </div>
 
-          {/* Top tools with rate bars */}
+          {/* Top tools with compact bars */}
           {current.topTools.length > 0 && (
-            <div className="mt-5 space-y-2.5">
+            <div className="mt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Top recommendations
               </p>
               {current.topTools.map(({ tool, rate }) => {
                 const pct = rate * 100
-                const barWidth = (rate / maxRate) * 100
 
                 return (
                   <div key={tool.id} className="flex items-center gap-3">
@@ -109,18 +113,16 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                         size="sm"
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-chart-a transition-all"
-                            style={{ width: `${Math.max(barWidth, 2)}%` }}
-                          />
-                        </div>
-                        <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                          {pct.toFixed(1)}%
-                        </span>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-muted-foreground/30 transition-all"
+                          style={{ width: `${Math.max(pct, 3)}%` }}
+                        />
                       </div>
+                      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                        {pct.toFixed(1)}%
+                      </span>
                     </div>
                   </div>
                 )
@@ -130,7 +132,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
           {/* Dot indicators */}
           {prompts.length > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-1.5">
+            <div className="mt-5 flex items-center justify-center gap-1.5">
               {prompts.map((_, i) => (
                 <button
                   type="button"
@@ -138,7 +140,9 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                   onClick={() => setCurrentIndex(i)}
                   className={cn(
                     'h-1.5 rounded-full transition-all',
-                    i === currentIndex ? 'w-4 bg-chart-a' : 'w-1.5 bg-muted-foreground/30',
+                    i === currentIndex
+                      ? 'w-4 bg-muted-foreground/50'
+                      : 'w-1.5 bg-muted-foreground/20',
                   )}
                 />
               ))}
