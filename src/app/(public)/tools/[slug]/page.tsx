@@ -134,7 +134,7 @@ export default async function ToolDetailPage({ params }: Props) {
       {/* Active Matches */}
       {toolMatches.length > 0 && (
         <div className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold">Active Matches</h2>
+          <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {toolMatches.map((match) => (
               <MatchCard

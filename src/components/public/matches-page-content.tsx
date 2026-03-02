@@ -34,7 +34,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
     <div>
       {/* Active Matches */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold">Active Matches</h2>
+        <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
         {active.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {active.map((match) => (
@@ -55,7 +55,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
           </div>
         ) : (
           <EmptyState
-            title="No active matches"
+            title="No live matches"
             description="Matches are created when tools compete head-to-head in a category."
           />
         )}
