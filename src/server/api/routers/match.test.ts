@@ -95,6 +95,7 @@ describe('matchRouter', () => {
         categoryId: fixture.category?.id ?? '',
         status: 'active',
         periodStart: '2025-01-01',
+        periodEnd: '2025-01-07',
       },
       {
         toolAId: fixture.toolA?.id ?? '',
@@ -102,6 +103,7 @@ describe('matchRouter', () => {
         categoryId: fixture.category?.id ?? '',
         status: 'settled',
         periodStart: '2025-01-08',
+        periodEnd: '2025-01-14',
       },
     ])
 
@@ -180,9 +182,7 @@ describe('matchRouter', () => {
     expect(settled.match?.winnerToolId).toBe(fixture.toolA?.id)
   })
 
-  it('freezes settled breakdown when match started without periodEnd', async () => {
-    const { authUser } = await seedUser({ role: 'admin' })
-    const caller = createTestCaller(authUser)
+  it('excludes recommendations outside periodEnd from breakdown', async () => {
     const fixture = await seedMatchFixture()
     const db = getTestDb()
 
@@ -195,42 +195,39 @@ describe('matchRouter', () => {
           categoryId: fixture.category?.id ?? '',
           status: 'active',
           periodStart: '2025-01-01',
-          periodEnd: null,
+          periodEnd: '2025-01-07',
         })
         .returning()
     )[0]
 
+    // Recommendation within the period
     await db.insert(recommendations).values([
       {
         runResultId: fixture.rrA?.id ?? '',
         toolId: fixture.toolA?.id ?? '',
         categoryId: fixture.category?.id ?? '',
+        createdAt: new Date('2025-01-05T12:00:00.000Z'),
       },
     ])
 
-    const settled = await caller.match.settle({ id: match?.id ?? '' })
-    expect(settled.match?.status).toBe('settled')
-    expect(settled.match?.periodEnd).toBe(
-      (settled.match?.settledAt ?? new Date()).toISOString().slice(0, 10),
-    )
+    const details = await createTestCaller(null).match.getById({ id: match?.id ?? '' })
+    expect(details.breakdown.totals.toolA).toBe(1)
 
-    const createdAfterSettlement = new Date(
-      (settled.match?.settledAt ?? new Date()).getTime() + 1_000,
-    )
+    // Recommendation after the period end — should not be counted
     await db.insert(recommendations).values([
       {
         runResultId: fixture.rrA?.id ?? '',
         toolId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
-        createdAt: createdAfterSettlement,
+        createdAt: new Date('2025-01-10T12:00:00.000Z'),
       },
     ])
 
-    const detailsAfterSettlement = await createTestCaller(null).match.getById({
+    const detailsAfterPeriod = await createTestCaller(null).match.getById({
       id: match?.id ?? '',
     })
-    expect(detailsAfterSettlement.breakdown.totals.toolA).toBe(settled.breakdown.totals.toolA)
-    expect(detailsAfterSettlement.breakdown.totals.toolB).toBe(settled.breakdown.totals.toolB)
+    expect(detailsAfterPeriod.breakdown.totals.toolA).toBe(1)
+    expect(detailsAfterPeriod.breakdown.totals.toolB).toBe(0)
   })
 
   it('rejects settling match that is already settled', async () => {
@@ -293,6 +290,7 @@ describe('matchRouter', () => {
         toolBId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
         periodStart: new Date('2025-01-01'),
+        periodEnd: new Date('2025-01-07'),
       }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',

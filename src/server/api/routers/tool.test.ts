@@ -128,22 +128,88 @@ describe('toolRouter', () => {
       name: 'Stripe',
       slug: 'stripe',
       categoryIds: [category.id],
+      isVerified: true,
     })
     expect(created?.slug).toBe('stripe')
-    expect(created?.isVerified).toBe(false)
+    expect(created?.isVerified).toBe(true)
 
     const updated = await adminCaller.tool.update({
       id: created?.id ?? '',
       description: 'Payment platform',
       aliases: ['stripe-payments'],
+      isVerified: false,
     })
     expect(updated.description).toBe('Payment platform')
+    expect(updated.isVerified).toBe(false)
 
     const verified = await adminCaller.tool.verify({ id: created?.id ?? '' })
     expect(verified.isVerified).toBe(true)
 
     const deleted = await adminCaller.tool.delete({ id: created?.id ?? '' })
     expect(deleted.success).toBe(true)
+  })
+
+  it('allows clearing optional fields and categories on update', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    const group = await adminCaller.category.createGroup({
+      name: 'Collaboration',
+      slug: 'collaboration',
+      displayOrder: 1,
+    })
+    if (!group) throw new Error('Expected group to be created')
+    const category = await adminCaller.category.create({
+      name: 'Project Management',
+      slug: 'project-management',
+      categoryId: group.id,
+      description: 'PM',
+      icon: 'briefcase',
+      displayOrder: 1,
+    })
+    if (!category) throw new Error('Expected category to be created')
+
+    const created = await adminCaller.tool.create({
+      name: 'Linear',
+      slug: 'linear',
+      description: 'Issue tracker',
+      website: 'https://linear.app',
+      logoUrl: '/logos/linear.png',
+      aliases: ['linear-app'],
+      categoryIds: [category.id],
+      isVerified: true,
+    })
+    if (!created) throw new Error('Expected tool to be created')
+
+    const updated = await adminCaller.tool.update({
+      id: created.id,
+      description: null,
+      website: null,
+      logoUrl: null,
+      aliases: null,
+      categoryIds: [],
+    })
+
+    expect(updated.description).toBeNull()
+    expect(updated.website).toBeNull()
+    expect(updated.logoUrl).toBeNull()
+    expect(updated.aliases).toBeNull()
+    expect(updated.toolCategories).toHaveLength(0)
+  })
+
+  it('rejects non-local logo paths', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    await expect(
+      adminCaller.tool.create({
+        name: 'Bad Logo Tool',
+        slug: 'bad-logo-tool',
+        logoUrl: 'https://example.com/logo.png',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    } satisfies Partial<TRPCError>)
   })
 
   it('enforces provider-scoped listMine', async () => {

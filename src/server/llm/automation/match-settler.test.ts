@@ -173,7 +173,7 @@ describe('settleExpiredMatches', () => {
     expect(settledMatch?.totalPrompts).toBe(2)
   })
 
-  it('does not settle non-expired matches or matches with no period end', async () => {
+  it('does not settle non-expired matches', async () => {
     const database = getTestDb()
     const fixture = await seedFixture()
 
@@ -192,7 +192,7 @@ describe('settleExpiredMatches', () => {
         categoryId: fixture.category?.id ?? '',
         status: 'active',
         periodStart: '2026-02-21',
-        periodEnd: null,
+        periodEnd: '2026-03-10',
       },
     ])
 

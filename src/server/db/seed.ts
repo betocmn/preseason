@@ -265,13 +265,6 @@ const SUBCATEGORIES = [
 const TOOLS = [
   // Auth
   {
-    name: 'Supabase Auth',
-    slug: 'supabase-auth',
-    website: 'https://supabase.com/auth',
-    description: 'Open source auth with row-level security',
-    logoUrl: '/logos/supabase-auth.png',
-  },
-  {
     name: 'Clerk',
     slug: 'clerk',
     website: 'https://clerk.com',
@@ -294,13 +287,6 @@ const TOOLS = [
     logoUrl: '/logos/nextauth.png',
   },
   {
-    name: 'Firebase Auth',
-    slug: 'firebase-auth',
-    website: 'https://firebase.google.com/products/auth',
-    description: 'Google-backed authentication service',
-    logoUrl: '/logos/firebase-auth.png',
-  },
-  {
     name: 'Lucia',
     slug: 'lucia',
     website: 'https://lucia-auth.com',
@@ -313,6 +299,7 @@ const TOOLS = [
     slug: 'supabase',
     website: 'https://supabase.com',
     description: 'Open source Firebase alternative with Postgres',
+    aliases: ['Supabase Auth', 'Supabase Storage', 'Supabase Realtime'],
     logoUrl: '/logos/supabase.png',
   },
   {
@@ -334,6 +321,7 @@ const TOOLS = [
     slug: 'firebase',
     website: 'https://firebase.google.com',
     description: 'Google app development platform with Firestore',
+    aliases: ['Firebase Auth', 'Firebase Cloud Messaging', 'FCM'],
     logoUrl: '/logos/firebase.png',
   },
   {
@@ -448,13 +436,6 @@ const TOOLS = [
     logoUrl: '/logos/paypal.png',
   },
   // Storage
-  {
-    name: 'Supabase Storage',
-    slug: 'supabase-storage',
-    website: 'https://supabase.com/storage',
-    description: 'S3-compatible object storage',
-    logoUrl: '/logos/supabase-storage.png',
-  },
   {
     name: 'Cloudinary',
     slug: 'cloudinary',
@@ -705,7 +686,7 @@ const TOOLS = [
     aliases: ['HuggingFace'],
     logoUrl: '/logos/hugging-face.png',
   },
-  // Realtime
+  // Realtime / WebSocket
   {
     name: 'Pusher',
     slug: 'pusher',
@@ -719,13 +700,6 @@ const TOOLS = [
     website: 'https://ably.com',
     description: 'Realtime messaging platform',
     logoUrl: '/logos/ably.png',
-  },
-  {
-    name: 'Supabase Realtime',
-    slug: 'supabase-realtime',
-    website: 'https://supabase.com/realtime',
-    description: 'Realtime Postgres changes over WebSocket',
-    logoUrl: '/logos/supabase-realtime.png',
   },
   {
     name: 'Socket.io',
@@ -890,14 +864,6 @@ const TOOLS = [
     description: 'Push notification service',
     logoUrl: '/logos/onesignal.png',
   },
-  {
-    name: 'Firebase Cloud Messaging',
-    slug: 'firebase-cloud-messaging',
-    website: 'https://firebase.google.com/products/cloud-messaging',
-    description: 'Cross-platform messaging by Google',
-    aliases: ['FCM'],
-    logoUrl: '/logos/firebase-cloud-messaging.png',
-  },
 ]
 
 // Map tool slugs to their category slugs (with isPrimary flag)
@@ -907,11 +873,9 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   isPrimary: boolean
 }> = [
   // Auth
-  { toolSlug: 'supabase-auth', categorySlug: 'auth', isPrimary: true },
   { toolSlug: 'clerk', categorySlug: 'auth', isPrimary: true },
   { toolSlug: 'auth0', categorySlug: 'auth', isPrimary: true },
   { toolSlug: 'nextauth', categorySlug: 'auth', isPrimary: true },
-  { toolSlug: 'firebase-auth', categorySlug: 'auth', isPrimary: true },
   { toolSlug: 'lucia', categorySlug: 'auth', isPrimary: true },
   // Database
   { toolSlug: 'supabase', categorySlug: 'database', isPrimary: true },
@@ -937,7 +901,6 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'lemonsqueezy', categorySlug: 'payments', isPrimary: true },
   { toolSlug: 'paypal', categorySlug: 'payments', isPrimary: true },
   // Storage
-  { toolSlug: 'supabase-storage', categorySlug: 'storage', isPrimary: true },
   { toolSlug: 'cloudinary', categorySlug: 'storage', isPrimary: true },
   { toolSlug: 'uploadthing', categorySlug: 'storage', isPrimary: true },
   { toolSlug: 'aws-s3', categorySlug: 'storage', isPrimary: true },
@@ -981,7 +944,6 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   // Realtime
   { toolSlug: 'pusher', categorySlug: 'realtime', isPrimary: true },
   { toolSlug: 'ably', categorySlug: 'realtime', isPrimary: true },
-  { toolSlug: 'supabase-realtime', categorySlug: 'realtime', isPrimary: true },
   { toolSlug: 'socket-io', categorySlug: 'realtime', isPrimary: true },
   // Search
   { toolSlug: 'algolia', categorySlug: 'search', isPrimary: true },
@@ -1010,7 +972,6 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   // Notifications
   { toolSlug: 'novu', categorySlug: 'notifications', isPrimary: true },
   { toolSlug: 'onesignal', categorySlug: 'notifications', isPrimary: true },
-  { toolSlug: 'firebase-cloud-messaging', categorySlug: 'notifications', isPrimary: true },
   // Cross-category assignments (tools that span multiple categories)
   { toolSlug: 'supabase', categorySlug: 'auth', isPrimary: false },
   { toolSlug: 'supabase', categorySlug: 'storage', isPrimary: false },
@@ -1018,6 +979,7 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'firebase', categorySlug: 'auth', isPrimary: false },
   { toolSlug: 'firebase', categorySlug: 'storage', isPrimary: false },
   { toolSlug: 'firebase', categorySlug: 'realtime', isPrimary: false },
+  { toolSlug: 'firebase', categorySlug: 'notifications', isPrimary: false },
   { toolSlug: 'vercel', categorySlug: 'ci-cd', isPrimary: false },
 ]
 

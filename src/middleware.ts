@@ -8,6 +8,13 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // Redirect /admin to /beto-admin (actual URL)
+  if (pathname.startsWith('/admin')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace(/^\/admin/, '/beto-admin')
+    return NextResponse.redirect(url)
+  }
+
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
 
   if (!user && !isPublicRoute) {
