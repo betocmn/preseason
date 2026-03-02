@@ -11,7 +11,7 @@ import {
 import { cn } from '~/lib/utils'
 
 type RankingItem = {
-  tool: { id: string; name: string; slug: string }
+  tool: { id: string; name: string; slug: string; logoUrl?: string | null }
   recommendationCount: number
   recommendationRate: number
   trend: number
@@ -47,7 +47,11 @@ export function RankingTable({ items, showCategoryCoverage, className }: Ranking
             <TableRow key={item.tool.id}>
               <TableCell className="font-medium text-muted-foreground">{index + 1}</TableCell>
               <TableCell>
-                <ToolBadge name={item.tool.name} slug={item.tool.slug} />
+                <ToolBadge
+                  name={item.tool.name}
+                  slug={item.tool.slug}
+                  logoUrl={item.tool.logoUrl}
+                />
               </TableCell>
               <TableCell className="text-right font-medium">
                 {(item.recommendationRate * 100).toFixed(1)}%

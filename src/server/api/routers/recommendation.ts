@@ -96,6 +96,7 @@ export const recommendationRouter = createTRPCRouter({
           toolId: tools.id,
           toolName: tools.name,
           toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
           categoryId: subcategories.id,
           categoryName: subcategories.name,
           categorySlug: subcategories.slug,
@@ -133,6 +134,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.toolId,
             name: row.toolName,
             slug: row.toolSlug,
+            logoUrl: row.toolLogoUrl,
           },
           category: {
             id: row.categoryId,
@@ -193,6 +195,7 @@ export const recommendationRouter = createTRPCRouter({
           toolId: tools.id,
           toolName: tools.name,
           toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
           categoryId: subcategories.id,
           categoryName: subcategories.name,
           categorySlug: subcategories.slug,
@@ -243,6 +246,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.toolId,
             name: row.toolName,
             slug: row.toolSlug,
+            logoUrl: row.toolLogoUrl,
           },
           recommendationCount,
           categoryTotal,
@@ -298,6 +302,7 @@ export const recommendationRouter = createTRPCRouter({
           toolId: tools.id,
           toolName: tools.name,
           toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
           createdAt: recommendations.createdAt,
         })
         .from(recommendations)
@@ -315,12 +320,20 @@ export const recommendationRouter = createTRPCRouter({
 
       const currentCounts = new Map<string, number>()
       const previousCounts = new Map<string, number>()
-      const toolMeta = new Map<string, { id: string; name: string; slug: string }>()
+      const toolMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; logoUrl: string | null }
+      >()
       let currentTotal = 0
       let previousTotal = 0
 
       for (const row of rows) {
-        toolMeta.set(row.toolId, { id: row.toolId, name: row.toolName, slug: row.toolSlug })
+        toolMeta.set(row.toolId, {
+          id: row.toolId,
+          name: row.toolName,
+          slug: row.toolSlug,
+          logoUrl: row.toolLogoUrl,
+        })
         if (row.createdAt >= currentStart) {
           currentCounts.set(row.toolId, (currentCounts.get(row.toolId) ?? 0) + 1)
           currentTotal += 1
