@@ -130,6 +130,44 @@ async function buildBreakdown(
 }
 
 export const matchRouter = createTRPCRouter({
+  listAll: protectedProcedure
+    .input(
+      paginationInputSchema.extend({
+        status: z.enum(['active', 'settled', 'archived']).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const where = input.status ? eq(matches.status, input.status) : undefined
+
+      const countRows = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(matches)
+        .where(where)
+      const total = Number(countRows[0]?.count ?? 0)
+
+      const items = await ctx.db.query.matches.findMany({
+        where,
+        orderBy: [desc(matches.startedAt)],
+        limit: input.limit,
+        offset: input.offset,
+        with: {
+          toolA: true,
+          toolB: true,
+          category: true,
+          winner: true,
+        },
+      })
+
+      return {
+        items,
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      }
+    }),
+
   listActive: publicProcedure
     .input(
       z
