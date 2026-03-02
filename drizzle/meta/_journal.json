@@ -8,6 +8,13 @@
       "when": 1772365478088,
       "tag": "0000_skinny_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772422360186,
+      "tag": "0001_bizarre_reavers",
+      "breakpoints": true
     }
   ]
 }

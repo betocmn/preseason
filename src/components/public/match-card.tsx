@@ -14,7 +14,7 @@ type MatchCardProps = {
   toolBScore: number
   winnerToolId: string | null
   periodStart: string
-  periodEnd: string | null
+  periodEnd: string
   className?: string
 }
 
@@ -72,8 +72,7 @@ export function MatchCard({
           )}
 
           <div className="mt-2 text-xs text-muted-foreground">
-            {periodStart}
-            {periodEnd ? ` - ${periodEnd}` : ' - ongoing'}
+            {periodStart} - {periodEnd}
           </div>
         </CardContent>
       </Link>
