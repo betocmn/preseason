@@ -102,7 +102,12 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                 return (
                   <div key={tool.id} className="flex items-center gap-3">
                     <div className="w-28 shrink-0">
-                      <ToolBadge name={tool.name} slug={tool.slug} logoUrl={tool.logoUrl} size="sm" />
+                      <ToolBadge
+                        name={tool.name}
+                        slug={tool.slug}
+                        logoUrl={tool.logoUrl}
+                        size="sm"
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -128,6 +133,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
             <div className="mt-4 flex items-center justify-center gap-1.5">
               {prompts.map((_, i) => (
                 <button
+                  type="button"
                   key={prompts[i]?.id ?? i}
                   onClick={() => setCurrentIndex(i)}
                   className={cn(

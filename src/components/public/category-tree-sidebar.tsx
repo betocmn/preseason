@@ -61,6 +61,7 @@ export function CategoryTreeSidebar({ groups, section, className }: CategoryTree
             <div key={group.id}>
               <div className="flex items-center">
                 <button
+                  type="button"
                   onClick={() => toggleGroup(group.slug)}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
@@ -136,7 +137,7 @@ function deriveActiveGroup(
 ): string {
   if (section === 'rankings') {
     const match = pathname.match(/^\/rankings\/([^/]+)/)
-    if (match) return match[1]
+    if (match?.[1]) return match[1]
     return DEFAULT_GROUP_SLUG
   }
 

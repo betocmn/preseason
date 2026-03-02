@@ -53,13 +53,13 @@ export function RankingTable({ items, showCategoryCoverage, className }: Ranking
                   logoUrl={item.tool.logoUrl}
                 />
               </TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell className="font-mono-data text-right font-medium">
                 {(item.recommendationRate * 100).toFixed(1)}%
               </TableCell>
               <TableCell className="text-right">
                 <TrendIndicator value={item.trend} size="sm" />
               </TableCell>
-              <TableCell className="hidden text-right md:table-cell">
+              <TableCell className="font-mono-data hidden text-right md:table-cell">
                 {(item.consistencyScore * 100).toFixed(0)}%
               </TableCell>
               {showCategoryCoverage && (

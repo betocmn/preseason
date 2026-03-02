@@ -29,7 +29,7 @@ export default async function TrendingPage() {
 
   return (
     <div className="container max-w-4xl py-8">
-      <h1 className="mb-2 text-2xl font-bold">Trending Tools</h1>
+      <h1 className="mb-2 text-xl font-bold tracking-tight">Trending Tools</h1>
       <p className="mb-6 text-sm text-muted-foreground">
         Tools gaining or losing momentum over the past 7 days compared to the prior 7 days.
       </p>
@@ -57,10 +57,10 @@ export default async function TrendingPage() {
                       logoUrl={item.tool.logoUrl}
                     />
                   </TableCell>
-                  <TableCell className="text-right font-medium">
+                  <TableCell className="font-mono-data text-right font-medium">
                     {(item.current.rate * 100).toFixed(1)}%
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="font-mono-data text-right text-muted-foreground">
                     {(item.previous.rate * 100).toFixed(1)}%
                   </TableCell>
                   <TableCell className="text-right">
