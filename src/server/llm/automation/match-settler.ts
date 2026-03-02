@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, lt, lte } from 'drizzle-orm'
+import { and, eq, gte, inArray, lt, lte } from 'drizzle-orm'
 import { db } from '~/server/db'
 import { matches, recommendations, runResults } from '~/server/db/schema'
 
@@ -42,20 +42,12 @@ export async function settleExpiredMatches(
   const today = toDateString(now())
 
   const activeExpiredMatches = await database.query.matches.findMany({
-    where: and(
-      eq(matches.status, 'active'),
-      isNotNull(matches.periodEnd),
-      lt(matches.periodEnd, today),
-    ),
+    where: and(eq(matches.status, 'active'), lt(matches.periodEnd, today)),
   })
 
   const settled: SettledMatchResult[] = []
 
   for (const match of activeExpiredMatches) {
-    if (!match.periodEnd) {
-      continue
-    }
-
     const rows = await database
       .select({
         toolId: recommendations.toolId,

@@ -57,10 +57,10 @@ const TOOL_WEIGHTS: Record<string, Record<string, number>> = {
   auth: {
     clerk: 0.35,
     nextauth: 0.25,
-    'supabase-auth': 0.2,
+    supabase: 0.2,
     auth0: 0.1,
     lucia: 0.07,
-    'firebase-auth': 0.03,
+    firebase: 0.03,
   },
   database: {
     supabase: 0.3,
@@ -77,7 +77,7 @@ const TOOL_WEIGHTS: Record<string, Record<string, number>> = {
     'cloudflare-r2': 0.3,
     uploadthing: 0.25,
     'aws-s3': 0.2,
-    'supabase-storage': 0.15,
+    supabase: 0.15,
     cloudinary: 0.1,
   },
   hosting: {
@@ -104,11 +104,11 @@ const TOOL_WEIGHTS: Record<string, Record<string, number>> = {
   analytics: { posthog: 0.4, plausible: 0.3, mixpanel: 0.2, 'google-analytics': 0.1 },
   monitoring: { sentry: 0.6, datadog: 0.25, logrocket: 0.15 },
   ai: { openai: 0.4, anthropic: 0.35, replicate: 0.15, 'hugging-face': 0.1 },
-  realtime: { 'supabase-realtime': 0.35, pusher: 0.25, 'socket-io': 0.25, ably: 0.15 },
+  realtime: { supabase: 0.35, pusher: 0.25, 'socket-io': 0.25, ably: 0.15 },
   testing: { vitest: 0.45, playwright: 0.25, jest: 0.2, cypress: 0.1 },
   'ci-cd': { 'github-actions': 0.6, 'vercel-ci': 0.25, circleci: 0.15 },
   jobs: { inngest: 0.35, 'trigger-dev': 0.35, bullmq: 0.2, quirrel: 0.1 },
-  notifications: { novu: 0.4, onesignal: 0.35, 'firebase-cloud-messaging': 0.25 },
+  notifications: { novu: 0.4, onesignal: 0.35, firebase: 0.25 },
 }
 
 const REASONING_TEMPLATES = [
@@ -387,8 +387,8 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
     },
     {
       catSlug: 'auth',
-      toolASlugs: ['supabase-auth'],
-      toolBSlugs: ['firebase-auth'],
+      toolASlugs: ['supabase'],
+      toolBSlugs: ['firebase'],
       status: 'settled',
       daysAgo: 25,
     },
@@ -471,10 +471,7 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
     // For settled matches, pick the winner
     const winnerId = toolAScore > toolBScore ? toolAId : toolBId
 
-    const periodEnd =
-      def.status === 'settled'
-        ? dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
-        : null
+    const periodEnd = dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
 
     await db.insert(schema.matches).values({
       toolAId,

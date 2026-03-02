@@ -17,16 +17,11 @@ function toDateString(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
-function getMatchRange(periodStart: string, periodEnd: string | null, settledAt: Date | null) {
+function getMatchRange(periodStart: string, periodEnd: string, settledAt: Date | null) {
   const start = new Date(`${periodStart}T00:00:00.000Z`)
-  if (periodEnd) {
-    const periodEndAt = new Date(`${periodEnd}T23:59:59.999Z`)
-    if (!settledAt) return { start, end: periodEndAt }
-    return { start, end: periodEndAt < settledAt ? periodEndAt : settledAt }
-  }
-
-  const end = settledAt ?? new Date()
-  return { start, end }
+  const periodEndAt = new Date(`${periodEnd}T23:59:59.999Z`)
+  if (!settledAt) return { start, end: periodEndAt }
+  return { start, end: periodEndAt < settledAt ? periodEndAt : settledAt }
 }
 
 async function buildBreakdown(
@@ -130,6 +125,44 @@ async function buildBreakdown(
 }
 
 export const matchRouter = createTRPCRouter({
+  listAll: protectedProcedure
+    .input(
+      paginationInputSchema.extend({
+        status: z.enum(['active', 'settled', 'archived']).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const where = input.status ? eq(matches.status, input.status) : undefined
+
+      const countRows = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(matches)
+        .where(where)
+      const total = Number(countRows[0]?.count ?? 0)
+
+      const items = await ctx.db.query.matches.findMany({
+        where,
+        orderBy: [desc(matches.startedAt)],
+        limit: input.limit,
+        offset: input.offset,
+        with: {
+          toolA: true,
+          toolB: true,
+          category: true,
+          winner: true,
+        },
+      })
+
+      return {
+        items,
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      }
+    }),
+
   listActive: publicProcedure
     .input(
       z
@@ -248,7 +281,7 @@ export const matchRouter = createTRPCRouter({
         toolBId: z.string().uuid(),
         categoryId: z.string().uuid(),
         periodStart: z.coerce.date(),
-        periodEnd: z.coerce.date().optional(),
+        periodEnd: z.coerce.date(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -260,7 +293,7 @@ export const matchRouter = createTRPCRouter({
           message: 'Match tools must be different',
         })
       }
-      if (input.periodEnd && input.periodEnd < input.periodStart) {
+      if (input.periodEnd < input.periodStart) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Match period end must be on or after period start',
@@ -281,7 +314,7 @@ export const matchRouter = createTRPCRouter({
           status: 'active',
           startedAt: new Date(),
           periodStart: toDateString(input.periodStart),
-          periodEnd: input.periodEnd ? toDateString(input.periodEnd) : null,
+          periodEnd: toDateString(input.periodEnd),
         })
         .returning()
 
@@ -318,8 +351,7 @@ export const matchRouter = createTRPCRouter({
       }
 
       const settledAt = new Date()
-      const periodEnd = match.periodEnd ?? toDateString(settledAt)
-      const breakdown = await buildBreakdown(ctx.db, { ...match, periodEnd, settledAt })
+      const breakdown = await buildBreakdown(ctx.db, { ...match, settledAt })
       const winnerToolId =
         breakdown.totals.toolA === breakdown.totals.toolB
           ? null
@@ -332,7 +364,6 @@ export const matchRouter = createTRPCRouter({
         .set({
           status: 'settled',
           settledAt,
-          periodEnd,
           toolAScore: breakdown.totals.toolA,
           toolBScore: breakdown.totals.toolB,
           totalPrompts: breakdown.totals.prompts,
