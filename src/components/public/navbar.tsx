@@ -19,7 +19,6 @@ type NavbarProps = {
 }
 
 const navLinks = [
-  { href: '/feed', label: 'Feed' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/matches', label: 'Matches' },
   { href: '/critics', label: 'Critics' },

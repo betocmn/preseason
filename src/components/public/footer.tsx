@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 const footerLinks = [
   { href: '/feed', label: 'Feed' },
+  { href: '/trending', label: 'Trending' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/matches', label: 'Matches' },
   { href: '/critics', label: 'Critics' },
