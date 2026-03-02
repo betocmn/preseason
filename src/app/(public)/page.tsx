@@ -17,8 +17,8 @@ export default async function HomePage() {
     <div className="container py-8">
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
-        <section className="grid items-center gap-10 lg:grid-cols-[2fr_3fr]">
-          <div className="rounded-lg border border-border/50 bg-card/50 px-6 py-8 backdrop-blur-sm lg:py-10">
+        <section className="grid items-stretch gap-10 lg:grid-cols-[2fr_3fr]">
+          <div className="flex flex-col justify-center rounded-lg border border-border/50 bg-card/50 px-6 py-8 backdrop-blur-sm">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
             </h1>
@@ -28,25 +28,14 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-muted-foreground">Latest Prompts</h2>
-              <Link
-                href="/prompts"
-                className="text-xs text-muted-foreground/70 hover:text-foreground"
-              >
-                View all
-              </Link>
-            </div>
-            {promptsWithTools.length > 0 ? (
-              <PromptCarousel prompts={promptsWithTools} />
-            ) : (
-              <EmptyState
-                title="No prompts yet"
-                description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
-              />
-            )}
-          </div>
+          {promptsWithTools.length > 0 ? (
+            <PromptCarousel prompts={promptsWithTools} />
+          ) : (
+            <EmptyState
+              title="No prompts yet"
+              description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
+            />
+          )}
         </section>
 
         {/* Active Matches */}
