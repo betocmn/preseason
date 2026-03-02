@@ -82,6 +82,19 @@ async function getToolWithCategories(db: Database, toolId: string) {
 }
 
 export const toolRouter = createTRPCRouter({
+  getById: publicProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const tool = await getToolWithCategories(ctx.db, input.id)
+      if (!tool) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool not found',
+        })
+      }
+      return tool
+    }),
+
   list: publicProcedure
     .input(
       paginationInputSchema.extend({
