@@ -38,7 +38,9 @@ export function PercentageBar({
           )}
           style={{ width: `${Math.max(pctA, 5)}%` }}
         >
-          <span className={cn('font-medium text-chart-a-foreground', textClass)}>{pctA}%</span>
+          <span className={cn('font-mono-data font-medium text-chart-a-foreground', textClass)}>
+            {pctA}%
+          </span>
         </div>
         <div
           className={cn(
@@ -47,7 +49,9 @@ export function PercentageBar({
           )}
           style={{ width: `${Math.max(pctB, 5)}%` }}
         >
-          <span className={cn('font-medium text-chart-b-foreground', textClass)}>{pctB}%</span>
+          <span className={cn('font-mono-data font-medium text-chart-b-foreground', textClass)}>
+            {pctB}%
+          </span>
         </div>
       </div>
     </div>

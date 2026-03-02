@@ -14,10 +14,7 @@ export const metadata: Metadata = {
 
 export default async function CriticsPage() {
   const caller = await api()
-  const [critics, groups] = await Promise.all([
-    caller.critic.list(),
-    caller.category.listGroups(),
-  ])
+  const [critics, groups] = await Promise.all([caller.critic.list(), caller.category.listGroups()])
 
   return (
     <SidebarLayout groups={groups} section="critics">

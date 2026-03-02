@@ -35,7 +35,13 @@ export function MatchCard({
   const isActive = status === 'active'
 
   return (
-    <Card className={cn('transition-colors hover:bg-accent/50', className)}>
+    <Card
+      className={cn(
+        'transition-colors hover:bg-accent/50',
+        isActive && 'border-l-2 border-l-trend-up',
+        className,
+      )}
+    >
       <Link href={`/matches/${id}`}>
         <CardContent className="p-4">
           <div className="mb-2 flex items-center justify-between">
