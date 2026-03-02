@@ -20,7 +20,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background">
       <div className="container flex h-14 items-center gap-6">
-        <Link href="/" className="mr-4 text-lg font-bold tracking-tight">
+        <Link href="/" className="mr-4 text-lg font-bold tracking-tight text-primary">
           Preseason
         </Link>
 
