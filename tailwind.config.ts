@@ -51,6 +51,18 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        chart: {
+          a: {
+            DEFAULT: 'hsl(var(--chart-a))',
+            foreground: 'hsl(var(--chart-a-foreground))',
+            muted: 'hsl(var(--chart-a-muted))',
+          },
+          b: {
+            DEFAULT: 'hsl(var(--chart-b))',
+            foreground: 'hsl(var(--chart-b-foreground))',
+            muted: 'hsl(var(--chart-b-muted))',
+          },
+        },
         trend: {
           up: {
             DEFAULT: 'hsl(var(--trend-up))',
