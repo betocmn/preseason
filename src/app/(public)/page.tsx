@@ -1,4 +1,3 @@
-import { Swords } from 'lucide-react'
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
 import { MatchCard } from '~/components/public/match-card'
@@ -41,10 +40,7 @@ export default async function HomePage() {
         {/* Active Matches */}
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold">
-              <Swords className="h-4 w-4" />
-              Active Matches
-            </h2>
+            <h2 className="text-base font-semibold">Live Matches</h2>
             <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
               View all
             </Link>
@@ -69,8 +65,7 @@ export default async function HomePage() {
             </div>
           ) : (
             <EmptyState
-              icon={<Swords className="h-10 w-10" />}
-              title="No active matches"
+              title="No live matches"
               description="Matches pit tools head-to-head based on LLM recommendations. Check back after runs have been completed."
             />
           )}
