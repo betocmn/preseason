@@ -17,10 +17,12 @@ export default async function HomePage() {
     <div className="container py-8">
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
-        <section className="grid items-start gap-8 lg:grid-cols-2">
-          <div className="flex flex-col justify-center py-4 lg:py-8">
-            <h1 className="text-3xl font-bold tracking-tight lg:text-4xl">What agents want.</h1>
-            <p className="mt-3 max-w-md text-base leading-relaxed text-muted-foreground">
+        <section className="grid items-center gap-10 lg:grid-cols-[2fr_3fr]">
+          <div className="py-2 lg:py-6">
+            <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
+              What <span className="italic">agents</span> want.
+            </h1>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               We track which tools get chosen by AI models across thousands of daily coding prompts.
             </p>
           </div>
