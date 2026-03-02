@@ -8,39 +8,19 @@ import { Button } from '~/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '~/components/ui/sheet'
 import { cn } from '~/lib/utils'
 
-type CategoryGroup = {
-  id: string
-  name: string
-  slug: string
-}
-
-type NavbarProps = {
-  categoryGroups: CategoryGroup[]
-}
-
 const navLinks = [
+  { href: '/matches', label: 'Live Matches' },
   { href: '/rankings', label: 'Rankings' },
-  { href: '/matches', label: 'Matches' },
   { href: '/critics', label: 'Critics' },
 ]
 
-const DEFAULT_GROUP_SLUG = 'devtools'
-
-export function Navbar({ categoryGroups }: NavbarProps) {
+export function Navbar() {
   const pathname = usePathname()
 
-  const isRankingsSection = pathname === '/rankings' || pathname.startsWith('/rankings/')
-
-  const activeGroupSlug =
-    categoryGroups.find(
-      (c) => pathname === `/rankings/${c.slug}` || pathname.startsWith(`/rankings/${c.slug}/`),
-    )?.slug ?? (isRankingsSection ? DEFAULT_GROUP_SLUG : undefined)
-
   return (
-    <header className="sticky top-0 z-50 bg-background">
-      {/* Main nav bar */}
-      <div className="container flex h-16 items-center gap-6">
-        <Link href="/" className="mr-4 text-xl font-bold tracking-tight">
+    <header className="sticky top-0 z-50 border-b bg-background">
+      <div className="container flex h-14 items-center gap-6">
+        <Link href="/" className="mr-4 text-lg font-bold tracking-tight">
           Preseason
         </Link>
 
@@ -50,7 +30,7 @@ export function Navbar({ categoryGroups }: NavbarProps) {
               key={link.href}
               href={link.href}
               className={cn(
-                'px-3 py-1.5 text-[15px] font-semibold uppercase tracking-wide transition-colors hover:text-foreground',
+                'px-3 py-1.5 text-sm font-medium transition-colors hover:text-foreground',
                 pathname.startsWith(link.href) ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -82,25 +62,11 @@ export function Navbar({ categoryGroups }: NavbarProps) {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      'rounded-md px-3 py-2 text-sm font-semibold uppercase tracking-wide transition-colors hover:bg-accent',
+                      'rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
                       pathname.startsWith(link.href) && 'bg-accent',
                     )}
                   >
                     {link.label}
-                  </Link>
-                ))}
-                <hr className="my-2" />
-                <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Categories</p>
-                {categoryGroups.map((group) => (
-                  <Link
-                    key={group.slug}
-                    href={`/rankings/${group.slug}`}
-                    className={cn(
-                      'rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent',
-                      activeGroupSlug === group.slug && 'bg-accent font-medium',
-                    )}
-                  >
-                    {group.name}
                   </Link>
                 ))}
                 <hr className="my-2" />
@@ -113,28 +79,6 @@ export function Navbar({ categoryGroups }: NavbarProps) {
               </nav>
             </SheetContent>
           </Sheet>
-        </div>
-      </div>
-
-      {/* Category sub-nav — Kalshi-style horizontal tabs */}
-      <div className="border-b">
-        <div className="container">
-          <nav className="hidden items-center gap-0 overflow-x-auto md:flex">
-            {categoryGroups.map((group) => (
-              <Link
-                key={group.slug}
-                href={`/rankings/${group.slug}`}
-                className={cn(
-                  'whitespace-nowrap border-b-2 px-4 py-2 text-[13px] transition-colors hover:text-foreground',
-                  activeGroupSlug === group.slug
-                    ? 'border-foreground font-medium text-foreground'
-                    : 'border-transparent text-muted-foreground',
-                )}
-              >
-                {group.name}
-              </Link>
-            ))}
-          </nav>
         </div>
       </div>
     </header>
