@@ -269,18 +269,21 @@ const TOOLS = [
     slug: 'supabase-auth',
     website: 'https://supabase.com/auth',
     description: 'Open source auth with row-level security',
+    logoUrl: '/logos/supabase-auth.png',
   },
   {
     name: 'Clerk',
     slug: 'clerk',
     website: 'https://clerk.com',
     description: 'Drop-in authentication and user management',
+    logoUrl: '/logos/clerk.png',
   },
   {
     name: 'Auth0',
     slug: 'auth0',
     website: 'https://auth0.com',
     description: 'Flexible authentication and authorization platform',
+    logoUrl: '/logos/auth0.png',
   },
   {
     name: 'NextAuth.js',
@@ -288,18 +291,21 @@ const TOOLS = [
     website: 'https://next-auth.js.org',
     description: 'Authentication for Next.js',
     aliases: ['next-auth', 'Auth.js', 'authjs'],
+    logoUrl: '/logos/nextauth.png',
   },
   {
     name: 'Firebase Auth',
     slug: 'firebase-auth',
     website: 'https://firebase.google.com/products/auth',
     description: 'Google-backed authentication service',
+    logoUrl: '/logos/firebase-auth.png',
   },
   {
     name: 'Lucia',
     slug: 'lucia',
     website: 'https://lucia-auth.com',
     description: 'Lightweight auth library for TypeScript',
+    logoUrl: '/logos/lucia.png',
   },
   // Database
   {
@@ -307,36 +313,42 @@ const TOOLS = [
     slug: 'supabase',
     website: 'https://supabase.com',
     description: 'Open source Firebase alternative with Postgres',
+    logoUrl: '/logos/supabase.png',
   },
   {
     name: 'PlanetScale',
     slug: 'planetscale',
     website: 'https://planetscale.com',
     description: 'Serverless MySQL platform',
+    logoUrl: '/logos/planetscale.png',
   },
   {
     name: 'Neon',
     slug: 'neon',
     website: 'https://neon.tech',
     description: 'Serverless Postgres with branching',
+    logoUrl: '/logos/neon.png',
   },
   {
     name: 'Firebase',
     slug: 'firebase',
     website: 'https://firebase.google.com',
     description: 'Google app development platform with Firestore',
+    logoUrl: '/logos/firebase.png',
   },
   {
     name: 'MongoDB Atlas',
     slug: 'mongodb-atlas',
     website: 'https://www.mongodb.com/atlas',
     description: 'Cloud-hosted MongoDB service',
+    logoUrl: '/logos/mongodb-atlas.png',
   },
   {
     name: 'Turso',
     slug: 'turso',
     website: 'https://turso.tech',
     description: 'Edge-hosted SQLite database',
+    logoUrl: '/logos/turso.png',
   },
   // ORM
   {
@@ -344,6 +356,7 @@ const TOOLS = [
     slug: 'prisma',
     website: 'https://prisma.io',
     description: 'Next-generation Node.js and TypeScript ORM',
+    logoUrl: '/logos/prisma.png',
   },
   {
     name: 'Drizzle',
@@ -351,18 +364,21 @@ const TOOLS = [
     website: 'https://orm.drizzle.team',
     description: 'TypeScript ORM with SQL-like syntax',
     aliases: ['drizzle-orm'],
+    logoUrl: '/logos/drizzle.png',
   },
   {
     name: 'Kysely',
     slug: 'kysely',
     website: 'https://kysely.dev',
     description: 'Type-safe SQL query builder for TypeScript',
+    logoUrl: '/logos/kysely.png',
   },
   {
     name: 'TypeORM',
     slug: 'typeorm',
     website: 'https://typeorm.io',
     description: 'ORM for TypeScript and JavaScript',
+    logoUrl: '/logos/typeorm.png',
   },
   // Email
   {
@@ -370,18 +386,21 @@ const TOOLS = [
     slug: 'resend',
     website: 'https://resend.com',
     description: 'Email API for developers',
+    logoUrl: '/logos/resend.png',
   },
   {
     name: 'SendGrid',
     slug: 'sendgrid',
     website: 'https://sendgrid.com',
     description: 'Email delivery and marketing platform',
+    logoUrl: '/logos/sendgrid.png',
   },
   {
     name: 'Postmark',
     slug: 'postmark',
     website: 'https://postmarkapp.com',
     description: 'Transactional email service',
+    logoUrl: '/logos/postmark.png',
   },
   {
     name: 'Amazon SES',
@@ -389,12 +408,14 @@ const TOOLS = [
     website: 'https://aws.amazon.com/ses',
     description: 'AWS email sending service',
     aliases: ['SES', 'AWS SES'],
+    logoUrl: '/logos/amazon-ses.png',
   },
   {
     name: 'Mailgun',
     slug: 'mailgun',
     website: 'https://www.mailgun.com',
     description: 'Email API service for developers',
+    logoUrl: '/logos/mailgun.png',
   },
   // Payments
   {
@@ -402,12 +423,14 @@ const TOOLS = [
     slug: 'stripe',
     website: 'https://stripe.com',
     description: 'Payment infrastructure for the internet',
+    logoUrl: '/logos/stripe.png',
   },
   {
     name: 'Paddle',
     slug: 'paddle',
     website: 'https://paddle.com',
     description: 'Payment platform for SaaS',
+    logoUrl: '/logos/paddle.png',
   },
   {
     name: 'LemonSqueezy',
@@ -415,12 +438,14 @@ const TOOLS = [
     website: 'https://lemonsqueezy.com',
     description: 'All-in-one payments for digital products',
     aliases: ['Lemon Squeezy'],
+    logoUrl: '/logos/lemonsqueezy.png',
   },
   {
     name: 'PayPal',
     slug: 'paypal',
     website: 'https://developer.paypal.com',
     description: 'Online payment system',
+    logoUrl: '/logos/paypal.png',
   },
   // Storage
   {
@@ -428,18 +453,21 @@ const TOOLS = [
     slug: 'supabase-storage',
     website: 'https://supabase.com/storage',
     description: 'S3-compatible object storage',
+    logoUrl: '/logos/supabase-storage.png',
   },
   {
     name: 'Cloudinary',
     slug: 'cloudinary',
     website: 'https://cloudinary.com',
     description: 'Media management and optimization',
+    logoUrl: '/logos/cloudinary.png',
   },
   {
     name: 'UploadThing',
     slug: 'uploadthing',
     website: 'https://uploadthing.com',
     description: 'File uploads for full-stack TypeScript apps',
+    logoUrl: '/logos/uploadthing.png',
   },
   {
     name: 'AWS S3',
@@ -447,12 +475,14 @@ const TOOLS = [
     website: 'https://aws.amazon.com/s3',
     description: 'Amazon Simple Storage Service',
     aliases: ['S3', 'Amazon S3'],
+    logoUrl: '/logos/aws-s3.png',
   },
   {
     name: 'Cloudflare R2',
     slug: 'cloudflare-r2',
     website: 'https://developers.cloudflare.com/r2',
     description: 'S3-compatible object storage with zero egress',
+    logoUrl: '/logos/cloudflare-r2.png',
   },
   // Hosting
   {
@@ -460,18 +490,21 @@ const TOOLS = [
     slug: 'vercel',
     website: 'https://vercel.com',
     description: 'Frontend deployment and serverless platform',
+    logoUrl: '/logos/vercel.png',
   },
   {
     name: 'Netlify',
     slug: 'netlify',
     website: 'https://netlify.com',
     description: 'Web development platform for modern sites',
+    logoUrl: '/logos/netlify.png',
   },
   {
     name: 'Railway',
     slug: 'railway',
     website: 'https://railway.app',
     description: 'Infrastructure platform for deployment',
+    logoUrl: '/logos/railway.png',
   },
   {
     name: 'Fly.io',
@@ -479,18 +512,21 @@ const TOOLS = [
     website: 'https://fly.io',
     description: 'Global application platform',
     aliases: ['Fly', 'flyio'],
+    logoUrl: '/logos/fly-io.png',
   },
   {
     name: 'Render',
     slug: 'render',
     website: 'https://render.com',
     description: 'Cloud application hosting',
+    logoUrl: '/logos/render.png',
   },
   {
     name: 'Cloudflare Pages',
     slug: 'cloudflare-pages',
     website: 'https://pages.cloudflare.com',
     description: 'JAMstack platform by Cloudflare',
+    logoUrl: '/logos/cloudflare-pages.png',
   },
   // Styling
   {
@@ -499,18 +535,21 @@ const TOOLS = [
     website: 'https://tailwindcss.com',
     description: 'Utility-first CSS framework',
     aliases: ['Tailwind', 'tailwindcss'],
+    logoUrl: '/logos/tailwind-css.png',
   },
   {
     name: 'Bootstrap',
     slug: 'bootstrap',
     website: 'https://getbootstrap.com',
     description: 'Popular CSS framework',
+    logoUrl: '/logos/bootstrap.png',
   },
   {
     name: 'Panda CSS',
     slug: 'panda-css',
     website: 'https://panda-css.com',
     description: 'CSS-in-JS with build-time generation',
+    logoUrl: '/logos/panda-css.png',
   },
   // UI Components
   {
@@ -519,6 +558,7 @@ const TOOLS = [
     website: 'https://ui.shadcn.com',
     description: 'Beautifully designed components built with Radix UI and Tailwind',
     aliases: ['shadcn', 'shadcnui'],
+    logoUrl: '/logos/shadcn-ui.png',
   },
   {
     name: 'Radix UI',
@@ -526,12 +566,14 @@ const TOOLS = [
     website: 'https://radix-ui.com',
     description: 'Unstyled, accessible UI primitives',
     aliases: ['Radix'],
+    logoUrl: '/logos/radix-ui.png',
   },
   {
     name: 'Chakra UI',
     slug: 'chakra-ui',
     website: 'https://chakra-ui.com',
     description: 'Simple, modular and accessible component library',
+    logoUrl: '/logos/chakra-ui.png',
   },
   {
     name: 'MUI',
@@ -539,6 +581,7 @@ const TOOLS = [
     website: 'https://mui.com',
     description: 'Material Design React components',
     aliases: ['Material UI', 'Material-UI'],
+    logoUrl: '/logos/mui.png',
   },
   {
     name: 'Ant Design',
@@ -546,12 +589,14 @@ const TOOLS = [
     website: 'https://ant.design',
     description: 'Enterprise-class UI design language',
     aliases: ['antd', 'AntDesign'],
+    logoUrl: '/logos/ant-design.png',
   },
   {
     name: 'Mantine',
     slug: 'mantine',
     website: 'https://mantine.dev',
     description: 'Full-featured React component library',
+    logoUrl: '/logos/mantine.png',
   },
   // API
   {
@@ -559,6 +604,7 @@ const TOOLS = [
     slug: 'trpc',
     website: 'https://trpc.io',
     description: 'End-to-end typesafe APIs for TypeScript',
+    logoUrl: '/logos/trpc.png',
   },
   {
     name: 'Apollo GraphQL',
@@ -566,12 +612,14 @@ const TOOLS = [
     website: 'https://www.apollographql.com',
     description: 'GraphQL implementation for JavaScript',
     aliases: ['Apollo', 'GraphQL'],
+    logoUrl: '/logos/apollo-graphql.png',
   },
   {
     name: 'Hono',
     slug: 'hono',
     website: 'https://hono.dev',
     description: 'Small, fast web framework for the edge',
+    logoUrl: '/logos/hono.png',
   },
   // Analytics
   {
@@ -579,18 +627,21 @@ const TOOLS = [
     slug: 'posthog',
     website: 'https://posthog.com',
     description: 'Open source product analytics',
+    logoUrl: '/logos/posthog.png',
   },
   {
     name: 'Plausible',
     slug: 'plausible',
     website: 'https://plausible.io',
     description: 'Privacy-friendly web analytics',
+    logoUrl: '/logos/plausible.png',
   },
   {
     name: 'Mixpanel',
     slug: 'mixpanel',
     website: 'https://mixpanel.com',
     description: 'Product analytics for user behavior',
+    logoUrl: '/logos/mixpanel.png',
   },
   {
     name: 'Google Analytics',
@@ -598,6 +649,7 @@ const TOOLS = [
     website: 'https://analytics.google.com',
     description: 'Web analytics service by Google',
     aliases: ['GA', 'GA4'],
+    logoUrl: '/logos/google-analytics.png',
   },
   // Monitoring
   {
@@ -605,18 +657,21 @@ const TOOLS = [
     slug: 'sentry',
     website: 'https://sentry.io',
     description: 'Application monitoring and error tracking',
+    logoUrl: '/logos/sentry.png',
   },
   {
     name: 'LogRocket',
     slug: 'logrocket',
     website: 'https://logrocket.com',
     description: 'Session replay and error tracking',
+    logoUrl: '/logos/logrocket.png',
   },
   {
     name: 'Datadog',
     slug: 'datadog',
     website: 'https://datadoghq.com',
     description: 'Cloud monitoring and observability',
+    logoUrl: '/logos/datadog.png',
   },
   // AI
   {
@@ -625,6 +680,7 @@ const TOOLS = [
     website: 'https://openai.com',
     description: 'AI models including GPT and DALL-E',
     aliases: ['GPT', 'ChatGPT'],
+    logoUrl: '/logos/openai.png',
   },
   {
     name: 'Anthropic',
@@ -632,12 +688,14 @@ const TOOLS = [
     website: 'https://anthropic.com',
     description: 'AI safety company building Claude',
     aliases: ['Claude'],
+    logoUrl: '/logos/anthropic.png',
   },
   {
     name: 'Replicate',
     slug: 'replicate',
     website: 'https://replicate.com',
     description: 'Run AI models via API',
+    logoUrl: '/logos/replicate.png',
   },
   {
     name: 'Hugging Face',
@@ -645,6 +703,7 @@ const TOOLS = [
     website: 'https://huggingface.co',
     description: 'Open source AI model hub',
     aliases: ['HuggingFace'],
+    logoUrl: '/logos/hugging-face.png',
   },
   // Realtime
   {
@@ -652,18 +711,21 @@ const TOOLS = [
     slug: 'pusher',
     website: 'https://pusher.com',
     description: 'Realtime messaging and event infrastructure',
+    logoUrl: '/logos/pusher.png',
   },
   {
     name: 'Ably',
     slug: 'ably',
     website: 'https://ably.com',
     description: 'Realtime messaging platform',
+    logoUrl: '/logos/ably.png',
   },
   {
     name: 'Supabase Realtime',
     slug: 'supabase-realtime',
     website: 'https://supabase.com/realtime',
     description: 'Realtime Postgres changes over WebSocket',
+    logoUrl: '/logos/supabase-realtime.png',
   },
   {
     name: 'Socket.io',
@@ -671,6 +733,7 @@ const TOOLS = [
     website: 'https://socket.io',
     description: 'Bidirectional event-based communication',
     aliases: ['SocketIO', 'socket.io'],
+    logoUrl: '/logos/socket-io.png',
   },
   // Search
   {
@@ -678,24 +741,28 @@ const TOOLS = [
     slug: 'algolia',
     website: 'https://algolia.com',
     description: 'AI-powered search and discovery',
+    logoUrl: '/logos/algolia.png',
   },
   {
     name: 'Typesense',
     slug: 'typesense',
     website: 'https://typesense.org',
     description: 'Open source search engine',
+    logoUrl: '/logos/typesense.png',
   },
   {
     name: 'Meilisearch',
     slug: 'meilisearch',
     website: 'https://meilisearch.com',
     description: 'Lightning-fast open source search engine',
+    logoUrl: '/logos/meilisearch.png',
   },
   {
     name: 'Elasticsearch',
     slug: 'elasticsearch',
     website: 'https://elastic.co',
     description: 'Distributed search and analytics engine',
+    logoUrl: '/logos/elasticsearch.png',
   },
   // Testing
   {
@@ -703,24 +770,28 @@ const TOOLS = [
     slug: 'vitest',
     website: 'https://vitest.dev',
     description: 'Vite-native unit testing framework',
+    logoUrl: '/logos/vitest.png',
   },
   {
     name: 'Jest',
     slug: 'jest',
     website: 'https://jestjs.io',
     description: 'JavaScript testing framework',
+    logoUrl: '/logos/jest.png',
   },
   {
     name: 'Playwright',
     slug: 'playwright',
     website: 'https://playwright.dev',
     description: 'End-to-end testing framework',
+    logoUrl: '/logos/playwright.png',
   },
   {
     name: 'Cypress',
     slug: 'cypress',
     website: 'https://cypress.io',
     description: 'End-to-end testing for web apps',
+    logoUrl: '/logos/cypress.png',
   },
   // CI/CD
   {
@@ -728,18 +799,21 @@ const TOOLS = [
     slug: 'github-actions',
     website: 'https://github.com/features/actions',
     description: 'CI/CD built into GitHub',
+    logoUrl: '/logos/github-actions.png',
   },
   {
     name: 'Vercel CI',
     slug: 'vercel-ci',
     website: 'https://vercel.com',
     description: 'Continuous deployment via Vercel',
+    logoUrl: '/logos/vercel-ci.png',
   },
   {
     name: 'CircleCI',
     slug: 'circleci',
     website: 'https://circleci.com',
     description: 'Continuous integration and delivery platform',
+    logoUrl: '/logos/circleci.png',
   },
   // Jobs
   {
@@ -747,6 +821,7 @@ const TOOLS = [
     slug: 'inngest',
     website: 'https://inngest.com',
     description: 'Durable functions and event-driven workflows',
+    logoUrl: '/logos/inngest.png',
   },
   {
     name: 'Trigger.dev',
@@ -754,18 +829,21 @@ const TOOLS = [
     website: 'https://trigger.dev',
     description: 'Background jobs for TypeScript',
     aliases: ['Trigger', 'triggerdev'],
+    logoUrl: '/logos/trigger-dev.png',
   },
   {
     name: 'BullMQ',
     slug: 'bullmq',
     website: 'https://bullmq.io',
     description: 'Node.js message queue based on Redis',
+    logoUrl: '/logos/bullmq.png',
   },
   {
     name: 'Quirrel',
     slug: 'quirrel',
     website: 'https://quirrel.dev',
     description: 'Job queueing for serverless',
+    logoUrl: '/logos/quirrel.png',
   },
   // CMS
   {
@@ -773,18 +851,21 @@ const TOOLS = [
     slug: 'sanity',
     website: 'https://sanity.io',
     description: 'Structured content platform',
+    logoUrl: '/logos/sanity.png',
   },
   {
     name: 'Contentful',
     slug: 'contentful',
     website: 'https://contentful.com',
     description: 'Headless content management',
+    logoUrl: '/logos/contentful.png',
   },
   {
     name: 'Strapi',
     slug: 'strapi',
     website: 'https://strapi.io',
     description: 'Open source headless CMS',
+    logoUrl: '/logos/strapi.png',
   },
   {
     name: 'Payload CMS',
@@ -792,6 +873,7 @@ const TOOLS = [
     website: 'https://payloadcms.com',
     description: 'TypeScript-first headless CMS',
     aliases: ['Payload'],
+    logoUrl: '/logos/payload-cms.png',
   },
   // Notifications
   {
@@ -799,12 +881,14 @@ const TOOLS = [
     slug: 'novu',
     website: 'https://novu.co',
     description: 'Open source notification infrastructure',
+    logoUrl: '/logos/novu.png',
   },
   {
     name: 'OneSignal',
     slug: 'onesignal',
     website: 'https://onesignal.com',
     description: 'Push notification service',
+    logoUrl: '/logos/onesignal.png',
   },
   {
     name: 'Firebase Cloud Messaging',
@@ -812,6 +896,7 @@ const TOOLS = [
     website: 'https://firebase.google.com/products/cloud-messaging',
     description: 'Cross-platform messaging by Google',
     aliases: ['FCM'],
+    logoUrl: '/logos/firebase-cloud-messaging.png',
   },
 ]
 
@@ -1245,6 +1330,7 @@ async function seedTools() {
     slug: t.slug,
     description: t.description,
     website: t.website,
+    logoUrl: t.logoUrl ?? null,
     aliases: t.aliases ?? null,
   }))
   await db.insert(schema.tools).values(toolValues).onConflictDoNothing()
