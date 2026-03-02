@@ -9,8 +9,8 @@
     --card-foreground: 210 11% 15%;
     --popover: 0 0% 100%;
     --popover-foreground: 210 11% 15%;
-    --primary: 164 97% 60%;
-    --primary-foreground: 164 50% 8%;
+    --primary: 228 55% 60%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 220 14% 96%;
     --secondary-foreground: 210 11% 15%;
     --muted: 220 14% 96%;
@@ -21,7 +21,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 220 6% 94%;
     --input: 220 8% 89%;
-    --ring: 164 97% 60%;
+    --ring: 228 55% 60%;
     --radius: 0.5rem;
 
     /* Trend colors — subtle, used sparingly */
@@ -49,8 +49,8 @@
     --card-foreground: 220 14% 96%;
     --popover: 220 13% 11%;
     --popover-foreground: 220 14% 96%;
-    --primary: 164 97% 65%;
-    --primary-foreground: 164 50% 8%;
+    --primary: 228 55% 65%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 220 13% 16%;
     --secondary-foreground: 220 14% 96%;
     --muted: 220 13% 16%;
@@ -61,7 +61,7 @@
     --destructive-foreground: 220 14% 96%;
     --border: 220 6% 15%;
     --input: 220 8% 20%;
-    --ring: 164 80% 55%;
+    --ring: 228 50% 55%;
 
     /* Trend colors — dark mode */
     --trend-up: 152 50% 45%;
