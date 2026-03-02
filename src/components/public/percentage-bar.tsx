@@ -34,22 +34,22 @@ export function PercentageBar({
         <div
           className={cn(
             'flex items-center justify-center transition-all',
-            pctA >= pctB ? 'bg-chart-a' : 'bg-chart-a-muted',
+            pctA >= pctB ? 'bg-muted-foreground/25' : 'bg-muted-foreground/15',
           )}
           style={{ width: `${Math.max(pctA, 5)}%` }}
         >
-          <span className={cn('font-mono-data font-medium text-chart-a-foreground', textClass)}>
+          <span className={cn('font-mono-data font-medium text-foreground', textClass)}>
             {pctA}%
           </span>
         </div>
         <div
           className={cn(
             'flex items-center justify-center transition-all',
-            pctB > pctA ? 'bg-chart-b' : 'bg-chart-b-muted',
+            pctB > pctA ? 'bg-muted-foreground/25' : 'bg-muted-foreground/15',
           )}
           style={{ width: `${Math.max(pctB, 5)}%` }}
         >
-          <span className={cn('font-mono-data font-medium text-chart-b-foreground', textClass)}>
+          <span className={cn('font-mono-data font-medium text-foreground', textClass)}>
             {pctB}%
           </span>
         </div>
