@@ -53,104 +53,115 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
-      <div className="flex items-center justify-between border-b px-5 py-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Latest Prompts</h2>
-        <Link href="/prompts" className="text-xs text-muted-foreground/70 hover:text-foreground">
-          View all
-        </Link>
-      </div>
-      <div className="flex-1 px-5 py-4">
-        <div className="mb-2 flex items-center gap-2">
-          <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
-            {formatLevel(current.level)}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {currentIndex + 1} of {prompts.length}
-          </span>
-        </div>
-        <h3 className="text-sm font-medium leading-snug">{current.title}</h3>
-        {current.description && (
-          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-            {current.description}
-          </p>
-        )}
-        <Link
-          href={`/prompts/${current.slug}`}
-          className="mt-1 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
-        >
-          Read full prompt...
-        </Link>
+      <div className="flex-1 p-5">
+        {/* Two-column: prompt text left, recommendations right */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          {/* Left: prompt content */}
+          <div className="min-w-0">
+            <div className="mb-2 flex items-center gap-2">
+              <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
+                {formatLevel(current.level)}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {currentIndex + 1} of {prompts.length}
+              </span>
+            </div>
+            <h3 className="text-sm font-medium leading-snug">{current.title}</h3>
+            {current.description && (
+              <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                {current.description}
+              </p>
+            )}
+            <Link
+              href={`/prompts/${current.slug}`}
+              className="mt-2 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
+            >
+              Read full prompt...
+            </Link>
+          </div>
 
-        {/* Top tools with compact bars */}
-        {current.topTools.length > 0 && (
-          <div className="mt-5 space-y-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Top recommendations
-            </p>
-            {current.topTools.map(({ tool, rate }) => {
-              const pct = rate * 100
+          {/* Right: top tools */}
+          {current.topTools.length > 0 && (
+            <div className="space-y-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Top recommendations
+              </p>
+              {current.topTools.map(({ tool, rate }) => {
+                const pct = rate * 100
 
-              return (
-                <div key={tool.id} className="flex items-center gap-3">
-                  <div className="w-28 shrink-0">
-                    <ToolBadge name={tool.name} slug={tool.slug} logoUrl={tool.logoUrl} size="sm" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-muted-foreground/30 transition-all"
-                        style={{ width: `${Math.max(pct, 3)}%` }}
+                return (
+                  <div key={tool.id} className="flex items-center gap-3">
+                    <div className="w-28 shrink-0">
+                      <ToolBadge
+                        name={tool.name}
+                        slug={tool.slug}
+                        logoUrl={tool.logoUrl}
+                        size="sm"
                       />
                     </div>
-                    <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                      {pct.toFixed(1)}%
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-muted-foreground/30 transition-all"
+                          style={{ width: `${Math.max(pct, 3)}%` }}
+                        />
+                      </div>
+                      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Navigation: arrows around dots */}
-        {prompts.length > 1 && (
-          <div className="mt-5 flex items-center justify-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={!hasPrev}
-              onClick={goPrev}
-              className="h-6 w-6 text-muted-foreground"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <div className="flex items-center gap-1.5">
-              {prompts.map((_, i) => (
-                <button
-                  type="button"
-                  key={prompts[i]?.id ?? i}
-                  onClick={() => setCurrentIndex(i)}
-                  className={cn(
-                    'h-1.5 rounded-full transition-all',
-                    i === currentIndex
-                      ? 'w-4 bg-muted-foreground/50'
-                      : 'w-1.5 bg-muted-foreground/20',
-                  )}
-                />
-              ))}
+                )
+              })}
+              <Link
+                href="/prompts"
+                className="mt-1 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
+              >
+                View all prompts
+              </Link>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={!hasNext}
-              onClick={goNext}
-              className="h-6 w-6 text-muted-foreground"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Navigation: arrows around dots */}
+      {prompts.length > 1 && (
+        <div className="flex items-center justify-center gap-2 border-t px-5 py-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasPrev}
+            onClick={goPrev}
+            className="h-6 w-6 text-muted-foreground"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <div className="flex items-center gap-1.5">
+            {prompts.map((_, i) => (
+              <button
+                type="button"
+                key={prompts[i]?.id ?? i}
+                onClick={() => setCurrentIndex(i)}
+                className={cn(
+                  'h-1.5 rounded-full transition-all',
+                  i === currentIndex
+                    ? 'w-4 bg-muted-foreground/50'
+                    : 'w-1.5 bg-muted-foreground/20',
+                )}
+              />
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasNext}
+            onClick={goNext}
+            className="h-6 w-6 text-muted-foreground"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
