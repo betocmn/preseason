@@ -9,7 +9,7 @@
     --card-foreground: 210 11% 15%;
     --popover: 0 0% 100%;
     --popover-foreground: 210 11% 15%;
-    --primary: 164 97% 64%;
+    --primary: 164 97% 60%;
     --primary-foreground: 164 50% 8%;
     --secondary: 220 14% 96%;
     --secondary-foreground: 210 11% 15%;
@@ -21,7 +21,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 220 6% 94%;
     --input: 220 8% 89%;
-    --ring: 164 97% 64%;
+    --ring: 164 97% 60%;
     --radius: 0.5rem;
 
     /* Trend colors — subtle, used sparingly */
