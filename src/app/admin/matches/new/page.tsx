@@ -33,7 +33,7 @@ const formSchema = z
     toolBId: z.string().uuid('Select Tool B'),
     categoryId: z.string().uuid('Select a sub-category'),
     periodStart: z.string().min(1, 'Start date is required'),
-    periodEnd: z.string().optional(),
+    periodEnd: z.string().min(1, 'End date is required'),
   })
   .refine((data) => data.toolAId !== data.toolBId, {
     message: 'Tools must be different',
@@ -55,7 +55,7 @@ export default function NewMatchPage() {
       toolBId: '',
       categoryId: '',
       periodStart: new Date().toISOString().slice(0, 10),
-      periodEnd: '',
+      periodEnd: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().slice(0, 10),
     },
   })
 
@@ -73,7 +73,7 @@ export default function NewMatchPage() {
       toolBId: values.toolBId,
       categoryId: values.categoryId,
       periodStart: new Date(values.periodStart),
-      periodEnd: values.periodEnd ? new Date(values.periodEnd) : undefined,
+      periodEnd: new Date(values.periodEnd),
     })
   }
 
@@ -197,7 +197,7 @@ export default function NewMatchPage() {
             name="periodEnd"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Period End (optional)</FormLabel>
+                <FormLabel>Period End</FormLabel>
                 <FormControl>
                   <Input type="date" {...field} />
                 </FormControl>

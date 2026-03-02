@@ -314,7 +314,7 @@ export const matches = createTable(
     startedAt: d.timestamp('started_at', { withTimezone: true }),
     settledAt: d.timestamp('settled_at', { withTimezone: true }),
     periodStart: d.date('period_start').notNull(),
-    periodEnd: d.date('period_end'),
+    periodEnd: d.date('period_end').notNull(),
     toolAScore: d.integer('tool_a_score').notNull().default(0),
     toolBScore: d.integer('tool_b_score').notNull().default(0),
     totalPrompts: d.integer('total_prompts').notNull().default(0),

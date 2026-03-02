@@ -85,8 +85,7 @@ export default async function MatchDetailPage({ params }: Props) {
         )}
 
         <p className="mt-2 text-xs text-muted-foreground">
-          Period: {match.periodStart}
-          {match.periodEnd ? ` - ${match.periodEnd}` : ' - ongoing'}
+          Period: {match.periodStart} - {match.periodEnd}
           {' | '}
           {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts}{' '}
           prompts

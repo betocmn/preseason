@@ -753,6 +753,7 @@ describe('Database Schema', () => {
         toolBId: toolB.id,
         categoryId: cat.id,
         periodStart: '2025-01-01',
+        periodEnd: '2025-01-07',
       })
       await expect(
         db.insert(matches).values({
@@ -760,6 +761,7 @@ describe('Database Schema', () => {
           toolBId: toolB.id,
           categoryId: cat.id,
           periodStart: '2025-01-01',
+          periodEnd: '2025-01-07',
         }),
       ).rejects.toThrow()
     })
@@ -791,6 +793,7 @@ describe('Database Schema', () => {
           categoryId: cat.id,
           status,
           periodStart: `2025-0${i + 1}-01`,
+          periodEnd: `2025-0${i + 1}-07`,
         })
       }
       const result = await db.select().from(matches)

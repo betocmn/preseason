@@ -471,10 +471,7 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
     // For settled matches, pick the winner
     const winnerId = toolAScore > toolBScore ? toolAId : toolBId
 
-    const periodEnd =
-      def.status === 'settled'
-        ? dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
-        : null
+    const periodEnd = dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
 
     await db.insert(schema.matches).values({
       toolAId,
