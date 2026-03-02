@@ -13,7 +13,7 @@ export default async function FeedPage() {
 
   return (
     <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-bold">Recommendation Feed</h1>
+      <h1 className="mb-6 text-xl font-bold tracking-tight">Recommendation Feed</h1>
       <FeedList categories={categories} llms={llms} />
     </div>
   )

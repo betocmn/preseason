@@ -1,9 +1,9 @@
 import { TRPCError } from '@trpc/server'
-import { asc, eq } from 'drizzle-orm'
+import { asc, count, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { prompts } from '~/server/db/schema'
+import { prompts, recommendations, runResults, tools } from '~/server/db/schema'
 import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
 
 const promptLevelSchema = z.enum([
@@ -69,6 +69,62 @@ export const promptRouter = createTRPCRouter({
       .where(eq(prompts.isActive, true))
       .orderBy(asc(prompts.title))
   }),
+
+  listWithTopTools: publicProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(10).default(5) }).optional())
+    .query(async ({ ctx, input }) => {
+      const activePrompts = await ctx.db
+        .select({
+          id: prompts.id,
+          title: prompts.title,
+          slug: prompts.slug,
+          level: prompts.level,
+          description: prompts.description,
+          expectedCategories: prompts.expectedCategories,
+        })
+        .from(prompts)
+        .where(eq(prompts.isActive, true))
+        .orderBy(desc(prompts.createdAt))
+        .limit(input?.limit ?? 5)
+
+      const results = await Promise.all(
+        activePrompts.map(async (prompt) => {
+          const topTools = await ctx.db
+            .select({
+              toolId: tools.id,
+              toolName: tools.name,
+              toolSlug: tools.slug,
+              toolLogoUrl: tools.logoUrl,
+              recCount: count(recommendations.id),
+            })
+            .from(recommendations)
+            .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+            .innerJoin(tools, eq(recommendations.toolId, tools.id))
+            .where(eq(runResults.promptId, prompt.id))
+            .groupBy(tools.id, tools.name, tools.slug, tools.logoUrl)
+            .orderBy(desc(count(recommendations.id)))
+            .limit(3)
+
+          const totalRecs = topTools.reduce((sum, t) => sum + Number(t.recCount), 0)
+
+          return {
+            ...prompt,
+            topTools: topTools.map((t) => ({
+              tool: {
+                id: t.toolId,
+                name: t.toolName,
+                slug: t.toolSlug,
+                logoUrl: t.toolLogoUrl,
+              },
+              count: Number(t.recCount),
+              rate: totalRecs > 0 ? Number(t.recCount) / totalRecs : 0,
+            })),
+          }
+        }),
+      )
+
+      return results
+    }),
 
   getBySlug: publicProcedure
     .input(

@@ -1,10 +1,12 @@
 import Link from 'next/link'
 
 const footerLinks = [
-  { href: '/feed', label: 'Feed' },
+  { href: '/matches', label: 'Live Matches' },
   { href: '/rankings', label: 'Rankings' },
-  { href: '/matches', label: 'Matches' },
+  { href: '/prompts', label: 'Prompts' },
   { href: '/critics', label: 'Critics' },
+  { href: '/feed', label: 'Feed' },
+  { href: '/trending', label: 'Trending' },
 ]
 
 export function Footer() {

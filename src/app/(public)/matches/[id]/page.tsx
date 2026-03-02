@@ -65,9 +65,17 @@ export default async function MatchDetailPage({ params }: Props) {
         </h1>
 
         <div className="mb-4 flex items-center gap-6">
-          <ToolBadge name={match.toolA.name} slug={match.toolA.slug} />
+          <ToolBadge
+            name={match.toolA.name}
+            slug={match.toolA.slug}
+            logoUrl={match.toolA.logoUrl}
+          />
           <span className="text-sm text-muted-foreground">vs</span>
-          <ToolBadge name={match.toolB.name} slug={match.toolB.slug} />
+          <ToolBadge
+            name={match.toolB.name}
+            slug={match.toolB.slug}
+            logoUrl={match.toolB.logoUrl}
+          />
         </div>
 
         <PercentageBar

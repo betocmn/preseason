@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import { CategorySidebar } from '~/components/public/category-sidebar'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
+import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -17,24 +17,17 @@ export default async function RankingsPage() {
   ])
 
   return (
-    <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-bold">Rankings</h1>
-      <div className="flex gap-8">
-        <aside className="hidden w-48 shrink-0 md:block">
-          <CategorySidebar categories={groups} basePath="/rankings" />
-        </aside>
-        <div className="min-w-0 flex-1">
-          <h2 className="mb-4 text-lg font-semibold">Overall Rankings (30 days)</h2>
-          {ranking.items.length > 0 ? (
-            <RankingTable items={ranking.items} showCategoryCoverage />
-          ) : (
-            <EmptyState
-              title="No ranking data yet"
-              description="Rankings are computed from recommendation runs. Check back after runs have completed."
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    <SidebarLayout groups={groups} section="rankings">
+      <h1 className="mb-6 text-xl font-bold tracking-tight">Rankings</h1>
+      <h2 className="mb-4 text-lg font-semibold">Overall Rankings (30 days)</h2>
+      {ranking.items.length > 0 ? (
+        <RankingTable items={ranking.items} showCategoryCoverage />
+      ) : (
+        <EmptyState
+          title="No ranking data yet"
+          description="Rankings are computed from recommendation runs. Check back after runs have completed."
+        />
+      )}
+    </SidebarLayout>
   )
 }

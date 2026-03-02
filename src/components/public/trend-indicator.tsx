@@ -18,7 +18,7 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-0.5 font-medium text-trend-up',
+          'font-mono-data inline-flex items-center gap-0.5 font-medium text-trend-up',
           textSize,
           className,
         )}
@@ -33,7 +33,7 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-0.5 font-medium text-trend-down',
+          'font-mono-data inline-flex items-center gap-0.5 font-medium text-trend-down',
           textSize,
           className,
         )}
@@ -47,7 +47,7 @@ export function TrendIndicator({ value, size = 'md', className }: TrendIndicator
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 font-medium text-trend-flat',
+        'font-mono-data inline-flex items-center gap-0.5 font-medium text-trend-flat',
         textSize,
         className,
       )}

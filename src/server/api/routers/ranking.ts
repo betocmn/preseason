@@ -54,6 +54,7 @@ export const rankingRouter = createTRPCRouter({
             toolId: tools.id,
             toolName: tools.name,
             toolSlug: tools.slug,
+            toolLogoUrl: tools.logoUrl,
             llmId: llms.id,
           })
           .from(recommendations)
@@ -89,7 +90,10 @@ export const rankingRouter = createTRPCRouter({
       const currentCounts = new Map<string, number>()
       const previousCounts = new Map<string, number>()
       const llmsByTool = new Map<string, Set<string>>()
-      const toolMeta = new Map<string, { id: string; name: string; slug: string }>()
+      const toolMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; logoUrl: string | null }
+      >()
       const allCurrentLlms = new Set<string>()
 
       for (const row of currentRows) {
@@ -101,6 +105,7 @@ export const rankingRouter = createTRPCRouter({
           id: row.toolId,
           name: row.toolName,
           slug: row.toolSlug,
+          logoUrl: row.toolLogoUrl,
         })
       }
 
@@ -188,6 +193,7 @@ export const rankingRouter = createTRPCRouter({
             toolId: tools.id,
             toolName: tools.name,
             toolSlug: tools.slug,
+            toolLogoUrl: tools.logoUrl,
             llmId: llms.id,
           })
           .from(recommendations)
@@ -223,7 +229,10 @@ export const rankingRouter = createTRPCRouter({
       const currentCounts = new Map<string, number>()
       const previousCounts = new Map<string, number>()
       const llmsByTool = new Map<string, Set<string>>()
-      const toolMeta = new Map<string, { id: string; name: string; slug: string }>()
+      const toolMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; logoUrl: string | null }
+      >()
       const allCurrentLlms = new Set<string>()
 
       for (const row of currentRows) {
@@ -235,6 +244,7 @@ export const rankingRouter = createTRPCRouter({
           id: row.toolId,
           name: row.toolName,
           slug: row.toolSlug,
+          logoUrl: row.toolLogoUrl,
         })
       }
 
@@ -300,6 +310,7 @@ export const rankingRouter = createTRPCRouter({
             toolId: tools.id,
             toolName: tools.name,
             toolSlug: tools.slug,
+            toolLogoUrl: tools.logoUrl,
             llmId: llms.id,
             categoryId: subcategories.id,
           })
@@ -336,7 +347,10 @@ export const rankingRouter = createTRPCRouter({
       const previousCounts = new Map<string, number>()
       const llmsByTool = new Map<string, Set<string>>()
       const categoriesByTool = new Map<string, Set<string>>()
-      const toolMeta = new Map<string, { id: string; name: string; slug: string }>()
+      const toolMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; logoUrl: string | null }
+      >()
       const allCurrentLlms = new Set<string>()
       const allCurrentCategories = new Set<string>()
 
@@ -352,6 +366,7 @@ export const rankingRouter = createTRPCRouter({
           id: row.toolId,
           name: row.toolName,
           slug: row.toolSlug,
+          logoUrl: row.toolLogoUrl,
         })
       }
 

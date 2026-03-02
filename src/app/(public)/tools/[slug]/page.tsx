@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation'
 import { CategoryPill } from '~/components/public/category-pill'
 import { CommentList } from '~/components/public/comment-list'
 import { MatchCard } from '~/components/public/match-card'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -57,7 +58,13 @@ export default async function ToolDetailPage({ params }: Props) {
     <div className="container max-w-4xl py-8">
       {/* Header */}
       <div className="mb-8">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <Avatar className="h-8 w-8">
+            {tool.logoUrl && <AvatarImage src={tool.logoUrl} alt={tool.name} />}
+            <AvatarFallback className="text-xs">
+              {tool.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
           <h1 className="text-2xl font-bold">{tool.name}</h1>
           {tool.isVerified && (
             <Badge variant="secondary" className="gap-1 text-xs">
@@ -127,7 +134,7 @@ export default async function ToolDetailPage({ params }: Props) {
       {/* Active Matches */}
       {toolMatches.length > 0 && (
         <div className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold">Active Matches</h2>
+          <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {toolMatches.map((match) => (
               <MatchCard

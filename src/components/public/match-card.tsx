@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { PercentageBar } from '~/components/public/percentage-bar'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { cn } from '~/lib/utils'
@@ -7,8 +8,8 @@ import { cn } from '~/lib/utils'
 type MatchCardProps = {
   id: string
   status: 'active' | 'settled' | 'archived'
-  toolA: { id: string; name: string; slug: string }
-  toolB: { id: string; name: string; slug: string }
+  toolA: { id: string; name: string; slug: string; logoUrl?: string | null }
+  toolB: { id: string; name: string; slug: string; logoUrl?: string | null }
   category: { id: string; name: string; slug: string }
   toolAScore: number
   toolBScore: number
@@ -53,8 +54,22 @@ export function MatchCard({
             )}
           </div>
 
-          <div className="mb-3 text-sm font-medium">
-            {toolA.name} vs {toolB.name}
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+            <Avatar className="h-5 w-5">
+              {toolA.logoUrl && <AvatarImage src={toolA.logoUrl} alt={toolA.name} />}
+              <AvatarFallback className="text-[10px]">
+                {toolA.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {toolA.name}
+            <span className="text-muted-foreground">vs</span>
+            <Avatar className="h-5 w-5">
+              {toolB.logoUrl && <AvatarImage src={toolB.logoUrl} alt={toolB.name} />}
+              <AvatarFallback className="text-[10px]">
+                {toolB.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {toolB.name}
           </div>
 
           <PercentageBar

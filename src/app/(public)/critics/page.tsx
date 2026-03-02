@@ -1,6 +1,7 @@
 import { Users } from 'lucide-react'
 import type { Metadata } from 'next'
 import { EmptyState } from '~/components/public/empty-state'
+import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
@@ -13,11 +14,11 @@ export const metadata: Metadata = {
 
 export default async function CriticsPage() {
   const caller = await api()
-  const critics = await caller.critic.list()
+  const [critics, groups] = await Promise.all([caller.critic.list(), caller.category.listGroups()])
 
   return (
-    <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-bold">Verified Critics</h1>
+    <SidebarLayout groups={groups} section="critics">
+      <h1 className="mb-6 text-xl font-bold tracking-tight">Verified Critics</h1>
 
       {critics.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -63,6 +64,6 @@ export default async function CriticsPage() {
           description="Verified critics provide expert commentary on tool recommendations."
         />
       )}
-    </div>
+    </SidebarLayout>
   )
 }
