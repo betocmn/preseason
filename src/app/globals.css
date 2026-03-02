@@ -32,6 +32,14 @@
     --trend-down-foreground: 0 0% 100%;
     --trend-down-muted: 0 30% 95%;
     --trend-flat: 215 14% 55%;
+
+    /* Chart colors — soft peach & muted lavender */
+    --chart-a: 22 65% 68%;
+    --chart-a-foreground: 22 30% 20%;
+    --chart-a-muted: 22 40% 93%;
+    --chart-b: 220 50% 73%;
+    --chart-b-foreground: 220 30% 20%;
+    --chart-b-muted: 220 35% 93%;
   }
 
   .dark {
@@ -63,6 +71,14 @@
     --trend-down-foreground: 0 0% 100%;
     --trend-down-muted: 0 25% 15%;
     --trend-flat: 215 14% 60%;
+
+    /* Chart colors — dark mode */
+    --chart-a: 22 55% 60%;
+    --chart-a-foreground: 22 10% 95%;
+    --chart-a-muted: 22 30% 18%;
+    --chart-b: 220 40% 58%;
+    --chart-b-foreground: 220 10% 95%;
+    --chart-b-muted: 220 25% 18%;
   }
 }
 
