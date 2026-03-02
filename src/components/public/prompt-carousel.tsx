@@ -52,8 +52,14 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
   const hasNext = currentIndex < prompts.length - 1
 
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="px-5 py-5">
+    <div className="flex flex-col rounded-lg border bg-card">
+      <div className="flex items-center justify-between border-b px-5 py-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Latest Prompts</h2>
+        <Link href="/prompts" className="text-xs text-muted-foreground/70 hover:text-foreground">
+          View all
+        </Link>
+      </div>
+      <div className="flex-1 px-5 py-4">
         <div className="mb-2 flex items-center gap-2">
           <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
             {formatLevel(current.level)}
