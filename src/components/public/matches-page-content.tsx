@@ -4,35 +4,25 @@ import { useState } from 'react'
 import { EmptyState } from '~/components/public/empty-state'
 import { LoadMoreButton } from '~/components/public/load-more-button'
 import { MatchCard } from '~/components/public/match-card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
 import { api } from '~/trpc/react'
 
-type Category = { id: string; name: string; slug: string }
-
 type MatchesPageContentProps = {
-  categories: Category[]
+  initialCategorySlug?: string
 }
 
 const PAGE_SIZE = 12
 
-export function MatchesPageContent({ categories }: MatchesPageContentProps) {
-  const [categorySlug, setCategorySlug] = useState<string | undefined>()
+export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentProps) {
   const [settledLimit, setSettledLimit] = useState(PAGE_SIZE)
 
   const { data: activeMatches } = api.match.listActive.useQuery(
-    categorySlug ? { categorySlug } : undefined,
+    initialCategorySlug ? { categorySlug: initialCategorySlug } : undefined,
   )
 
   const { data: settledData, isLoading: settledLoading } = api.match.listSettled.useQuery({
     limit: settledLimit,
     offset: 0,
-    categorySlug: categorySlug || undefined,
+    categorySlug: initialCategorySlug || undefined,
   })
 
   const active = activeMatches ?? []
@@ -42,28 +32,6 @@ export function MatchesPageContent({ categories }: MatchesPageContentProps) {
 
   return (
     <div>
-      <div className="mb-6">
-        <Select
-          value={categorySlug ?? 'all'}
-          onValueChange={(v) => {
-            setCategorySlug(v === 'all' ? undefined : v)
-            setSettledLimit(PAGE_SIZE)
-          }}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.slug}>
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Active Matches */}
       <section className="mb-8">
         <h2 className="mb-4 text-lg font-semibold">Active Matches</h2>

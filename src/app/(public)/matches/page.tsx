@@ -1,20 +1,26 @@
 import type { Metadata } from 'next'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
+import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
-  title: 'Matches | Preseason',
+  title: 'Live Matches | Preseason',
   description: 'Head-to-head tool battles based on LLM recommendations.',
 }
 
-export default async function MatchesPage() {
+type Props = {
+  searchParams: Promise<{ category?: string; sub?: string }>
+}
+
+export default async function MatchesPage({ searchParams }: Props) {
+  const { category, sub } = await searchParams
   const caller = await api()
-  const categories = await caller.category.list()
+  const groups = await caller.category.listGroups()
 
   return (
-    <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-bold">Matches</h1>
-      <MatchesPageContent categories={categories} />
-    </div>
+    <SidebarLayout groups={groups} section="matches">
+      <h1 className="mb-6 text-xl font-bold tracking-tight">Live Matches</h1>
+      <MatchesPageContent initialCategorySlug={sub ?? category} />
+    </SidebarLayout>
   )
 }
