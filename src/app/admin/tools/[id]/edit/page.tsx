@@ -11,7 +11,7 @@ export default async function EditToolPage({ params }: EditToolPageProps) {
   const caller = await api()
 
   const tool = await caller.tool.getById({ id }).catch(() => notFound())
-  const categories = await caller.category.list({})
+  const subcategories = await caller.category.list({})
 
   return (
     <div className="space-y-6">
@@ -19,7 +19,7 @@ export default async function EditToolPage({ params }: EditToolPageProps) {
         <h1 className="text-3xl font-bold tracking-tight">Edit Tool</h1>
         <p className="text-muted-foreground">Update {tool.name}.</p>
       </div>
-      <ToolForm tool={tool} categories={categories} />
+      <ToolForm tool={tool} subcategories={subcategories} />
     </div>
   )
 }

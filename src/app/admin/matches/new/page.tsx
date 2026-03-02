@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -18,7 +19,9 @@ import { Input } from '~/components/ui/input'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
@@ -28,7 +31,7 @@ const formSchema = z
   .object({
     toolAId: z.string().uuid('Select Tool A'),
     toolBId: z.string().uuid('Select Tool B'),
-    categoryId: z.string().uuid('Select a category'),
+    categoryId: z.string().uuid('Select a sub-category'),
     periodStart: z.string().min(1, 'Start date is required'),
     periodEnd: z.string().optional(),
   })
@@ -43,7 +46,7 @@ export default function NewMatchPage() {
   const router = useRouter()
 
   const { data: toolsData } = api.tool.list.useQuery({ limit: 100 })
-  const { data: categories } = api.category.list.useQuery({})
+  const { data: subcategories } = api.category.list.useQuery({})
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,6 +78,16 @@ export default function NewMatchPage() {
   }
 
   const tools = toolsData?.items ?? []
+
+  const groupedSubcategories = useMemo(() => {
+    const groups: Record<string, Array<{ id: string; name: string }>> = {}
+    for (const sub of subcategories ?? []) {
+      const groupName = sub.categoryGroup?.name ?? 'Other'
+      if (!groups[groupName]) groups[groupName] = []
+      groups[groupName].push(sub)
+    }
+    return groups
+  }, [subcategories])
 
   return (
     <div className="space-y-6">
@@ -140,18 +153,23 @@ export default function NewMatchPage() {
             name="categoryId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Category</FormLabel>
+                <FormLabel>Sub-category</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
+                      <SelectValue placeholder="Select a sub-category" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {(categories ?? []).map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
+                    {Object.entries(groupedSubcategories).map(([group, subs]) => (
+                      <SelectGroup key={group}>
+                        <SelectLabel>{group}</SelectLabel>
+                        {subs.map((sub) => (
+                          <SelectItem key={sub.id} value={sub.id}>
+                            {sub.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>

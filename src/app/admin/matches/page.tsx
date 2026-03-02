@@ -52,7 +52,7 @@ export default async function MatchesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Match</TableHead>
-              <TableHead>Category</TableHead>
+              <TableHead>Sub-category</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Period</TableHead>
               <TableHead>Score</TableHead>
