@@ -16,22 +16,34 @@ export default async function HomePage() {
   return (
     <div className="container py-8">
       <div className="space-y-10">
-        {/* Featured Prompts */}
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Latest Prompts</h2>
-            <Link href="/prompts" className="text-sm text-muted-foreground hover:text-foreground">
-              View all
-            </Link>
+        {/* Hero + Latest Prompts */}
+        <section className="grid items-start gap-8 lg:grid-cols-2">
+          <div className="flex flex-col justify-center py-4 lg:py-8">
+            <h1 className="text-3xl font-bold tracking-tight lg:text-4xl">What agents want.</h1>
+            <p className="mt-3 max-w-md text-base leading-relaxed text-muted-foreground">
+              We track which tools get chosen by AI models across thousands of daily coding prompts.
+            </p>
           </div>
-          {promptsWithTools.length > 0 ? (
-            <PromptCarousel prompts={promptsWithTools} />
-          ) : (
-            <EmptyState
-              title="No prompts yet"
-              description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
-            />
-          )}
+
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-muted-foreground">Latest Prompts</h2>
+              <Link
+                href="/prompts"
+                className="text-xs text-muted-foreground/70 hover:text-foreground"
+              >
+                View all
+              </Link>
+            </div>
+            {promptsWithTools.length > 0 ? (
+              <PromptCarousel prompts={promptsWithTools} />
+            ) : (
+              <EmptyState
+                title="No prompts yet"
+                description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
+              />
+            )}
+          </div>
         </section>
 
         {/* Active Matches */}
