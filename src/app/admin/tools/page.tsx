@@ -41,7 +41,7 @@ export default async function ToolsPage() {
               <TableHead className="w-12" />
               <TableHead>Name</TableHead>
               <TableHead>Slug</TableHead>
-              <TableHead>Categories</TableHead>
+              <TableHead>Sub-categories</TableHead>
               <TableHead>Verified</TableHead>
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
@@ -71,6 +71,9 @@ export default async function ToolsPage() {
                   <div className="flex flex-wrap gap-1">
                     {tool.toolCategories.map((tc) => (
                       <Badge key={tc.category.id} variant="secondary" className="text-xs">
+                        {tc.category.categoryGroup?.name
+                          ? `${tc.category.categoryGroup.name} > `
+                          : ''}
                         {tc.category.name}
                       </Badge>
                     ))}

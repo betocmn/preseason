@@ -29,12 +29,12 @@ const formSchema = z.object({
   logoUrl: z.string().max(512).optional(),
   aliases: z.string().optional(),
   isVerified: z.boolean(),
-  categoryIds: z.array(z.string().uuid()),
+  subcategoryIds: z.array(z.string().uuid()),
 })
 
 type FormValues = z.infer<typeof formSchema>
 
-type Category = {
+type Subcategory = {
   id: string
   name: string
   categoryGroup: { name: string } | null
@@ -54,7 +54,7 @@ type Tool = {
 
 type ToolFormProps = {
   tool?: Tool
-  categories: Category[]
+  subcategories: Subcategory[]
 }
 
 function slugify(text: string) {
@@ -64,7 +64,7 @@ function slugify(text: string) {
     .replace(/(^-|-$)/g, '')
 }
 
-export function ToolForm({ tool, categories }: ToolFormProps) {
+export function ToolForm({ tool, subcategories }: ToolFormProps) {
   const router = useRouter()
   const isEditing = !!tool
 
@@ -78,7 +78,7 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
       logoUrl: tool?.logoUrl ?? '',
       aliases: tool?.aliases?.join(', ') ?? '',
       isVerified: tool?.isVerified ?? false,
-      categoryIds: tool?.toolCategories.map((tc) => tc.categoryId) ?? [],
+      subcategoryIds: tool?.toolCategories.map((tc) => tc.categoryId) ?? [],
     },
   })
 
@@ -117,7 +117,7 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
       website: values.website || undefined,
       logoUrl: values.logoUrl || undefined,
       aliases: aliases?.length ? aliases : undefined,
-      categoryIds: values.categoryIds.length ? values.categoryIds : undefined,
+      categoryIds: values.subcategoryIds.length ? values.subcategoryIds : undefined,
     }
 
     if (isEditing) {
@@ -127,10 +127,10 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
     }
   }
 
-  const groupedCategories = categories.reduce<Record<string, Category[]>>((acc, cat) => {
-    const group = cat.categoryGroup?.name ?? 'Other'
+  const groupedSubcategories = subcategories.reduce<Record<string, Subcategory[]>>((acc, sub) => {
+    const group = sub.categoryGroup?.name ?? 'Other'
     if (!acc[group]) acc[group] = []
-    acc[group].push(cat)
+    acc[group].push(sub)
     return acc
   }, {})
 
@@ -263,29 +263,30 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
 
         <FormField
           control={form.control}
-          name="categoryIds"
+          name="subcategoryIds"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Categories</FormLabel>
-              <div className="max-h-48 space-y-3 overflow-y-auto rounded-md border p-3">
-                {Object.entries(groupedCategories).map(([group, cats]) => (
+              <FormLabel>Sub-categories</FormLabel>
+              <FormDescription>Grouped by parent category</FormDescription>
+              <div className="max-h-64 space-y-3 overflow-y-auto rounded-md border p-3">
+                {Object.entries(groupedSubcategories).map(([group, subs]) => (
                   <div key={group}>
                     <p className="mb-1 text-xs font-semibold text-muted-foreground">{group}</p>
                     <div className="space-y-1">
-                      {cats.map((cat) => (
-                        <div key={cat.id} className="flex items-center gap-2 text-sm">
+                      {subs.map((sub) => (
+                        <div key={sub.id} className="flex items-center gap-2 text-sm">
                           <Checkbox
-                            id={`cat-${cat.id}`}
-                            checked={field.value.includes(cat.id)}
+                            id={`sub-${sub.id}`}
+                            checked={field.value.includes(sub.id)}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                field.onChange([...field.value, cat.id])
+                                field.onChange([...field.value, sub.id])
                               } else {
-                                field.onChange(field.value.filter((id) => id !== cat.id))
+                                field.onChange(field.value.filter((id) => id !== sub.id))
                               }
                             }}
                           />
-                          <label htmlFor={`cat-${cat.id}`}>{cat.name}</label>
+                          <label htmlFor={`sub-${sub.id}`}>{sub.name}</label>
                         </div>
                       ))}
                     </div>
