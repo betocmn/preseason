@@ -26,7 +26,13 @@ const formSchema = z.object({
   slug: z.string().min(1, 'Slug is required').max(255),
   description: z.string().max(5000).optional(),
   website: z.string().max(512).optional(),
-  logoUrl: z.string().max(512).optional(),
+  logoUrl: z
+    .string()
+    .max(512)
+    .refine((value) => value.length === 0 || value.startsWith('/'), {
+      message: 'Logo path must start with "/"',
+    })
+    .optional(),
   aliases: z.string().optional(),
   isVerified: z.boolean(),
   subcategoryIds: z.array(z.string().uuid()),
@@ -62,6 +68,10 @@ function slugify(text: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
+}
+
+function isLocalLogoPath(value: string) {
+  return value.startsWith('/')
 }
 
 export function ToolForm({ tool, subcategories }: ToolFormProps) {
@@ -103,6 +113,10 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
   const isPending = createMutation.isPending || updateMutation.isPending
 
   function onSubmit(values: FormValues) {
+    const description = values.description?.trim() ?? ''
+    const website = values.website?.trim() ?? ''
+    const logoUrl = values.logoUrl?.trim() ?? ''
+
     const aliases = values.aliases
       ? values.aliases
           .split(',')
@@ -110,20 +124,29 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
           .filter(Boolean)
       : undefined
 
-    const data = {
-      name: values.name,
-      slug: values.slug,
-      description: values.description || undefined,
-      website: values.website || undefined,
-      logoUrl: values.logoUrl || undefined,
-      aliases: aliases?.length ? aliases : undefined,
-      categoryIds: values.subcategoryIds.length ? values.subcategoryIds : undefined,
-    }
-
     if (isEditing) {
-      updateMutation.mutate({ id: tool.id, ...data })
+      updateMutation.mutate({
+        id: tool.id,
+        name: values.name,
+        slug: values.slug,
+        description: description || null,
+        website: website || null,
+        logoUrl: logoUrl || null,
+        aliases: aliases?.length ? aliases : null,
+        categoryIds: values.subcategoryIds,
+        isVerified: values.isVerified,
+      })
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate({
+        name: values.name,
+        slug: values.slug,
+        description: description || undefined,
+        website: website || undefined,
+        logoUrl: logoUrl || undefined,
+        aliases: aliases?.length ? aliases : undefined,
+        categoryIds: values.subcategoryIds.length > 0 ? values.subcategoryIds : undefined,
+        isVerified: values.isVerified,
+      })
     }
   }
 
@@ -211,7 +234,7 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
                 <Input {...field} placeholder="/logos/tool-name.png" />
               </FormControl>
               <FormDescription>Path relative to the public folder</FormDescription>
-              {logoUrl && (
+              {logoUrl && isLocalLogoPath(logoUrl) && (
                 <div className="mt-2 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border bg-background">
                     <Image
