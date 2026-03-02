@@ -15,6 +15,10 @@ import {
 import { api } from '~/trpc/server'
 import { DeleteToolButton } from './_components/delete-tool-button'
 
+function isLocalLogoPath(value: string) {
+  return value.startsWith('/')
+}
+
 export default async function ToolsPage() {
   const caller = await api()
   const { items: tools } = await caller.tool.list({ limit: 100 })
@@ -51,7 +55,7 @@ export default async function ToolsPage() {
               <TableRow key={tool.id}>
                 <TableCell>
                   <Avatar className="h-8 w-8">
-                    {tool.logoUrl && (
+                    {tool.logoUrl && isLocalLogoPath(tool.logoUrl) && (
                       <Image
                         src={tool.logoUrl}
                         alt={tool.name}

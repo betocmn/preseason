@@ -6,12 +6,20 @@ import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import { subcategories, toolCategories, tools } from '~/server/db/schema'
 
+const logoPathSchema = z
+  .string()
+  .max(512)
+  .refine((value) => value.startsWith('/'), {
+    message: 'Logo path must start with "/"',
+  })
+
 const createToolInput = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
   description: z.string().max(5000).optional(),
   website: z.string().url().max(512).optional(),
-  logoUrl: z.string().max(512).optional(),
+  logoUrl: logoPathSchema.optional(),
+  isVerified: z.boolean().optional(),
   providerUserId: z.string().uuid().nullable().optional(),
   aliases: z.array(z.string().min(1).max(255)).max(50).optional(),
   categoryIds: z.array(z.string().uuid()).max(50).optional(),
@@ -24,7 +32,8 @@ const updateToolInput = z
     slug: z.string().min(1).max(255).optional(),
     description: z.string().max(5000).nullable().optional(),
     website: z.string().url().max(512).nullable().optional(),
-    logoUrl: z.string().max(512).nullable().optional(),
+    logoUrl: logoPathSchema.nullable().optional(),
+    isVerified: z.boolean().optional(),
     providerUserId: z.string().uuid().nullable().optional(),
     aliases: z.array(z.string().min(1).max(255)).max(50).nullable().optional(),
     categoryIds: z.array(z.string().uuid()).max(50).optional(),
@@ -36,6 +45,7 @@ const updateToolInput = z
       input.description !== undefined ||
       input.website !== undefined ||
       input.logoUrl !== undefined ||
+      input.isVerified !== undefined ||
       input.providerUserId !== undefined ||
       input.aliases !== undefined ||
       input.categoryIds !== undefined,
@@ -286,6 +296,7 @@ export const toolRouter = createTRPCRouter({
         description: input.description,
         website: input.website,
         logoUrl: input.logoUrl,
+        isVerified: input.isVerified ?? false,
         providerUserId: input.providerUserId ?? null,
         aliases: input.aliases,
       })
