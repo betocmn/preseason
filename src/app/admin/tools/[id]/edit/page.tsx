@@ -10,13 +10,7 @@ export default async function EditToolPage({ params }: EditToolPageProps) {
   const { id } = await params
   const caller = await api()
 
-  let tool
-  try {
-    tool = await caller.tool.getById({ id })
-  } catch {
-    notFound()
-  }
-
+  const tool = await caller.tool.getById({ id }).catch(() => notFound())
   const categories = await caller.category.list({})
 
   return (

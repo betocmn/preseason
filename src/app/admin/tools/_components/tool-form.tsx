@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '~/components/ui/button'
 import { Checkbox } from '~/components/ui/checkbox'
@@ -19,7 +20,6 @@ import {
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
 import { api } from '~/trpc/react'
-import { toast } from 'sonner'
 
 const formSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
@@ -273,8 +273,9 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
                     <p className="mb-1 text-xs font-semibold text-muted-foreground">{group}</p>
                     <div className="space-y-1">
                       {cats.map((cat) => (
-                        <label key={cat.id} className="flex items-center gap-2 text-sm">
+                        <div key={cat.id} className="flex items-center gap-2 text-sm">
                           <Checkbox
+                            id={`cat-${cat.id}`}
                             checked={field.value.includes(cat.id)}
                             onCheckedChange={(checked) => {
                               if (checked) {
@@ -284,8 +285,8 @@ export function ToolForm({ tool, categories }: ToolFormProps) {
                               }
                             }}
                           />
-                          {cat.name}
-                        </label>
+                          <label htmlFor={`cat-${cat.id}`}>{cat.name}</label>
+                        </div>
                       ))}
                     </div>
                   </div>
