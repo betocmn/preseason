@@ -111,7 +111,12 @@ export default async function HomePage() {
                 <div className="space-y-3">
                   {trendingItems.map((item) => (
                     <div key={item.tool.id} className="flex items-center justify-between">
-                      <ToolBadge name={item.tool.name} slug={item.tool.slug} size="sm" />
+                      <ToolBadge
+                        name={item.tool.name}
+                        slug={item.tool.slug}
+                        logoUrl={item.tool.logoUrl}
+                        size="sm"
+                      />
                       <TrendIndicator value={item.rateChange} size="sm" />
                     </div>
                   ))}
