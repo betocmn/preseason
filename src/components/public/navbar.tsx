@@ -28,7 +28,7 @@ export function Navbar() {
             width={140}
             height={32}
             priority
-            className="invert dark:invert-0"
+            className=""
           />
         </Link>
 
