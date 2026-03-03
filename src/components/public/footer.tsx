@@ -30,11 +30,17 @@ const linkGroups = [
 
 export function Footer() {
   return (
-    <footer className="border-t bg-background">
+    <footer
+      className="border-t"
+      style={{
+        background:
+          'linear-gradient(130deg, rgba(125,211,252,0.04) 0%, rgba(196,181,253,0.06) 40%, rgba(110,231,183,0.04) 70%, rgba(125,211,252,0.04) 100%)',
+      }}
+    >
       <div className="container py-10">
-        <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
+        <div className="flex flex-col gap-8 md:flex-row md:justify-between">
           {/* Brand */}
-          <div>
+          <div className="max-w-xs">
             <Link href="/">
               <Image
                 src="/preseason-brand/preseason-logo.svg"
@@ -42,39 +48,39 @@ export function Footer() {
                 width={120}
                 height={28}
                 className="mb-3"
+                style={{ filter: 'var(--logo-filter)' }}
               />
             </Link>
             <p className="text-sm leading-relaxed text-muted-foreground">
               What tools do AI models actually recommend?
             </p>
+            <p className="mt-3 text-xs text-muted-foreground/50">
+              &copy; {new Date().getFullYear()} Preseason. All rights reserved.
+            </p>
           </div>
 
           {/* Link groups */}
-          {linkGroups.map((group) => (
-            <div key={group.title}>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-                {group.title}
-              </p>
-              <ul className="space-y-2">
-                {group.links.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 border-t pt-6">
-          <p className="text-xs text-muted-foreground/50">
-            &copy; {new Date().getFullYear()} Preseason. All rights reserved.
-          </p>
+          <div className="flex flex-wrap gap-12 sm:gap-16">
+            {linkGroups.map((group) => (
+              <div key={group.title}>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  {group.title}
+                </p>
+                <ul className="space-y-2">
+                  {group.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </footer>
