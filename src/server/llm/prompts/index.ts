@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const PROMPTS_DIR = import.meta.dirname
+const PROMPTS_DIR = join(process.cwd(), 'src/server/llm/prompts')
 
 export const PROMPT_LEVELS = [
   'software-dev-beginner',

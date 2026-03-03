@@ -3,7 +3,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { cn } from '~/lib/utils'
+import { cn, formatPeriod } from '~/lib/utils'
 
 type MatchCardProps = {
   id: string
@@ -16,6 +16,7 @@ type MatchCardProps = {
   winnerToolId: string | null
   periodStart: string
   periodEnd: string
+  showPeriod?: boolean
   className?: string
 }
 
@@ -30,6 +31,7 @@ export function MatchCard({
   winnerToolId,
   periodStart,
   periodEnd,
+  showPeriod = false,
   className,
 }: MatchCardProps) {
   const isActive = status === 'active'
@@ -86,9 +88,11 @@ export function MatchCard({
             </p>
           )}
 
-          <div className="mt-2 text-xs text-muted-foreground">
-            {periodStart} - {periodEnd}
-          </div>
+          {showPeriod && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {formatPeriod(periodStart, periodEnd)}
+            </p>
+          )}
         </CardContent>
       </Link>
     </Card>

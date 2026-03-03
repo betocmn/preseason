@@ -7,6 +7,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { formatPeriod } from '~/lib/utils'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -59,6 +60,9 @@ export default async function MatchDetailPage({ params }: Props) {
           ) : (
             <Badge variant="outline">SETTLED</Badge>
           )}
+          <span className="text-xs text-muted-foreground">
+            {formatPeriod(match.periodStart, match.periodEnd)}
+          </span>
         </div>
         <h1 className="mb-4 text-2xl font-bold">
           {match.toolA.name} vs {match.toolB.name}
@@ -93,8 +97,6 @@ export default async function MatchDetailPage({ params }: Props) {
         )}
 
         <p className="mt-2 text-xs text-muted-foreground">
-          Period: {match.periodStart} - {match.periodEnd}
-          {' | '}
           {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts}{' '}
           prompts
         </p>
