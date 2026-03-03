@@ -73,7 +73,7 @@ export default async function CriticsPage() {
       {/* Recent commentary feed */}
       {recentComments.length > 0 && (
         <div>
-          <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
+          <h2 className="mb-4 text-xl font-bold tracking-tight">Verified Critics</h2>
           <CommentaryFeed comments={recentComments} />
         </div>
       )}
