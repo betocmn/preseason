@@ -35,7 +35,7 @@ export function MatchCard({
   const isActive = status === 'active'
 
   return (
-    <Card className={cn('transition-colors hover:bg-accent/50', className)}>
+    <Card className={cn('group transition-colors hover:bg-accent/50', className)}>
       <Link href={`/matches/${id}`}>
         <CardContent className="p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -43,8 +43,10 @@ export function MatchCard({
               {category.name}
             </Badge>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{formatPeriod(periodStart, periodEnd)}</span>
-              <span className="text-border">·</span>
+              <span className="hidden group-hover:inline">
+                {formatPeriod(periodStart, periodEnd)}
+              </span>
+              <span className="hidden group-hover:inline text-border">·</span>
               {isActive ? (
                 <span className="inline-flex items-center gap-1 font-medium">
                   <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
