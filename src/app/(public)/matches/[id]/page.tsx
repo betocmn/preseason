@@ -7,6 +7,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { formatPeriod } from '~/lib/utils'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -93,7 +94,7 @@ export default async function MatchDetailPage({ params }: Props) {
         )}
 
         <p className="mt-2 text-xs text-muted-foreground">
-          Period: {match.periodStart} - {match.periodEnd}
+          {formatPeriod(match.periodStart, match.periodEnd)}
           {' | '}
           {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts}{' '}
           prompts
