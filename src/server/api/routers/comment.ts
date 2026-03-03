@@ -131,14 +131,14 @@ export const commentRouter = createTRPCRouter({
       toolIds.size > 0
         ? ctx.db.query.tools.findMany({
             where: inArray(tools.id, [...toolIds]),
-            columns: { id: true, name: true, slug: true },
+            columns: { id: true, name: true, slug: true, logoUrl: true },
           })
         : [],
       recIds.size > 0
         ? ctx.db.query.recommendations.findMany({
             where: inArray(recommendations.id, [...recIds]),
             with: {
-              tool: { columns: { id: true, name: true, slug: true } },
+              tool: { columns: { id: true, name: true, slug: true, logoUrl: true } },
               category: { with: { categoryGroup: true } },
             },
           })
@@ -156,6 +156,7 @@ export const commentRouter = createTRPCRouter({
           label: string
           sublabel: string
           href: string
+          logos: Array<{ url: string | null; name: string }>
         } | null = null
 
         if (comment.targetType === 'match') {
@@ -166,6 +167,10 @@ export const commentRouter = createTRPCRouter({
             label: `${match.toolA.name} vs ${match.toolB.name}`,
             sublabel: match.category?.name ?? '',
             href: `/matches/${comment.targetId}`,
+            logos: [
+              { url: match.toolA.logoUrl, name: match.toolA.name },
+              { url: match.toolB.logoUrl, name: match.toolB.name },
+            ],
           }
         } else if (comment.targetType === 'tool') {
           const tool = toolMap.get(comment.targetId)
@@ -175,6 +180,7 @@ export const commentRouter = createTRPCRouter({
             label: tool.name,
             sublabel: '',
             href: `/tools/${tool.slug}`,
+            logos: [{ url: tool.logoUrl, name: tool.name }],
           }
         } else if (comment.targetType === 'recommendation') {
           const rec = recMap.get(comment.targetId)
@@ -186,6 +192,7 @@ export const commentRouter = createTRPCRouter({
             label: rec.tool?.name ?? 'Tool',
             sublabel: rec.category?.name ?? '',
             href: groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#',
+            logos: [{ url: rec.tool?.logoUrl ?? null, name: rec.tool?.name ?? '' }],
           }
         }
 
