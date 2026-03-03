@@ -588,8 +588,10 @@ export const criticRouter = createTRPCRouter({
       // Check whether the user has a real auth.users identity (linked user)
       // vs. a placeholder created by adminCreate (no auth account) BEFORE
       // making any mutations, so a failure here leaves the DB unchanged.
-      // auth.users only exists in Supabase; plain PostgreSQL (e.g. tests) won't have it,
-      // so we fall back to treating the profile as admin-created (safe to remove).
+      // auth.users only exists in Supabase; in environments without it (e.g. plain PostgreSQL
+      // tests), we cannot safely distinguish placeholder-only accounts from real linked users.
+      // Preserve the underlying user profile by default and only delete it when we can
+      // confirm there is no auth user row.
       let hasAuthAccount = false
       try {
         const authRows = await ctx.db.execute<{ id: string }>(
@@ -599,7 +601,7 @@ export const criticRouter = createTRPCRouter({
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (message.includes('relation "auth.users" does not exist')) {
-          hasAuthAccount = false
+          hasAuthAccount = true
         } else {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
