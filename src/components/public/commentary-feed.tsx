@@ -65,20 +65,59 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
             className="group relative overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors hover:bg-secondary/60"
           >
             <div className="relative z-0 flex flex-col gap-4 p-5">
-              {/* Context header */}
+              {/* Critic header */}
               <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Link
+                    href={`/critics/${comment.critic.id}`}
+                    className="relative z-20 flex items-center gap-2 hover:underline"
+                  >
+                    <Avatar className="h-7 w-7">
+                      {comment.critic.user.avatarUrl && (
+                        <AvatarImage
+                          src={comment.critic.user.avatarUrl}
+                          alt={comment.critic.user.displayName}
+                        />
+                      )}
+                      <AvatarFallback className="text-[10px]">
+                        {comment.critic.user.displayName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-semibold">{comment.critic.user.displayName}</span>
+                  </Link>
+                  {comment.critic.title && (
+                    <span className="text-xs text-muted-foreground">· {comment.critic.title}</span>
+                  )}
+                  {comment.critic.user.company && (
+                    <span className="text-xs text-muted-foreground">
+                      @ <span className="font-semibold">{comment.critic.user.company}</span>
+                    </span>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {formatDate(comment.createdAt)}
+                </span>
+              </div>
+
+              {/* Comment text */}
+              <p className="text-sm leading-relaxed text-foreground/75">
+                &ldquo;{truncate(comment.content, 220)}&rdquo;
+              </p>
+
+              {/* Match context */}
+              <div className="flex items-center gap-2 border-t border-border/40 pt-2">
+                <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                   {logoA && logoB ? (
                     <>
-                      <ToolLogo url={logoA.url} name={logoA.name} />
+                      <ToolLogo url={logoA.url} name={logoA.name} size={4} />
                       <span className="truncate">{logoA.name}</span>
-                      <span className="shrink-0 text-xs font-normal text-muted-foreground">vs</span>
-                      <ToolLogo url={logoB.url} name={logoB.name} />
+                      <span className="text-muted-foreground/60">vs</span>
+                      <ToolLogo url={logoB.url} name={logoB.name} size={4} />
                       <span className="truncate">{logoB.name}</span>
                     </>
                   ) : logoA ? (
                     <>
-                      <ToolLogo url={logoA.url} name={logoA.name} />
+                      <ToolLogo url={logoA.url} name={logoA.name} size={4} />
                       <span className="truncate">{comment.context.label}</span>
                     </>
                   ) : (
@@ -93,48 +132,6 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
                     </Badge>
                   )}
                 </div>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatDate(comment.createdAt)}
-                </span>
-              </div>
-
-              {/* Comment text */}
-              <p className="text-sm leading-relaxed text-foreground/75">
-                &ldquo;{truncate(comment.content, 220)}&rdquo;
-              </p>
-
-              {/* Critic attribution */}
-              <div className="flex items-center gap-2 border-t border-border/40 pt-2">
-                <Link
-                  href={`/critics/${comment.critic.id}`}
-                  className="relative z-20 flex items-center gap-1.5 hover:underline"
-                >
-                  <Avatar className="h-5 w-5">
-                    {comment.critic.user.avatarUrl && (
-                      <AvatarImage
-                        src={comment.critic.user.avatarUrl}
-                        alt={comment.critic.user.displayName}
-                      />
-                    )}
-                    <AvatarFallback className="text-[8px]">
-                      {comment.critic.user.displayName.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {comment.critic.user.displayName}
-                  </span>
-                </Link>
-                {comment.critic.title && (
-                  <span className="text-xs text-muted-foreground/60">· {comment.critic.title}</span>
-                )}
-                {comment.critic.user.company && (
-                  <span className="text-xs text-muted-foreground/60">
-                    @{' '}
-                    <span className="font-semibold text-muted-foreground">
-                      {comment.critic.user.company}
-                    </span>
-                  </span>
-                )}
               </div>
             </div>
             <Link
