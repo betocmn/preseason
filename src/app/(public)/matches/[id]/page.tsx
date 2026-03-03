@@ -60,6 +60,9 @@ export default async function MatchDetailPage({ params }: Props) {
           ) : (
             <Badge variant="outline">SETTLED</Badge>
           )}
+          <span className="text-xs text-muted-foreground">
+            {formatPeriod(match.periodStart, match.periodEnd)}
+          </span>
         </div>
         <h1 className="mb-4 text-2xl font-bold">
           {match.toolA.name} vs {match.toolB.name}
@@ -94,8 +97,6 @@ export default async function MatchDetailPage({ params }: Props) {
         )}
 
         <p className="mt-2 text-xs text-muted-foreground">
-          {formatPeriod(match.periodStart, match.periodEnd)}
-          {' | '}
           {breakdown.totals.recommendations} recommendations across {breakdown.totals.prompts}{' '}
           prompts
         </p>
