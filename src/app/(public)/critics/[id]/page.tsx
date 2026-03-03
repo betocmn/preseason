@@ -46,7 +46,11 @@ export default async function CriticDetailPage({ params }: Props) {
     try {
       return await caller.critic.getById({ id })
     } catch (error) {
-      if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
+      if (
+        error instanceof TRPCError &&
+        (error.code === 'NOT_FOUND' || error.code === 'BAD_REQUEST')
+      )
+        notFound()
       throw error
     }
   })()
