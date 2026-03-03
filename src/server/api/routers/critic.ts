@@ -3,7 +3,14 @@ import { and, count, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { comments, criticProfiles, matches, recommendations, tools } from '~/server/db/schema'
+import {
+  comments,
+  criticProfiles,
+  matches,
+  recommendations,
+  tools,
+  userProfiles,
+} from '~/server/db/schema'
 
 const updateOwnInput = z
   .object({
@@ -21,6 +28,49 @@ const updateOwnInput = z
     {
       message: 'At least one field is required',
     },
+  )
+
+const avatarPathSchema = z
+  .string()
+  .max(512)
+  .refine((value) => value.startsWith('/'), {
+    message: 'Avatar path must start with "/"',
+  })
+
+const adminCreateInput = z.object({
+  displayName: z.string().min(1).max(150),
+  email: z.string().email().max(255),
+  avatarUrl: avatarPathSchema.optional(),
+  bio: z.string().max(5000).optional(),
+  company: z.string().max(255).optional(),
+  website: z.string().max(255).optional(),
+  title: z.string().max(255).optional(),
+  expertiseAreas: z.array(z.string().min(1).max(100)).max(100).optional(),
+  excludedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
+  isActive: z.boolean().optional(),
+  verified: z.boolean().optional(),
+})
+
+const adminUpdateInput = z
+  .object({
+    id: z.string().uuid(),
+    displayName: z.string().min(1).max(150).optional(),
+    avatarUrl: avatarPathSchema.nullable().optional(),
+    bio: z.string().max(5000).nullable().optional(),
+    company: z.string().max(255).nullable().optional(),
+    website: z.string().max(255).nullable().optional(),
+    title: z.string().max(255).nullable().optional(),
+    expertiseAreas: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
+    excludedCategories: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
+    isActive: z.boolean().optional(),
+    verified: z.boolean().optional(),
+  })
+  .refine(
+    (input) => {
+      const { id: _, ...fields } = input
+      return Object.values(fields).some((v) => v !== undefined)
+    },
+    { message: 'At least one field is required' },
   )
 
 const publicUserColumns = {
@@ -340,4 +390,151 @@ export const criticRouter = createTRPCRouter({
 
     return updated[0]
   }),
+
+  adminList: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    return ctx.db.query.criticProfiles.findMany({
+      orderBy: [desc(criticProfiles.createdAt)],
+      limit: 100,
+      with: { user: true },
+    })
+  }),
+
+  adminGetById: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const critic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, input.id),
+        with: { user: true },
+      })
+
+      if (!critic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Critic not found',
+        })
+      }
+
+      return critic
+    }),
+
+  adminCreate: protectedProcedure.input(adminCreateInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    const userId = crypto.randomUUID()
+
+    const userRow = await ctx.db
+      .insert(userProfiles)
+      .values({
+        id: userId,
+        email: input.email,
+        displayName: input.displayName,
+        avatarUrl: input.avatarUrl ?? null,
+        bio: input.bio ?? null,
+        company: input.company ?? null,
+        website: input.website ?? null,
+        role: 'critic',
+      })
+      .returning()
+
+    if (!userRow[0]) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+    }
+
+    const criticRow = await ctx.db
+      .insert(criticProfiles)
+      .values({
+        userId,
+        title: input.title ?? null,
+        expertiseAreas: input.expertiseAreas ?? null,
+        excludedCategories: input.excludedCategories ?? null,
+        isActive: input.isActive ?? true,
+        verifiedAt: input.verified ? new Date() : null,
+        verifiedBy: input.verified ? ctx.user.id : null,
+      })
+      .returning()
+
+    if (!criticRow[0]) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to create critic profile',
+      })
+    }
+
+    return { ...criticRow[0], user: userRow[0] }
+  }),
+
+  adminUpdate: protectedProcedure.input(adminUpdateInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    const critic = await ctx.db.query.criticProfiles.findFirst({
+      where: eq(criticProfiles.id, input.id),
+      with: { user: true },
+    })
+
+    if (!critic) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
+    }
+
+    const userUpdates: Record<string, unknown> = {}
+    if (input.displayName !== undefined) userUpdates.displayName = input.displayName
+    if (input.avatarUrl !== undefined) userUpdates.avatarUrl = input.avatarUrl
+    if (input.bio !== undefined) userUpdates.bio = input.bio
+    if (input.company !== undefined) userUpdates.company = input.company
+    if (input.website !== undefined) userUpdates.website = input.website
+
+    if (Object.keys(userUpdates).length > 0) {
+      await ctx.db
+        .update(userProfiles)
+        .set(userUpdates)
+        .where(eq(userProfiles.id, critic.userId))
+    }
+
+    const criticUpdates: Record<string, unknown> = {}
+    if (input.title !== undefined) criticUpdates.title = input.title
+    if (input.expertiseAreas !== undefined) criticUpdates.expertiseAreas = input.expertiseAreas
+    if (input.excludedCategories !== undefined)
+      criticUpdates.excludedCategories = input.excludedCategories
+    if (input.isActive !== undefined) criticUpdates.isActive = input.isActive
+    if (input.verified !== undefined) {
+      criticUpdates.verifiedAt = input.verified ? new Date() : null
+      criticUpdates.verifiedBy = input.verified ? ctx.user.id : null
+    }
+
+    if (Object.keys(criticUpdates).length > 0) {
+      await ctx.db
+        .update(criticProfiles)
+        .set(criticUpdates)
+        .where(eq(criticProfiles.id, input.id))
+    }
+
+    const updated = await ctx.db.query.criticProfiles.findFirst({
+      where: eq(criticProfiles.id, input.id),
+      with: { user: true },
+    })
+
+    return updated!
+  }),
+
+  adminDelete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const critic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, input.id),
+      })
+
+      if (!critic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
+      }
+
+      await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
+      await ctx.db.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
+
+      return { success: true, id: input.id }
+    }),
 })
