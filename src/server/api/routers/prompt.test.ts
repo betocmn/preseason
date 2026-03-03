@@ -62,6 +62,33 @@ describe('promptRouter', () => {
     expect(prompt.content).toContain('Create')
   })
 
+  it('lists prompt variants by slug across levels', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    await adminCaller.prompt.create({
+      title: 'Vibe Variant',
+      slug: 'job-board',
+      level: 'vibe-coder',
+      isActive: true,
+    })
+    await adminCaller.prompt.create({
+      title: 'Experienced Variant',
+      slug: 'job-board',
+      level: 'software-dev-experienced',
+      isActive: true,
+    })
+
+    const caller = createTestCaller(null)
+    const variants = await caller.prompt.listBySlug({ slug: 'job-board' })
+
+    expect(variants).toHaveLength(2)
+    expect(variants.map((variant) => variant.level).sort()).toEqual([
+      'software-dev-experienced',
+      'vibe-coder',
+    ])
+  })
+
   it('supports admin update and toggleActive', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

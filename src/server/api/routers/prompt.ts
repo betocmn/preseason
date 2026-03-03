@@ -129,6 +129,24 @@ export const promptRouter = createTRPCRouter({
       return results
     }),
 
+  listBySlug: publicProcedure
+    .input(
+      z.object({
+        slug: z.string().min(1).max(255),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.db
+        .select({
+          id: prompts.id,
+          slug: prompts.slug,
+          level: prompts.level,
+          isActive: prompts.isActive,
+        })
+        .from(prompts)
+        .where(eq(prompts.slug, input.slug))
+    }),
+
   getBySlug: publicProcedure
     .input(
       z.object({

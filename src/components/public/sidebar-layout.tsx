@@ -16,7 +16,7 @@ type CategoryGroup = {
 
 type SidebarLayoutProps = {
   groups: CategoryGroup[]
-  section: 'rankings' | 'matches' | 'critics' | 'prompts'
+  section: 'rankings' | 'matches' | 'critics'
   children: React.ReactNode
 }
 

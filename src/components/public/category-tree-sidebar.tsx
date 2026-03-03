@@ -22,7 +22,7 @@ type CategoryGroup = {
 
 type CategoryTreeSidebarProps = {
   groups: CategoryGroup[]
-  section: 'rankings' | 'matches' | 'critics' | 'prompts'
+  section: 'rankings' | 'matches' | 'critics'
   className?: string
 }
 
