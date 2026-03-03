@@ -582,41 +582,41 @@ export const criticRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
+      const critic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, input.id),
+      })
+
+      if (!critic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
+      }
+
+      // Check whether the user has a real auth.users identity (linked user)
+      // vs. a placeholder created by adminCreate (no auth account).
+      // Run this OUTSIDE any transaction: if auth.users doesn't exist (e.g. plain
+      // PostgreSQL / Testcontainers), a failing query inside a transaction poisons
+      // it and prevents the subsequent mutations from running even after the error
+      // is caught. Using ctx.db here keeps the check on a separate connection.
+      // auth.users only exists in Supabase; without it we preserve the user profile.
+      let hasAuthAccount = false
+      try {
+        const authRows = await ctx.db.execute<{ id: string }>(
+          sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
+        )
+        hasAuthAccount = authRows.length > 0
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('relation "auth.users" does not exist')) {
+          hasAuthAccount = true
+        } else {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to verify auth account status',
+            cause: err,
+          })
+        }
+      }
+
       return await ctx.db.transaction(async (tx) => {
-        const critic = await tx.query.criticProfiles.findFirst({
-          where: eq(criticProfiles.id, input.id),
-        })
-
-        if (!critic) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
-        }
-
-        // Check whether the user has a real auth.users identity (linked user)
-        // vs. a placeholder created by adminCreate (no auth account) BEFORE
-        // making any mutations, so a failure here leaves the DB unchanged.
-        // auth.users only exists in Supabase; in environments without it (e.g. plain PostgreSQL
-        // tests), we cannot safely distinguish placeholder-only accounts from real linked users.
-        // Preserve the underlying user profile by default and only delete it when we can
-        // confirm there is no auth user row.
-        let hasAuthAccount = false
-        try {
-          const authRows = await tx.execute<{ id: string }>(
-            sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
-          )
-          hasAuthAccount = authRows.length > 0
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          if (message.includes('relation \"auth.users\" does not exist')) {
-            hasAuthAccount = true
-          } else {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to verify auth account status',
-              cause: err,
-            })
-          }
-        }
-
         // Remove the critic profile
         await tx.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
 
