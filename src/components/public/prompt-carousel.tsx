@@ -13,6 +13,7 @@ type PromptWithTools = {
   title: string
   slug: string
   content: string | null
+  description: string | null
   level: string
   topTools: {
     tool: { id: string; name: string; slug: string; logoUrl: string | null }
@@ -77,11 +78,16 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
             <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
               {current.title}
             </h3>
-            {current.content && (
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {truncate(current.content, 160)}
-              </p>
-            )}
+            {(() => {
+              const promptText = current.content ?? current.description
+              return (
+                promptText && (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {truncate(promptText, 160)}
+                  </p>
+                )
+              )
+            })()}
           </Link>
 
           {/* Right: top tools */}
