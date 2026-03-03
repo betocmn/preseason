@@ -128,7 +128,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
         </div>
         {/* Card-level link overlay */}
         <Link
-          href={`/prompts/${current.slug}`}
+          href={`/prompts/${current.level}/${current.slug}`}
           className="absolute inset-0 z-10 rounded-t-lg"
           aria-label={current.title}
         />

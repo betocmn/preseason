@@ -107,6 +107,7 @@ export const recommendationRouter = createTRPCRouter({
           promptId: prompts.id,
           promptTitle: prompts.title,
           promptSlug: prompts.slug,
+          promptLevel: prompts.level,
           runId: runs.id,
           runStatus: runs.status,
         })
@@ -151,6 +152,7 @@ export const recommendationRouter = createTRPCRouter({
             id: row.promptId,
             title: row.promptTitle,
             slug: row.promptSlug,
+            level: row.promptLevel,
           },
           run: {
             id: row.runId,

@@ -13,7 +13,7 @@ type RecommendationCardProps = {
   tool: { id: string; name: string; slug: string; logoUrl?: string | null }
   category: { id: string; name: string; slug: string; groupSlug: string }
   llm: { id: string; name: string; slug: string }
-  prompt: { id: string; title: string; slug: string }
+  prompt: { id: string; title: string; slug: string; level: string }
   createdAt: Date | null
   className?: string
 }
@@ -62,7 +62,7 @@ export function RecommendationCard({
               </span>
               <span className="inline-flex items-center gap-1">
                 <FileText className="h-3 w-3" />
-                <Link href={`/prompts/${prompt.slug}`} className="hover:underline">
+                <Link href={`/prompts/${prompt.level}/${prompt.slug}`} className="hover:underline">
                   {prompt.title}
                 </Link>
               </span>
