@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { asc, count, desc, eq } from 'drizzle-orm'
+import { asc, count, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -145,6 +145,10 @@ export const promptRouter = createTRPCRouter({
         })
         .from(prompts)
         .where(eq(prompts.slug, input.slug))
+        .orderBy(
+          desc(prompts.isActive),
+          asc(sql`CASE WHEN ${prompts.level} = 'vibe-coder' THEN 0 WHEN ${prompts.level} = 'software-dev-experienced' THEN 1 ELSE 2 END`),
+        )
     }),
 
   getBySlug: publicProcedure

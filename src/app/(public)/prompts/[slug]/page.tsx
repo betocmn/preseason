@@ -11,7 +11,10 @@ export default async function PromptSlugRedirectPage({
   const prompts = await caller.prompt.listBySlug({ slug })
   if (prompts.length === 0) notFound()
 
-  const preferred = prompts.find((prompt) => prompt.level === 'vibe-coder') ?? prompts[0]
+  // listBySlug returns results sorted by active status and level priority
+  // (active first, then vibe-coder, then experienced, then beginner)
+  // so the first result is always the preferred canonical variant
+  const preferred = prompts[0]
   if (!preferred) notFound()
 
   redirect(`/prompts/${preferred.level}/${preferred.slug}`)
