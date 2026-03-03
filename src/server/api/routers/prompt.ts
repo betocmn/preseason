@@ -147,7 +147,9 @@ export const promptRouter = createTRPCRouter({
         .where(eq(prompts.slug, input.slug))
         .orderBy(
           desc(prompts.isActive),
-          asc(sql`CASE WHEN ${prompts.level} = 'vibe-coder' THEN 0 WHEN ${prompts.level} = 'software-dev-experienced' THEN 1 ELSE 2 END`),
+          asc(
+            sql`CASE WHEN ${prompts.level} = 'vibe-coder' THEN 0 WHEN ${prompts.level} = 'software-dev-experienced' THEN 1 ELSE 2 END`,
+          ),
         )
     }),
 
