@@ -17,7 +17,7 @@ export default async function HomePage() {
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
         <section className="grid items-stretch gap-10 lg:grid-cols-[2fr_3fr]">
-          <div className="flex flex-col justify-center rounded-lg border border-border/50 bg-card/50 px-6 py-8 backdrop-blur-sm">
+          <div className="flex flex-col justify-center rounded-lg border bg-card px-6 py-8">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
             </h1>
