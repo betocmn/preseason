@@ -28,7 +28,7 @@ export function Navbar() {
             width={140}
             height={32}
             priority
-            className=""
+            style={{ filter: 'var(--logo-filter)' }}
           />
         </Link>
 
