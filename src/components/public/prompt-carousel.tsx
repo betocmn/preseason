@@ -59,14 +59,14 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
-      <div className="flex-1 p-5">
+      <Link
+        href={`/prompts/${current.slug}`}
+        className="group/prompt flex-1 rounded-t-lg p-5 transition-colors hover:bg-secondary/50"
+      >
         {/* Two-column: prompt text left, recommendations right */}
         <div className="grid gap-5 sm:grid-cols-2">
           {/* Left: prompt content */}
-          <Link
-            href={`/prompts/${current.slug}`}
-            className="group/prompt min-w-0 rounded-md p-2 -m-2 transition-colors hover:bg-secondary/50"
-          >
+          <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">
               <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
                 {formatLevel(current.level)}
@@ -88,7 +88,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                 )
               )
             })()}
-          </Link>
+          </div>
 
           {/* Right: top tools */}
           {current.topTools.length > 0 && (
@@ -126,7 +126,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
             </div>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Navigation: arrows around dots */}
       {prompts.length > 1 && (
