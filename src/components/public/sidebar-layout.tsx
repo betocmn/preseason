@@ -28,7 +28,7 @@ export function SidebarLayout({ groups, section, children }: SidebarLayoutProps)
       </div>
       <div className="flex gap-8">
         <aside className="hidden w-56 shrink-0 md:block">
-          <div className="sticky top-[4.5rem]">
+          <div className="sticky top-4">
             <CategoryTreeSidebar groups={groups} section={section} />
           </div>
         </aside>
