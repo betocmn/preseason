@@ -1,4 +1,4 @@
-import { MessageSquare, Sparkles, Swords, Wrench } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   title: 'Critics | Preseason',
   description: 'Verified critics who provide expert commentary on tool recommendations.',
 }
+
+const HOVER_GRADIENT =
+  'linear-gradient(130deg, rgba(125,211,252,0.07) 0%, rgba(196,181,253,0.07) 40%, rgba(110,231,183,0.07) 70%, rgba(125,211,252,0.07) 100%)'
 
 function formatDate(date: Date | null) {
   if (!date) return ''
@@ -25,11 +28,16 @@ function truncate(text: string, maxLength: number) {
   return `${text.slice(0, maxLength).trimEnd()}...`
 }
 
-const contextConfig = {
-  match: { Icon: Swords, color: '#7dd3fc' },
-  tool: { Icon: Wrench, color: '#6ee7b7' },
-  recommendation: { Icon: Sparkles, color: '#c4b5fd' },
-} as const
+function ToolLogo({ url, name, size = 5 }: { url: string | null; name: string; size?: number }) {
+  return (
+    <Avatar className={`h-${size} w-${size} ring-1 ring-border`}>
+      {url && <AvatarImage src={url} alt={name} />}
+      <AvatarFallback className="bg-secondary text-[8px]">
+        {name.slice(0, 2).toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
 
 export default async function CriticsPage() {
   const caller = await api()
@@ -94,63 +102,52 @@ export default async function CriticsPage() {
       {recentComments.length > 0 && (
         <div>
           <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {recentComments.map((comment) => {
-              const { Icon, color } = contextConfig[comment.context.type]
+              const [logoA, logoB] = comment.context.logos
 
               return (
                 <div
                   key={comment.id}
-                  className="group relative flex overflow-hidden rounded-lg border border-border bg-secondary/25 transition-colors hover:bg-secondary/40"
+                  className="group relative overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors"
                 >
-                  {/* Colored left accent */}
-                  <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
+                  {/* Gradient hover overlay */}
+                  <div
+                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    style={{ background: HOVER_GRADIENT }}
+                  />
 
-                  {/* Main card link — covers the whole card */}
+                  {/* Main card link */}
                   <Link
                     href={comment.context.href}
                     className="absolute inset-0 z-0"
                     aria-label={comment.context.label}
                   />
 
-                  <div className="relative z-10 flex flex-1 flex-col gap-3 p-4">
-                    {/* Context header row */}
+                  <div className="relative z-10 flex flex-col gap-3 p-4">
+                    {/* Context header */}
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2">
-                        {/* Tool logo(s) */}
-                        {(() => {
-                          const [logoA, logoB] = comment.context.logos
-                          return logoA && logoB ? (
-                            <div className="relative h-6 w-10 shrink-0">
-                              <Avatar className="absolute left-0 top-0 h-6 w-6 ring-1 ring-border">
-                                {logoA.url && <AvatarImage src={logoA.url} alt={logoA.name} />}
-                                <AvatarFallback className="bg-secondary text-[8px]">
-                                  {logoA.name.slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <Avatar className="absolute left-4 top-0 h-6 w-6 ring-1 ring-border">
-                                {logoB.url && <AvatarImage src={logoB.url} alt={logoB.name} />}
-                                <AvatarFallback className="bg-secondary text-[8px]">
-                                  {logoB.name.slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                            </div>
-                          ) : logoA ? (
-                            <Avatar className="h-6 w-6 shrink-0 ring-1 ring-border">
-                              {logoA.url && <AvatarImage src={logoA.url} alt={logoA.name} />}
-                              <AvatarFallback className="bg-secondary text-[8px]">
-                                {logoA.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          ) : null
-                        })()}
-
-                        <span style={{ color }}>
-                          <Icon className="h-3.5 w-3.5 shrink-0" />
-                        </span>
-                        <span className="truncate text-sm font-semibold">
-                          {comment.context.label}
-                        </span>
+                      <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                        {logoA && logoB ? (
+                          // Match: logo next to each tool name
+                          <>
+                            <ToolLogo url={logoA.url} name={logoA.name} />
+                            <span className="truncate">{logoA.name}</span>
+                            <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                              vs
+                            </span>
+                            <ToolLogo url={logoB.url} name={logoB.name} />
+                            <span className="truncate">{logoB.name}</span>
+                          </>
+                        ) : logoA ? (
+                          // Single tool / recommendation
+                          <>
+                            <ToolLogo url={logoA.url} name={logoA.name} />
+                            <span className="truncate">{comment.context.label}</span>
+                          </>
+                        ) : (
+                          <span className="truncate">{comment.context.label}</span>
+                        )}
                         {comment.context.sublabel && (
                           <Badge
                             variant="secondary"
