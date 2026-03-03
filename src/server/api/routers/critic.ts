@@ -487,10 +487,7 @@ export const criticRouter = createTRPCRouter({
     if (input.website !== undefined) userUpdates.website = input.website
 
     if (Object.keys(userUpdates).length > 0) {
-      await ctx.db
-        .update(userProfiles)
-        .set(userUpdates)
-        .where(eq(userProfiles.id, critic.userId))
+      await ctx.db.update(userProfiles).set(userUpdates).where(eq(userProfiles.id, critic.userId))
     }
 
     const criticUpdates: Record<string, unknown> = {}
@@ -505,10 +502,7 @@ export const criticRouter = createTRPCRouter({
     }
 
     if (Object.keys(criticUpdates).length > 0) {
-      await ctx.db
-        .update(criticProfiles)
-        .set(criticUpdates)
-        .where(eq(criticProfiles.id, input.id))
+      await ctx.db.update(criticProfiles).set(criticUpdates).where(eq(criticProfiles.id, input.id))
     }
 
     const updated = await ctx.db.query.criticProfiles.findFirst({
@@ -516,7 +510,11 @@ export const criticRouter = createTRPCRouter({
       with: { user: true },
     })
 
-    return updated!
+    if (!updated) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found after update' })
+    }
+
+    return updated
   }),
 
   adminDelete: protectedProcedure

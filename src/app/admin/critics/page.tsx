@@ -96,10 +96,7 @@ export default async function CriticsPage() {
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <DeleteCriticButton
-                      criticId={critic.id}
-                      criticName={critic.user.displayName}
-                    />
+                    <DeleteCriticButton criticId={critic.id} criticName={critic.user.displayName} />
                   </div>
                 </TableCell>
               </TableRow>
