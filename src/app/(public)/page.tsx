@@ -47,7 +47,7 @@ export default async function HomePage() {
           </div>
           {activeMatches.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {activeMatches.slice(0, 6).map((match) => (
+              {activeMatches.slice(0, 12).map((match) => (
                 <MatchCard
                   key={match.id}
                   id={match.id}
