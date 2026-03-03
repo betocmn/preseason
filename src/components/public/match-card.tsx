@@ -42,16 +42,20 @@ export function MatchCard({
             <Badge variant="secondary" className="text-xs">
               {category.name}
             </Badge>
-            {isActive ? (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
-                LIVE
-              </span>
-            ) : (
-              <Badge variant="outline" className="text-xs">
-                SETTLED
-              </Badge>
-            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{formatPeriod(periodStart, periodEnd)}</span>
+              <span className="text-border">·</span>
+              {isActive ? (
+                <span className="inline-flex items-center gap-1 font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
+                  LIVE
+                </span>
+              ) : (
+                <Badge variant="outline" className="text-xs">
+                  SETTLED
+                </Badge>
+              )}
+            </div>
           </div>
 
           <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
@@ -85,10 +89,6 @@ export function MatchCard({
               Winner: {winnerToolId === toolA.id ? toolA.name : toolB.name}
             </p>
           )}
-
-          <div className="mt-2 text-xs text-muted-foreground">
-            {formatPeriod(periodStart, periodEnd)}
-          </div>
         </CardContent>
       </Link>
     </Card>
