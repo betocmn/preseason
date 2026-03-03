@@ -1,4 +1,4 @@
-import { MessageSquare, Swords, Wrench } from 'lucide-react'
+import { MessageSquare, Sparkles, Swords, Wrench } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
@@ -26,9 +26,9 @@ function truncate(text: string, maxLength: number) {
 }
 
 const contextConfig = {
-  match: { Icon: Swords, color: '#7dd3fc', label: 'Match' },
-  tool: { Icon: Wrench, color: '#6ee7b7', label: 'Tool' },
-  recommendation: { Icon: MessageSquare, color: '#c4b5fd', label: 'Ranking' },
+  match: { Icon: Swords, color: '#7dd3fc' },
+  tool: { Icon: Wrench, color: '#6ee7b7' },
+  recommendation: { Icon: Sparkles, color: '#c4b5fd' },
 } as const
 
 export default async function CriticsPage() {
@@ -61,16 +61,19 @@ export default async function CriticsPage() {
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold">{critic.user.displayName}</p>
-                  {critic.title && (
-                    <p className="truncate text-[10px] text-muted-foreground">{critic.title}</p>
-                  )}
-                  {critic.user.company && (
-                    <p className="truncate text-[10px] text-muted-foreground/70">
-                      {critic.user.company}
+                  {(critic.title || critic.user.company) && (
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      {critic.title && <span>{critic.title}</span>}
+                      {critic.title && critic.user.company && <span> @ </span>}
+                      {critic.user.company && (
+                        <span className="font-semibold text-muted-foreground">
+                          {critic.user.company}
+                        </span>
+                      )}
                     </p>
                   )}
                   {critic.commentCount > 0 && (
-                    <p className="mt-1 text-[10px] font-medium" style={{ color: '#c4b5fd' }}>
+                    <p className="mt-0.5 text-[10px] font-medium" style={{ color: '#c4b5fd' }}>
                       {critic.commentCount} comment{critic.commentCount !== 1 ? 's' : ''}
                     </p>
                   )}
@@ -98,22 +101,54 @@ export default async function CriticsPage() {
               return (
                 <div
                   key={comment.id}
-                  className="flex overflow-hidden rounded-lg border border-border bg-secondary/25"
+                  className="group relative flex overflow-hidden rounded-lg border border-border bg-secondary/25 transition-colors hover:bg-secondary/40"
                 >
                   {/* Colored left accent */}
                   <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
 
-                  <div className="flex flex-1 flex-col gap-2.5 p-4">
-                    {/* Context + date */}
+                  {/* Main card link — covers the whole card */}
+                  <Link
+                    href={comment.context.href}
+                    className="absolute inset-0 z-0"
+                    aria-label={comment.context.label}
+                  />
+
+                  <div className="relative z-10 flex flex-1 flex-col gap-3 p-4">
+                    {/* Context header row */}
                     <div className="flex items-center justify-between gap-3">
-                      <Link
-                        href={comment.context.href}
-                        className="group/ctx flex min-w-0 items-center gap-2"
-                      >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {/* Tool logo(s) */}
+                        {(() => {
+                          const [logoA, logoB] = comment.context.logos
+                          return logoA && logoB ? (
+                            <div className="relative h-6 w-10 shrink-0">
+                              <Avatar className="absolute left-0 top-0 h-6 w-6 ring-1 ring-border">
+                                {logoA.url && <AvatarImage src={logoA.url} alt={logoA.name} />}
+                                <AvatarFallback className="bg-secondary text-[8px]">
+                                  {logoA.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <Avatar className="absolute left-4 top-0 h-6 w-6 ring-1 ring-border">
+                                {logoB.url && <AvatarImage src={logoB.url} alt={logoB.name} />}
+                                <AvatarFallback className="bg-secondary text-[8px]">
+                                  {logoB.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                          ) : logoA ? (
+                            <Avatar className="h-6 w-6 shrink-0 ring-1 ring-border">
+                              {logoA.url && <AvatarImage src={logoA.url} alt={logoA.name} />}
+                              <AvatarFallback className="bg-secondary text-[8px]">
+                                {logoA.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          ) : null
+                        })()}
+
                         <span style={{ color }}>
                           <Icon className="h-3.5 w-3.5 shrink-0" />
                         </span>
-                        <span className="truncate text-sm font-semibold group-hover/ctx:underline">
+                        <span className="truncate text-sm font-semibold">
                           {comment.context.label}
                         </span>
                         {comment.context.sublabel && (
@@ -124,7 +159,7 @@ export default async function CriticsPage() {
                             {comment.context.sublabel}
                           </Badge>
                         )}
-                      </Link>
+                      </div>
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {formatDate(comment.createdAt)}
                       </span>
@@ -135,11 +170,11 @@ export default async function CriticsPage() {
                       &ldquo;{truncate(comment.content, 220)}&rdquo;
                     </p>
 
-                    {/* Critic */}
+                    {/* Critic attribution */}
                     <div className="flex items-center gap-2 border-t border-border/40 pt-2">
                       <Link
                         href={`/critics/${comment.critic.id}`}
-                        className="group/c flex items-center gap-1.5"
+                        className="relative z-10 flex items-center gap-1.5 hover:underline"
                       >
                         <Avatar className="h-5 w-5">
                           {comment.critic.user.avatarUrl && (
@@ -152,13 +187,21 @@ export default async function CriticsPage() {
                             {comment.critic.user.displayName.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-xs font-medium text-muted-foreground group-hover/c:text-foreground">
+                        <span className="text-xs font-medium text-muted-foreground">
                           {comment.critic.user.displayName}
                         </span>
                       </Link>
                       {comment.critic.title && (
                         <span className="text-xs text-muted-foreground/60">
                           · {comment.critic.title}
+                        </span>
+                      )}
+                      {comment.critic.user.company && (
+                        <span className="text-xs text-muted-foreground/60">
+                          @{' '}
+                          <span className="font-semibold text-muted-foreground">
+                            {comment.critic.user.company}
+                          </span>
                         </span>
                       )}
                     </div>

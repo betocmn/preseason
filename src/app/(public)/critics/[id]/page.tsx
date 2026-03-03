@@ -73,9 +73,14 @@ export default async function CriticDetailPage({ params }: Props) {
           </Avatar>
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold tracking-tight">{critic.user.displayName}</h1>
-            {critic.title && <p className="text-muted-foreground">{critic.title}</p>}
-            {critic.user.company && (
-              <p className="text-sm text-muted-foreground">@ {critic.user.company}</p>
+            {(critic.title || critic.user.company) && (
+              <p className="text-muted-foreground">
+                {critic.title && <span>{critic.title}</span>}
+                {critic.title && critic.user.company && <span> @ </span>}
+                {critic.user.company && (
+                  <span className="font-semibold">{critic.user.company}</span>
+                )}
+              </p>
             )}
             {critic.user.website && (
               <Link
