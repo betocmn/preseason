@@ -16,6 +16,7 @@ type MatchCardProps = {
   winnerToolId: string | null
   periodStart: string
   periodEnd: string
+  showPeriod?: boolean
   className?: string
 }
 
@@ -30,34 +31,29 @@ export function MatchCard({
   winnerToolId,
   periodStart,
   periodEnd,
+  showPeriod = false,
   className,
 }: MatchCardProps) {
   const isActive = status === 'active'
 
   return (
-    <Card className={cn('group transition-colors hover:bg-accent/50', className)}>
+    <Card className={cn('transition-colors hover:bg-accent/50', className)}>
       <Link href={`/matches/${id}`}>
         <CardContent className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <Badge variant="secondary" className="text-xs">
               {category.name}
             </Badge>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="hidden group-hover:inline">
-                {formatPeriod(periodStart, periodEnd)}
+            {isActive ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
+                LIVE
               </span>
-              <span className="hidden group-hover:inline text-border">·</span>
-              {isActive ? (
-                <span className="inline-flex items-center gap-1 font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-trend-up" />
-                  LIVE
-                </span>
-              ) : (
-                <Badge variant="outline" className="text-xs">
-                  SETTLED
-                </Badge>
-              )}
-            </div>
+            ) : (
+              <Badge variant="outline" className="text-xs">
+                SETTLED
+              </Badge>
+            )}
           </div>
 
           <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
@@ -89,6 +85,12 @@ export function MatchCard({
           {winnerToolId && (
             <p className="mt-2 text-xs font-medium text-foreground">
               Winner: {winnerToolId === toolA.id ? toolA.name : toolB.name}
+            </p>
+          )}
+
+          {showPeriod && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {formatPeriod(periodStart, periodEnd)}
             </p>
           )}
         </CardContent>

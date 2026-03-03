@@ -50,6 +50,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
                 winnerToolId={match.winnerToolId}
                 periodStart={match.periodStart}
                 periodEnd={match.periodEnd}
+                showPeriod
               />
             ))}
           </div>
@@ -79,6 +80,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
                 winnerToolId={match.winnerToolId}
                 periodStart={match.periodStart}
                 periodEnd={match.periodEnd}
+                showPeriod
               />
             ))}
           </div>
