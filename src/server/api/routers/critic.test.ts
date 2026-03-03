@@ -68,7 +68,7 @@ describe('criticRouter', () => {
     const caller = createTestCaller(null)
     const result = await caller.critic.getById({ id: critic?.id ?? '' })
     expect(result.id).toBe(critic?.id)
-    expect(result.comments).toHaveLength(1)
+    expect(result.commentTargets).toHaveLength(0)
     expect(result.user).not.toHaveProperty('email')
   })
 
