@@ -113,12 +113,6 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                   </div>
                 )
               })}
-              <Link
-                href="/prompts"
-                className="mt-1 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
-              >
-                View all prompts
-              </Link>
             </div>
           )}
         </div>
@@ -126,40 +120,45 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
       {/* Navigation: arrows around dots */}
       {prompts.length > 1 && (
-        <div className="flex items-center justify-center gap-2 border-t px-5 py-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={!hasPrev}
-            onClick={goPrev}
-            className="h-6 w-6 text-muted-foreground"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <div className="flex items-center gap-1.5">
-            {prompts.map((_, i) => (
-              <button
-                type="button"
-                key={prompts[i]?.id ?? i}
-                onClick={() => setCurrentIndex(i)}
-                className={cn(
-                  'h-1.5 rounded-full transition-all',
-                  i === currentIndex
-                    ? 'w-4 bg-muted-foreground/50'
-                    : 'w-1.5 bg-muted-foreground/20',
-                )}
-              />
-            ))}
+        <div className="flex items-center justify-between border-t px-5 py-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={!hasPrev}
+              onClick={goPrev}
+              className="h-6 w-6 text-muted-foreground"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <div className="flex items-center gap-1.5">
+              {prompts.map((_, i) => (
+                <button
+                  type="button"
+                  key={prompts[i]?.id ?? i}
+                  onClick={() => setCurrentIndex(i)}
+                  className={cn(
+                    'h-1.5 rounded-full transition-all',
+                    i === currentIndex
+                      ? 'w-4 bg-muted-foreground/50'
+                      : 'w-1.5 bg-muted-foreground/20',
+                  )}
+                />
+              ))}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={!hasNext}
+              onClick={goNext}
+              className="h-6 w-6 text-muted-foreground"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={!hasNext}
-            onClick={goNext}
-            className="h-6 w-6 text-muted-foreground"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
+          <Link href="/prompts" className="text-xs text-muted-foreground/70 hover:text-foreground">
+            View all prompts
+          </Link>
         </div>
       )}
     </div>
