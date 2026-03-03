@@ -76,11 +76,21 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
               {current.title}
             </h3>
             {(() => {
+              const isPromptContent = !!current.content
               const promptText = current.content ?? current.description
               return (
                 promptText && (
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {truncate(promptText, 160)}
+                  <p
+                    className={cn(
+                      'mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground',
+                      isPromptContent && 'italic',
+                    )}
+                  >
+                    {isPromptContent ? (
+                      <>&ldquo;{truncate(promptText, 120)}&rdquo;</>
+                    ) : (
+                      truncate(promptText, 120)
+                    )}
                   </p>
                 )
               )
