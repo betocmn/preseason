@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -43,6 +43,34 @@ export const criticRouter = createTRPCRouter({
         },
       },
     })
+  }),
+
+  listWithCount: publicProcedure.query(async ({ ctx }) => {
+    const critics = await ctx.db.query.criticProfiles.findMany({
+      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
+      orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
+      limit: 12,
+      with: { user: { columns: publicUserColumns } },
+    })
+
+    const criticIds = critics.map((c) => c.id)
+    const countRows =
+      criticIds.length > 0
+        ? await ctx.db
+            .select({ criticId: comments.criticId, total: count() })
+            .from(comments)
+            .where(inArray(comments.criticId, criticIds))
+            .groupBy(comments.criticId)
+        : []
+
+    const countMap = new Map(countRows.map((r) => [r.criticId, r.total]))
+
+    return critics.map((critic) => ({
+      id: critic.id,
+      title: critic.title,
+      user: critic.user,
+      commentCount: countMap.get(critic.id) ?? 0,
+    }))
   }),
 
   listWithComments: publicProcedure.query(async ({ ctx }) => {

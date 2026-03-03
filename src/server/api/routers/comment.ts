@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { getUserProfile, requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -84,6 +84,128 @@ async function resolveTargetCategorySlugs(
 }
 
 export const commentRouter = createTRPCRouter({
+  listRecent: publicProcedure.query(async ({ ctx }) => {
+    const LIMIT = 30
+
+    const verifiedCritics = await ctx.db.query.criticProfiles.findMany({
+      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
+      columns: { id: true },
+    })
+
+    if (verifiedCritics.length === 0) return []
+
+    const criticIds = verifiedCritics.map((c) => c.id)
+
+    const recentComments = await ctx.db.query.comments.findMany({
+      where: inArray(comments.criticId, criticIds),
+      orderBy: [desc(comments.createdAt)],
+      limit: LIMIT,
+      with: {
+        critic: {
+          with: { user: { columns: publicUserColumns } },
+        },
+      },
+    })
+
+    const matchIds = new Set<string>()
+    const toolIds = new Set<string>()
+    const recIds = new Set<string>()
+
+    for (const c of recentComments) {
+      if (c.targetType === 'match') matchIds.add(c.targetId)
+      else if (c.targetType === 'tool') toolIds.add(c.targetId)
+      else if (c.targetType === 'recommendation') recIds.add(c.targetId)
+    }
+
+    const [matchTargets, toolTargets, recTargets] = await Promise.all([
+      matchIds.size > 0
+        ? ctx.db.query.matches.findMany({
+            where: inArray(matches.id, [...matchIds]),
+            with: {
+              toolA: { columns: { id: true, name: true, slug: true, logoUrl: true } },
+              toolB: { columns: { id: true, name: true, slug: true, logoUrl: true } },
+              category: true,
+            },
+          })
+        : [],
+      toolIds.size > 0
+        ? ctx.db.query.tools.findMany({
+            where: inArray(tools.id, [...toolIds]),
+            columns: { id: true, name: true, slug: true },
+          })
+        : [],
+      recIds.size > 0
+        ? ctx.db.query.recommendations.findMany({
+            where: inArray(recommendations.id, [...recIds]),
+            with: {
+              tool: { columns: { id: true, name: true, slug: true } },
+              category: { with: { categoryGroup: true } },
+            },
+          })
+        : [],
+    ])
+
+    const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
+    const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
+    const recMap = new Map(recTargets.map((r) => [r.id, r]))
+
+    return recentComments
+      .map((comment) => {
+        let context: {
+          type: 'match' | 'tool' | 'recommendation'
+          label: string
+          sublabel: string
+          href: string
+        } | null = null
+
+        if (comment.targetType === 'match') {
+          const match = matchMap.get(comment.targetId)
+          if (!match) return null
+          context = {
+            type: 'match',
+            label: `${match.toolA.name} vs ${match.toolB.name}`,
+            sublabel: match.category?.name ?? '',
+            href: `/matches/${comment.targetId}`,
+          }
+        } else if (comment.targetType === 'tool') {
+          const tool = toolMap.get(comment.targetId)
+          if (!tool) return null
+          context = {
+            type: 'tool',
+            label: tool.name,
+            sublabel: '',
+            href: `/tools/${tool.slug}`,
+          }
+        } else if (comment.targetType === 'recommendation') {
+          const rec = recMap.get(comment.targetId)
+          if (!rec) return null
+          const groupSlug = rec.category?.categoryGroup?.slug
+          const subSlug = rec.category?.slug
+          context = {
+            type: 'recommendation',
+            label: rec.tool?.name ?? 'Tool',
+            sublabel: rec.category?.name ?? '',
+            href: groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#',
+          }
+        }
+
+        if (!context) return null
+
+        return {
+          id: comment.id,
+          content: comment.content,
+          createdAt: comment.createdAt,
+          critic: {
+            id: comment.critic.id,
+            user: comment.critic.user,
+            title: comment.critic.title,
+          },
+          context,
+        }
+      })
+      .filter((c) => c !== null)
+  }),
+
   listByTarget: publicProcedure
     .input(
       z.object({
