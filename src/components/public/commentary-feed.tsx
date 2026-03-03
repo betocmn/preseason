@@ -42,9 +42,14 @@ function truncate(text: string, maxLength: number) {
   return `${(lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated).trimEnd()}...`
 }
 
+const sizeClasses: Record<number, string> = {
+  4: 'h-4 w-4',
+  5: 'h-5 w-5',
+}
+
 function ToolLogo({ url, name, size = 5 }: { url: string | null; name: string; size?: number }) {
   return (
-    <Avatar className={`h-${size} w-${size} ring-1 ring-border`}>
+    <Avatar className={`${sizeClasses[size] ?? 'h-5 w-5'} ring-1 ring-border`}>
       {url && <AvatarImage src={url} alt={name} />}
       <AvatarFallback className="bg-secondary text-[8px]">
         {name.slice(0, 2).toUpperCase()}
