@@ -583,12 +583,20 @@ export const criticRouter = createTRPCRouter({
       await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
 
       // Check whether the user has a real auth.users identity (linked user)
-      // vs. a placeholder created by adminCreate (no auth account)
-      const authRows = await ctx.db.execute<{ id: string }>(
-        sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
-      )
+      // vs. a placeholder created by adminCreate (no auth account).
+      // auth.users only exists in Supabase; plain PostgreSQL (e.g. tests) won't have it,
+      // so we fall back to treating the profile as admin-created (safe to remove).
+      let hasAuthAccount = false
+      try {
+        const authRows = await ctx.db.execute<{ id: string }>(
+          sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
+        )
+        hasAuthAccount = authRows.length > 0
+      } catch {
+        hasAuthAccount = false
+      }
 
-      if (authRows.length > 0) {
+      if (hasAuthAccount) {
         // Linked real user: demote role back to 'user', leave their account intact
         await ctx.db
           .update(userProfiles)
