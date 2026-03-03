@@ -96,4 +96,28 @@
     font-family: var(--font-geist-mono), ui-monospace, monospace;
     font-feature-settings: "tnum";
   }
+
+  .btn-gradient {
+    background: linear-gradient(
+      130deg,
+      #7dd3fc 0%,
+      #c4b5fd 40%,
+      #6ee7b7 70%,
+      #7dd3fc 100%
+    );
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease-in-out infinite;
+  }
+
+  @keyframes gradient-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
 }
