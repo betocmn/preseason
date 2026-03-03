@@ -65,7 +65,7 @@
     --input: 220 8% 20%;
     --ring: 45 90% 50%;
 
-    --logo-filter: none;
+    --logo-filter: brightness(0) invert(1);
 
     /* Trend colors — dark mode */
     --trend-up: 152 50% 45%;
