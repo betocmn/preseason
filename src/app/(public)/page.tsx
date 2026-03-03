@@ -73,11 +73,11 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* Recent Commentary */}
+        {/* Verified Critics */}
         {recentComments.length > 0 && (
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Recent Commentary</h2>
+              <h2 className="text-base font-semibold">Verified Critics</h2>
               <Link href="/critics" className="text-sm text-muted-foreground hover:text-foreground">
                 View all
               </Link>
