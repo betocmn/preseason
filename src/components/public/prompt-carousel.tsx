@@ -58,13 +58,10 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
   const hasNext = currentIndex < prompts.length - 1
 
   return (
-    <div className="flex flex-col rounded-lg border bg-card">
-      <Link
-        href={`/prompts/${current.slug}`}
-        className="group/prompt flex-1 rounded-t-lg p-5 transition-colors hover:bg-secondary/50"
-      >
+    <div className="group/prompt flex flex-col rounded-lg border bg-card">
+      <div className="relative flex-1 rounded-t-lg p-5 transition-colors group-hover/prompt:bg-secondary/50">
         {/* Two-column: prompt text left, recommendations right */}
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="relative z-0 grid gap-5 sm:grid-cols-2">
           {/* Left: prompt content */}
           <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">
@@ -101,7 +98,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
                 return (
                   <div key={tool.id} className="flex items-center gap-3">
-                    <div className="w-28 shrink-0">
+                    <div className="relative z-20 w-28 shrink-0">
                       <ToolBadge
                         name={tool.name}
                         slug={tool.slug}
@@ -126,7 +123,13 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
             </div>
           )}
         </div>
-      </Link>
+        {/* Card-level link overlay */}
+        <Link
+          href={`/prompts/${current.slug}`}
+          className="absolute inset-0 z-10 rounded-t-lg"
+          aria-label={current.title}
+        />
+      </div>
 
       {/* Navigation: arrows around dots */}
       {prompts.length > 1 && (
