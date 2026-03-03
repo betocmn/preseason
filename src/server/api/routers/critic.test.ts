@@ -175,6 +175,44 @@ describe('criticRouter', () => {
     expect(afterDelete).toHaveLength(0)
   })
 
+  it('rejects invalid website URLs in adminCreate and adminUpdate', async () => {
+    const admin = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(admin.authUser)
+
+    await expect(
+      caller.critic.adminCreate({
+        displayName: 'Bad URL',
+        email: 'badurl@example.com',
+        website: 'javascript:alert(1)',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    await expect(
+      caller.critic.adminCreate({
+        displayName: 'Bad URL 2',
+        email: 'badurl2@example.com',
+        website: 'not-a-url',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    const created = await caller.critic.adminCreate({
+      displayName: 'Good URL',
+      email: 'goodurl@example.com',
+      website: 'https://example.com',
+    })
+    expect(created.user.website).toBe('https://example.com')
+
+    await expect(
+      caller.critic.adminUpdate({
+        id: created.id,
+        website: 'javascript:alert(1)',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    const updated = await caller.critic.adminUpdate({ id: created.id, website: null })
+    expect(updated.user.website).toBeNull()
+  })
+
   it('rejects non-admin critic CRUD mutations', async () => {
     const provider = await seedUser({ role: 'provider' })
     const caller = createTestCaller(provider.authUser)
