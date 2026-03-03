@@ -37,7 +37,9 @@ function formatDate(date: Date | null) {
 
 function truncate(text: string, maxLength: number) {
   if (text.length <= maxLength) return text
-  return `${text.slice(0, maxLength).trimEnd()}...`
+  const truncated = text.slice(0, maxLength)
+  const lastSpace = truncated.lastIndexOf(' ')
+  return `${(lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated).trimEnd()}...`
 }
 
 function ToolLogo({ url, name, size = 5 }: { url: string | null; name: string; size?: number }) {
