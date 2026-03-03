@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
-import { Separator } from '~/components/ui/separator'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -26,11 +25,11 @@ function truncate(text: string, maxLength: number) {
   return `${text.slice(0, maxLength).trimEnd()}...`
 }
 
-const contextIcons = {
-  match: Swords,
-  tool: Wrench,
-  recommendation: MessageSquare,
-}
+const contextConfig = {
+  match: { Icon: Swords, color: '#7dd3fc', label: 'Match' },
+  tool: { Icon: Wrench, color: '#6ee7b7', label: 'Tool' },
+  recommendation: { Icon: MessageSquare, color: '#c4b5fd', label: 'Ranking' },
+} as const
 
 export default async function CriticsPage() {
   const caller = await api()
@@ -45,32 +44,33 @@ export default async function CriticsPage() {
       <div className="mb-10">
         <h1 className="mb-4 text-xl font-bold tracking-tight">Verified Critics</h1>
         {critics.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
             {critics.map((critic) => (
               <Link
                 key={critic.id}
                 href={`/critics/${critic.id}`}
-                className="group flex items-center gap-2.5 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-3 transition-colors hover:bg-secondary/60"
               >
-                <Avatar className="h-8 w-8 shrink-0">
+                <Avatar className="h-9 w-9 shrink-0 ring-2 ring-border">
                   {critic.user.avatarUrl && (
                     <AvatarImage src={critic.user.avatarUrl} alt={critic.user.displayName} />
                   )}
-                  <AvatarFallback className="text-[10px] font-medium">
+                  <AvatarFallback className="bg-secondary text-[10px] font-semibold">
                     {critic.user.displayName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold group-hover:text-foreground">
-                    {critic.user.displayName}
-                  </p>
-                  {(critic.title ?? critic.user.company) && (
-                    <p className="truncate text-[10px] text-muted-foreground">
-                      {critic.title ?? critic.user.company}
+                  <p className="truncate text-xs font-semibold">{critic.user.displayName}</p>
+                  {critic.title && (
+                    <p className="truncate text-[10px] text-muted-foreground">{critic.title}</p>
+                  )}
+                  {critic.user.company && (
+                    <p className="truncate text-[10px] text-muted-foreground/70">
+                      {critic.user.company}
                     </p>
                   )}
                   {critic.commentCount > 0 && (
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-[10px] font-medium" style={{ color: '#c4b5fd' }}>
                       {critic.commentCount} comment{critic.commentCount !== 1 ? 's' : ''}
                     </p>
                   )}
@@ -91,36 +91,38 @@ export default async function CriticsPage() {
       {recentComments.length > 0 && (
         <div>
           <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
-          <div className="space-y-0">
-            {recentComments.map((comment, idx) => {
-              const Icon = contextIcons[comment.context.type]
+          <div className="space-y-2.5">
+            {recentComments.map((comment) => {
+              const { Icon, color } = contextConfig[comment.context.type]
 
               return (
-                <div key={comment.id}>
-                  {idx > 0 && <Separator />}
-                  <div className="py-4">
-                    {/* Context + date row */}
-                    <div className="mb-2 flex items-center justify-between gap-3">
+                <div
+                  key={comment.id}
+                  className="flex overflow-hidden rounded-lg border border-border bg-secondary/25"
+                >
+                  {/* Colored left accent */}
+                  <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
+
+                  <div className="flex flex-1 flex-col gap-2.5 p-4">
+                    {/* Context + date */}
+                    <div className="flex items-center justify-between gap-3">
                       <Link
                         href={comment.context.href}
-                        className="group/ctx flex items-center gap-1.5"
+                        className="group/ctx flex min-w-0 items-center gap-2"
                       >
-                        <span className="text-muted-foreground">
-                          <Icon className="h-3 w-3" />
+                        <span style={{ color }}>
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
                         </span>
-                        <span className="text-xs font-medium text-foreground/80 group-hover/ctx:text-foreground">
+                        <span className="truncate text-sm font-semibold group-hover/ctx:underline">
                           {comment.context.label}
                         </span>
                         {comment.context.sublabel && (
-                          <>
-                            <span className="text-xs text-muted-foreground/50">·</span>
-                            <Badge
-                              variant="outline"
-                              className="px-1.5 py-0 text-[10px] font-normal"
-                            >
-                              {comment.context.sublabel}
-                            </Badge>
-                          </>
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 px-1.5 py-0 text-[10px] font-normal"
+                          >
+                            {comment.context.sublabel}
+                          </Badge>
                         )}
                       </Link>
                       <span className="shrink-0 text-xs text-muted-foreground">
@@ -129,15 +131,15 @@ export default async function CriticsPage() {
                     </div>
 
                     {/* Comment text */}
-                    <p className="mb-2 text-sm leading-relaxed text-foreground/90">
-                      {truncate(comment.content, 280)}
+                    <p className="text-sm leading-relaxed text-foreground/75">
+                      &ldquo;{truncate(comment.content, 220)}&rdquo;
                     </p>
 
-                    {/* Critic attribution */}
-                    <div className="flex items-center gap-1.5">
+                    {/* Critic */}
+                    <div className="flex items-center gap-2 border-t border-border/40 pt-2">
                       <Link
                         href={`/critics/${comment.critic.id}`}
-                        className="group/critic flex items-center gap-1.5"
+                        className="group/c flex items-center gap-1.5"
                       >
                         <Avatar className="h-5 w-5">
                           {comment.critic.user.avatarUrl && (
@@ -150,12 +152,12 @@ export default async function CriticsPage() {
                             {comment.critic.user.displayName.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-xs font-medium text-muted-foreground group-hover/critic:text-foreground">
+                        <span className="text-xs font-medium text-muted-foreground group-hover/c:text-foreground">
                           {comment.critic.user.displayName}
                         </span>
                       </Link>
                       {comment.critic.title && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground/60">
                           · {comment.critic.title}
                         </span>
                       )}
