@@ -3,6 +3,9 @@ import './src/env.js'
 /** @type {import("next").NextConfig} */
 const config = {
   reactStrictMode: true,
+  outputFileTracingIncludes: {
+    '/*': ['./src/server/llm/prompts/**/*.md'],
+  },
   async rewrites() {
     return [
       {
