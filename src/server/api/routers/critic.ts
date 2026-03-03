@@ -37,19 +37,25 @@ const avatarPathSchema = z
     message: 'Avatar path must start with "/"',
   })
 
-const adminCreateInput = z.object({
-  displayName: z.string().min(1).max(150),
-  email: z.string().email().max(255),
-  avatarUrl: avatarPathSchema.optional(),
-  bio: z.string().max(5000).optional(),
-  company: z.string().max(255).optional(),
-  website: z.string().max(255).optional(),
-  title: z.string().max(255).optional(),
-  expertiseAreas: z.array(z.string().min(1).max(100)).max(100).optional(),
-  excludedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
-  isActive: z.boolean().optional(),
-  verified: z.boolean().optional(),
-})
+const adminCreateInput = z
+  .object({
+    // Link to existing user by their profile ID, or omit to create a new user profile
+    userId: z.string().uuid().optional(),
+    displayName: z.string().min(1).max(150).optional(),
+    email: z.string().email().max(255).optional(),
+    avatarUrl: avatarPathSchema.optional(),
+    bio: z.string().max(5000).optional(),
+    company: z.string().max(255).optional(),
+    website: z.string().max(255).optional(),
+    title: z.string().max(255).optional(),
+    expertiseAreas: z.array(z.string().min(1).max(100)).max(100).optional(),
+    excludedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
+    isActive: z.boolean().optional(),
+    verified: z.boolean().optional(),
+  })
+  .refine((input) => input.userId != null || (input.displayName != null && input.email != null), {
+    message: 'Either userId (existing user) or both displayName and email are required',
+  })
 
 const adminUpdateInput = z
   .object({
@@ -424,30 +430,61 @@ export const criticRouter = createTRPCRouter({
   adminCreate: protectedProcedure.input(adminCreateInput).mutation(async ({ ctx, input }) => {
     await requireRole(ctx.db, ctx.user.id, ['admin'])
 
-    const userId = crypto.randomUUID()
+    let resolvedUserId: string
 
-    const userRow = await ctx.db
-      .insert(userProfiles)
-      .values({
-        id: userId,
-        email: input.email,
-        displayName: input.displayName,
-        avatarUrl: input.avatarUrl ?? null,
-        bio: input.bio ?? null,
-        company: input.company ?? null,
-        website: input.website ?? null,
-        role: 'critic',
+    if (input.userId) {
+      const existingUser = await ctx.db.query.userProfiles.findFirst({
+        where: eq(userProfiles.id, input.userId),
       })
-      .returning()
+      if (!existingUser) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' })
+      }
+      const existingCritic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.userId, input.userId),
+      })
+      if (existingCritic) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'User already has a critic profile' })
+      }
+      if (existingUser.role !== 'critic') {
+        await ctx.db
+          .update(userProfiles)
+          .set({ role: 'critic' })
+          .where(eq(userProfiles.id, input.userId))
+      }
+      resolvedUserId = input.userId
+    } else {
+      const { email, displayName } = input
+      if (!email || !displayName) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'displayName and email are required when not linking an existing user',
+        })
+      }
+      const newUserId = crypto.randomUUID()
+      const userRow = await ctx.db
+        .insert(userProfiles)
+        .values({
+          id: newUserId,
+          email,
+          displayName,
+          avatarUrl: input.avatarUrl ?? null,
+          bio: input.bio ?? null,
+          company: input.company ?? null,
+          website: input.website ?? null,
+          role: 'critic',
+        })
+        .returning()
 
-    if (!userRow[0]) {
-      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+      if (!userRow[0]) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+      }
+      resolvedUserId = newUserId
     }
 
     const criticRow = await ctx.db
       .insert(criticProfiles)
       .values({
-        userId,
+        userId: resolvedUserId,
         title: input.title ?? null,
         expertiseAreas: input.expertiseAreas ?? null,
         excludedCategories: input.excludedCategories ?? null,
@@ -464,7 +501,19 @@ export const criticRouter = createTRPCRouter({
       })
     }
 
-    return { ...criticRow[0], user: userRow[0] }
+    const result = await ctx.db.query.criticProfiles.findFirst({
+      where: eq(criticProfiles.id, criticRow[0].id),
+      with: { user: true },
+    })
+
+    if (!result) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch created critic',
+      })
+    }
+
+    return result
   }),
 
   adminUpdate: protectedProcedure.input(adminUpdateInput).mutation(async ({ ctx, input }) => {
