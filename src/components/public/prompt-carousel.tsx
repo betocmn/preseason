@@ -22,13 +22,6 @@ type PromptWithTools = {
   }[]
 }
 
-function truncate(text: string, maxLength: number) {
-  if (text.length <= maxLength) return text
-  const truncated = text.slice(0, maxLength)
-  const lastSpace = truncated.lastIndexOf(' ')
-  return `${(lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated).trimEnd()}...`
-}
-
 type PromptCarouselProps = {
   prompts: PromptWithTools[]
 }
@@ -88,11 +81,9 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                       isPromptContent && 'italic',
                     )}
                   >
-                    {isPromptContent ? (
-                      <>&ldquo;{truncate(promptText, 120)}&rdquo;</>
-                    ) : (
-                      truncate(promptText, 120)
-                    )}
+                    {isPromptContent && <>&ldquo;</>}
+                    {promptText}
+                    {isPromptContent && <>&rdquo;</>}
                   </p>
                 )
               )
