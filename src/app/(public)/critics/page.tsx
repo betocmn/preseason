@@ -109,7 +109,7 @@ export default async function CriticsPage() {
               return (
                 <div
                   key={comment.id}
-                  className="group relative overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors"
+                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors"
                 >
                   {/* Gradient hover overlay */}
                   <div
@@ -124,7 +124,7 @@ export default async function CriticsPage() {
                     aria-label={comment.context.label}
                   />
 
-                  <div className="relative z-10 flex flex-col gap-3 p-4">
+                  <div className="relative flex flex-col gap-3 p-4">
                     {/* Context header */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
