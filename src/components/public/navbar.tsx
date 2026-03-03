@@ -19,7 +19,7 @@ export function Navbar() {
   const pathname = usePathname()
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background">
+    <header className="border-b bg-background">
       <div className="container flex h-14 items-center gap-6">
         <Link href="/" className="mr-4">
           <Image
