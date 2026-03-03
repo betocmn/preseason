@@ -430,96 +430,98 @@ export const criticRouter = createTRPCRouter({
   adminCreate: protectedProcedure.input(adminCreateInput).mutation(async ({ ctx, input }) => {
     await requireRole(ctx.db, ctx.user.id, ['admin'])
 
-    let resolvedUserId: string
+    return await ctx.db.transaction(async (tx) => {
+      let resolvedUserId: string
 
-    if (input.userId) {
-      const existingUser = await ctx.db.query.userProfiles.findFirst({
-        where: eq(userProfiles.id, input.userId),
-      })
-      if (!existingUser) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' })
-      }
-      const existingCritic = await ctx.db.query.criticProfiles.findFirst({
-        where: eq(criticProfiles.userId, input.userId),
-      })
-      if (existingCritic) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'User already has a critic profile' })
-      }
-      if (existingUser.role !== 'critic' && existingUser.role !== 'user') {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Cannot link a user with role "${existingUser.role}" as a critic`,
+      if (input.userId) {
+        const existingUser = await tx.query.userProfiles.findFirst({
+          where: eq(userProfiles.id, input.userId),
         })
-      }
-      if (existingUser.role !== 'critic') {
-        await ctx.db
-          .update(userProfiles)
-          .set({ role: 'critic' })
-          .where(eq(userProfiles.id, input.userId))
-      }
-      resolvedUserId = input.userId
-    } else {
-      const { email, displayName } = input
-      if (!email || !displayName) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'displayName and email are required when not linking an existing user',
+        if (!existingUser) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' })
+        }
+        const existingCritic = await tx.query.criticProfiles.findFirst({
+          where: eq(criticProfiles.userId, input.userId),
         })
+        if (existingCritic) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'User already has a critic profile' })
+        }
+        if (existingUser.role !== 'critic' && existingUser.role !== 'user') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot link a user with role "${existingUser.role}" as a critic`,
+          })
+        }
+        if (existingUser.role !== 'critic') {
+          await tx
+            .update(userProfiles)
+            .set({ role: 'critic' })
+            .where(eq(userProfiles.id, input.userId))
+        }
+        resolvedUserId = input.userId
+      } else {
+        const { email, displayName } = input
+        if (!email || !displayName) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'displayName and email are required when not linking an existing user',
+          })
+        }
+        const newUserId = crypto.randomUUID()
+        const userRow = await tx
+          .insert(userProfiles)
+          .values({
+            id: newUserId,
+            email,
+            displayName,
+            avatarUrl: input.avatarUrl ?? null,
+            bio: input.bio ?? null,
+            company: input.company ?? null,
+            website: input.website ?? null,
+            role: 'critic',
+          })
+          .returning()
+
+        if (!userRow[0]) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+        }
+        resolvedUserId = newUserId
       }
-      const newUserId = crypto.randomUUID()
-      const userRow = await ctx.db
-        .insert(userProfiles)
+
+      const criticRow = await tx
+        .insert(criticProfiles)
         .values({
-          id: newUserId,
-          email,
-          displayName,
-          avatarUrl: input.avatarUrl ?? null,
-          bio: input.bio ?? null,
-          company: input.company ?? null,
-          website: input.website ?? null,
-          role: 'critic',
+          userId: resolvedUserId,
+          title: input.title ?? null,
+          expertiseAreas: input.expertiseAreas ?? null,
+          excludedCategories: input.excludedCategories ?? null,
+          isActive: input.isActive ?? true,
+          verifiedAt: input.verified ? new Date() : null,
+          verifiedBy: input.verified ? ctx.user.id : null,
         })
         .returning()
 
-      if (!userRow[0]) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+      if (!criticRow[0]) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create critic profile',
+        })
       }
-      resolvedUserId = newUserId
-    }
 
-    const criticRow = await ctx.db
-      .insert(criticProfiles)
-      .values({
-        userId: resolvedUserId,
-        title: input.title ?? null,
-        expertiseAreas: input.expertiseAreas ?? null,
-        excludedCategories: input.excludedCategories ?? null,
-        isActive: input.isActive ?? true,
-        verifiedAt: input.verified ? new Date() : null,
-        verifiedBy: input.verified ? ctx.user.id : null,
+      const result = await tx.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, criticRow[0].id),
+        with: { user: true },
       })
-      .returning()
 
-    if (!criticRow[0]) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create critic profile',
-      })
-    }
+      if (!result) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch created critic',
+        })
+      }
 
-    const result = await ctx.db.query.criticProfiles.findFirst({
-      where: eq(criticProfiles.id, criticRow[0].id),
-      with: { user: true },
+      return result
     })
-
-    if (!result) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch created critic',
-      })
-    }
-
-    return result
   }),
 
   adminUpdate: protectedProcedure.input(adminUpdateInput).mutation(async ({ ctx, input }) => {
@@ -577,54 +579,56 @@ export const criticRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
-      const critic = await ctx.db.query.criticProfiles.findFirst({
-        where: eq(criticProfiles.id, input.id),
-      })
+      return await ctx.db.transaction(async (tx) => {
+        const critic = await tx.query.criticProfiles.findFirst({
+          where: eq(criticProfiles.id, input.id),
+        })
 
-      if (!critic) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
-      }
-
-      // Check whether the user has a real auth.users identity (linked user)
-      // vs. a placeholder created by adminCreate (no auth account) BEFORE
-      // making any mutations, so a failure here leaves the DB unchanged.
-      // auth.users only exists in Supabase; in environments without it (e.g. plain PostgreSQL
-      // tests), we cannot safely distinguish placeholder-only accounts from real linked users.
-      // Preserve the underlying user profile by default and only delete it when we can
-      // confirm there is no auth user row.
-      let hasAuthAccount = false
-      try {
-        const authRows = await ctx.db.execute<{ id: string }>(
-          sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
-        )
-        hasAuthAccount = authRows.length > 0
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        if (message.includes('relation "auth.users" does not exist')) {
-          hasAuthAccount = true
-        } else {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to verify auth account status',
-            cause: err,
-          })
+        if (!critic) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
         }
-      }
 
-      // Remove the critic profile
-      await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
+        // Check whether the user has a real auth.users identity (linked user)
+        // vs. a placeholder created by adminCreate (no auth account) BEFORE
+        // making any mutations, so a failure here leaves the DB unchanged.
+        // auth.users only exists in Supabase; in environments without it (e.g. plain PostgreSQL
+        // tests), we cannot safely distinguish placeholder-only accounts from real linked users.
+        // Preserve the underlying user profile by default and only delete it when we can
+        // confirm there is no auth user row.
+        let hasAuthAccount = false
+        try {
+          const authRows = await tx.execute<{ id: string }>(
+            sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
+          )
+          hasAuthAccount = authRows.length > 0
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (message.includes('relation \"auth.users\" does not exist')) {
+            hasAuthAccount = true
+          } else {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to verify auth account status',
+              cause: err,
+            })
+          }
+        }
 
-      if (hasAuthAccount) {
-        // Linked real user: restore role back to 'user', leave their account intact
-        await ctx.db
-          .update(userProfiles)
-          .set({ role: 'user' })
-          .where(eq(userProfiles.id, critic.userId))
-      } else {
-        // Admin-created placeholder with no auth account: safe to remove the profile
-        await ctx.db.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
-      }
+        // Remove the critic profile
+        await tx.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
 
-      return { success: true, id: input.id }
+        if (hasAuthAccount) {
+          // Linked real user: restore role back to 'user', leave their account intact
+          await tx
+            .update(userProfiles)
+            .set({ role: 'user' })
+            .where(eq(userProfiles.id, critic.userId))
+        } else {
+          // Admin-created placeholder with no auth account: safe to remove the profile
+          await tx.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
+        }
+
+        return { success: true, id: input.id }
+      })
     }),
 })
