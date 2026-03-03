@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
 import { MatchCard } from '~/components/public/match-card'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
@@ -7,9 +8,10 @@ import { api } from '~/trpc/server'
 export default async function HomePage() {
   const caller = await api()
 
-  const [promptsWithTools, activeMatches] = await Promise.all([
+  const [promptsWithTools, activeMatches, recentComments] = await Promise.all([
     caller.prompt.listWithTopTools({ limit: 5 }),
     caller.match.listActive(),
+    caller.comment.listRecent({ limit: 5 }),
   ])
 
   return (
@@ -70,6 +72,19 @@ export default async function HomePage() {
             />
           )}
         </section>
+
+        {/* Recent Commentary */}
+        {recentComments.length > 0 && (
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Recent Commentary</h2>
+              <Link href="/critics" className="text-sm text-muted-foreground hover:text-foreground">
+                View all
+              </Link>
+            </div>
+            <CommentaryFeed comments={recentComments} />
+          </section>
+        )}
       </div>
     </div>
   )
