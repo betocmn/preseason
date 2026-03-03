@@ -19,27 +19,63 @@ import {
 } from '~/components/ui/form'
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
+import { cn } from '~/lib/utils'
 import { api } from '~/trpc/react'
 
-const formSchema = z.object({
-  displayName: z.string().min(1, 'Name is required').max(150),
-  email: z.string().email('Valid email required').max(255),
-  avatarUrl: z
-    .string()
-    .max(512)
-    .refine((value) => value.length === 0 || value.startsWith('/'), {
-      message: 'Avatar path must start with "/"',
-    })
-    .optional(),
-  bio: z.string().max(5000).optional(),
-  company: z.string().max(255).optional(),
-  website: z.string().max(255).optional(),
-  title: z.string().max(255).optional(),
-  expertiseAreas: z.string().optional(),
-  excludedCategories: z.string().optional(),
-  isActive: z.boolean(),
-  verified: z.boolean(),
-})
+const formSchema = z
+  .object({
+    userMode: z.enum(['link', 'create']),
+    userId: z.string().optional(),
+    displayName: z.string().max(150).optional(),
+    email: z.string().max(255).optional(),
+    avatarUrl: z
+      .string()
+      .max(512)
+      .refine((value) => value.length === 0 || value.startsWith('/'), {
+        message: 'Avatar path must start with "/"',
+      })
+      .optional(),
+    bio: z.string().max(5000).optional(),
+    company: z.string().max(255).optional(),
+    website: z.string().max(255).optional(),
+    title: z.string().max(255).optional(),
+    expertiseAreas: z.string().optional(),
+    excludedCategories: z.string().optional(),
+    isActive: z.boolean(),
+    verified: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.userMode === 'link') {
+      if (!data.userId?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'User ID is required',
+          path: ['userId'],
+        })
+      }
+    } else {
+      if (!data.displayName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Name is required',
+          path: ['displayName'],
+        })
+      }
+      if (!data.email?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Email is required',
+          path: ['email'],
+        })
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Valid email required',
+          path: ['email'],
+        })
+      }
+    }
+  })
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -76,6 +112,9 @@ export function CriticForm({ critic }: CriticFormProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      // In edit mode, use 'create' so displayName/email are validated (not userId)
+      userMode: isEditing ? 'create' : 'link',
+      userId: '',
       displayName: critic?.user.displayName ?? '',
       email: critic?.user.email ?? '',
       avatarUrl: critic?.user.avatarUrl ?? '',
@@ -90,6 +129,7 @@ export function CriticForm({ critic }: CriticFormProps) {
     },
   })
 
+  const userMode = form.watch('userMode')
   const avatarUrl = form.watch('avatarUrl')
 
   const createMutation = api.critic.adminCreate.useMutation({
@@ -119,6 +159,11 @@ export function CriticForm({ critic }: CriticFormProps) {
     return items.length > 0 ? items : undefined
   }
 
+  function handleModeChange(mode: 'link' | 'create') {
+    form.setValue('userMode', mode)
+    form.clearErrors()
+  }
+
   function onSubmit(values: FormValues) {
     const avatarUrl = values.avatarUrl?.trim() ?? ''
     const bio = values.bio?.trim() ?? ''
@@ -143,6 +188,15 @@ export function CriticForm({ critic }: CriticFormProps) {
         isActive: values.isActive,
         verified: values.verified,
       })
+    } else if (values.userMode === 'link') {
+      createMutation.mutate({
+        userId: values.userId?.trim(),
+        title: title || undefined,
+        expertiseAreas,
+        excludedCategories,
+        isActive: values.isActive,
+        verified: values.verified,
+      })
     } else {
       createMutation.mutate({
         displayName: values.displayName,
@@ -160,72 +214,181 @@ export function CriticForm({ critic }: CriticFormProps) {
     }
   }
 
+  // Show user profile fields in edit mode or when creating a new user
+  const showUserFields = isEditing || userMode === 'create'
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-2xl space-y-6">
-        <FormField
-          control={form.control}
-          name="displayName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* User mode toggle — only shown when creating */}
+        {!isEditing && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">User</p>
+            <div className="flex overflow-hidden rounded-md border">
+              <button
+                type="button"
+                onClick={() => handleModeChange('link')}
+                className={cn(
+                  'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                  userMode === 'link'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Link existing user
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange('create')}
+                className={cn(
+                  'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                  userMode === 'create'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Create new user
+              </button>
+            </div>
+          </div>
+        )}
 
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input {...field} type="email" disabled={isEditing} />
-              </FormControl>
-              {isEditing && (
-                <FormDescription>Email cannot be changed after creation</FormDescription>
+        {/* Link mode: user ID input */}
+        {!isEditing && userMode === 'link' && (
+          <FormField
+            control={form.control}
+            name="userId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>User ID</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Paste user UUID..."
+                    className="font-mono text-sm"
+                  />
+                </FormControl>
+                <FormDescription>
+                  Paste the existing user&apos;s profile ID (UUID). Their role will be updated to
+                  critic.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {/* User profile fields: create mode or edit */}
+        {showUserFields && (
+          <>
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            />
 
-        <FormField
-          control={form.control}
-          name="avatarUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Avatar Path</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="/critics/name.png" />
-              </FormControl>
-              <FormDescription>Path relative to the public folder</FormDescription>
-              {avatarUrl && isLocalAvatarPath(avatarUrl) && (
-                <div className="mt-2 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-background">
-                    <Image
-                      src={avatarUrl}
-                      alt="Avatar preview"
-                      width={40}
-                      height={40}
-                      className="object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs text-muted-foreground">Preview</span>
-                </div>
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="email" disabled={isEditing} />
+                  </FormControl>
+                  {isEditing && (
+                    <FormDescription>Email cannot be changed after creation</FormDescription>
+                  )}
+                  <FormMessage />
+                </FormItem>
               )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            />
 
+            <FormField
+              control={form.control}
+              name="avatarUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Avatar Path</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="/critics/name.png" />
+                  </FormControl>
+                  <FormDescription>Path relative to the public folder</FormDescription>
+                  {avatarUrl && isLocalAvatarPath(avatarUrl) && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-background">
+                        <Image
+                          src={avatarUrl}
+                          alt="Avatar preview"
+                          width={40}
+                          height={40}
+                          className="object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">Preview</span>
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="company"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="bio"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bio</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={3} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="website"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Website</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="https://example.com" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
+        )}
+
+        {/* Critic profile fields: always shown */}
         <FormField
           control={form.control}
           name="title"
@@ -234,48 +397,6 @@ export function CriticForm({ critic }: CriticFormProps) {
               <FormLabel>Title</FormLabel>
               <FormControl>
                 <Input {...field} placeholder="VP of Engineering" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="company"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Company</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="bio"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Bio</FormLabel>
-              <FormControl>
-                <Textarea {...field} rows={3} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="website"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Website</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="https://example.com" />
               </FormControl>
               <FormMessage />
             </FormItem>
