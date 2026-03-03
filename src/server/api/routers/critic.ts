@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, count, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -579,8 +579,25 @@ export const criticRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
       }
 
+      // Always remove the critic profile
       await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
-      await ctx.db.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
+
+      // Check whether the user has a real auth.users identity (linked user)
+      // vs. a placeholder created by adminCreate (no auth account)
+      const authRows = await ctx.db.execute<{ id: string }>(
+        sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
+      )
+
+      if (authRows.length > 0) {
+        // Linked real user: demote role back to 'user', leave their account intact
+        await ctx.db
+          .update(userProfiles)
+          .set({ role: 'user' })
+          .where(eq(userProfiles.id, critic.userId))
+      } else {
+        // Admin-created placeholder with no auth account: safe to remove the profile
+        await ctx.db.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
+      }
 
       return { success: true, id: input.id }
     }),
