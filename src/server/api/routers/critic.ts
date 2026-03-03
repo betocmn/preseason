@@ -30,6 +30,12 @@ const updateOwnInput = z
     },
   )
 
+const websiteUrlSchema = z
+  .string()
+  .url()
+  .max(255)
+  .regex(/^https?:\/\//, { message: 'Website must use http or https protocol' })
+
 const avatarPathSchema = z
   .string()
   .max(512)
@@ -46,7 +52,7 @@ const adminCreateInput = z
     avatarUrl: avatarPathSchema.optional(),
     bio: z.string().max(5000).optional(),
     company: z.string().max(255).optional(),
-    website: z.string().url().max(255).optional(),
+    website: websiteUrlSchema.optional(),
     title: z.string().max(255).optional(),
     expertiseAreas: z.array(z.string().min(1).max(100)).max(100).optional(),
     excludedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
@@ -64,7 +70,7 @@ const adminUpdateInput = z
     avatarUrl: avatarPathSchema.nullable().optional(),
     bio: z.string().max(5000).nullable().optional(),
     company: z.string().max(255).nullable().optional(),
-    website: z.string().url().max(255).nullable().optional(),
+    website: websiteUrlSchema.nullable().optional(),
     title: z.string().max(255).nullable().optional(),
     expertiseAreas: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
     excludedCategories: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),

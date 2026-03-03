@@ -12,7 +12,7 @@ export const userRouter = createTRPCRouter({
         avatarUrl: z.string().url().max(512).optional(),
         bio: z.string().max(5000).optional(),
         company: z.string().max(255).optional(),
-        website: z.string().url().max(255).optional(),
+        website: z.string().url().max(255).regex(/^https?:\/\//, { message: 'Website must use http or https protocol' }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -58,7 +58,7 @@ export const userRouter = createTRPCRouter({
           avatarUrl: z.string().url().max(512).nullable().optional(),
           bio: z.string().max(5000).nullable().optional(),
           company: z.string().max(255).nullable().optional(),
-          website: z.string().url().max(255).nullable().optional(),
+          website: z.string().url().max(255).regex(/^https?:\/\//, { message: 'Website must use http or https protocol' }).nullable().optional(),
         })
         .refine(
           (input) =>
