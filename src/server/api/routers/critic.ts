@@ -554,8 +554,11 @@ export const criticRouter = createTRPCRouter({
       criticUpdates.excludedCategories = input.excludedCategories
     if (input.isActive !== undefined) criticUpdates.isActive = input.isActive
     if (input.verified !== undefined) {
-      criticUpdates.verifiedAt = input.verified ? new Date() : null
-      criticUpdates.verifiedBy = input.verified ? ctx.user.id : null
+      const isCurrentlyVerified = critic.verifiedAt !== null
+      if (input.verified !== isCurrentlyVerified) {
+        criticUpdates.verifiedAt = input.verified ? new Date() : null
+        criticUpdates.verifiedBy = input.verified ? ctx.user.id : null
+      }
     }
 
     if (Object.keys(criticUpdates).length > 0) {
