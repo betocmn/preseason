@@ -33,8 +33,8 @@ const updateOwnInput = z
 const avatarPathSchema = z
   .string()
   .max(512)
-  .refine((value) => value.startsWith('/'), {
-    message: 'Avatar path must start with "/"',
+  .refine((value) => /^\/(?!\/)/.test(value), {
+    message: 'Avatar path must start with "/" and not be a protocol-relative URL',
   })
 
 const adminCreateInput = z
@@ -592,8 +592,21 @@ export const criticRouter = createTRPCRouter({
           sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
         )
         hasAuthAccount = authRows.length > 0
-      } catch {
-        hasAuthAccount = false
+      } catch (err) {
+        // auth.users only exists in Supabase; in test environments (plain PostgreSQL)
+        // the table is missing, which is safe to treat as "no auth account".
+        // Any other error (transient DB failure, permission issue) must propagate
+        // so we don't accidentally delete a linked user profile.
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('relation "auth.users" does not exist')) {
+          hasAuthAccount = false
+        } else {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to verify auth account status',
+            cause: err,
+          })
+        }
       }
 
       if (hasAuthAccount) {
