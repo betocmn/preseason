@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { asc, count, desc, eq } from 'drizzle-orm'
+import { asc, count, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -107,8 +107,11 @@ export const promptRouter = createTRPCRouter({
 
           const totalRecs = topTools.reduce((sum, t) => sum + Number(t.recCount), 0)
 
+          const content = await readPromptFile(prompt.slug, prompt.level as PromptLevel)
+
           return {
             ...prompt,
+            content,
             topTools: topTools.map((t) => ({
               tool: {
                 id: t.toolId,
@@ -124,6 +127,30 @@ export const promptRouter = createTRPCRouter({
       )
 
       return results
+    }),
+
+  listBySlug: publicProcedure
+    .input(
+      z.object({
+        slug: z.string().min(1).max(255),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.db
+        .select({
+          id: prompts.id,
+          slug: prompts.slug,
+          level: prompts.level,
+          isActive: prompts.isActive,
+        })
+        .from(prompts)
+        .where(eq(prompts.slug, input.slug))
+        .orderBy(
+          desc(prompts.isActive),
+          asc(
+            sql`CASE WHEN ${prompts.level} = 'vibe-coder' THEN 0 WHEN ${prompts.level} = 'software-dev-experienced' THEN 1 ELSE 2 END`,
+          ),
+        )
     }),
 
   getBySlug: publicProcedure

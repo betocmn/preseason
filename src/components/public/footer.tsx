@@ -1,32 +1,87 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
-const footerLinks = [
-  { href: '/matches', label: 'Live Matches' },
-  { href: '/rankings', label: 'Rankings' },
-  { href: '/prompts', label: 'Prompts' },
-  { href: '/critics', label: 'Critics' },
-  { href: '/feed', label: 'Feed' },
-  { href: '/trending', label: 'Trending' },
+const linkGroups = [
+  {
+    title: 'Product',
+    links: [
+      { href: '/matches', label: 'Live Matches' },
+      { href: '/rankings', label: 'Rankings' },
+      { href: '/prompts', label: 'Prompts' },
+      { href: '/critics', label: 'Critics' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { href: '/about', label: 'About' },
+      { href: '/methodology', label: 'Methodology' },
+      { href: '/business', label: 'Business Access' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { href: '/privacy', label: 'Privacy Policy' },
+      { href: '/terms', label: 'Terms & Conditions' },
+    ],
+  },
 ]
 
 export function Footer() {
   return (
-    <footer className="border-t bg-background">
-      <div className="container flex flex-col items-center justify-between gap-4 py-6 md:flex-row">
-        <p className="text-sm text-muted-foreground">
-          Preseason &mdash; What tools do AI models actually recommend?
-        </p>
-        <nav className="flex items-center gap-4">
-          {footerLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              {link.label}
+    <footer
+      className="border-t"
+      style={{
+        background:
+          'linear-gradient(130deg, rgba(125,211,252,0.12) 0%, rgba(196,181,253,0.15) 40%, rgba(110,231,183,0.12) 70%, rgba(125,211,252,0.12) 100%)',
+      }}
+    >
+      <div className="container py-10">
+        <div className="flex flex-col gap-8 md:flex-row md:justify-between">
+          {/* Brand */}
+          <div className="max-w-xs">
+            <Link href="/">
+              <Image
+                src="/preseason-brand/preseason-logo.svg"
+                alt="Preseason"
+                width={120}
+                height={28}
+                className="mb-3"
+                style={{ filter: 'var(--logo-filter)' }}
+              />
             </Link>
-          ))}
-        </nav>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              What tools do AI models actually recommend?
+            </p>
+            <p className="mt-3 text-xs text-muted-foreground/50">
+              &copy; {new Date().getFullYear()} Preseason. All rights reserved.
+            </p>
+          </div>
+
+          {/* Link groups */}
+          <div className="flex flex-wrap gap-12 sm:gap-16">
+            {linkGroups.map((group) => (
+              <div key={group.title}>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  {group.title}
+                </p>
+                <ul className="space-y-2">
+                  {group.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </footer>
   )

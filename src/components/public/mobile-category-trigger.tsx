@@ -20,7 +20,7 @@ type CategoryGroup = {
 
 type MobileCategoryTriggerProps = {
   groups: CategoryGroup[]
-  section: 'rankings' | 'matches' | 'critics' | 'prompts'
+  section: 'rankings' | 'matches' | 'critics'
 }
 
 export function MobileCategoryTrigger({ groups, section }: MobileCategoryTriggerProps) {
