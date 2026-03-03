@@ -2,14 +2,15 @@
  * Test data generation script for local development
  * Run with: pnpm db:seed-test
  *
- * Generates runs, run_results, recommendations, and matches so the
- * public UI can be reviewed with realistic-looking data.
+ * Generates runs, run_results, recommendations, matches, and critic comments
+ * so the public UI can be reviewed with realistic-looking data.
  *
  * Prerequisites: Run `pnpm db:seed` first to create categories, tools, LLMs, and prompts.
  *
- * Idempotent: deletes previous test data (runs, matches) then re-creates.
+ * Idempotent: deletes previous test data (runs, matches, critics) then re-creates.
  */
 
+import { eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
@@ -40,6 +41,11 @@ function randomFloat(min: number, max: number): number {
 function randomPick<T>(arr: T[]): T {
   const idx = Math.floor(Math.random() * arr.length)
   return arr[idx] as T
+}
+
+function randomSample<T>(arr: T[], count: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, Math.min(count, shuffled.length))
 }
 
 function daysAgo(days: number): Date {
@@ -129,6 +135,103 @@ const REASONING_TEMPLATES = [
   'Excellent serverless and edge support',
 ]
 
+// Verified critic profiles at major tech companies (none make the tools being reviewed)
+const TEST_CRITICS = [
+  {
+    displayName: 'Sarah Chen',
+    email: 'critic-sarah@preseason-test.local',
+    company: 'Netflix',
+    title: 'VP of Engineering',
+    expertiseAreas: ['infrastructure', 'streaming', 'scalability'],
+  },
+  {
+    displayName: 'Marcus Johnson',
+    email: 'critic-marcus@preseason-test.local',
+    company: 'Spotify',
+    title: 'Staff Engineer',
+    expertiseAreas: ['data-engineering', 'microservices', 'real-time'],
+  },
+  {
+    displayName: 'Priya Patel',
+    email: 'critic-priya@preseason-test.local',
+    company: 'Airbnb',
+    title: 'Engineering Director',
+    expertiseAreas: ['marketplace', 'frontend', 'platform'],
+  },
+  {
+    displayName: 'Alex Rivera',
+    email: 'critic-alex@preseason-test.local',
+    company: 'Shopify',
+    title: 'Principal Engineer',
+    expertiseAreas: ['e-commerce', 'performance', 'ruby'],
+  },
+  {
+    displayName: 'Jamie Wu',
+    email: 'critic-jamie@preseason-test.local',
+    company: 'Coinbase',
+    title: 'Senior Staff Engineer',
+    expertiseAreas: ['security', 'fintech', 'distributed-systems'],
+  },
+  {
+    displayName: 'Elena Kowalski',
+    email: 'critic-elena@preseason-test.local',
+    company: 'Figma',
+    title: 'Engineering Manager',
+    expertiseAreas: ['frontend', 'collaboration', 'webassembly'],
+  },
+  {
+    displayName: 'David Kim',
+    email: 'critic-david@preseason-test.local',
+    company: 'Linear',
+    title: 'CTO',
+    expertiseAreas: ['developer-tools', 'real-time', 'typescript'],
+  },
+  {
+    displayName: 'Rachel Thompson',
+    email: 'critic-rachel@preseason-test.local',
+    company: 'Notion',
+    title: 'Staff Frontend Engineer',
+    expertiseAreas: ['editor', 'react', 'performance'],
+  },
+  {
+    displayName: 'Omar Hassan',
+    email: 'critic-omar@preseason-test.local',
+    company: 'Uber',
+    title: 'Engineering Lead',
+    expertiseAreas: ['payments', 'apis', 'infrastructure'],
+  },
+  {
+    displayName: 'Lisa Park',
+    email: 'critic-lisa@preseason-test.local',
+    company: 'Discord',
+    title: 'Principal Software Engineer',
+    expertiseAreas: ['real-time', 'scale', 'rust'],
+  },
+]
+
+const MATCH_COMMENT_TEMPLATES = [
+  "We migrated from {toolB} to {toolA} six months ago and haven't looked back. The developer experience improvement was immediate and team velocity increased noticeably.",
+  "I've evaluated both extensively. {toolA} has better documentation, but {toolB} has some unique features worth considering. For most teams, {toolA} is the safer bet.",
+  'At {company}, we use {toolA} across multiple services. The ecosystem and community support are unmatched in this space.',
+  'Hot take: {toolB} is actually better for real-time workloads. But for the general case, {toolA} wins on reliability and long-term support.',
+  'Both are solid choices. We went with {toolA} at {company} mainly because of the TypeScript-first approach and type safety.',
+  "I've been following this space closely. {toolA} has shipped more meaningful features in the past year than {toolB} has in two. The momentum is clear.",
+  "We run {toolA} in production serving millions of requests daily. Rock solid. Tried {toolB} in a POC but it wasn't ready for our scale requirements.",
+  'Unpopular opinion: {toolB} has a better core architecture. {toolA} wins mostly on community and ecosystem, not raw technical merit.',
+  "The pricing model for {toolA} is much more predictable at scale. We got burned by {toolB}'s costs after crossing certain usage thresholds.",
+  'As someone who mentors junior engineers, I always recommend {toolA} first. The learning resources and error messages are significantly better.',
+  'From a security standpoint, {toolA} has a more mature vulnerability disclosure process. {toolB} still needs to improve their security posture.',
+  "We switched to {toolA} after {toolB}'s reliability issues last year. Can't afford downtime during peak traffic at {company}.",
+  'Both tools have their place. For greenfield projects, {toolA} is the clear choice. For legacy integrations, {toolB} might be easier to adopt.',
+  'The CI/CD integration story for {toolA} is miles ahead. Saved us weeks of DevOps configuration compared to {toolB}.',
+  "I've contributed to both open source projects. {toolA} has a healthier contributor community and faster code review cycles.",
+  'At {company} we benchmarked both. {toolA} consistently outperformed on p99 latency. {toolB} was competitive on throughput but the tail latency was concerning.',
+  'The migration path from {toolB} to {toolA} is well-documented and we completed it in under two weeks for a mid-size codebase.',
+  "I'd pick {toolB} for a weekend project and {toolA} for anything going to production. The operational tooling makes a huge difference.",
+  'Having maintained both in production at previous companies, {toolA} requires significantly less operational overhead. The self-healing capabilities are underrated.',
+  '{toolA} just announced their new pricing tier which makes it even more competitive. {toolB} needs to respond or risk losing market share.',
+]
+
 // ============================================================================
 // SEED FUNCTIONS
 // ============================================================================
@@ -139,7 +242,14 @@ async function cleanTestData() {
   await db.delete(schema.runs)
   await db.delete(schema.matches)
   await db.delete(schema.comments)
-  console.log('  Cleaned runs, matches, and comments')
+  await db.delete(schema.criticProfiles)
+  // Delete test critic user profiles (identifiable by 'critic' role)
+  await db.delete(schema.userProfiles).where(eq(schema.userProfiles.role, 'critic'))
+  // Clean up test auth users
+  await db.execute(sql`
+    DELETE FROM auth.users WHERE email LIKE 'critic-%@preseason-test.local'
+  `)
+  console.log('  Cleaned runs, matches, comments, critic profiles, and test users')
 }
 
 async function loadExistingData() {
@@ -167,6 +277,7 @@ async function loadExistingData() {
   // Build lookup maps
   const catBySlug = new Map(allSubcategories.map((c) => [c.slug, c]))
   const toolBySlug = new Map(allTools.map((t) => [t.slug, t]))
+  const toolById = new Map(allTools.map((t) => [t.id, t]))
 
   // Build category -> tool IDs map from toolCategories
   const catTools = new Map<string, string[]>()
@@ -178,7 +289,16 @@ async function loadExistingData() {
     catTools.set(cat.slug, existing)
   }
 
-  return { allSubcategories, allTools, allLlms, allPrompts, catBySlug, toolBySlug, catTools }
+  return {
+    allSubcategories,
+    allTools,
+    allLlms,
+    allPrompts,
+    catBySlug,
+    toolBySlug,
+    toolById,
+    catTools,
+  }
 }
 
 function pickToolForCategory(
@@ -306,7 +426,7 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
     status: 'active' | 'settled'
     daysAgo: number
   }> = [
-    // Active matches
+    // ==================== Active matches ====================
     {
       catSlug: 'auth',
       toolASlugs: ['clerk'],
@@ -377,7 +497,78 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
       status: 'active',
       daysAgo: 6,
     },
-    // Settled matches
+    // New active matches
+    {
+      catSlug: 'storage',
+      toolASlugs: ['cloudflare-r2'],
+      toolBSlugs: ['uploadthing'],
+      status: 'active',
+      daysAgo: 4,
+    },
+    {
+      catSlug: 'storage',
+      toolASlugs: ['aws-s3'],
+      toolBSlugs: ['supabase'],
+      status: 'active',
+      daysAgo: 11,
+    },
+    {
+      catSlug: 'realtime',
+      toolASlugs: ['supabase'],
+      toolBSlugs: ['pusher'],
+      status: 'active',
+      daysAgo: 3,
+    },
+    {
+      catSlug: 'notifications',
+      toolASlugs: ['novu'],
+      toolBSlugs: ['onesignal'],
+      status: 'active',
+      daysAgo: 5,
+    },
+    {
+      catSlug: 'api',
+      toolASlugs: ['trpc'],
+      toolBSlugs: ['hono'],
+      status: 'active',
+      daysAgo: 7,
+    },
+    {
+      catSlug: 'auth',
+      toolASlugs: ['auth0'],
+      toolBSlugs: ['lucia'],
+      status: 'active',
+      daysAgo: 12,
+    },
+    {
+      catSlug: 'database',
+      toolASlugs: ['firebase'],
+      toolBSlugs: ['mongodb-atlas'],
+      status: 'active',
+      daysAgo: 6,
+    },
+    {
+      catSlug: 'hosting',
+      toolASlugs: ['cloudflare-pages'],
+      toolBSlugs: ['netlify'],
+      status: 'active',
+      daysAgo: 9,
+    },
+    {
+      catSlug: 'email',
+      toolASlugs: ['sendgrid'],
+      toolBSlugs: ['amazon-ses'],
+      status: 'active',
+      daysAgo: 8,
+    },
+    {
+      catSlug: 'ui-components',
+      toolASlugs: ['mantine'],
+      toolBSlugs: ['chakra-ui'],
+      status: 'active',
+      daysAgo: 11,
+    },
+    // ==================== Settled matches ====================
     {
       catSlug: 'styling',
       toolASlugs: ['tailwind-css'],
@@ -434,10 +625,68 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
       status: 'settled',
       daysAgo: 24,
     },
+    // New settled matches
+    {
+      catSlug: 'hosting',
+      toolASlugs: ['fly-io'],
+      toolBSlugs: ['render'],
+      status: 'settled',
+      daysAgo: 35,
+    },
+    {
+      catSlug: 'analytics',
+      toolASlugs: ['mixpanel'],
+      toolBSlugs: ['google-analytics'],
+      status: 'settled',
+      daysAgo: 32,
+    },
+    {
+      catSlug: 'orm',
+      toolASlugs: ['kysely'],
+      toolBSlugs: ['typeorm'],
+      status: 'settled',
+      daysAgo: 40,
+    },
+    {
+      catSlug: 'realtime',
+      toolASlugs: ['socket-io'],
+      toolBSlugs: ['ably'],
+      status: 'settled',
+      daysAgo: 38,
+    },
+    {
+      catSlug: 'payments',
+      toolASlugs: ['paddle'],
+      toolBSlugs: ['paypal'],
+      status: 'settled',
+      daysAgo: 33,
+    },
+    {
+      catSlug: 'api',
+      toolASlugs: ['hono'],
+      toolBSlugs: ['apollo-graphql'],
+      status: 'settled',
+      daysAgo: 36,
+    },
+    {
+      catSlug: 'notifications',
+      toolASlugs: ['onesignal'],
+      toolBSlugs: ['firebase'],
+      status: 'settled',
+      daysAgo: 42,
+    },
+    {
+      catSlug: 'email',
+      toolASlugs: ['resend'],
+      toolBSlugs: ['mailgun'],
+      status: 'settled',
+      daysAgo: 29,
+    },
   ]
 
   console.log(`Creating ${MATCH_DEFS.length} matches...`)
   let count = 0
+  const matchIds: string[] = []
 
   for (const def of MATCH_DEFS) {
     const cat = catBySlug.get(def.catSlug)
@@ -473,27 +722,151 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
 
     const periodEnd = dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
 
-    await db.insert(schema.matches).values({
-      toolAId,
-      toolBId,
-      categoryId: cat.id,
-      status: def.status,
-      startedAt: startDate,
-      settledAt:
-        def.status === 'settled' ? new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000) : null,
-      periodStart: dateStr(startDate),
-      periodEnd,
-      toolAScore,
-      toolBScore,
-      totalPrompts,
-      winnerToolId: def.status === 'settled' ? winnerId : null,
-    })
+    const [match] = await db
+      .insert(schema.matches)
+      .values({
+        toolAId,
+        toolBId,
+        categoryId: cat.id,
+        status: def.status,
+        startedAt: startDate,
+        settledAt:
+          def.status === 'settled'
+            ? new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000)
+            : null,
+        periodStart: dateStr(startDate),
+        periodEnd,
+        toolAScore,
+        toolBScore,
+        totalPrompts,
+        winnerToolId: def.status === 'settled' ? winnerId : null,
+      })
+      .returning({ id: schema.matches.id })
+
+    if (match) matchIds.push(match.id)
     count++
   }
 
-  console.log(
-    `  Created ${count} matches (${MATCH_DEFS.filter((m) => m.status === 'active').length} active, ${MATCH_DEFS.filter((m) => m.status === 'settled').length} settled)`,
-  )
+  const activeCount = MATCH_DEFS.filter((m) => m.status === 'active').length
+  const settledCount = MATCH_DEFS.filter((m) => m.status === 'settled').length
+  console.log(`  Created ${count} matches (${activeCount} active, ${settledCount} settled)`)
+
+  return matchIds
+}
+
+async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingData>>) {
+  const { toolById } = data
+
+  console.log('Creating critic profiles and comments...')
+
+  // Create auth users, user profiles, and critic profiles for test critics
+  const criticProfileIds: string[] = []
+
+  for (const critic of TEST_CRITICS) {
+    // Create auth user
+    const authResult = await db.execute<{ id: string }>(sql`
+      INSERT INTO auth.users (
+        id, instance_id, email, encrypted_password, email_confirmed_at,
+        created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+        is_super_admin, role, aud, confirmation_token, email_change,
+        email_change_token_new, recovery_token, phone, phone_change,
+        phone_change_token, email_change_token_current, reauthentication_token
+      ) VALUES (
+        gen_random_uuid(), '00000000-0000-0000-0000-000000000000', ${critic.email}, '',
+        now(), now(), now(), '{"provider": "email", "providers": ["email"]}',
+        '{}', false, 'authenticated', 'authenticated', '', '', '', '', NULL, '', '', '', ''
+      )
+      RETURNING id
+    `)
+
+    const authId = authResult[0]?.id
+    if (!authId) {
+      console.warn(`  Failed to create auth user for ${critic.email}`)
+      continue
+    }
+
+    // Create identity
+    await db.execute(sql`
+      INSERT INTO auth.identities (
+        id, user_id, provider_id, provider, identity_data,
+        last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        ${authId}::uuid, ${authId}::uuid, ${critic.email}::varchar, 'email',
+        jsonb_build_object('sub', ${authId}::text, 'email', ${critic.email}::text, 'email_verified', true, 'provider', 'email'),
+        now(), now(), now()
+      )
+    `)
+
+    // Create user profile
+    await db.insert(schema.userProfiles).values({
+      id: authId,
+      email: critic.email,
+      displayName: critic.displayName,
+      company: critic.company,
+      role: 'critic',
+    })
+
+    // Create critic profile
+    const [criticProfile] = await db
+      .insert(schema.criticProfiles)
+      .values({
+        userId: authId,
+        title: critic.title,
+        expertiseAreas: critic.expertiseAreas,
+        verifiedAt: daysAgo(randomInt(30, 180)),
+        isActive: true,
+      })
+      .returning({ id: schema.criticProfiles.id })
+
+    if (criticProfile) criticProfileIds.push(criticProfile.id)
+  }
+
+  console.log(`  Created ${criticProfileIds.length} critic profiles`)
+
+  // Load all matches to attach comments
+  const allMatches = await db.select().from(schema.matches)
+
+  let commentCount = 0
+
+  for (const match of allMatches) {
+    // Each match gets 2-5 comments from random critics
+    const numComments = randomInt(2, 5)
+    const selectedCritics = randomSample(
+      criticProfileIds
+        .map((id, idx) => {
+          const critic = TEST_CRITICS[idx]
+          return critic ? { id, critic } : null
+        })
+        .filter((c) => c !== null),
+      numComments,
+    )
+
+    const toolA = toolById.get(match.toolAId)
+    const toolB = toolById.get(match.toolBId)
+    if (!toolA || !toolB) continue
+
+    for (const { id: criticId, critic } of selectedCritics) {
+      const template = randomPick(MATCH_COMMENT_TEMPLATES)
+      const content = template
+        .replace(/\{toolA\}/g, toolA.name)
+        .replace(/\{toolB\}/g, toolB.name)
+        .replace(/\{company\}/g, critic.company)
+
+      await db.insert(schema.comments).values({
+        criticId,
+        targetType: 'match',
+        targetId: match.id,
+        content,
+        isPinned: Math.random() < 0.1,
+        createdAt: new Date(
+          (match.startedAt?.getTime() ?? Date.now()) + randomInt(1, 10) * 24 * 60 * 60 * 1000,
+        ),
+      })
+      commentCount++
+    }
+  }
+
+  console.log(`  Created ${commentCount} comments across ${allMatches.length} matches`)
 }
 
 // ============================================================================
@@ -507,6 +880,7 @@ async function seedTestData() {
   const data = await loadExistingData()
   await seedRuns(data)
   await seedMatches(data)
+  await seedCriticComments(data)
 
   console.log('\nTest data generation complete!')
 }
