@@ -12,13 +12,18 @@ type PromptWithTools = {
   id: string
   title: string
   slug: string
-  description: string | null
+  content: string | null
   level: string
   topTools: {
     tool: { id: string; name: string; slug: string; logoUrl: string | null }
     rate: number
     count: number
   }[]
+}
+
+function truncate(text: string, maxLength: number) {
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength).trimEnd()}...`
 }
 
 type PromptCarouselProps = {
@@ -57,7 +62,10 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
         {/* Two-column: prompt text left, recommendations right */}
         <div className="grid gap-5 sm:grid-cols-2">
           {/* Left: prompt content */}
-          <div className="min-w-0">
+          <Link
+            href={`/prompts/${current.slug}`}
+            className="group/prompt min-w-0 rounded-md p-2 -m-2 transition-colors hover:bg-secondary/50"
+          >
             <div className="mb-2 flex items-center gap-2">
               <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
                 {formatLevel(current.level)}
@@ -66,19 +74,15 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                 {currentIndex + 1} of {prompts.length}
               </span>
             </div>
-            <h3 className="text-sm font-medium leading-snug">{current.title}</h3>
-            {current.description && (
-              <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-muted-foreground">
-                {current.description}
+            <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
+              {current.title}
+            </h3>
+            {current.content && (
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {truncate(current.content, 160)}
               </p>
             )}
-            <Link
-              href={`/prompts/${current.slug}`}
-              className="mt-2 inline-block text-xs text-muted-foreground/70 hover:text-foreground"
-            >
-              Read full prompt...
-            </Link>
-          </div>
+          </Link>
 
           {/* Right: top tools */}
           {current.topTools.length > 0 && (

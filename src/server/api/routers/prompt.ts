@@ -107,8 +107,11 @@ export const promptRouter = createTRPCRouter({
 
           const totalRecs = topTools.reduce((sum, t) => sum + Number(t.recCount), 0)
 
+          const content = await readPromptFile(prompt.slug, prompt.level as PromptLevel)
+
           return {
             ...prompt,
+            content,
             topTools: topTools.map((t) => ({
               tool: {
                 id: t.toolId,
