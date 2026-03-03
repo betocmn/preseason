@@ -306,7 +306,9 @@ export function CriticForm({ critic }: CriticFormProps) {
               <FormControl>
                 <Input {...field} placeholder="payments, analytics" />
               </FormControl>
-              <FormDescription>Comma-separated categories the critic cannot comment on</FormDescription>
+              <FormDescription>
+                Comma-separated categories the critic cannot comment on
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

@@ -10,7 +10,7 @@
  * Idempotent: deletes previous test data (runs, matches, critics) then re-creates.
  */
 
-import { eq, like, sql } from 'drizzle-orm'
+import { like, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
@@ -244,7 +244,9 @@ async function cleanTestData() {
   await db.delete(schema.comments)
   await db.delete(schema.criticProfiles)
   // Delete only test critic user profiles (matched by seeded test email pattern)
-  await db.delete(schema.userProfiles).where(like(schema.userProfiles.email, 'critic-%@preseason-test.local'))
+  await db
+    .delete(schema.userProfiles)
+    .where(like(schema.userProfiles.email, 'critic-%@preseason-test.local'))
   // Clean up test auth users
   await db.execute(sql`
     DELETE FROM auth.users WHERE email LIKE 'critic-%@preseason-test.local'
