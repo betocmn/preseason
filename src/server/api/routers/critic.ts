@@ -445,6 +445,12 @@ export const criticRouter = createTRPCRouter({
       if (existingCritic) {
         throw new TRPCError({ code: 'CONFLICT', message: 'User already has a critic profile' })
       }
+      if (existingUser.role !== 'critic' && existingUser.role !== 'user') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot link a user with role "${existingUser.role}" as a critic`,
+        })
+      }
       if (existingUser.role !== 'critic') {
         await ctx.db
           .update(userProfiles)
@@ -579,11 +585,9 @@ export const criticRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
       }
 
-      // Always remove the critic profile
-      await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
-
       // Check whether the user has a real auth.users identity (linked user)
-      // vs. a placeholder created by adminCreate (no auth account).
+      // vs. a placeholder created by adminCreate (no auth account) BEFORE
+      // making any mutations, so a failure here leaves the DB unchanged.
       // auth.users only exists in Supabase; plain PostgreSQL (e.g. tests) won't have it,
       // so we fall back to treating the profile as admin-created (safe to remove).
       let hasAuthAccount = false
@@ -593,10 +597,6 @@ export const criticRouter = createTRPCRouter({
         )
         hasAuthAccount = authRows.length > 0
       } catch (err) {
-        // auth.users only exists in Supabase; in test environments (plain PostgreSQL)
-        // the table is missing, which is safe to treat as "no auth account".
-        // Any other error (transient DB failure, permission issue) must propagate
-        // so we don't accidentally delete a linked user profile.
         const message = err instanceof Error ? err.message : String(err)
         if (message.includes('relation "auth.users" does not exist')) {
           hasAuthAccount = false
@@ -609,8 +609,11 @@ export const criticRouter = createTRPCRouter({
         }
       }
 
+      // Remove the critic profile
+      await ctx.db.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
+
       if (hasAuthAccount) {
-        // Linked real user: demote role back to 'user', leave their account intact
+        // Linked real user: restore role back to 'user', leave their account intact
         await ctx.db
           .update(userProfiles)
           .set({ role: 'user' })
