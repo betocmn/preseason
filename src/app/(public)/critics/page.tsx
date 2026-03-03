@@ -11,9 +11,6 @@ export const metadata: Metadata = {
   description: 'Verified critics who provide expert commentary on tool recommendations.',
 }
 
-const HOVER_GRADIENT =
-  'linear-gradient(130deg, rgba(125,211,252,0.07) 0%, rgba(196,181,253,0.07) 40%, rgba(110,231,183,0.07) 70%, rgba(125,211,252,0.07) 100%)'
-
 function formatDate(date: Date | null) {
   if (!date) return ''
   return new Intl.DateTimeFormat('en-US', {
@@ -109,22 +106,9 @@ export default async function CriticsPage() {
               return (
                 <div
                   key={comment.id}
-                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors"
+                  className="group relative overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors hover:bg-secondary/60"
                 >
-                  {/* Gradient hover overlay */}
-                  <div
-                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                    style={{ background: HOVER_GRADIENT }}
-                  />
-
-                  {/* Main card link */}
-                  <Link
-                    href={comment.context.href}
-                    className="absolute inset-0 z-0"
-                    aria-label={comment.context.label}
-                  />
-
-                  <div className="relative flex flex-col gap-3 p-4">
+                  <div className="relative z-0 flex flex-col gap-3 p-4">
                     {/* Context header */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
@@ -171,7 +155,7 @@ export default async function CriticsPage() {
                     <div className="flex items-center gap-2 border-t border-border/40 pt-2">
                       <Link
                         href={`/critics/${comment.critic.id}`}
-                        className="relative z-10 flex items-center gap-1.5 hover:underline"
+                        className="relative z-20 flex items-center gap-1.5 hover:underline"
                       >
                         <Avatar className="h-5 w-5">
                           {comment.critic.user.avatarUrl && (
@@ -203,6 +187,12 @@ export default async function CriticsPage() {
                       )}
                     </div>
                   </div>
+                  {/* Card-level link — sits above content (z-10) so clicks navigate, critic link uses z-20 to stay clickable */}
+                  <Link
+                    href={comment.context.href}
+                    className="absolute inset-0 z-10"
+                    aria-label={comment.context.label}
+                  />
                 </div>
               )
             })}
