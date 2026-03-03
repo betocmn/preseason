@@ -127,4 +127,128 @@ describe('criticRouter', () => {
       code: 'FORBIDDEN',
     } satisfies Partial<TRPCError>)
   })
+
+  it('supports admin CRUD for critics', async () => {
+    const admin = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(admin.authUser)
+
+    const created = await caller.critic.adminCreate({
+      displayName: 'Jane Doe',
+      email: 'jane@example.com',
+      avatarUrl: '/critics/jane-doe.png',
+      company: 'Acme Inc',
+      title: 'CTO',
+      expertiseAreas: ['infrastructure', 'databases'],
+      isActive: true,
+      verified: true,
+    })
+
+    expect(created.user.displayName).toBe('Jane Doe')
+    expect(created.user.avatarUrl).toBe('/critics/jane-doe.png')
+    expect(created.title).toBe('CTO')
+    expect(created.expertiseAreas).toEqual(['infrastructure', 'databases'])
+    expect(created.verifiedAt).not.toBeNull()
+
+    const listed = await caller.critic.adminList()
+    expect(listed).toHaveLength(1)
+    expect(listed[0]?.user.email).toBe('jane@example.com')
+
+    const fetched = await caller.critic.adminGetById({ id: created.id })
+    expect(fetched.user.email).toBe('jane@example.com')
+    expect(fetched.title).toBe('CTO')
+
+    const updated = await caller.critic.adminUpdate({
+      id: created.id,
+      title: 'VP of Engineering',
+      company: 'New Corp',
+      avatarUrl: '/critics/jane-updated.png',
+    })
+
+    expect(updated.title).toBe('VP of Engineering')
+    expect(updated.user.company).toBe('New Corp')
+    expect(updated.user.avatarUrl).toBe('/critics/jane-updated.png')
+
+    const deleted = await caller.critic.adminDelete({ id: created.id })
+    expect(deleted.success).toBe(true)
+
+    const afterDelete = await caller.critic.adminList()
+    expect(afterDelete).toHaveLength(0)
+  })
+
+  it('rejects invalid website URLs in adminCreate and adminUpdate', async () => {
+    const admin = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(admin.authUser)
+
+    await expect(
+      caller.critic.adminCreate({
+        displayName: 'Bad URL',
+        email: 'badurl@example.com',
+        website: 'javascript:alert(1)',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    await expect(
+      caller.critic.adminCreate({
+        displayName: 'Bad URL 2',
+        email: 'badurl2@example.com',
+        website: 'not-a-url',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    const created = await caller.critic.adminCreate({
+      displayName: 'Good URL',
+      email: 'goodurl@example.com',
+      website: 'https://example.com',
+    })
+    expect(created.user.website).toBe('https://example.com')
+
+    await expect(
+      caller.critic.adminUpdate({
+        id: created.id,
+        website: 'javascript:alert(1)',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+
+    const updated = await caller.critic.adminUpdate({ id: created.id, website: null })
+    expect(updated.user.website).toBeNull()
+  })
+
+  it('rejects non-admin critic CRUD mutations', async () => {
+    const provider = await seedUser({ role: 'provider' })
+    const caller = createTestCaller(provider.authUser)
+
+    await expect(
+      caller.critic.adminCreate({
+        displayName: 'Should Fail',
+        email: 'fail@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('returns email in adminGetById but not in public getById', async () => {
+    const db = getTestDb()
+    const admin = await seedUser({ role: 'admin' })
+    const criticUser = await seedUser({ role: 'critic' })
+
+    const critic = (
+      await db
+        .insert(criticProfiles)
+        .values({
+          userId: criticUser.profile?.id ?? '',
+          title: 'Email Test',
+          verifiedAt: new Date(),
+        })
+        .returning()
+    )[0]
+
+    const adminCaller = createTestCaller(admin.authUser)
+    const adminResult = await adminCaller.critic.adminGetById({ id: critic?.id ?? '' })
+    expect(adminResult.user).toHaveProperty('email')
+
+    const publicCaller = createTestCaller(null)
+    const publicResult = await publicCaller.critic.getById({ id: critic?.id ?? '' })
+    expect(publicResult.user).not.toHaveProperty('email')
+  })
 })

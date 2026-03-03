@@ -1,9 +1,16 @@
 import { TRPCError } from '@trpc/server'
-import { and, count, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { comments, criticProfiles, matches, recommendations, tools } from '~/server/db/schema'
+import {
+  comments,
+  criticProfiles,
+  matches,
+  recommendations,
+  tools,
+  userProfiles,
+} from '~/server/db/schema'
 
 const updateOwnInput = z
   .object({
@@ -21,6 +28,61 @@ const updateOwnInput = z
     {
       message: 'At least one field is required',
     },
+  )
+
+const websiteUrlSchema = z
+  .string()
+  .url()
+  .max(255)
+  .regex(/^https?:\/\//, { message: 'Website must use http or https protocol' })
+
+const avatarPathSchema = z
+  .string()
+  .max(512)
+  .refine((value) => /^\/(?!\/)/.test(value), {
+    message: 'Avatar path must start with "/" and not be a protocol-relative URL',
+  })
+
+const adminCreateInput = z
+  .object({
+    // Link to existing user by their profile ID, or omit to create a new user profile
+    userId: z.string().uuid().optional(),
+    displayName: z.string().min(1).max(150).optional(),
+    email: z.string().email().max(255).optional(),
+    avatarUrl: avatarPathSchema.optional(),
+    bio: z.string().max(5000).optional(),
+    company: z.string().max(255).optional(),
+    website: websiteUrlSchema.optional(),
+    title: z.string().max(255).optional(),
+    expertiseAreas: z.array(z.string().min(1).max(100)).max(100).optional(),
+    excludedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
+    isActive: z.boolean().optional(),
+    verified: z.boolean().optional(),
+  })
+  .refine((input) => input.userId != null || (input.displayName != null && input.email != null), {
+    message: 'Either userId (existing user) or both displayName and email are required',
+  })
+
+const adminUpdateInput = z
+  .object({
+    id: z.string().uuid(),
+    displayName: z.string().min(1).max(150).optional(),
+    avatarUrl: avatarPathSchema.nullable().optional(),
+    bio: z.string().max(5000).nullable().optional(),
+    company: z.string().max(255).nullable().optional(),
+    website: websiteUrlSchema.nullable().optional(),
+    title: z.string().max(255).nullable().optional(),
+    expertiseAreas: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
+    excludedCategories: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
+    isActive: z.boolean().optional(),
+    verified: z.boolean().optional(),
+  })
+  .refine(
+    (input) => {
+      const { id: _, ...fields } = input
+      return Object.values(fields).some((v) => v !== undefined)
+    },
+    { message: 'At least one field is required' },
   )
 
 const publicUserColumns = {
@@ -340,4 +402,242 @@ export const criticRouter = createTRPCRouter({
 
     return updated[0]
   }),
+
+  adminList: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    return ctx.db.query.criticProfiles.findMany({
+      orderBy: [desc(criticProfiles.createdAt)],
+      limit: 100,
+      with: { user: true },
+    })
+  }),
+
+  adminGetById: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const critic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, input.id),
+        with: { user: true },
+      })
+
+      if (!critic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Critic not found',
+        })
+      }
+
+      return critic
+    }),
+
+  adminCreate: protectedProcedure.input(adminCreateInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    return await ctx.db.transaction(async (tx) => {
+      let resolvedUserId: string
+
+      if (input.userId) {
+        const existingUser = await tx.query.userProfiles.findFirst({
+          where: eq(userProfiles.id, input.userId),
+        })
+        if (!existingUser) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' })
+        }
+        const existingCritic = await tx.query.criticProfiles.findFirst({
+          where: eq(criticProfiles.userId, input.userId),
+        })
+        if (existingCritic) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'User already has a critic profile' })
+        }
+        if (existingUser.role !== 'critic' && existingUser.role !== 'user') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot link a user with role "${existingUser.role}" as a critic`,
+          })
+        }
+        if (existingUser.role !== 'critic') {
+          await tx
+            .update(userProfiles)
+            .set({ role: 'critic' })
+            .where(eq(userProfiles.id, input.userId))
+        }
+        resolvedUserId = input.userId
+      } else {
+        const { email, displayName } = input
+        if (!email || !displayName) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'displayName and email are required when not linking an existing user',
+          })
+        }
+        const newUserId = crypto.randomUUID()
+        const userRow = await tx
+          .insert(userProfiles)
+          .values({
+            id: newUserId,
+            email,
+            displayName,
+            avatarUrl: input.avatarUrl ?? null,
+            bio: input.bio ?? null,
+            company: input.company ?? null,
+            website: input.website ?? null,
+            role: 'critic',
+          })
+          .returning()
+
+        if (!userRow[0]) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create user' })
+        }
+        resolvedUserId = newUserId
+      }
+
+      const criticRow = await tx
+        .insert(criticProfiles)
+        .values({
+          userId: resolvedUserId,
+          title: input.title ?? null,
+          expertiseAreas: input.expertiseAreas ?? null,
+          excludedCategories: input.excludedCategories ?? null,
+          isActive: input.isActive ?? true,
+          verifiedAt: input.verified ? new Date() : null,
+          verifiedBy: input.verified ? ctx.user.id : null,
+        })
+        .returning()
+
+      if (!criticRow[0]) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create critic profile',
+        })
+      }
+
+      const result = await tx.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, criticRow[0].id),
+        with: { user: true },
+      })
+
+      if (!result) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch created critic',
+        })
+      }
+
+      return result
+    })
+  }),
+
+  adminUpdate: protectedProcedure.input(adminUpdateInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    const critic = await ctx.db.query.criticProfiles.findFirst({
+      where: eq(criticProfiles.id, input.id),
+      with: { user: true },
+    })
+
+    if (!critic) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
+    }
+
+    const userUpdates: Record<string, unknown> = {}
+    if (input.displayName !== undefined) userUpdates.displayName = input.displayName
+    if (input.avatarUrl !== undefined) userUpdates.avatarUrl = input.avatarUrl
+    if (input.bio !== undefined) userUpdates.bio = input.bio
+    if (input.company !== undefined) userUpdates.company = input.company
+    if (input.website !== undefined) userUpdates.website = input.website
+
+    if (Object.keys(userUpdates).length > 0) {
+      await ctx.db.update(userProfiles).set(userUpdates).where(eq(userProfiles.id, critic.userId))
+    }
+
+    const criticUpdates: Record<string, unknown> = {}
+    if (input.title !== undefined) criticUpdates.title = input.title
+    if (input.expertiseAreas !== undefined) criticUpdates.expertiseAreas = input.expertiseAreas
+    if (input.excludedCategories !== undefined)
+      criticUpdates.excludedCategories = input.excludedCategories
+    if (input.isActive !== undefined) criticUpdates.isActive = input.isActive
+    if (input.verified !== undefined) {
+      const isCurrentlyVerified = critic.verifiedAt !== null
+      if (input.verified !== isCurrentlyVerified) {
+        criticUpdates.verifiedAt = input.verified ? new Date() : null
+        criticUpdates.verifiedBy = input.verified ? ctx.user.id : null
+      }
+    }
+
+    if (Object.keys(criticUpdates).length > 0) {
+      await ctx.db.update(criticProfiles).set(criticUpdates).where(eq(criticProfiles.id, input.id))
+    }
+
+    const updated = await ctx.db.query.criticProfiles.findFirst({
+      where: eq(criticProfiles.id, input.id),
+      with: { user: true },
+    })
+
+    if (!updated) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found after update' })
+    }
+
+    return updated
+  }),
+
+  adminDelete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const critic = await ctx.db.query.criticProfiles.findFirst({
+        where: eq(criticProfiles.id, input.id),
+      })
+
+      if (!critic) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Critic not found' })
+      }
+
+      // Check whether the user has a real auth.users identity (linked user)
+      // vs. a placeholder created by adminCreate (no auth account).
+      // Run this OUTSIDE any transaction: if auth.users doesn't exist (e.g. plain
+      // PostgreSQL / Testcontainers), a failing query inside a transaction poisons
+      // it and prevents the subsequent mutations from running even after the error
+      // is caught. Using ctx.db here keeps the check on a separate connection.
+      // auth.users only exists in Supabase; without it we preserve the user profile.
+      let hasAuthAccount = false
+      try {
+        const authRows = await ctx.db.execute<{ id: string }>(
+          sql`SELECT id FROM auth.users WHERE id = ${critic.userId}::uuid LIMIT 1`,
+        )
+        hasAuthAccount = authRows.length > 0
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('relation "auth.users" does not exist')) {
+          hasAuthAccount = true
+        } else {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to verify auth account status',
+            cause: err,
+          })
+        }
+      }
+
+      return await ctx.db.transaction(async (tx) => {
+        // Remove the critic profile
+        await tx.delete(criticProfiles).where(eq(criticProfiles.id, input.id))
+
+        if (hasAuthAccount) {
+          // Linked real user: restore role back to 'user', leave their account intact
+          await tx
+            .update(userProfiles)
+            .set({ role: 'user' })
+            .where(eq(userProfiles.id, critic.userId))
+        } else {
+          // Admin-created placeholder with no auth account: safe to remove the profile
+          await tx.delete(userProfiles).where(eq(userProfiles.id, critic.userId))
+        }
+
+        return { success: true, id: input.id }
+      })
+    }),
 })
