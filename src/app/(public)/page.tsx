@@ -17,13 +17,13 @@ export default async function HomePage() {
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
         <section className="grid items-stretch gap-10 lg:grid-cols-[2fr_3fr]">
-          <div className="flex flex-col justify-center rounded-lg border border-border/50 bg-card/50 px-6 py-8 backdrop-blur-sm">
+          <div className="flex flex-col justify-center rounded-lg border bg-card px-6 py-8">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              We track which tools get chosen by AI models across thousands of daily coding prompts,
-              from vibe coders to expert engineers.
+              We track what tools AI models pick across thousands of prompts at every level, from
+              vibe coding beginners to expert engineers.
             </p>
           </div>
 
@@ -47,7 +47,7 @@ export default async function HomePage() {
           </div>
           {activeMatches.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {activeMatches.slice(0, 6).map((match) => (
+              {activeMatches.slice(0, 12).map((match) => (
                 <MatchCard
                   key={match.id}
                   id={match.id}

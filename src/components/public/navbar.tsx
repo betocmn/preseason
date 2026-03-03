@@ -1,6 +1,7 @@
 'use client'
 
 import { Menu } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ThemeToggle } from '~/components/public/theme-toggle'
@@ -20,8 +21,15 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background">
       <div className="container flex h-14 items-center gap-6">
-        <Link href="/" className="mr-4 text-lg font-bold tracking-tight text-primary">
-          Preseason
+        <Link href="/" className="mr-4">
+          <Image
+            src="/preseason-brand/preseason-logo.svg"
+            alt="Preseason"
+            width={140}
+            height={32}
+            priority
+            className=""
+          />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
