@@ -37,6 +37,8 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
 
 2. **Start Supabase locally**
 
+   Make sure Docker is running, then:
+
    ```bash
    supabase start
    ```
@@ -47,10 +49,16 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
    cp .env.example .env.local
    ```
 
-   Fill in credentials from `supabase status`:
-   - `DATABASE_URL` - Use the "DB URL" value
-   - `NEXT_PUBLIC_SUPABASE_URL` - Use the "API URL" value
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Use the "anon key" value
+   Run `supabase status` and fill in `.env.local` with the output values:
+
+   | Variable | Source |
+   |----------|--------|
+   | `DATABASE_URL` | "DB URL" from `supabase status` |
+   | `NEXT_PUBLIC_SUPABASE_URL` | "API URL" from `supabase status` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | "anon key" from `supabase status` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | "service_role key" from `supabase status` |
+   | `OPENROUTER_API_KEY` | Your [OpenRouter](https://openrouter.ai) API key |
+   | `CRON_SECRET` | Any secure random token for cron authentication |
 
 4. **Set up the database**
 
@@ -77,15 +85,35 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
 
 ## Common Commands
 
+### Development
+
 ```bash
-pnpm run dev          # Start dev server
-pnpm run build        # Production build
-pnpm run check        # Lint + typecheck
-pnpm run test         # Run tests
-pnpm run format       # Format code
-pnpm run db:generate  # Generate migration
-pnpm run db:migrate   # Apply migrations
-pnpm run db:seed      # Seed data
+pnpm run dev            # Start dev server (Next.js with Turbo)
+pnpm run build          # Production build
+pnpm run start          # Start production server
+pnpm run preview        # Build and start production server
+```
+
+### Database
+
+```bash
+pnpm run db:generate    # Generate migration from schema changes
+pnpm run db:migrate     # Apply pending migrations
+pnpm run db:seed        # Seed auth users and user profiles
+pnpm run db:seed-test   # Seed test/demo data (matches, recommendations, etc.)
+pnpm run db:studio      # Open Drizzle Studio
+```
+
+> **Note:** Never use `db:push`. Always use `db:generate` then `db:migrate`.
+
+### Quality Checks
+
+```bash
+pnpm run check          # Run lint + typecheck together
+pnpm run lint           # Check for lint issues
+pnpm run lint:fix       # Auto-fix lint issues
+pnpm run format         # Format all files with Biome
+pnpm run typecheck      # TypeScript type checking
 ```
 
 ## Guides
@@ -103,9 +131,10 @@ pnpm run db:seed      # Seed data
 Uses **Vitest** with Testcontainers for PostgreSQL (Docker required).
 
 ```bash
-pnpm run test          # Run all tests
-pnpm run test:watch    # Watch mode
-pnpm run test:coverage # Coverage report
+pnpm run test           # Run all tests once
+pnpm run test:watch     # Run tests in watch mode
+pnpm run test:ui        # Open Vitest UI
+pnpm run test:coverage  # Run tests with coverage report
 ```
 
 ## Local Development URLs
