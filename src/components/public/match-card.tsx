@@ -3,7 +3,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { cn } from '~/lib/utils'
+import { cn, formatPeriod } from '~/lib/utils'
 
 type MatchCardProps = {
   id: string
@@ -87,7 +87,7 @@ export function MatchCard({
           )}
 
           <div className="mt-2 text-xs text-muted-foreground">
-            {periodStart} - {periodEnd}
+            {formatPeriod(periodStart, periodEnd)}
           </div>
         </CardContent>
       </Link>
