@@ -99,7 +99,7 @@ export default async function CriticsPage() {
       {recentComments.length > 0 && (
         <div>
           <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
-          <div className="space-y-2">
+          <div className="space-y-4">
             {recentComments.map((comment) => {
               const [logoA, logoB] = comment.context.logos
 
@@ -108,7 +108,7 @@ export default async function CriticsPage() {
                   key={comment.id}
                   className="group relative overflow-hidden rounded-lg border border-border bg-secondary/20 transition-colors hover:bg-secondary/60"
                 >
-                  <div className="relative z-0 flex flex-col gap-3 p-4">
+                  <div className="relative z-0 flex flex-col gap-4 p-5">
                     {/* Context header */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
