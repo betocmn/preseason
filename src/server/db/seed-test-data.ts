@@ -10,7 +10,7 @@
  * Idempotent: deletes previous test data (runs, matches, critics) then re-creates.
  */
 
-import { eq, sql } from 'drizzle-orm'
+import { inArray, like, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
@@ -242,9 +242,23 @@ async function cleanTestData() {
   await db.delete(schema.runs)
   await db.delete(schema.matches)
   await db.delete(schema.comments)
-  await db.delete(schema.criticProfiles)
-  // Delete test critic user profiles (identifiable by 'critic' role)
-  await db.delete(schema.userProfiles).where(eq(schema.userProfiles.role, 'critic'))
+  // Delete only test critic profiles (scoped to test users by email pattern)
+  const testUserIds = await db
+    .select({ id: schema.userProfiles.id })
+    .from(schema.userProfiles)
+    .where(like(schema.userProfiles.email, 'critic-%@preseason-test.local'))
+  if (testUserIds.length > 0) {
+    await db.delete(schema.criticProfiles).where(
+      inArray(
+        schema.criticProfiles.userId,
+        testUserIds.map((u) => u.id),
+      ),
+    )
+  }
+  // Delete only test critic user profiles (matched by seeded test email pattern)
+  await db
+    .delete(schema.userProfiles)
+    .where(like(schema.userProfiles.email, 'critic-%@preseason-test.local'))
   // Clean up test auth users
   await db.execute(sql`
     DELETE FROM auth.users WHERE email LIKE 'critic-%@preseason-test.local'
