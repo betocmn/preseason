@@ -124,6 +124,63 @@ describe('commentRouter', () => {
     expect(result[0]?.critic.user).not.toHaveProperty('email')
   })
 
+  it('paginates recent comments and excludes non-displayable targets', async () => {
+    const db = getTestDb()
+    const criticUser = await seedUser({ role: 'critic' })
+    const critic = (
+      await db
+        .insert(criticProfiles)
+        .values({
+          userId: criticUser.profile?.id ?? '',
+          isActive: true,
+          verifiedAt: new Date(),
+        })
+        .returning()
+    )[0]
+    const [toolA, toolB] = await db
+      .insert(tools)
+      .values([
+        { name: 'Tool A', slug: 'tool-a' },
+        { name: 'Tool B', slug: 'tool-b' },
+      ])
+      .returning()
+
+    await db.insert(comments).values([
+      {
+        criticId: critic?.id ?? '',
+        targetType: 'tool',
+        targetId: toolA?.id ?? '',
+        content: 'Newest visible',
+        createdAt: new Date('2026-01-03T00:00:00.000Z'),
+      },
+      {
+        criticId: critic?.id ?? '',
+        targetType: 'tool',
+        targetId: toolB?.id ?? '',
+        content: 'Older visible',
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
+      },
+      {
+        criticId: critic?.id ?? '',
+        targetType: 'tool',
+        targetId: crypto.randomUUID(),
+        content: 'Hidden broken target',
+        createdAt: new Date('2026-01-04T00:00:00.000Z'),
+      },
+    ])
+
+    const caller = createTestCaller(null)
+    const firstPage = await caller.comment.listRecent({ limit: 1, offset: 0 })
+    const secondPage = await caller.comment.listRecent({ limit: 1, offset: 1 })
+
+    expect(firstPage.total).toBe(2)
+    expect(firstPage.items).toHaveLength(1)
+    expect(firstPage.items[0]?.content).toBe('Newest visible')
+    expect(secondPage.total).toBe(2)
+    expect(secondPage.items).toHaveLength(1)
+    expect(secondPage.items[0]?.content).toBe('Older visible')
+  })
+
   it('enforces conflict-of-interest exclusions on create', async () => {
     const db = getTestDb()
     const { authRecommendation, dbRecommendation } = await seedRecommendationTarget()
