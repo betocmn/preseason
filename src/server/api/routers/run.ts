@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, countDistinct, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
@@ -9,6 +9,70 @@ import { llms, prompts, runResults, runs } from '~/server/db/schema'
 type ParseStatus = 'pending' | 'success' | 'failed'
 
 export const runRouter = createTRPCRouter({
+  listByPrompt: publicProcedure
+    .input(paginationInputSchema.extend({ promptId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [countRow] = await ctx.db
+        .select({ count: countDistinct(runResults.runId) })
+        .from(runResults)
+        .where(eq(runResults.promptId, input.promptId))
+      const total = Number(countRow?.count ?? 0)
+
+      if (total === 0) {
+        return { items: [], total, limit: input.limit, offset: input.offset }
+      }
+
+      const runIdRows = await ctx.db
+        .selectDistinct({ runId: runResults.runId, createdAt: runs.createdAt })
+        .from(runResults)
+        .innerJoin(runs, eq(runResults.runId, runs.id))
+        .where(eq(runResults.promptId, input.promptId))
+        .orderBy(desc(runs.createdAt))
+        .limit(input.limit)
+        .offset(input.offset)
+
+      const runIds = runIdRows.map((r) => r.runId)
+
+      const runData = await ctx.db.query.runs.findMany({
+        where: inArray(runs.id, runIds),
+        orderBy: [desc(runs.createdAt)],
+      })
+
+      const resultsForPrompt = await ctx.db.query.runResults.findMany({
+        where: and(inArray(runResults.runId, runIds), eq(runResults.promptId, input.promptId)),
+        with: {
+          llm: true,
+          recommendations: {
+            with: {
+              tool: true,
+              category: true,
+            },
+          },
+        },
+      })
+
+      const resultsByRunId = new Map<string, typeof resultsForPrompt>()
+      for (const result of resultsForPrompt) {
+        const existing = resultsByRunId.get(result.runId) ?? []
+        existing.push(result)
+        resultsByRunId.set(result.runId, existing)
+      }
+
+      const items = runData.map((run) => {
+        const results = resultsByRunId.get(run.id) ?? []
+        return {
+          run,
+          llmCount: results.length,
+          totalRecommendations: results.reduce((sum, r) => sum + r.recommendations.length, 0),
+          successCount: results.filter((r) => r.parseStatus === 'success').length,
+          failedCount: results.filter((r) => r.parseStatus === 'failed').length,
+          results,
+        }
+      })
+
+      return { items, total, limit: input.limit, offset: input.offset }
+    }),
+
   listRecent: publicProcedure.input(paginationInputSchema).query(async ({ ctx, input }) => {
     const countResult = await ctx.db.select({ count: sql<number>`count(*)` }).from(runs)
     const total = Number(countResult[0]?.count ?? 0)
