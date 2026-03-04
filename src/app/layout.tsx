@@ -19,10 +19,7 @@ export const metadata: Metadata = {
   title: 'Preseason',
   description: 'Track what tools LLMs recommend for vibe-coding prompts',
   icons: {
-    icon: [
-      { url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
-      { url: '/favicon/favicon.svg', type: 'image/svg+xml' },
-    ],
+    icon: [{ url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' }],
     shortcut: ['/favicon/favicon.ico'],
     apple: [{ url: '/favicon/apple-touch-icon.png', sizes: '180x180' }],
   },

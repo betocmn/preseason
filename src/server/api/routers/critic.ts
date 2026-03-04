@@ -2,11 +2,13 @@ import { TRPCError } from '@trpc/server'
 import { and, count, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
+import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
   comments,
   criticProfiles,
   matches,
+  prompts,
   recommendations,
   tools,
   userProfiles,
@@ -107,13 +109,21 @@ export const criticRouter = createTRPCRouter({
     })
   }),
 
-  listWithCount: publicProcedure.query(async ({ ctx }) => {
-    const critics = await ctx.db.query.criticProfiles.findMany({
-      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
-      orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
-      limit: 12,
-      with: { user: { columns: publicUserColumns } },
-    })
+  listWithCount: publicProcedure.input(paginationInputSchema).query(async ({ ctx, input }) => {
+    const where = and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt))
+
+    const [critics, totalRows] = await Promise.all([
+      ctx.db.query.criticProfiles.findMany({
+        where,
+        orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
+        limit: input.limit,
+        offset: input.offset,
+        with: { user: { columns: publicUserColumns } },
+      }),
+      ctx.db.select({ count: count() }).from(criticProfiles).where(where),
+    ])
+
+    const total = Number(totalRows[0]?.count ?? 0)
 
     const criticIds = critics.map((c) => c.id)
     const countRows =
@@ -127,12 +137,17 @@ export const criticRouter = createTRPCRouter({
 
     const countMap = new Map(countRows.map((r) => [r.criticId, r.total]))
 
-    return critics.map((critic) => ({
-      id: critic.id,
-      title: critic.title,
-      user: critic.user,
-      commentCount: countMap.get(critic.id) ?? 0,
-    }))
+    return {
+      items: critics.map((critic) => ({
+        id: critic.id,
+        title: critic.title,
+        user: critic.user,
+        commentCount: countMap.get(critic.id) ?? 0,
+      })),
+      total,
+      limit: input.limit,
+      offset: input.offset,
+    }
   }),
 
   listWithComments: publicProcedure.query(async ({ ctx }) => {
@@ -148,16 +163,18 @@ export const criticRouter = createTRPCRouter({
     const matchIds = new Set<string>()
     const toolIds = new Set<string>()
     const recommendationIds = new Set<string>()
+    const promptIds = new Set<string>()
 
     for (const critic of critics) {
       for (const comment of critic.comments) {
         if (comment.targetType === 'match') matchIds.add(comment.targetId)
         if (comment.targetType === 'tool') toolIds.add(comment.targetId)
         if (comment.targetType === 'recommendation') recommendationIds.add(comment.targetId)
+        if (comment.targetType === 'prompt') promptIds.add(comment.targetId)
       }
     }
 
-    const [matchTargets, toolTargets, recTargets] = await Promise.all([
+    const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
       matchIds.size > 0
         ? ctx.db.query.matches.findMany({
             where: inArray(matches.id, [...matchIds]),
@@ -176,11 +193,18 @@ export const criticRouter = createTRPCRouter({
             with: { category: { with: { categoryGroup: true } } },
           })
         : [],
+      promptIds.size > 0
+        ? ctx.db.query.prompts.findMany({
+            where: inArray(prompts.id, [...promptIds]),
+            columns: { id: true, title: true, slug: true, level: true },
+          })
+        : [],
     ])
 
     const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
     const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
     const recMap = new Map(recTargets.map((r) => [r.id, r]))
+    const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
     return critics.map((critic) => ({
       id: critic.id,
@@ -209,6 +233,11 @@ export const criticRouter = createTRPCRouter({
             const subSlug = rec.category?.slug
             label = rec.category?.name ?? 'Recommendation'
             href = groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#'
+          } else if (comment.targetType === 'prompt') {
+            const prompt = promptMap.get(comment.targetId)
+            if (!prompt) return null
+            label = prompt.title
+            href = `/prompts/${prompt.level}/${prompt.slug}`
           }
 
           return {
@@ -244,14 +273,16 @@ export const criticRouter = createTRPCRouter({
       const matchIds = new Set<string>()
       const toolIds = new Set<string>()
       const recommendationIds = new Set<string>()
+      const promptIds = new Set<string>()
 
       for (const comment of critic.comments) {
         if (comment.targetType === 'match') matchIds.add(comment.targetId)
         if (comment.targetType === 'tool') toolIds.add(comment.targetId)
         if (comment.targetType === 'recommendation') recommendationIds.add(comment.targetId)
+        if (comment.targetType === 'prompt') promptIds.add(comment.targetId)
       }
 
-      const [matchTargets, toolTargets, recTargets] = await Promise.all([
+      const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
         matchIds.size > 0
           ? ctx.db.query.matches.findMany({
               where: inArray(matches.id, [...matchIds]),
@@ -270,11 +301,18 @@ export const criticRouter = createTRPCRouter({
               with: { category: { with: { categoryGroup: true } } },
             })
           : [],
+        promptIds.size > 0
+          ? ctx.db.query.prompts.findMany({
+              where: inArray(prompts.id, [...promptIds]),
+              columns: { id: true, title: true, slug: true, level: true },
+            })
+          : [],
       ])
 
       const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
       const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
       const recMap = new Map(recTargets.map((r) => [r.id, r]))
+      const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
       return {
         id: critic.id,
@@ -303,6 +341,11 @@ export const criticRouter = createTRPCRouter({
               const subSlug = rec.category?.slug
               label = rec.category?.name ?? 'Recommendation'
               href = groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#'
+            } else if (comment.targetType === 'prompt') {
+              const prompt = promptMap.get(comment.targetId)
+              if (!prompt) return null
+              label = prompt.title
+              href = `/prompts/${prompt.level}/${prompt.slug}`
             }
 
             return {
