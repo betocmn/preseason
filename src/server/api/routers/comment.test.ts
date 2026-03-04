@@ -245,6 +245,83 @@ describe('commentRouter', () => {
     expect(deleted.success).toBe(true)
   })
 
+  async function seedPromptTarget() {
+    const db = getTestDb()
+    const [group] = await db
+      .insert(categories)
+      .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+      .returning()
+    await db
+      .insert(subcategories)
+      .values([
+        { name: 'Authentication', slug: 'auth', categoryId: group?.id ?? '' },
+        { name: 'Database', slug: 'database', categoryId: group?.id ?? '' },
+      ])
+      .returning()
+    const [prompt] = await db
+      .insert(prompts)
+      .values({
+        title: 'Build a SaaS',
+        slug: 'build-a-saas',
+        level: 'vibe-coder',
+        expectedCategories: ['auth', 'database'],
+      })
+      .returning()
+    return { prompt }
+  }
+
+  it('lists comments by prompt target', async () => {
+    const db = getTestDb()
+    const { prompt } = await seedPromptTarget()
+    const criticUser = await seedUser({ role: 'critic' })
+    const critic = (
+      await db
+        .insert(criticProfiles)
+        .values({ userId: criticUser.profile?.id ?? '', isActive: true })
+        .returning()
+    )[0]
+
+    await db.insert(comments).values({
+      criticId: critic?.id ?? '',
+      targetType: 'prompt',
+      targetId: prompt?.id ?? '',
+      content: 'Great prompt for testing',
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.comment.listByTarget({
+      targetType: 'prompt',
+      targetId: prompt?.id ?? '',
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0]?.content).toBe('Great prompt for testing')
+  })
+
+  it('enforces conflict-of-interest exclusions for prompt targets', async () => {
+    const db = getTestDb()
+    const { prompt } = await seedPromptTarget()
+
+    const criticUser = await seedUser({ role: 'critic' })
+    await db.insert(criticProfiles).values({
+      userId: criticUser.profile?.id ?? '',
+      isActive: true,
+      verifiedAt: new Date(),
+      excludedCategories: ['auth'],
+    })
+
+    const caller = createTestCaller(criticUser.authUser)
+    await expect(
+      caller.comment.create({
+        targetType: 'prompt',
+        targetId: prompt?.id ?? '',
+        content: 'Should fail due to auth exclusion',
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('allows admin to delete any comment', async () => {
     const db = getTestDb()
     const target = await seedRecommendationTarget()
