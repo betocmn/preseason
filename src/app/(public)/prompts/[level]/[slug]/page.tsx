@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { CommentList } from '~/components/public/comment-list'
 import { EmptyState } from '~/components/public/empty-state'
 import { PromptRunsList } from '~/components/public/prompt-runs-list'
+import { PromptTopRecommendations } from '~/components/public/prompt-top-recommendations'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { isPromptLevel } from '~/server/llm/prompts'
@@ -117,6 +118,15 @@ export default async function PromptDetailPage({ params }: Props) {
           description="Prompt content is not available at this time."
         />
       )}
+
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Top Recommendations</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PromptTopRecommendations promptId={prompt.id} />
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader className="pb-3">

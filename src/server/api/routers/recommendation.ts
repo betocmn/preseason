@@ -266,6 +266,118 @@ export const recommendationRouter = createTRPCRouter({
       }
     }),
 
+  topToolsByPrompt: publicProcedure
+    .input(
+      z.object({
+        promptId: z.string().uuid(),
+        limit: z.number().int().min(1).max(20).default(5),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .select({
+          toolId: tools.id,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          categoryId: subcategories.id,
+          categoryName: subcategories.name,
+          categorySlug: subcategories.slug,
+          categoryGroupName: categories.name,
+          categoryGroupSlug: categories.slug,
+          llmId: runResults.llmId,
+        })
+        .from(recommendations)
+        .innerJoin(tools, eq(recommendations.toolId, tools.id))
+        .innerJoin(subcategories, eq(recommendations.categoryId, subcategories.id))
+        .innerJoin(categories, eq(subcategories.categoryId, categories.id))
+        .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+        .where(eq(runResults.promptId, input.promptId))
+
+      const countsBySubcategoryTool = new Map<string, number>()
+      const subcategoryTotals = new Map<string, number>()
+      const llmsBySubcategoryTool = new Map<string, Set<string>>()
+      const allLlms = new Set<string>()
+      const toolMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; logoUrl: string | null }
+      >()
+      const subcategoryMeta = new Map<
+        string,
+        { id: string; name: string; slug: string; groupName: string; groupSlug: string }
+      >()
+
+      for (const row of rows) {
+        const key = `${row.categoryId}:${row.toolId}`
+        countsBySubcategoryTool.set(key, (countsBySubcategoryTool.get(key) ?? 0) + 1)
+        subcategoryTotals.set(row.categoryId, (subcategoryTotals.get(row.categoryId) ?? 0) + 1)
+        allLlms.add(row.llmId)
+        if (!llmsBySubcategoryTool.has(key)) llmsBySubcategoryTool.set(key, new Set())
+        llmsBySubcategoryTool.get(key)?.add(row.llmId)
+        toolMeta.set(row.toolId, {
+          id: row.toolId,
+          name: row.toolName,
+          slug: row.toolSlug,
+          logoUrl: row.toolLogoUrl,
+        })
+        subcategoryMeta.set(row.categoryId, {
+          id: row.categoryId,
+          name: row.categoryName,
+          slug: row.categorySlug,
+          groupName: row.categoryGroupName,
+          groupSlug: row.categoryGroupSlug,
+        })
+      }
+
+      const subcategoryIds = Array.from(subcategoryMeta.keys())
+      const grouped = subcategoryIds.map((subcategoryId) => {
+        const subcategory = subcategoryMeta.get(subcategoryId)
+        if (!subcategory) return null
+        const subcategoryTotal = subcategoryTotals.get(subcategoryId) ?? 0
+
+        const toolItems: Array<{
+          tool: { id: string; name: string; slug: string; logoUrl: string | null }
+          recommendationCount: number
+          recommendationRate: number
+          consistencyScore: number
+        }> = []
+
+        for (const [key, count] of countsBySubcategoryTool) {
+          if (!key.startsWith(`${subcategoryId}:`)) continue
+          const toolId = key.split(':')[1]
+          if (!toolId) continue
+          const tool = toolMeta.get(toolId)
+          if (!tool) continue
+
+          toolItems.push({
+            tool,
+            recommendationCount: count,
+            recommendationRate: subcategoryTotal > 0 ? count / subcategoryTotal : 0,
+            consistencyScore:
+              allLlms.size > 0 ? (llmsBySubcategoryTool.get(key)?.size ?? 0) / allLlms.size : 0,
+          })
+        }
+
+        toolItems.sort(
+          (a, b) =>
+            b.recommendationRate - a.recommendationRate ||
+            b.consistencyScore - a.consistencyScore ||
+            b.recommendationCount - a.recommendationCount,
+        )
+
+        return {
+          subcategory,
+          totalRecommendations: subcategoryTotal,
+          tools: toolItems.slice(0, input.limit),
+        }
+      })
+
+      const filtered = grouped.filter((g): g is NonNullable<typeof g> => g !== null)
+      filtered.sort((a, b) => b.totalRecommendations - a.totalRecommendations)
+
+      return { groups: filtered }
+    }),
+
   getTrending: publicProcedure
     .input(
       z.object({
