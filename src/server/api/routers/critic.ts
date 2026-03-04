@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { and, count, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
+import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
   comments,
@@ -108,13 +109,21 @@ export const criticRouter = createTRPCRouter({
     })
   }),
 
-  listWithCount: publicProcedure.query(async ({ ctx }) => {
-    const critics = await ctx.db.query.criticProfiles.findMany({
-      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
-      orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
-      limit: 12,
-      with: { user: { columns: publicUserColumns } },
-    })
+  listWithCount: publicProcedure.input(paginationInputSchema).query(async ({ ctx, input }) => {
+    const where = and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt))
+
+    const [critics, totalRows] = await Promise.all([
+      ctx.db.query.criticProfiles.findMany({
+        where,
+        orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
+        limit: input.limit,
+        offset: input.offset,
+        with: { user: { columns: publicUserColumns } },
+      }),
+      ctx.db.select({ count: count() }).from(criticProfiles).where(where),
+    ])
+
+    const total = Number(totalRows[0]?.count ?? 0)
 
     const criticIds = critics.map((c) => c.id)
     const countRows =
@@ -128,12 +137,17 @@ export const criticRouter = createTRPCRouter({
 
     const countMap = new Map(countRows.map((r) => [r.criticId, r.total]))
 
-    return critics.map((critic) => ({
-      id: critic.id,
-      title: critic.title,
-      user: critic.user,
-      commentCount: countMap.get(critic.id) ?? 0,
-    }))
+    return {
+      items: critics.map((critic) => ({
+        id: critic.id,
+        title: critic.title,
+        user: critic.user,
+        commentCount: countMap.get(critic.id) ?? 0,
+      })),
+      total,
+      limit: input.limit,
+      offset: input.offset,
+    }
   }),
 
   listWithComments: publicProcedure.query(async ({ ctx }) => {
