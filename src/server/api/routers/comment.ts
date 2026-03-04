@@ -1,5 +1,14 @@
 import { TRPCError } from '@trpc/server'
-import { and, count as countFn, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import {
+  and,
+  count as countFn,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  type SQLWrapper,
+  sql,
+} from 'drizzle-orm'
 import { z } from 'zod'
 import { getUserProfile, requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
@@ -110,22 +119,66 @@ export const commentRouter = createTRPCRouter({
 
     const criticIds = verifiedCritics.map((c) => c.id)
 
-    const allComments = await ctx.db.query.comments.findMany({
-      where: inArray(comments.criticId, criticIds),
-      orderBy: [desc(comments.createdAt)],
+    const displayableTargetWhere = (
+      targetTypeColumn: SQLWrapper,
+      targetIdColumn: SQLWrapper,
+    ) => sql<boolean>`
+      (
+        (${targetTypeColumn} = 'match' and exists (
+          select 1 from ${matches} where ${matches.id} = ${targetIdColumn}
+        ))
+        or (${targetTypeColumn} = 'tool' and exists (
+          select 1 from ${tools} where ${tools.id} = ${targetIdColumn}
+        ))
+        or (${targetTypeColumn} = 'recommendation' and exists (
+          select 1 from ${recommendations} where ${recommendations.id} = ${targetIdColumn}
+        ))
+        or (${targetTypeColumn} = 'prompt' and exists (
+          select 1 from ${prompts} where ${prompts.id} = ${targetIdColumn}
+        ))
+      )
+    `
+    const countWhere = and(
+      inArray(comments.criticId, criticIds),
+      displayableTargetWhere(comments.targetType, comments.targetId),
+    )
+
+    const [countRows, pageIdRows] = await Promise.all([
+      ctx.db.select({ count: countFn() }).from(comments).where(countWhere),
+      ctx.db
+        .select({ id: comments.id })
+        .from(comments)
+        .where(countWhere)
+        .orderBy(desc(comments.createdAt))
+        .limit(input.limit)
+        .offset(input.offset),
+    ])
+    const pageCommentIds = pageIdRows.map((row) => row.id)
+    const total = Number(countRows[0]?.count ?? 0)
+
+    if (pageCommentIds.length === 0) {
+      return { items: [], total, limit: input.limit, offset: input.offset }
+    }
+
+    const pagedComments = await ctx.db.query.comments.findMany({
+      where: inArray(comments.id, pageCommentIds),
       with: {
         critic: {
           with: { user: { columns: publicUserColumns } },
         },
       },
     })
+    const pagedCommentMap = new Map(pagedComments.map((comment) => [comment.id, comment]))
+    const orderedPagedComments = pageCommentIds
+      .map((id) => pagedCommentMap.get(id))
+      .filter((comment) => comment !== undefined)
 
     const matchIds = new Set<string>()
     const toolIds = new Set<string>()
     const recIds = new Set<string>()
     const promptIds = new Set<string>()
 
-    for (const c of allComments) {
+    for (const c of orderedPagedComments) {
       if (c.targetType === 'match') matchIds.add(c.targetId)
       else if (c.targetType === 'tool') toolIds.add(c.targetId)
       else if (c.targetType === 'recommendation') recIds.add(c.targetId)
@@ -171,7 +224,7 @@ export const commentRouter = createTRPCRouter({
     const recMap = new Map(recTargets.map((r) => [r.id, r]))
     const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
-    const allDisplayableComments = allComments
+    const items = orderedPagedComments
       .map((comment) => {
         let context: {
           type: 'match' | 'tool' | 'recommendation' | 'prompt'
@@ -243,9 +296,6 @@ export const commentRouter = createTRPCRouter({
         }
       })
       .filter((c) => c !== null)
-
-    const total = allDisplayableComments.length
-    const items = allDisplayableComments.slice(input.offset, input.offset + input.limit)
 
     return { items, total, limit: input.limit, offset: input.offset }
   }),
