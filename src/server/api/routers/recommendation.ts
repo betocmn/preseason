@@ -297,7 +297,7 @@ export const recommendationRouter = createTRPCRouter({
       const countsBySubcategoryTool = new Map<string, number>()
       const subcategoryTotals = new Map<string, number>()
       const llmsBySubcategoryTool = new Map<string, Set<string>>()
-      const allLlms = new Set<string>()
+      const llmsBySubcategory = new Map<string, Set<string>>()
       const toolMeta = new Map<
         string,
         { id: string; name: string; slug: string; logoUrl: string | null }
@@ -311,7 +311,8 @@ export const recommendationRouter = createTRPCRouter({
         const key = `${row.categoryId}:${row.toolId}`
         countsBySubcategoryTool.set(key, (countsBySubcategoryTool.get(key) ?? 0) + 1)
         subcategoryTotals.set(row.categoryId, (subcategoryTotals.get(row.categoryId) ?? 0) + 1)
-        allLlms.add(row.llmId)
+        if (!llmsBySubcategory.has(row.categoryId)) llmsBySubcategory.set(row.categoryId, new Set())
+        llmsBySubcategory.get(row.categoryId)?.add(row.llmId)
         if (!llmsBySubcategoryTool.has(key)) llmsBySubcategoryTool.set(key, new Set())
         llmsBySubcategoryTool.get(key)?.add(row.llmId)
         toolMeta.set(row.toolId, {
@@ -354,7 +355,10 @@ export const recommendationRouter = createTRPCRouter({
             recommendationCount: count,
             recommendationRate: subcategoryTotal > 0 ? count / subcategoryTotal : 0,
             consistencyScore:
-              allLlms.size > 0 ? (llmsBySubcategoryTool.get(key)?.size ?? 0) / allLlms.size : 0,
+              (llmsBySubcategory.get(subcategoryId)?.size ?? 0) > 0
+                ? (llmsBySubcategoryTool.get(key)?.size ?? 0) /
+                  (llmsBySubcategory.get(subcategoryId)?.size ?? 1)
+                : 0,
           })
         }
 
