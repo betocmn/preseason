@@ -74,7 +74,7 @@ export default async function HomePage() {
         </section>
 
         {/* Verified Critics */}
-        {recentComments.length > 0 && (
+        {recentComments.items.length > 0 && (
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold">Verified Critics</h2>
@@ -82,7 +82,7 @@ export default async function HomePage() {
                 View all
               </Link>
             </div>
-            <CommentaryFeed comments={recentComments} />
+            <CommentaryFeed comments={recentComments.items} />
           </section>
         )}
       </div>

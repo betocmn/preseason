@@ -1,0 +1,1 @@
+ALTER TYPE "public"."comment_target" ADD VALUE 'prompt';
