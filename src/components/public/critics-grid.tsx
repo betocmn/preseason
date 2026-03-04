@@ -2,24 +2,38 @@
 
 import { MessageSquare } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { EmptyState } from '~/components/public/empty-state'
 import { LoadMoreButton } from '~/components/public/load-more-button'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
-import { api } from '~/trpc/react'
+import { api, type RouterOutputs } from '~/trpc/react'
 
 const PAGE_SIZE = 12
 
-export function CriticsGrid() {
-  const [limit, setLimit] = useState(PAGE_SIZE)
+type CriticItem = RouterOutputs['critic']['listWithCount']['items'][number]
 
-  const { data, isLoading } = api.critic.listWithCount.useQuery({
-    limit,
-    offset: 0,
+export function CriticsGrid() {
+  const [offset, setOffset] = useState(0)
+  const [items, setItems] = useState<CriticItem[]>([])
+  const [total, setTotal] = useState(0)
+
+  const { data, isLoading, isFetching } = api.critic.listWithCount.useQuery({
+    limit: PAGE_SIZE,
+    offset,
   })
 
-  const items = data?.items ?? []
-  const total = data?.total ?? 0
+  useEffect(() => {
+    if (!data) return
+
+    setTotal(data.total)
+    setItems((prev) => {
+      if (offset === 0) return data.items
+      const existingIds = new Set(prev.map((critic) => critic.id))
+      const next = data.items.filter((critic) => !existingIds.has(critic.id))
+      return [...prev, ...next]
+    })
+  }, [data, offset])
+
   const hasMore = items.length < total
 
   if (!isLoading && items.length === 0) {
@@ -73,9 +87,9 @@ export function CriticsGrid() {
       </div>
 
       <LoadMoreButton
-        onLoadMore={() => setLimit((prev) => prev + PAGE_SIZE)}
+        onLoadMore={() => setOffset(items.length)}
         hasMore={hasMore}
-        isLoading={isLoading}
+        isLoading={isFetching}
       />
     </>
   )
