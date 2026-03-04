@@ -1,16 +1,18 @@
 'use client'
 
 import { ChevronDown, ChevronRight, Clock, Cpu, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LoadMoreButton } from '~/components/public/load-more-button'
 import { Badge } from '~/components/ui/badge'
-import { api } from '~/trpc/react'
+import { api, type RouterOutputs } from '~/trpc/react'
 
 const PAGE_SIZE = 10
 
 type Props = {
   promptId: string
 }
+
+type PromptRunItem = RouterOutputs['run']['listByPrompt']['items'][number]
 
 function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString('en-US', {
@@ -36,17 +38,29 @@ function statusVariant(status: string) {
 }
 
 export function PromptRunsList({ promptId }: Props) {
-  const [limit, setLimit] = useState(PAGE_SIZE)
+  const [offset, setOffset] = useState(0)
+  const [items, setItems] = useState<PromptRunItem[]>([])
+  const [total, setTotal] = useState(0)
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
 
-  const { data, isLoading } = api.run.listByPrompt.useQuery({
+  const { data, isLoading, isFetching } = api.run.listByPrompt.useQuery({
     promptId,
-    limit,
-    offset: 0,
+    limit: PAGE_SIZE,
+    offset,
   })
 
-  const items = data?.items ?? []
-  const total = data?.total ?? 0
+  useEffect(() => {
+    if (!data) return
+
+    setTotal(data.total)
+    setItems((prev) => {
+      if (offset === 0) return data.items
+      const existingIds = new Set(prev.map((item) => item.run.id))
+      const next = data.items.filter((item) => !existingIds.has(item.run.id))
+      return [...prev, ...next]
+    })
+  }, [data, offset])
+
   const hasMore = items.length < total
 
   if (!isLoading && items.length === 0) {
@@ -146,9 +160,9 @@ export function PromptRunsList({ promptId }: Props) {
       })}
 
       <LoadMoreButton
-        onLoadMore={() => setLimit((prev) => prev + PAGE_SIZE)}
+        onLoadMore={() => setOffset(items.length)}
         hasMore={hasMore}
-        isLoading={isLoading}
+        isLoading={isFetching}
       />
     </div>
   )
