@@ -110,32 +110,22 @@ export const commentRouter = createTRPCRouter({
 
     const criticIds = verifiedCritics.map((c) => c.id)
 
-    const [recentComments, totalRows] = await Promise.all([
-      ctx.db.query.comments.findMany({
-        where: inArray(comments.criticId, criticIds),
-        orderBy: [desc(comments.createdAt)],
-        limit: input.limit,
-        offset: input.offset,
-        with: {
-          critic: {
-            with: { user: { columns: publicUserColumns } },
-          },
+    const allComments = await ctx.db.query.comments.findMany({
+      where: inArray(comments.criticId, criticIds),
+      orderBy: [desc(comments.createdAt)],
+      with: {
+        critic: {
+          with: { user: { columns: publicUserColumns } },
         },
-      }),
-      ctx.db
-        .select({ count: countFn() })
-        .from(comments)
-        .where(inArray(comments.criticId, criticIds)),
-    ])
-
-    const total = Number(totalRows[0]?.count ?? 0)
+      },
+    })
 
     const matchIds = new Set<string>()
     const toolIds = new Set<string>()
     const recIds = new Set<string>()
     const promptIds = new Set<string>()
 
-    for (const c of recentComments) {
+    for (const c of allComments) {
       if (c.targetType === 'match') matchIds.add(c.targetId)
       else if (c.targetType === 'tool') toolIds.add(c.targetId)
       else if (c.targetType === 'recommendation') recIds.add(c.targetId)
@@ -181,7 +171,7 @@ export const commentRouter = createTRPCRouter({
     const recMap = new Map(recTargets.map((r) => [r.id, r]))
     const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
-    const items = recentComments
+    const allDisplayableComments = allComments
       .map((comment) => {
         let context: {
           type: 'match' | 'tool' | 'recommendation' | 'prompt'
@@ -253,6 +243,9 @@ export const commentRouter = createTRPCRouter({
         }
       })
       .filter((c) => c !== null)
+
+    const total = allDisplayableComments.length
+    const items = allDisplayableComments.slice(input.offset, input.offset + input.limit)
 
     return { items, total, limit: input.limit, offset: input.offset }
   }),
