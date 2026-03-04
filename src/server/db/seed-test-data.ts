@@ -209,6 +209,19 @@ const TEST_CRITICS = [
   },
 ]
 
+const PROMPT_COMMENT_TEMPLATES = [
+  "This prompt does a great job of testing the {category} space. Most LLMs give sensible answers here.",
+  "I'd argue this prompt is too vague for experienced devs. It lets LLMs get away with surface-level answers.",
+  "At {company}, we ran a similar evaluation internally. The results here align closely with what we saw.",
+  "The expected categories for this prompt need updating. It should also test for monitoring and observability.",
+  "Great prompt for beginners. It forces LLMs to make opinionated choices rather than listing every option.",
+  "This is one of the more balanced prompts. You can really see which LLMs have strong default recommendations.",
+  "I've seen LLMs struggle with this one. The scope is broad enough that their answers vary wildly between runs.",
+  "Interesting that the top tools here differ from what I see recommended in the real world at {company}.",
+  "This prompt reveals a lot about LLM training data biases. Newer tools get underrepresented consistently.",
+  "Would love to see this prompt split into separate beginner and advanced versions for more nuanced results.",
+]
+
 const MATCH_COMMENT_TEMPLATES = [
   "We migrated from {toolB} to {toolA} six months ago and haven't looked back. The developer experience improvement was immediate and team velocity increased noticeably.",
   "I've evaluated both extensively. {toolA} has better documentation, but {toolB} has some unique features worth considering. For most teams, {toolA} is the safer bet.",
@@ -769,7 +782,7 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
 }
 
 async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingData>>) {
-  const { toolById } = data
+  const { toolById, allPrompts } = data
 
   console.log('Creating critic profiles and comments...')
 
@@ -881,6 +894,43 @@ async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingDa
   }
 
   console.log(`  Created ${commentCount} comments across ${allMatches.length} matches`)
+
+  // Seed prompt comments
+  let promptCommentCount = 0
+
+  for (const prompt of allPrompts) {
+    const numComments = randomInt(1, 3)
+    const selectedCritics = randomSample(
+      criticProfileIds
+        .map((id, idx) => {
+          const critic = TEST_CRITICS[idx]
+          return critic ? { id, critic } : null
+        })
+        .filter((c) => c !== null),
+      numComments,
+    )
+
+    const category = ((prompt.expectedCategories ?? [])[0] as string) ?? 'development'
+
+    for (const { id: criticId, critic } of selectedCritics) {
+      const template = randomPick(PROMPT_COMMENT_TEMPLATES)
+      const content = template
+        .replace(/\{category\}/g, category)
+        .replace(/\{company\}/g, critic.company)
+
+      await db.insert(schema.comments).values({
+        criticId,
+        targetType: 'prompt',
+        targetId: prompt.id,
+        content,
+        isPinned: Math.random() < 0.05,
+        createdAt: daysAgo(randomInt(1, 30)),
+      })
+      promptCommentCount++
+    }
+  }
+
+  console.log(`  Created ${promptCommentCount} prompt comments across ${allPrompts.length} prompts`)
 }
 
 // ============================================================================
