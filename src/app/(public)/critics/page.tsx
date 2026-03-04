@@ -1,17 +1,13 @@
 import type { Metadata } from 'next'
-import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { CriticsGrid } from '~/components/public/critics-grid'
-import { api } from '~/trpc/server'
+import { RecentCommentaryList } from '~/components/public/recent-commentary-list'
 
 export const metadata: Metadata = {
   title: 'Critics | Preseason',
   description: 'Verified critics who provide expert commentary on tool recommendations.',
 }
 
-export default async function CriticsPage() {
-  const caller = await api()
-  const recentComments = await caller.comment.listRecent()
-
+export default function CriticsPage() {
   return (
     <div className="container py-8">
       {/* Critics compact grid */}
@@ -21,12 +17,10 @@ export default async function CriticsPage() {
       </div>
 
       {/* Recent commentary feed */}
-      {recentComments.length > 0 && (
-        <div>
-          <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
-          <CommentaryFeed comments={recentComments} />
-        </div>
-      )}
+      <div>
+        <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
+        <RecentCommentaryList />
+      </div>
     </div>
   )
 }
