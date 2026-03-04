@@ -210,16 +210,16 @@ const TEST_CRITICS = [
 ]
 
 const PROMPT_COMMENT_TEMPLATES = [
-  "This prompt does a great job of testing the {category} space. Most LLMs give sensible answers here.",
+  'This prompt does a great job of testing the {category} space. Most LLMs give sensible answers here.',
   "I'd argue this prompt is too vague for experienced devs. It lets LLMs get away with surface-level answers.",
-  "At {company}, we ran a similar evaluation internally. The results here align closely with what we saw.",
-  "The expected categories for this prompt need updating. It should also test for monitoring and observability.",
-  "Great prompt for beginners. It forces LLMs to make opinionated choices rather than listing every option.",
-  "This is one of the more balanced prompts. You can really see which LLMs have strong default recommendations.",
+  'At {company}, we ran a similar evaluation internally. The results here align closely with what we saw.',
+  'The expected categories for this prompt need updating. It should also test for monitoring and observability.',
+  'Great prompt for beginners. It forces LLMs to make opinionated choices rather than listing every option.',
+  'This is one of the more balanced prompts. You can really see which LLMs have strong default recommendations.',
   "I've seen LLMs struggle with this one. The scope is broad enough that their answers vary wildly between runs.",
-  "Interesting that the top tools here differ from what I see recommended in the real world at {company}.",
-  "This prompt reveals a lot about LLM training data biases. Newer tools get underrepresented consistently.",
-  "Would love to see this prompt split into separate beginner and advanced versions for more nuanced results.",
+  'Interesting that the top tools here differ from what I see recommended in the real world at {company}.',
+  'This prompt reveals a lot about LLM training data biases. Newer tools get underrepresented consistently.',
+  'Would love to see this prompt split into separate beginner and advanced versions for more nuanced results.',
 ]
 
 const MATCH_COMMENT_TEMPLATES = [
