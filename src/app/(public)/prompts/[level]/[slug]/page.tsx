@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { FileText } from 'lucide-react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { CommentList } from '~/components/public/comment-list'
 import { EmptyState } from '~/components/public/empty-state'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -41,6 +42,11 @@ export default async function PromptDetailPage({ params }: Props) {
       throw error
     }
   })()
+
+  const promptComments = await caller.comment.listByTarget({
+    targetType: 'prompt',
+    targetId: prompt.id,
+  })
 
   return (
     <div className="container max-w-4xl py-8">
@@ -110,6 +116,15 @@ export default async function PromptDetailPage({ params }: Props) {
           description="Prompt content is not available at this time."
         />
       )}
+
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Comments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CommentList comments={promptComments} />
+        </CardContent>
+      </Card>
     </div>
   )
 }
