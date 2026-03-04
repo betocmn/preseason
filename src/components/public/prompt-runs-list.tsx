@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight, Clock, Cpu, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LoadMoreButton } from '~/components/public/load-more-button'
 import { Badge } from '~/components/ui/badge'
 import { api, type RouterOutputs } from '~/trpc/react'
@@ -42,6 +42,15 @@ export function PromptRunsList({ promptId }: Props) {
   const [items, setItems] = useState<PromptRunItem[]>([])
   const [total, setTotal] = useState(0)
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const prevPromptId = useRef(promptId)
+
+  if (prevPromptId.current !== promptId) {
+    prevPromptId.current = promptId
+    setOffset(0)
+    setItems([])
+    setTotal(0)
+    setExpandedRunId(null)
+  }
 
   const { data, isLoading, isFetching } = api.run.listByPrompt.useQuery({
     promptId,
