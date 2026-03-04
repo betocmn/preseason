@@ -4,9 +4,9 @@ import { api } from '~/trpc/server'
 export default async function PromptSlugRedirectPage({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ level: string }>
 }) {
-  const { slug } = await params
+  const { level: slug } = await params
   const caller = await api()
   const prompts = await caller.prompt.listBySlug({ slug })
   if (prompts.length === 0) notFound()
