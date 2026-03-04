@@ -102,7 +102,7 @@
   }
 
   .btn-gradient {
-    background: linear-gradient(130deg, #38dcff 0%, #2fb0ff 50%, #578bff 100%);
+    background: linear-gradient(130deg, #73edff 0%, #5a93ff 40%, #aa9fff 70%, #73edff 100%);
     background-size: 200% 200%;
     animation: gradient-shift 4s ease-in-out infinite;
   }

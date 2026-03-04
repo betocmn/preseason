@@ -34,7 +34,7 @@ export function Footer() {
       className="border-t"
       style={{
         background:
-          'linear-gradient(130deg, rgba(56,220,255,0.12) 0%, rgba(47,176,255,0.15) 50%, rgba(87,139,255,0.12) 100%)',
+          'linear-gradient(130deg, rgba(115,237,255,0.12) 0%, rgba(90,147,255,0.15) 40%, rgba(170,159,255,0.12) 70%, rgba(115,237,255,0.12) 100%)',
       }}
     >
       <div className="container py-10">
