@@ -7,13 +7,14 @@ import {
   comments,
   criticProfiles,
   matches,
+  prompts,
   recommendations,
   subcategories,
   toolCategories,
   tools,
 } from '~/server/db/schema'
 
-const targetTypeSchema = z.enum(['recommendation', 'match', 'tool'])
+const targetTypeSchema = z.enum(['recommendation', 'match', 'tool', 'prompt'])
 const publicUserColumns = {
   id: true,
   displayName: true,
@@ -60,6 +61,19 @@ async function resolveTargetCategorySlugs(
       where: eq(subcategories.id, match.categoryId),
     })
     return category ? [category.slug] : []
+  }
+
+  if (targetType === 'prompt') {
+    const prompt = await db.query.prompts.findFirst({
+      where: eq(prompts.id, targetId),
+    })
+    if (!prompt) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Prompt not found',
+      })
+    }
+    return (prompt.expectedCategories ?? []) as string[]
   }
 
   const tool = await db.query.tools.findFirst({
@@ -112,14 +126,16 @@ export const commentRouter = createTRPCRouter({
       const matchIds = new Set<string>()
       const toolIds = new Set<string>()
       const recIds = new Set<string>()
+      const promptIds = new Set<string>()
 
       for (const c of recentComments) {
         if (c.targetType === 'match') matchIds.add(c.targetId)
         else if (c.targetType === 'tool') toolIds.add(c.targetId)
         else if (c.targetType === 'recommendation') recIds.add(c.targetId)
+        else if (c.targetType === 'prompt') promptIds.add(c.targetId)
       }
 
-      const [matchTargets, toolTargets, recTargets] = await Promise.all([
+      const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
         matchIds.size > 0
           ? ctx.db.query.matches.findMany({
               where: inArray(matches.id, [...matchIds]),
@@ -145,16 +161,23 @@ export const commentRouter = createTRPCRouter({
               },
             })
           : [],
+        promptIds.size > 0
+          ? ctx.db.query.prompts.findMany({
+              where: inArray(prompts.id, [...promptIds]),
+              columns: { id: true, title: true, slug: true, level: true },
+            })
+          : [],
       ])
 
       const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
       const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
       const recMap = new Map(recTargets.map((r) => [r.id, r]))
+      const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
       return recentComments
         .map((comment) => {
           let context: {
-            type: 'match' | 'tool' | 'recommendation'
+            type: 'match' | 'tool' | 'recommendation' | 'prompt'
             label: string
             sublabel: string
             href: string
@@ -195,6 +218,16 @@ export const commentRouter = createTRPCRouter({
               sublabel: rec.category?.name ?? '',
               href: groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#',
               logos: [{ url: rec.tool?.logoUrl ?? null, name: rec.tool?.name ?? '' }],
+            }
+          } else if (comment.targetType === 'prompt') {
+            const prompt = promptMap.get(comment.targetId)
+            if (!prompt) return null
+            context = {
+              type: 'prompt',
+              label: prompt.title,
+              sublabel: prompt.level,
+              href: `/prompts/${prompt.level}/${prompt.slug}`,
+              logos: [],
             }
           }
 
