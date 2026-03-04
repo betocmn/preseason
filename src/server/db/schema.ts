@@ -25,7 +25,7 @@ export const userRoleEnum = pgEnum('user_role', ['admin', 'provider', 'critic', 
 export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed'])
 export const parseStatusEnum = pgEnum('parse_status', ['pending', 'success', 'failed'])
 export const matchStatusEnum = pgEnum('match_status', ['active', 'settled', 'archived'])
-export const commentTargetEnum = pgEnum('comment_target', ['recommendation', 'match', 'tool'])
+export const commentTargetEnum = pgEnum('comment_target', ['recommendation', 'match', 'tool', 'prompt'])
 export const promptLevelEnum = pgEnum('prompt_level', [
   'software-dev-beginner',
   'software-dev-experienced',
