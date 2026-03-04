@@ -924,7 +924,7 @@ async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingDa
         targetId: prompt.id,
         content,
         isPinned: Math.random() < 0.05,
-        createdAt: daysAgo(randomInt(1, 30)),
+        createdAt: daysAgo(randomInt(0, 5)),
       })
       promptCommentCount++
     }
