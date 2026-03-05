@@ -67,8 +67,6 @@ function FilterNav({ groups, currentLevel, currentGroup, currentSub }: PromptFil
     router.replace(qs ? `/prompts?${qs}` : '/prompts')
   }
 
-  const activeGroup = groups.find((g) => g.slug === currentGroup)
-
   return (
     <nav className="space-y-5">
       <FilterSection title="Level">
@@ -93,33 +91,36 @@ function FilterNav({ groups, currentLevel, currentGroup, currentSub }: PromptFil
         >
           All
         </FilterLink>
-        {groups.map((g) => (
-          <FilterLink
-            key={g.slug}
-            active={currentGroup === g.slug}
-            onClick={() => navigate({ group: g.slug, sub: undefined })}
-          >
-            {g.name}
-          </FilterLink>
-        ))}
+        {groups.map((g) => {
+          const isActive = currentGroup === g.slug
+          return (
+            <div key={g.slug}>
+              <FilterLink
+                active={isActive}
+                onClick={() => navigate({ group: g.slug, sub: undefined })}
+              >
+                {g.name}
+              </FilterLink>
+              {isActive && g.subcategories.length > 0 && (
+                <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border pl-2">
+                  <SubFilterLink active={!currentSub} onClick={() => navigate({ sub: undefined })}>
+                    All
+                  </SubFilterLink>
+                  {g.subcategories.map((s) => (
+                    <SubFilterLink
+                      key={s.slug}
+                      active={currentSub === s.slug}
+                      onClick={() => navigate({ sub: s.slug })}
+                    >
+                      {s.name}
+                    </SubFilterLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </FilterSection>
-
-      {activeGroup && activeGroup.subcategories.length > 0 && (
-        <FilterSection title="Sub-category">
-          <FilterLink active={!currentSub} onClick={() => navigate({ sub: undefined })}>
-            All
-          </FilterLink>
-          {activeGroup.subcategories.map((s) => (
-            <FilterLink
-              key={s.slug}
-              active={currentSub === s.slug}
-              onClick={() => navigate({ sub: s.slug })}
-            >
-              {s.name}
-            </FilterLink>
-          ))}
-        </FilterSection>
-      )}
     </nav>
   )
 }
@@ -153,6 +154,31 @@ function FilterLink({
         active
           ? 'bg-accent font-medium text-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SubFilterLink({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'block w-full rounded-md px-1.5 py-0.5 text-left text-xs transition-colors',
+        active
+          ? 'font-medium text-foreground'
+          : 'text-muted-foreground/70 hover:text-muted-foreground',
       )}
     >
       {children}
