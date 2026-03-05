@@ -1,7 +1,9 @@
 'use client'
 
+import { Filter } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { badgeVariants } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
+import { Sheet, SheetContent, SheetTrigger } from '~/components/ui/sheet'
 import { cn } from '~/lib/utils'
 
 type CategoryGroup = {
@@ -23,12 +25,32 @@ const LEVEL_OPTIONS = [
   { value: 'vibe-coder', label: 'Vibe Coder' },
 ]
 
-export function PromptFilters({
-  groups,
-  currentLevel,
-  currentGroup,
-  currentSub,
-}: PromptFiltersProps) {
+export function PromptFilters(props: PromptFiltersProps) {
+  return (
+    <>
+      <div className="mb-4 md:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Filter className="mr-2 h-4 w-4" />
+              Filters
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-56 p-6 pt-10">
+            <FilterNav {...props} />
+          </SheetContent>
+        </Sheet>
+      </div>
+      <aside className="hidden w-48 shrink-0 md:block">
+        <div className="sticky top-4">
+          <FilterNav {...props} />
+        </div>
+      </aside>
+    </>
+  )
+}
+
+function FilterNav({ groups, currentLevel, currentGroup, currentSub }: PromptFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -48,61 +70,72 @@ export function PromptFilters({
   const activeGroup = groups.find((g) => g.slug === currentGroup)
 
   return (
-    <div className="mb-6 space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Level</span>
-        <Pill active={!currentLevel} onClick={() => navigate({ level: undefined })}>
+    <nav className="space-y-5">
+      <FilterSection title="Level">
+        <FilterLink active={!currentLevel} onClick={() => navigate({ level: undefined })}>
           All
-        </Pill>
+        </FilterLink>
         {LEVEL_OPTIONS.map((opt) => (
-          <Pill
+          <FilterLink
             key={opt.value}
             active={currentLevel === opt.value}
             onClick={() => navigate({ level: opt.value })}
           >
             {opt.label}
-          </Pill>
+          </FilterLink>
         ))}
-      </div>
+      </FilterSection>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Category</span>
-        <Pill active={!currentGroup} onClick={() => navigate({ group: undefined, sub: undefined })}>
+      <FilterSection title="Category">
+        <FilterLink
+          active={!currentGroup}
+          onClick={() => navigate({ group: undefined, sub: undefined })}
+        >
           All
-        </Pill>
+        </FilterLink>
         {groups.map((g) => (
-          <Pill
+          <FilterLink
             key={g.slug}
             active={currentGroup === g.slug}
             onClick={() => navigate({ group: g.slug, sub: undefined })}
           >
             {g.name}
-          </Pill>
+          </FilterLink>
         ))}
-      </div>
+      </FilterSection>
 
       {activeGroup && activeGroup.subcategories.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Sub</span>
-          <Pill active={!currentSub} onClick={() => navigate({ sub: undefined })}>
+        <FilterSection title="Sub-category">
+          <FilterLink active={!currentSub} onClick={() => navigate({ sub: undefined })}>
             All
-          </Pill>
+          </FilterLink>
           {activeGroup.subcategories.map((s) => (
-            <Pill
+            <FilterLink
               key={s.slug}
               active={currentSub === s.slug}
               onClick={() => navigate({ sub: s.slug })}
             >
               {s.name}
-            </Pill>
+            </FilterLink>
           ))}
-        </div>
+        </FilterSection>
       )}
+    </nav>
+  )
+}
+
+function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-0.5">{children}</div>
     </div>
   )
 }
 
-function Pill({
+function FilterLink({
   active,
   onClick,
   children,
@@ -116,9 +149,10 @@ function Pill({
       type="button"
       onClick={onClick}
       className={cn(
-        badgeVariants({ variant: active ? 'default' : 'outline' }),
-        'cursor-pointer select-none transition-colors',
-        !active && 'hover:bg-accent',
+        'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors',
+        active
+          ? 'bg-accent font-medium text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
       {children}

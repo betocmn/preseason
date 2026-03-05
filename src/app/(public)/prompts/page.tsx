@@ -45,61 +45,73 @@ export default async function PromptsPage({ searchParams }: Props) {
     <div className="container py-8">
       <h1 className="mb-6 text-xl font-bold tracking-tight">Prompts</h1>
 
-      <Suspense fallback={null}>
-        <PromptFilters groups={groups} currentLevel={level} currentGroup={group} currentSub={sub} />
-      </Suspense>
+      <div className="flex gap-8">
+        <Suspense fallback={null}>
+          <PromptFilters
+            groups={groups}
+            currentLevel={level}
+            currentGroup={group}
+            currentSub={sub}
+          />
+        </Suspense>
 
-      {activePrompts.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {activePrompts.map((prompt) => (
-            <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
-              <CardContent className="p-4">
-                <Badge variant="outline" className="mb-2 text-[11px] font-normal">
-                  {formatLevel(prompt.level)}
-                </Badge>
-                <h3 className="font-medium">{prompt.title}</h3>
-                {prompt.description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                    {prompt.description}
-                  </p>
-                )}
-                {prompt.expectedCategories && prompt.expectedCategories.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {prompt.expectedCategories.slice(0, 3).map((cat) => (
-                      <Badge key={cat} variant="secondary" className="text-xs">
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {prompt.topTools.length > 0 && (
-                  <div className="relative z-20 mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
-                    {prompt.topTools.slice(0, 4).map(({ tool }) => (
-                      <ToolBadge
-                        key={tool.id}
-                        name={tool.name}
-                        slug={tool.slug}
-                        logoUrl={tool.logoUrl}
-                        size="sm"
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-              <Link
-                href={`/prompts/${prompt.level}/${prompt.slug}`}
-                className="absolute inset-0 z-10 rounded-lg"
-                aria-label={prompt.title}
-              />
-            </Card>
-          ))}
+        <div className="min-w-0 flex-1">
+          {activePrompts.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {activePrompts.map((prompt) => (
+                <Card
+                  key={prompt.id}
+                  className="group relative transition-colors hover:bg-accent/50"
+                >
+                  <CardContent className="p-4">
+                    <Badge variant="outline" className="mb-2 text-[11px] font-normal">
+                      {formatLevel(prompt.level)}
+                    </Badge>
+                    <h3 className="font-medium">{prompt.title}</h3>
+                    {prompt.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {prompt.description}
+                      </p>
+                    )}
+                    {prompt.expectedCategories && prompt.expectedCategories.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {prompt.expectedCategories.slice(0, 3).map((cat) => (
+                          <Badge key={cat} variant="secondary" className="text-xs">
+                            {cat}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {prompt.topTools.length > 0 && (
+                      <div className="relative z-20 mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+                        {prompt.topTools.slice(0, 4).map(({ tool }) => (
+                          <ToolBadge
+                            key={tool.id}
+                            name={tool.name}
+                            slug={tool.slug}
+                            logoUrl={tool.logoUrl}
+                            size="sm"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                  <Link
+                    href={`/prompts/${prompt.level}/${prompt.slug}`}
+                    className="absolute inset-0 z-10 rounded-lg"
+                    aria-label={prompt.title}
+                  />
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No prompts found"
+              description="Try adjusting your filters or check back later."
+            />
+          )}
         </div>
-      ) : (
-        <EmptyState
-          title="No prompts found"
-          description="Try adjusting your filters or check back later."
-        />
-      )}
+      </div>
     </div>
   )
 }
