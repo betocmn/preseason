@@ -3,7 +3,14 @@ import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { prompts, recommendations, runResults, tools } from '~/server/db/schema'
+import {
+  categories,
+  prompts,
+  recommendations,
+  runResults,
+  subcategories,
+  tools,
+} from '~/server/db/schema'
 import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
 
 const promptLevelSchema = z.enum([
@@ -59,7 +66,8 @@ export const promptRouter = createTRPCRouter({
       z
         .object({
           level: promptLevelSchema.optional(),
-          category: z.string().min(1).max(100).optional(),
+          group: z.string().min(1).max(100).optional(),
+          sub: z.string().min(1).max(100).optional(),
         })
         .optional(),
     )
@@ -83,11 +91,27 @@ export const promptRouter = createTRPCRouter({
         .where(and(...conditions))
         .orderBy(asc(prompts.title))
 
-      if (input?.category) {
-        const lowerCategory = input.category.toLowerCase()
-        activePrompts = activePrompts.filter((p) =>
-          p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerCategory),
-        )
+      if (input?.sub) {
+        const subcategory = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.sub),
+        })
+        if (subcategory) {
+          const lowerName = subcategory.name.toLowerCase()
+          activePrompts = activePrompts.filter((p) =>
+            p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerName),
+          )
+        }
+      } else if (input?.group) {
+        const group = await ctx.db.query.categories.findFirst({
+          where: eq(categories.slug, input.group),
+          with: { subcategories: true },
+        })
+        if (group) {
+          const subNames = new Set(group.subcategories.map((s) => s.name.toLowerCase()))
+          activePrompts = activePrompts.filter((p) =>
+            p.expectedCategories?.some((cat) => subNames.has(cat.toLowerCase())),
+          )
+        }
       }
 
       if (activePrompts.length === 0) return []
@@ -131,23 +155,6 @@ export const promptRouter = createTRPCRouter({
         })),
       }))
     }),
-
-  listExpectedCategories: publicProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db
-      .select({ expectedCategories: prompts.expectedCategories })
-      .from(prompts)
-      .where(eq(prompts.isActive, true))
-
-    const categorySet = new Set<string>()
-    for (const row of rows) {
-      if (row.expectedCategories) {
-        for (const cat of row.expectedCategories) {
-          categorySet.add(cat)
-        }
-      }
-    }
-    return Array.from(categorySet).sort()
-  }),
 
   listWithTopTools: publicProcedure
     .input(z.object({ limit: z.number().int().min(1).max(10).default(5) }).optional())

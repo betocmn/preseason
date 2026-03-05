@@ -1,76 +1,127 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
+import { badgeVariants } from '~/components/ui/badge'
+import { cn } from '~/lib/utils'
+
+type CategoryGroup = {
+  slug: string
+  name: string
+  subcategories: { slug: string; name: string }[]
+}
 
 type PromptFiltersProps = {
-  categories: string[]
+  groups: CategoryGroup[]
   currentLevel?: string
-  currentCategory?: string
+  currentGroup?: string
+  currentSub?: string
 }
 
 const LEVEL_OPTIONS = [
-  { value: 'software-dev-beginner', label: 'Software Dev Beginner' },
-  { value: 'software-dev-experienced', label: 'Software Dev Experienced' },
+  { value: 'software-dev-beginner', label: 'Beginner' },
+  { value: 'software-dev-experienced', label: 'Experienced' },
   { value: 'vibe-coder', label: 'Vibe Coder' },
 ]
 
-export function PromptFilters({ categories, currentLevel, currentCategory }: PromptFiltersProps) {
+export function PromptFilters({
+  groups,
+  currentLevel,
+  currentGroup,
+  currentSub,
+}: PromptFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  function updateFilter(key: string, value: string | undefined) {
+  function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
-    if (value) {
-      params.set(key, value)
-    } else {
-      params.delete(key)
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
     }
     const qs = params.toString()
     router.replace(qs ? `/prompts?${qs}` : '/prompts')
   }
 
-  return (
-    <div className="mb-6 flex flex-wrap gap-3">
-      <Select
-        value={currentLevel ?? 'all'}
-        onValueChange={(v) => updateFilter('level', v === 'all' ? undefined : v)}
-      >
-        <SelectTrigger className="w-[220px]">
-          <SelectValue placeholder="All levels" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All levels</SelectItem>
-          {LEVEL_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+  const activeGroup = groups.find((g) => g.slug === currentGroup)
 
-      <Select
-        value={currentCategory ?? 'all'}
-        onValueChange={(v) => updateFilter('category', v === 'all' ? undefined : v)}
-      >
-        <SelectTrigger className="w-[220px]">
-          <SelectValue placeholder="All categories" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All categories</SelectItem>
-          {categories.map((cat) => (
-            <SelectItem key={cat} value={cat.toLowerCase()}>
-              {cat}
-            </SelectItem>
+  return (
+    <div className="mb-6 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Level</span>
+        <Pill active={!currentLevel} onClick={() => navigate({ level: undefined })}>
+          All
+        </Pill>
+        {LEVEL_OPTIONS.map((opt) => (
+          <Pill
+            key={opt.value}
+            active={currentLevel === opt.value}
+            onClick={() => navigate({ level: opt.value })}
+          >
+            {opt.label}
+          </Pill>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Category</span>
+        <Pill active={!currentGroup} onClick={() => navigate({ group: undefined, sub: undefined })}>
+          All
+        </Pill>
+        {groups.map((g) => (
+          <Pill
+            key={g.slug}
+            active={currentGroup === g.slug}
+            onClick={() => navigate({ group: g.slug, sub: undefined })}
+          >
+            {g.name}
+          </Pill>
+        ))}
+      </div>
+
+      {activeGroup && activeGroup.subcategories.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Sub</span>
+          <Pill active={!currentSub} onClick={() => navigate({ sub: undefined })}>
+            All
+          </Pill>
+          {activeGroup.subcategories.map((s) => (
+            <Pill
+              key={s.slug}
+              active={currentSub === s.slug}
+              onClick={() => navigate({ sub: s.slug })}
+            >
+              {s.name}
+            </Pill>
           ))}
-        </SelectContent>
-      </Select>
+        </div>
+      )}
     </div>
+  )
+}
+
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        badgeVariants({ variant: active ? 'default' : 'outline' }),
+        'cursor-pointer select-none transition-colors',
+        !active && 'hover:bg-accent',
+      )}
+    >
+      {children}
+    </button>
   )
 }

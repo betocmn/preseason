@@ -21,28 +21,32 @@ function formatLevel(level: string): string {
 }
 
 type Props = {
-  searchParams: Promise<{ level?: string; category?: string }>
+  searchParams: Promise<{ level?: string; group?: string; sub?: string }>
 }
 
 export default async function PromptsPage({ searchParams }: Props) {
-  const { level, category } = await searchParams
+  const { level, group, sub } = await searchParams
   const caller = await api()
 
-  const [activePrompts, distinctCategories] = await Promise.all([
-    caller.prompt.listActive(level || category ? { level: level as never, category } : undefined),
-    caller.prompt.listExpectedCategories(),
+  const [activePrompts, categoryGroups] = await Promise.all([
+    caller.prompt.listActive(
+      level || group || sub ? { level: level as never, group, sub } : undefined,
+    ),
+    caller.category.listGroups(),
   ])
+
+  const groups = categoryGroups.map((g) => ({
+    slug: g.slug,
+    name: g.name,
+    subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
+  }))
 
   return (
     <div className="container py-8">
       <h1 className="mb-6 text-xl font-bold tracking-tight">Prompts</h1>
 
       <Suspense fallback={null}>
-        <PromptFilters
-          categories={distinctCategories}
-          currentLevel={level}
-          currentCategory={category}
-        />
+        <PromptFilters groups={groups} currentLevel={level} currentGroup={group} currentSub={sub} />
       </Suspense>
 
       {activePrompts.length > 0 ? (
