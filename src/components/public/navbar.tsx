@@ -49,7 +49,7 @@ export function Navbar() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           <Button variant="ghost" size="sm" asChild className="hidden md:inline-flex">
             <Link href="/login">Log in</Link>
