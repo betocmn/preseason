@@ -11,6 +11,7 @@ const navLinks = [
   { href: '/matches', label: 'Live Matches' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/critics', label: 'Critics' },
+  { href: '/prompts', label: 'Prompts' },
 ]
 
 export function MobileNav() {
