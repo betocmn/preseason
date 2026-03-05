@@ -29,9 +29,7 @@ export default async function PromptsPage({ searchParams }: Props) {
   const caller = await api()
 
   const [activePrompts, distinctCategories] = await Promise.all([
-    caller.prompt.listActive(
-      level || category ? { level: level as never, category } : undefined,
-    ),
+    caller.prompt.listActive(level || category ? { level: level as never, category } : undefined),
     caller.prompt.listExpectedCategories(),
   ])
 
@@ -50,10 +48,7 @@ export default async function PromptsPage({ searchParams }: Props) {
       {activePrompts.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {activePrompts.map((prompt) => (
-            <Card
-              key={prompt.id}
-              className="group relative transition-colors hover:bg-accent/50"
-            >
+            <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
               <CardContent className="p-4">
                 <Badge variant="outline" className="mb-2 text-[11px] font-normal">
                   {formatLevel(prompt.level)}
