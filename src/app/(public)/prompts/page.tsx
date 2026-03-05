@@ -26,12 +26,11 @@ type Props = {
 
 export default async function PromptsPage({ searchParams }: Props) {
   const { level, group, sub } = await searchParams
+  const effectiveGroup = group ?? 'devtools'
   const caller = await api()
 
   const [activePrompts, categoryGroups] = await Promise.all([
-    caller.prompt.listActive(
-      level || group || sub ? { level: level as never, group, sub } : undefined,
-    ),
+    caller.prompt.listActive({ level: level as never, group: effectiveGroup, sub }),
     caller.category.listGroups(),
   ])
 
@@ -50,7 +49,7 @@ export default async function PromptsPage({ searchParams }: Props) {
           <PromptFilters
             groups={groups}
             currentLevel={level}
-            currentGroup={group}
+            currentGroup={effectiveGroup}
             currentSub={sub}
           />
         </Suspense>
