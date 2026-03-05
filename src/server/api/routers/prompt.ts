@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { asc, count, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -54,20 +54,99 @@ async function readPromptFile(slug: string, level: PromptLevel) {
 }
 
 export const promptRouter = createTRPCRouter({
-  listActive: publicProcedure.query(async ({ ctx }) => {
-    return ctx.db
-      .select({
-        id: prompts.id,
-        title: prompts.title,
-        slug: prompts.slug,
-        level: prompts.level,
-        description: prompts.description,
-        expectedCategories: prompts.expectedCategories,
-        isActive: prompts.isActive,
-      })
+  listActive: publicProcedure
+    .input(
+      z
+        .object({
+          level: promptLevelSchema.optional(),
+          category: z.string().min(1).max(100).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const conditions = [eq(prompts.isActive, true)]
+      if (input?.level) {
+        conditions.push(eq(prompts.level, input.level))
+      }
+
+      let activePrompts = await ctx.db
+        .select({
+          id: prompts.id,
+          title: prompts.title,
+          slug: prompts.slug,
+          level: prompts.level,
+          description: prompts.description,
+          expectedCategories: prompts.expectedCategories,
+          isActive: prompts.isActive,
+        })
+        .from(prompts)
+        .where(and(...conditions))
+        .orderBy(asc(prompts.title))
+
+      if (input?.category) {
+        const lowerCategory = input.category.toLowerCase()
+        activePrompts = activePrompts.filter((p) =>
+          p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerCategory),
+        )
+      }
+
+      if (activePrompts.length === 0) return []
+
+      const promptIds = activePrompts.map((p) => p.id)
+      const topToolRows = await ctx.db
+        .select({
+          promptId: runResults.promptId,
+          toolId: tools.id,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          recCount: count(recommendations.id),
+        })
+        .from(recommendations)
+        .innerJoin(runResults, eq(recommendations.runResultId, runResults.id))
+        .innerJoin(tools, eq(recommendations.toolId, tools.id))
+        .where(inArray(runResults.promptId, promptIds))
+        .groupBy(runResults.promptId, tools.id, tools.name, tools.slug, tools.logoUrl)
+        .orderBy(desc(count(recommendations.id)))
+
+      const toolsByPrompt = new Map<string, typeof topToolRows>()
+      for (const row of topToolRows) {
+        const existing = toolsByPrompt.get(row.promptId) ?? []
+        if (existing.length < 4) {
+          existing.push(row)
+          toolsByPrompt.set(row.promptId, existing)
+        }
+      }
+
+      return activePrompts.map((prompt) => ({
+        ...prompt,
+        topTools: (toolsByPrompt.get(prompt.id) ?? []).map((t) => ({
+          tool: {
+            id: t.toolId,
+            name: t.toolName,
+            slug: t.toolSlug,
+            logoUrl: t.toolLogoUrl,
+          },
+          count: Number(t.recCount),
+        })),
+      }))
+    }),
+
+  listExpectedCategories: publicProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db
+      .select({ expectedCategories: prompts.expectedCategories })
       .from(prompts)
       .where(eq(prompts.isActive, true))
-      .orderBy(asc(prompts.title))
+
+    const categorySet = new Set<string>()
+    for (const row of rows) {
+      if (row.expectedCategories) {
+        for (const cat of row.expectedCategories) {
+          categorySet.add(cat)
+        }
+      }
+    }
+    return Array.from(categorySet).sort()
   }),
 
   listWithTopTools: publicProcedure
