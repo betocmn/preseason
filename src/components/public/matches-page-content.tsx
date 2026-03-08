@@ -7,22 +7,37 @@ import { MatchCard } from '~/components/public/match-card'
 import { api } from '~/trpc/react'
 
 type MatchesPageContentProps = {
+  initialGroupSlug?: string
   initialCategorySlug?: string
+  initialToolSlug?: string
 }
 
 const PAGE_SIZE = 12
 
-export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentProps) {
+export function MatchesPageContent({
+  initialGroupSlug,
+  initialCategorySlug,
+  initialToolSlug,
+}: MatchesPageContentProps) {
   const [settledLimit, setSettledLimit] = useState(PAGE_SIZE)
 
-  const { data: activeMatches } = api.match.listActive.useQuery(
-    initialCategorySlug ? { categorySlug: initialCategorySlug } : undefined,
-  )
+  const activeInput =
+    initialGroupSlug || initialCategorySlug || initialToolSlug
+      ? {
+          groupSlug: initialGroupSlug,
+          categorySlug: initialCategorySlug,
+          toolSlug: initialToolSlug,
+        }
+      : undefined
+
+  const { data: activeMatches } = api.match.listActive.useQuery(activeInput)
 
   const { data: settledData, isLoading: settledLoading } = api.match.listSettled.useQuery({
     limit: settledLimit,
     offset: 0,
+    groupSlug: initialGroupSlug || undefined,
     categorySlug: initialCategorySlug || undefined,
+    toolSlug: initialToolSlug || undefined,
   })
 
   const active = activeMatches ?? []
@@ -34,7 +49,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
     <div>
       {/* Active Matches */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
+        <h2 className="mb-4 text-lg font-semibold">Active</h2>
         {active.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {active.map((match) => (
