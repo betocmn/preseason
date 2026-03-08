@@ -32,10 +32,13 @@ export default async function PromptsPage({ searchParams }: Props) {
     level && validLevels.includes(level)
       ? (level as (typeof promptLevelEnum.enumValues)[number])
       : undefined
+  const safeStr = (v: string | undefined) => (v && v.length >= 1 && v.length <= 100 ? v : undefined)
+  const safeGroup = safeStr(group)
+  const safeSub = safeStr(sub)
   const caller = await api()
 
   const [activePrompts, categoryGroups] = await Promise.all([
-    caller.prompt.listActive({ level: safeLevel, group, sub }),
+    caller.prompt.listActive({ level: safeLevel, group: safeGroup, sub: safeSub }),
     caller.category.listGroups(),
   ])
 
