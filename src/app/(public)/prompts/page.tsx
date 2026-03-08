@@ -6,6 +6,7 @@ import { PromptFilters } from '~/components/public/prompt-filters'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
+import { promptLevelEnum } from '~/server/db/schema'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default async function PromptsPage({ searchParams }: Props) {
       <Suspense fallback={null}>
         <PromptFilters
           groups={groups}
+          levels={promptLevelEnum.enumValues}
           currentLevel={level}
           currentGroup={effectiveGroup}
           currentSub={sub}

@@ -21,19 +21,22 @@ type CategoryGroup = {
 
 type PromptFiltersProps = {
   groups: CategoryGroup[]
+  levels: string[]
   currentLevel?: string
   currentGroup?: string
   currentSub?: string
 }
 
-const LEVEL_OPTIONS = [
-  { value: 'software-dev-beginner', label: 'Beginner' },
-  { value: 'software-dev-experienced', label: 'Experienced' },
-  { value: 'vibe-coder', label: 'Vibe Coder' },
-]
+function formatLevelLabel(level: string): string {
+  return level
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
 
 export function PromptFilters({
   groups,
+  levels,
   currentLevel,
   currentGroup,
   currentSub,
@@ -84,9 +87,9 @@ export function PromptFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Levels</SelectItem>
-            {LEVEL_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+            {levels.map((level) => (
+              <SelectItem key={level} value={level}>
+                {formatLevelLabel(level)}
               </SelectItem>
             ))}
           </SelectContent>
