@@ -5,12 +5,14 @@ import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
+  categories,
   llms,
   matches,
   prompts,
   recommendations,
   runResults,
   subcategories,
+  tools,
 } from '~/server/db/schema'
 
 function toDateString(date: Date) {
@@ -167,24 +169,46 @@ export const matchRouter = createTRPCRouter({
     .input(
       z
         .object({
+          groupSlug: z.string().min(1).max(100).optional(),
           categorySlug: z.string().min(1).max(100).optional(),
+          toolSlug: z.string().min(1).max(255).optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      let categoryId: string | undefined
+      let categoryIds: string[] | undefined
+
       if (input?.categorySlug) {
-        const category = await ctx.db.query.subcategories.findFirst({
+        const sub = await ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.categorySlug),
         })
-        if (!category) return []
-        categoryId = category.id
+        if (!sub) return []
+        categoryIds = [sub.id]
+      } else if (input?.groupSlug) {
+        const group = await ctx.db.query.categories.findFirst({
+          where: eq(categories.slug, input.groupSlug),
+          with: { subcategories: true },
+        })
+        if (!group || group.subcategories.length === 0) return []
+        categoryIds = group.subcategories.map((s) => s.id)
+      }
+
+      let toolId: string | undefined
+      if (input?.toolSlug) {
+        const tool = await ctx.db.query.tools.findFirst({
+          where: eq(tools.slug, input.toolSlug),
+        })
+        if (!tool) return []
+        toolId = tool.id
       }
 
       return ctx.db.query.matches.findMany({
         where: and(
           eq(matches.status, 'active'),
-          categoryId ? eq(matches.categoryId, categoryId) : undefined,
+          categoryIds ? inArray(matches.categoryId, categoryIds) : undefined,
+          toolId
+            ? sql`(${matches.toolAId} = ${toolId} OR ${matches.toolBId} = ${toolId})`
+            : undefined,
         ),
         orderBy: [desc(matches.startedAt)],
         with: {
@@ -199,29 +223,45 @@ export const matchRouter = createTRPCRouter({
   listSettled: publicProcedure
     .input(
       paginationInputSchema.extend({
+        groupSlug: z.string().min(1).max(100).optional(),
         categorySlug: z.string().min(1).max(100).optional(),
+        toolSlug: z.string().min(1).max(255).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      let categoryId: string | undefined
+      const emptyResult = { items: [], total: 0, limit: input.limit, offset: input.offset }
+
+      let categoryIds: string[] | undefined
       if (input.categorySlug) {
-        const category = await ctx.db.query.subcategories.findFirst({
+        const sub = await ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.categorySlug),
         })
-        if (!category) {
-          return {
-            items: [],
-            total: 0,
-            limit: input.limit,
-            offset: input.offset,
-          }
-        }
-        categoryId = category.id
+        if (!sub) return emptyResult
+        categoryIds = [sub.id]
+      } else if (input.groupSlug) {
+        const group = await ctx.db.query.categories.findFirst({
+          where: eq(categories.slug, input.groupSlug),
+          with: { subcategories: true },
+        })
+        if (!group || group.subcategories.length === 0) return emptyResult
+        categoryIds = group.subcategories.map((s) => s.id)
+      }
+
+      let toolId: string | undefined
+      if (input.toolSlug) {
+        const tool = await ctx.db.query.tools.findFirst({
+          where: eq(tools.slug, input.toolSlug),
+        })
+        if (!tool) return emptyResult
+        toolId = tool.id
       }
 
       const where = and(
         eq(matches.status, 'settled'),
-        categoryId ? eq(matches.categoryId, categoryId) : undefined,
+        categoryIds ? inArray(matches.categoryId, categoryIds) : undefined,
+        toolId
+          ? sql`(${matches.toolAId} = ${toolId} OR ${matches.toolBId} = ${toolId})`
+          : undefined,
       )
 
       const countRows = await ctx.db

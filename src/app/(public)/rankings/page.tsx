@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import { EmptyState } from '~/components/public/empty-state'
-import { RankingTable } from '~/components/public/ranking-table'
-import { SidebarLayout } from '~/components/public/sidebar-layout'
+import { Suspense } from 'react'
+import { RankingFilters } from '~/components/public/ranking-filters'
+import { RankingsPageContent } from '~/components/public/rankings-page-content'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -9,25 +9,32 @@ export const metadata: Metadata = {
   description: 'See which tools LLMs recommend most across all categories.',
 }
 
-export default async function RankingsPage() {
+type Props = {
+  searchParams: Promise<{ category?: string; sub?: string }>
+}
+
+export default async function RankingsPage({ searchParams }: Props) {
+  const { category, sub } = await searchParams
   const caller = await api()
-  const [ranking, groups] = await Promise.all([
-    caller.ranking.overall({ days: 30, limit: 50 }),
-    caller.category.listGroups(),
-  ])
+  const categoryGroups = await caller.category.listGroups()
+
+  const groups = categoryGroups.map((g) => ({
+    slug: g.slug,
+    name: g.name,
+    subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
+  }))
 
   return (
-    <SidebarLayout groups={groups} section="rankings">
+    <div className="container py-8">
       <h1 className="mb-6 text-xl font-bold tracking-tight">Rankings</h1>
-      <h2 className="mb-4 text-lg font-semibold">Overall Rankings (30 days)</h2>
-      {ranking.items.length > 0 ? (
-        <RankingTable items={ranking.items} showCategoryCoverage />
-      ) : (
-        <EmptyState
-          title="No ranking data yet"
-          description="Rankings are computed from recommendation runs. Check back after runs have completed."
-        />
-      )}
-    </SidebarLayout>
+
+      <Suspense fallback={null}>
+        <RankingFilters groups={groups} currentGroup={category} currentSub={sub} />
+      </Suspense>
+
+      <div className="mt-6">
+        <RankingsPageContent currentGroup={category} currentSub={sub} />
+      </div>
+    </div>
   )
 }
