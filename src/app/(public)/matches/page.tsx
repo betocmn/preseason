@@ -43,7 +43,11 @@ export default async function MatchesPage({ searchParams }: Props) {
       </Suspense>
 
       <div className="mt-6">
-        <MatchesPageContent initialCategorySlug={sub ?? category} initialToolSlug={tool} />
+        <MatchesPageContent
+          initialGroupSlug={sub ? undefined : category}
+          initialCategorySlug={sub}
+          initialToolSlug={tool}
+        />
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import { MatchCard } from '~/components/public/match-card'
 import { api } from '~/trpc/react'
 
 type MatchesPageContentProps = {
+  initialGroupSlug?: string
   initialCategorySlug?: string
   initialToolSlug?: string
 }
@@ -14,14 +15,19 @@ type MatchesPageContentProps = {
 const PAGE_SIZE = 12
 
 export function MatchesPageContent({
+  initialGroupSlug,
   initialCategorySlug,
   initialToolSlug,
 }: MatchesPageContentProps) {
   const [settledLimit, setSettledLimit] = useState(PAGE_SIZE)
 
   const activeInput =
-    initialCategorySlug || initialToolSlug
-      ? { categorySlug: initialCategorySlug, toolSlug: initialToolSlug }
+    initialGroupSlug || initialCategorySlug || initialToolSlug
+      ? {
+          groupSlug: initialGroupSlug,
+          categorySlug: initialCategorySlug,
+          toolSlug: initialToolSlug,
+        }
       : undefined
 
   const { data: activeMatches } = api.match.listActive.useQuery(activeInput)
@@ -29,6 +35,7 @@ export function MatchesPageContent({
   const { data: settledData, isLoading: settledLoading } = api.match.listSettled.useQuery({
     limit: settledLimit,
     offset: 0,
+    groupSlug: initialGroupSlug || undefined,
     categorySlug: initialCategorySlug || undefined,
     toolSlug: initialToolSlug || undefined,
   })
