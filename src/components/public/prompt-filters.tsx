@@ -71,7 +71,7 @@ export function PromptFilters({
       const sub = group.subcategories.find((s) => s.slug === currentSub)
       return sub ? `${group.name} / ${sub.name}` : group.name
     }
-    return `${group.name} — All`
+    return `All ${group.name}`
   })()
 
   return (
