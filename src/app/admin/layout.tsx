@@ -8,7 +8,7 @@ import { AdminHeader } from './_components/admin-header'
 import { AdminNav } from './_components/admin-nav'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const user = await getServerUser()
+  const user = await getServerUser().catch(() => null)
 
   if (!user) {
     redirect('/login?redirectTo=/beto-admin')
