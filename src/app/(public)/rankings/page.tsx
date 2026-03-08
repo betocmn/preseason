@@ -15,6 +15,7 @@ type Props = {
 
 export default async function RankingsPage({ searchParams }: Props) {
   const { category, sub } = await searchParams
+  const effectiveCategory = category ?? 'devtools'
   const caller = await api()
   const categoryGroups = await caller.category.listGroups()
 
@@ -29,11 +30,11 @@ export default async function RankingsPage({ searchParams }: Props) {
       <h1 className="mb-6 text-xl font-bold tracking-tight">Rankings</h1>
 
       <Suspense fallback={null}>
-        <RankingFilters groups={groups} currentGroup={category} currentSub={sub} />
+        <RankingFilters groups={groups} currentGroup={effectiveCategory} currentSub={sub} />
       </Suspense>
 
       <div className="mt-6">
-        <RankingsPageContent currentGroup={category} currentSub={sub} />
+        <RankingsPageContent currentGroup={effectiveCategory} currentSub={sub} />
       </div>
     </div>
   )
