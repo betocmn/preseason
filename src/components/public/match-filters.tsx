@@ -1,6 +1,6 @@
 'use client'
 
-import { Swords, Tag } from 'lucide-react'
+import { Package, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -112,7 +112,7 @@ export function MatchFilters({
       </div>
 
       <div className="flex items-center gap-2">
-        <Swords className="h-4 w-4 text-muted-foreground" />
+        <Package className="h-4 w-4 text-muted-foreground" />
         <Select
           value={currentTool ?? 'all'}
           onValueChange={(val) => navigate({ tool: val === 'all' ? undefined : val })}
