@@ -49,7 +49,7 @@ export function MatchesPageContent({
     <div>
       {/* Active Matches */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
+        <h2 className="mb-4 text-lg font-semibold">Active</h2>
         {active.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {active.map((match) => (
