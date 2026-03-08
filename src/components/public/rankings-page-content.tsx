@@ -28,6 +28,12 @@ export function RankingsPageContent({ currentGroup, currentSub }: RankingsPageCo
   const isOverall = !currentGroup && !currentSub
   const isGroup = !!currentGroup && !currentSub
 
+  const isLoading = isOverall
+    ? overallQuery.isLoading
+    : isGroup
+      ? groupQuery.isLoading
+      : subQuery.isLoading
+
   const items = isOverall
     ? (overallQuery.data?.items ?? [])
     : isGroup
@@ -51,7 +57,7 @@ export function RankingsPageContent({ currentGroup, currentSub }: RankingsPageCo
       <h2 className="mb-4 text-lg font-semibold">{heading}</h2>
       {items.length > 0 ? (
         <RankingTable items={items} showCategoryCoverage={isOverall} />
-      ) : (
+      ) : isLoading ? null : (
         <EmptyState
           title={emptyTitle}
           description="Rankings are computed from recommendation runs. Check back after runs have completed."
