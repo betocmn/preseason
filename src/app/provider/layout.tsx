@@ -5,7 +5,7 @@ import { db } from '~/server/db'
 import { userProfiles } from '~/server/db/schema'
 
 export default async function ProviderLayout({ children }: { children: React.ReactNode }) {
-  const user = await getServerUser().catch(() => null)
+  const user = await getServerUser()
 
   if (!user) {
     redirect('/login?redirectTo=/provider')
