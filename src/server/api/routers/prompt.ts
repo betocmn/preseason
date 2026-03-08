@@ -96,9 +96,9 @@ export const promptRouter = createTRPCRouter({
           where: eq(subcategories.slug, input.sub),
         })
         if (subcategory) {
-          const lowerName = subcategory.name.toLowerCase()
+          const lowerSlug = subcategory.slug.toLowerCase()
           activePrompts = activePrompts.filter((p) =>
-            p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerName),
+            p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerSlug),
           )
         }
       } else if (input?.group) {
@@ -107,9 +107,9 @@ export const promptRouter = createTRPCRouter({
           with: { subcategories: true },
         })
         if (group) {
-          const subNames = new Set(group.subcategories.map((s) => s.name.toLowerCase()))
+          const subSlugs = new Set(group.subcategories.map((s) => s.slug.toLowerCase()))
           activePrompts = activePrompts.filter((p) =>
-            p.expectedCategories?.some((cat) => subNames.has(cat.toLowerCase())),
+            p.expectedCategories?.some((cat) => subSlugs.has(cat.toLowerCase())),
           )
         }
       }
