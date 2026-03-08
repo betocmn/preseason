@@ -15,6 +15,7 @@ type Props = {
 
 export default async function MatchesPage({ searchParams }: Props) {
   const { category, sub, tool } = await searchParams
+  const effectiveCategory = category ?? 'devtools'
   const caller = await api()
 
   const [categoryGroups, toolNames] = await Promise.all([
@@ -36,7 +37,7 @@ export default async function MatchesPage({ searchParams }: Props) {
         <MatchFilters
           groups={groups}
           tools={toolNames}
-          currentGroup={category}
+          currentGroup={effectiveCategory}
           currentSub={sub}
           currentTool={tool}
         />
@@ -44,7 +45,7 @@ export default async function MatchesPage({ searchParams }: Props) {
 
       <div className="mt-6">
         <MatchesPageContent
-          initialGroupSlug={sub ? undefined : category}
+          initialGroupSlug={sub ? undefined : effectiveCategory}
           initialCategorySlug={sub}
           initialToolSlug={tool}
         />
