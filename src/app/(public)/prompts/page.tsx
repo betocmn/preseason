@@ -27,11 +27,15 @@ type Props = {
 
 export default async function PromptsPage({ searchParams }: Props) {
   const { level, group, sub } = await searchParams
-  const effectiveGroup = group ?? 'devtools'
+  const validLevels: string[] = promptLevelEnum.enumValues
+  const safeLevel =
+    level && validLevels.includes(level)
+      ? (level as (typeof promptLevelEnum.enumValues)[number])
+      : undefined
   const caller = await api()
 
   const [activePrompts, categoryGroups] = await Promise.all([
-    caller.prompt.listActive({ level: level as never, group: effectiveGroup, sub }),
+    caller.prompt.listActive({ level: safeLevel, group, sub }),
     caller.category.listGroups(),
   ])
 
@@ -50,7 +54,7 @@ export default async function PromptsPage({ searchParams }: Props) {
           groups={groups}
           levels={promptLevelEnum.enumValues}
           currentLevel={level}
-          currentGroup={effectiveGroup}
+          currentGroup={group}
           currentSub={sub}
         />
       </Suspense>
