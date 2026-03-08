@@ -118,7 +118,7 @@ export function PromptFilters({
             {groups.map((group, i) => (
               <SelectGroup key={group.slug}>
                 {i > 0 && <SelectSeparator />}
-                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-foreground">
                   {group.name}
                 </SelectLabel>
                 <SelectItem value={group.slug}>All {group.name}</SelectItem>
