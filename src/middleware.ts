@@ -15,7 +15,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+  const isPublicRoute =
+    pathname === '/' || publicRoutes.slice(1).some((route) => pathname.startsWith(route))
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
