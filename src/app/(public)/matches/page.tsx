@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
+import { MatchFilters } from '~/components/public/match-filters'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
-import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -9,18 +10,41 @@ export const metadata: Metadata = {
 }
 
 type Props = {
-  searchParams: Promise<{ category?: string; sub?: string }>
+  searchParams: Promise<{ category?: string; sub?: string; tool?: string }>
 }
 
 export default async function MatchesPage({ searchParams }: Props) {
-  const { category, sub } = await searchParams
+  const { category, sub, tool } = await searchParams
   const caller = await api()
-  const groups = await caller.category.listGroups()
+
+  const [categoryGroups, toolNames] = await Promise.all([
+    caller.category.listGroups(),
+    caller.tool.listNames(),
+  ])
+
+  const groups = categoryGroups.map((g) => ({
+    slug: g.slug,
+    name: g.name,
+    subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
+  }))
 
   return (
-    <SidebarLayout groups={groups} section="matches">
+    <div className="container py-8">
       <h1 className="mb-6 text-xl font-bold tracking-tight">Live Matches</h1>
-      <MatchesPageContent initialCategorySlug={sub ?? category} />
-    </SidebarLayout>
+
+      <Suspense fallback={null}>
+        <MatchFilters
+          groups={groups}
+          tools={toolNames}
+          currentGroup={category}
+          currentSub={sub}
+          currentTool={tool}
+        />
+      </Suspense>
+
+      <div className="mt-6">
+        <MatchesPageContent initialCategorySlug={sub ?? category} initialToolSlug={tool} />
+      </div>
+    </div>
   )
 }

@@ -92,6 +92,13 @@ async function getToolWithCategories(db: Database, toolId: string) {
 }
 
 export const toolRouter = createTRPCRouter({
+  listNames: publicProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({ slug: tools.slug, name: tools.name })
+      .from(tools)
+      .orderBy(asc(tools.name))
+  }),
+
   getById: publicProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

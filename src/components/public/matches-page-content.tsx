@@ -8,21 +8,29 @@ import { api } from '~/trpc/react'
 
 type MatchesPageContentProps = {
   initialCategorySlug?: string
+  initialToolSlug?: string
 }
 
 const PAGE_SIZE = 12
 
-export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentProps) {
+export function MatchesPageContent({
+  initialCategorySlug,
+  initialToolSlug,
+}: MatchesPageContentProps) {
   const [settledLimit, setSettledLimit] = useState(PAGE_SIZE)
 
-  const { data: activeMatches } = api.match.listActive.useQuery(
-    initialCategorySlug ? { categorySlug: initialCategorySlug } : undefined,
-  )
+  const activeInput =
+    initialCategorySlug || initialToolSlug
+      ? { categorySlug: initialCategorySlug, toolSlug: initialToolSlug }
+      : undefined
+
+  const { data: activeMatches } = api.match.listActive.useQuery(activeInput)
 
   const { data: settledData, isLoading: settledLoading } = api.match.listSettled.useQuery({
     limit: settledLimit,
     offset: 0,
     categorySlug: initialCategorySlug || undefined,
+    toolSlug: initialToolSlug || undefined,
   })
 
   const active = activeMatches ?? []
