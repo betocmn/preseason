@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '~/lib/supabase/middleware'
 
-const publicRoutes = ['/', '/login', '/signup']
+const protectedRoutes = ['/beto-admin', '/provider']
 
 export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request)
@@ -15,9 +15,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+  const isProtectedRoute = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  )
 
-  if (!user && !isPublicRoute) {
+  if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirectTo', pathname)
