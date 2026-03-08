@@ -93,8 +93,6 @@ export function PromptFilters({
         </Select>
       </div>
 
-      <div className="h-6 w-px bg-border/60" />
-
       <div className="flex items-center gap-2">
         <Tag className="h-4 w-4 text-muted-foreground" />
         <Select
