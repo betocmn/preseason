@@ -1,10 +1,17 @@
 'use client'
 
-import { Filter } from 'lucide-react'
+import { Layers, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '~/components/ui/button'
-import { Sheet, SheetContent, SheetTrigger } from '~/components/ui/sheet'
-import { cn } from '~/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 type CategoryGroup = {
   slug: string
@@ -25,32 +32,12 @@ const LEVEL_OPTIONS = [
   { value: 'vibe-coder', label: 'Vibe Coder' },
 ]
 
-export function PromptFilters(props: PromptFiltersProps) {
-  return (
-    <>
-      <div className="mb-4 md:hidden">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Filters
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-56 p-6 pt-10">
-            <FilterNav {...props} />
-          </SheetContent>
-        </Sheet>
-      </div>
-      <aside className="hidden w-48 shrink-0 md:block">
-        <div className="sticky top-4">
-          <FilterNav {...props} />
-        </div>
-      </aside>
-    </>
-  )
-}
-
-function FilterNav({ groups, currentLevel, currentGroup, currentSub }: PromptFiltersProps) {
+export function PromptFilters({
+  groups,
+  currentLevel,
+  currentGroup,
+  currentSub,
+}: PromptFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -67,121 +54,84 @@ function FilterNav({ groups, currentLevel, currentGroup, currentSub }: PromptFil
     router.replace(qs ? `/prompts?${qs}` : '/prompts')
   }
 
-  return (
-    <nav className="space-y-5">
-      <FilterSection title="Level">
-        <FilterLink active={!currentLevel} onClick={() => navigate({ level: undefined })}>
-          All
-        </FilterLink>
-        {LEVEL_OPTIONS.map((opt) => (
-          <FilterLink
-            key={opt.value}
-            active={currentLevel === opt.value}
-            onClick={() => navigate({ level: opt.value })}
-          >
-            {opt.label}
-          </FilterLink>
-        ))}
-      </FilterSection>
+  const categoryValue = currentSub
+    ? `${currentGroup}:${currentSub}`
+    : currentGroup
+      ? currentGroup
+      : 'all'
 
-      <FilterSection title="Category">
-        <FilterLink
-          active={!currentGroup}
-          onClick={() => navigate({ group: undefined, sub: undefined })}
+  const categoryLabel = (() => {
+    if (!currentGroup) return 'All Categories'
+    const group = groups.find((g) => g.slug === currentGroup)
+    if (!group) return 'All Categories'
+    if (currentSub) {
+      const sub = group.subcategories.find((s) => s.slug === currentSub)
+      return sub ? `${group.name} / ${sub.name}` : group.name
+    }
+    return `${group.name} — All`
+  })()
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        <Layers className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={currentLevel ?? 'all'}
+          onValueChange={(val) => navigate({ level: val === 'all' ? undefined : val })}
         >
-          All
-        </FilterLink>
-        {groups.map((g) => {
-          const isActive = currentGroup === g.slug
-          return (
-            <div key={g.slug}>
-              <FilterLink
-                active={isActive}
-                onClick={() => navigate({ group: g.slug, sub: undefined })}
-              >
-                {g.name}
-              </FilterLink>
-              {isActive && g.subcategories.length > 0 && (
-                <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                  <SubFilterLink active={!currentSub} onClick={() => navigate({ sub: undefined })}>
-                    All
-                  </SubFilterLink>
-                  {g.subcategories.map((s) => (
-                    <SubFilterLink
-                      key={s.slug}
-                      active={currentSub === s.slug}
-                      onClick={() => navigate({ sub: s.slug })}
-                    >
-                      {s.name}
-                    </SubFilterLink>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </FilterSection>
-    </nav>
-  )
-}
+          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Levels</SelectItem>
+            {LEVEL_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        {title}
-      </p>
-      <div className="space-y-0.5">{children}</div>
+      <div className="h-6 w-px bg-border/60" />
+
+      <div className="flex items-center gap-2">
+        <Tag className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={categoryValue}
+          onValueChange={(val) => {
+            if (val === 'all') {
+              navigate({ group: undefined, sub: undefined })
+            } else if (val.includes(':')) {
+              const [groupSlug, subSlug] = val.split(':')
+              navigate({ group: groupSlug, sub: subSlug })
+            } else {
+              navigate({ group: val, sub: undefined })
+            }
+          }}
+        >
+          <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
+            <span className="truncate">{categoryLabel}</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {groups.map((group, i) => (
+              <SelectGroup key={group.slug}>
+                {i > 0 && <SelectSeparator />}
+                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.name}
+                </SelectLabel>
+                <SelectItem value={group.slug}>All {group.name}</SelectItem>
+                {group.subcategories.map((sub) => (
+                  <SelectItem key={sub.slug} value={`${group.slug}:${sub.slug}`}>
+                    <span className="pl-2">{sub.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
-  )
-}
-
-function FilterLink({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors',
-        active
-          ? 'bg-accent font-medium text-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-function SubFilterLink({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'block w-full rounded-md px-1.5 py-0.5 text-left text-xs transition-colors',
-        active
-          ? 'font-medium text-foreground'
-          : 'text-muted-foreground/70 hover:text-muted-foreground',
-      )}
-    >
-      {children}
-    </button>
   )
 }
