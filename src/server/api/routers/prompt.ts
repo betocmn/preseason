@@ -95,23 +95,21 @@ export const promptRouter = createTRPCRouter({
         const subcategory = await ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.sub),
         })
-        if (subcategory) {
-          const lowerSlug = subcategory.slug.toLowerCase()
-          activePrompts = activePrompts.filter((p) =>
-            p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerSlug),
-          )
-        }
+        if (!subcategory) return []
+        const lowerSlug = subcategory.slug.toLowerCase()
+        activePrompts = activePrompts.filter((p) =>
+          p.expectedCategories?.some((cat) => cat.toLowerCase() === lowerSlug),
+        )
       } else if (input?.group) {
         const group = await ctx.db.query.categories.findFirst({
           where: eq(categories.slug, input.group),
           with: { subcategories: true },
         })
-        if (group) {
-          const subSlugs = new Set(group.subcategories.map((s) => s.slug.toLowerCase()))
-          activePrompts = activePrompts.filter((p) =>
-            p.expectedCategories?.some((cat) => subSlugs.has(cat.toLowerCase())),
-          )
-        }
+        if (!group) return []
+        const subSlugs = new Set(group.subcategories.map((s) => s.slug.toLowerCase()))
+        activePrompts = activePrompts.filter((p) =>
+          p.expectedCategories?.some((cat) => subSlugs.has(cat.toLowerCase())),
+        )
       }
 
       if (activePrompts.length === 0) return []
