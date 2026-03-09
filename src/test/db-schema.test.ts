@@ -846,7 +846,9 @@ describe('Database Schema', () => {
       })
 
       await db.insert(criticProfiles).values({ slug: 'unique-critic', userId })
-      await expect(db.insert(criticProfiles).values({ slug: 'unique-critic-2', userId })).rejects.toThrow()
+      await expect(
+        db.insert(criticProfiles).values({ slug: 'unique-critic-2', userId }),
+      ).rejects.toThrow()
     })
 
     it('should cascade delete when user is deleted', async () => {
@@ -878,7 +880,9 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ slug: 'comment-critic', userId }).returning())
+      const critic = first(
+        await db.insert(criticProfiles).values({ slug: 'comment-critic', userId }).returning(),
+      )
 
       await db.insert(comments).values({
         criticId: critic.id,
@@ -900,7 +904,9 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ slug: 'target-critic', userId }).returning())
+      const critic = first(
+        await db.insert(criticProfiles).values({ slug: 'target-critic', userId }).returning(),
+      )
 
       const targets = ['recommendation', 'match', 'tool'] as const
       for (const targetType of targets) {
@@ -924,7 +930,12 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ slug: 'cascade-comment-critic', userId }).returning())
+      const critic = first(
+        await db
+          .insert(criticProfiles)
+          .values({ slug: 'cascade-comment-critic', userId })
+          .returning(),
+      )
       await db.insert(comments).values({
         criticId: critic.id,
         targetType: 'tool',

@@ -7,8 +7,15 @@ import { api } from '~/trpc/server'
 export const metadata: Metadata = {
   title: 'Rankings',
   description: 'See which tools LLMs recommend most across all categories.',
-  openGraph: { title: 'Rankings', description: 'See which tools LLMs recommend most across all categories.' },
-  twitter: { card: 'summary_large_image', title: 'Rankings', description: 'See which tools LLMs recommend most across all categories.' },
+  openGraph: {
+    title: 'Rankings',
+    description: 'See which tools LLMs recommend most across all categories.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Rankings',
+    description: 'See which tools LLMs recommend most across all categories.',
+  },
 }
 
 type Props = {

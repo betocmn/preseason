@@ -370,9 +370,18 @@ export const matchRouter = createTRPCRouter({
           : [input.toolBId, input.toolAId]
 
       const [toolARow, toolBRow, categoryRow] = await Promise.all([
-        ctx.db.query.tools.findFirst({ where: eq(tools.id, toolAId ?? ''), columns: { slug: true } }),
-        ctx.db.query.tools.findFirst({ where: eq(tools.id, toolBId ?? ''), columns: { slug: true } }),
-        ctx.db.query.subcategories.findFirst({ where: eq(subcategories.id, input.categoryId), columns: { slug: true } }),
+        ctx.db.query.tools.findFirst({
+          where: eq(tools.id, toolAId ?? ''),
+          columns: { slug: true },
+        }),
+        ctx.db.query.tools.findFirst({
+          where: eq(tools.id, toolBId ?? ''),
+          columns: { slug: true },
+        }),
+        ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.id, input.categoryId),
+          columns: { slug: true },
+        }),
       ])
 
       const periodStartStr = toDateString(input.periodStart)

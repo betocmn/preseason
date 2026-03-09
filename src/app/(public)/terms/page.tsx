@@ -4,7 +4,11 @@ export const metadata: Metadata = {
   title: 'Terms & Conditions',
   description: 'Preseason terms and conditions of use.',
   openGraph: { title: 'Terms & Conditions', description: 'Preseason terms and conditions of use.' },
-  twitter: { card: 'summary_large_image', title: 'Terms & Conditions', description: 'Preseason terms and conditions of use.' },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Terms & Conditions',
+    description: 'Preseason terms and conditions of use.',
+  },
 }
 
 export default function TermsPage() {

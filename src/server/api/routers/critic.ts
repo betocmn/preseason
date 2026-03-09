@@ -537,7 +537,7 @@ export const criticRouter = createTRPCRouter({
       })
       const baseSlug = slugify(user?.displayName ?? ctx.user.id)
       const existingSlugs = await ctx.db.query.criticProfiles.findMany({
-        where: sql`${criticProfiles.slug} LIKE ${baseSlug + '%'}`,
+        where: sql`${criticProfiles.slug} LIKE ${`${baseSlug}%`}`,
         columns: { slug: true },
       })
       const slugSet = new Set(existingSlugs.map((c) => c.slug))
@@ -674,7 +674,7 @@ export const criticRouter = createTRPCRouter({
       })
       const baseSlug = slugify(resolvedUser?.displayName ?? resolvedUserId)
       const existingSlugs = await tx.query.criticProfiles.findMany({
-        where: sql`${criticProfiles.slug} LIKE ${baseSlug + '%'}`,
+        where: sql`${criticProfiles.slug} LIKE ${`${baseSlug}%`}`,
         columns: { slug: true },
       })
       const slugSet = new Set(existingSlugs.map((c) => c.slug))
