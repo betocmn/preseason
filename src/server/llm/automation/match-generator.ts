@@ -112,11 +112,9 @@ export async function generateMatches(
   const toolSlugMap = new Map(toolRows.map((t) => [t.id, t.slug]))
   const categorySlugMap = new Map(categoryRows.map((c) => [c.id, c.slug]))
 
-  // Pre-fetch existing match slugs for the current period to handle collisions
-  const existingMatchSlugs = await database
-    .select({ slug: matches.slug })
-    .from(matches)
-    .where(sql`${matches.slug} LIKE ${`%-${periodStart.slice(0, 10)}%`}`)
+  // Pre-fetch all existing match slugs to handle collisions (including truncated slugs
+  // where the date suffix may have been removed by the 255-char limit)
+  const existingMatchSlugs = await database.select({ slug: matches.slug }).from(matches)
   const usedSlugs = new Set(existingMatchSlugs.map((m) => m.slug))
 
   const matchesToCreate: Array<{
