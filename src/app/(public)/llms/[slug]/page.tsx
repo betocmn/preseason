@@ -17,12 +17,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const caller = await api()
     const llm = await caller.llm.getBySlug({ slug })
+    const title = llm.name
+    const description = `See what tools ${llm.name} recommends across categories.`
     return {
-      title: `${llm.name} | Preseason`,
-      description: `See what tools ${llm.name} recommends across categories.`,
+      title,
+      description,
+      openGraph: { title, description, type: 'article' },
+      twitter: { card: 'summary_large_image', title, description },
     }
   } catch {
-    return { title: 'LLM | Preseason' }
+    return { title: 'LLM' }
   }
 }
 

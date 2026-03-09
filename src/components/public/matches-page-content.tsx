@@ -55,7 +55,7 @@ export function MatchesPageContent({
             {active.map((match) => (
               <MatchCard
                 key={match.id}
-                id={match.id}
+                slug={match.slug}
                 status={match.status}
                 toolA={match.toolA}
                 toolB={match.toolB}
@@ -85,7 +85,7 @@ export function MatchesPageContent({
             {settled.map((match) => (
               <MatchCard
                 key={match.id}
-                id={match.id}
+                slug={match.slug}
                 status={match.status}
                 toolA={match.toolA}
                 toolB={match.toolB}

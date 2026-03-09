@@ -15,9 +15,29 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 })
 
+const siteDescription = 'Track what tools LLMs recommend for vibe-coding prompts'
+
 export const metadata: Metadata = {
-  title: 'Preseason',
-  description: 'Track what tools LLMs recommend for vibe-coding prompts',
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'),
+  ),
+  title: {
+    default: 'Preseason',
+    template: '%s | Preseason',
+  },
+  description: siteDescription,
+  openGraph: {
+    type: 'website',
+    siteName: 'Preseason',
+    title: 'Preseason',
+    description: siteDescription,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Preseason',
+    description: siteDescription,
+  },
   icons: {
     icon: [{ url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' }],
     shortcut: ['/favicon/favicon.ico'],

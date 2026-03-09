@@ -303,6 +303,7 @@ export const matches = createTable(
   'match',
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
+    slug: d.varchar({ length: 255 }).notNull().unique(),
     toolAId: d
       .uuid('tool_a_id')
       .notNull()
@@ -333,6 +334,7 @@ export const matches = createTable(
       t.periodStart,
     ),
     check('match_tool_order_chk', sql`tool_a_id < tool_b_id`),
+    index('match_slug_idx').on(t.slug),
     index('match_status_idx').on(t.status),
     index('match_category_id_idx').on(t.categoryId),
   ],
@@ -346,6 +348,7 @@ export const criticProfiles = createTable(
   'critic_profile',
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
+    slug: d.varchar({ length: 255 }).notNull().unique(),
     userId: d
       .uuid('user_id')
       .notNull()
@@ -369,6 +372,7 @@ export const criticProfiles = createTable(
       columns: [t.verifiedBy],
       foreignColumns: [userProfiles.id],
     }).onDelete('set null'),
+    index('critic_profile_slug_idx').on(t.slug),
     index('critic_profile_user_id_idx').on(t.userId),
   ],
 )

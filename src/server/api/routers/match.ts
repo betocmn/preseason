@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { buildMatchSlug, deduplicateSlug } from '~/lib/slug'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -314,6 +315,29 @@ export const matchRouter = createTRPCRouter({
       return { match, breakdown }
     }),
 
+  getBySlug: publicProcedure
+    .input(z.object({ slug: z.string().min(1).max(255) }))
+    .query(async ({ ctx, input }) => {
+      const match = await ctx.db.query.matches.findFirst({
+        where: eq(matches.slug, input.slug),
+        with: {
+          toolA: true,
+          toolB: true,
+          category: true,
+          winner: true,
+        },
+      })
+      if (!match) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Match not found',
+        })
+      }
+
+      const breakdown = await buildBreakdown(ctx.db, match)
+      return { match, breakdown }
+    }),
+
   create: protectedProcedure
     .input(
       z.object({
@@ -345,15 +369,45 @@ export const matchRouter = createTRPCRouter({
           ? [input.toolAId, input.toolBId]
           : [input.toolBId, input.toolAId]
 
+      const [toolARow, toolBRow, categoryRow] = await Promise.all([
+        ctx.db.query.tools.findFirst({
+          where: eq(tools.id, toolAId ?? ''),
+          columns: { slug: true },
+        }),
+        ctx.db.query.tools.findFirst({
+          where: eq(tools.id, toolBId ?? ''),
+          columns: { slug: true },
+        }),
+        ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.id, input.categoryId),
+          columns: { slug: true },
+        }),
+      ])
+
+      const periodStartStr = toDateString(input.periodStart)
+      const baseSlug = buildMatchSlug(
+        toolARow?.slug ?? '',
+        toolBRow?.slug ?? '',
+        categoryRow?.slug ?? '',
+        periodStartStr,
+      )
+      const slugPrefix = baseSlug.slice(0, 245)
+      const existingSlugs = await ctx.db.query.matches.findMany({
+        where: sql`${matches.slug} LIKE ${`${slugPrefix}%`}`,
+        columns: { slug: true },
+      })
+      const slug = deduplicateSlug(baseSlug, new Set(existingSlugs.map((m) => m.slug)))
+
       const inserted = await ctx.db
         .insert(matches)
         .values({
+          slug,
           toolAId,
           toolBId,
           categoryId: input.categoryId,
           status: 'active',
           startedAt: new Date(),
-          periodStart: toDateString(input.periodStart),
+          periodStart: periodStartStr,
           periodEnd: toDateString(input.periodEnd),
         })
         .returning()

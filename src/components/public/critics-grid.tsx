@@ -52,7 +52,7 @@ export function CriticsGrid() {
         {items.map((critic) => (
           <Link
             key={critic.id}
-            href={`/critics/${critic.id}`}
+            href={`/critics/${critic.slug}`}
             className="group flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-3 transition-colors hover:bg-secondary/60"
           >
             <Avatar className="h-9 w-9 shrink-0 ring-2 ring-border">

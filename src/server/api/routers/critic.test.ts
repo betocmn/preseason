@@ -24,12 +24,14 @@ describe('criticRouter', () => {
 
     await db.insert(criticProfiles).values([
       {
+        slug: 'verified-critic',
         userId: verifiedUser.profile?.id ?? '',
         title: 'Verified Critic',
         verifiedAt: new Date(),
         isActive: true,
       },
       {
+        slug: 'unverified-critic',
         userId: unverifiedUser.profile?.id ?? '',
         title: 'Unverified Critic',
         verifiedAt: null,
@@ -51,6 +53,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'reviewer',
           userId: criticUser.profile?.id ?? '',
           title: 'Reviewer',
           verifiedAt: new Date(),
@@ -72,6 +75,39 @@ describe('criticRouter', () => {
     expect(result.user).not.toHaveProperty('email')
   })
 
+  it('does not expose unverified or inactive critics by slug', async () => {
+    const db = getTestDb()
+    const unverifiedUser = await seedUser({ role: 'critic', displayName: 'Pending Critic' })
+    const inactiveUser = await seedUser({ role: 'critic', displayName: 'Inactive Critic' })
+
+    await db.insert(criticProfiles).values([
+      {
+        slug: 'pending-critic',
+        userId: unverifiedUser.profile?.id ?? '',
+        title: 'Pending Critic',
+        verifiedAt: null,
+        isActive: true,
+      },
+      {
+        slug: 'inactive-critic',
+        userId: inactiveUser.profile?.id ?? '',
+        title: 'Inactive Critic',
+        verifiedAt: new Date(),
+        isActive: false,
+      },
+    ])
+
+    const caller = createTestCaller(null)
+
+    await expect(caller.critic.getBySlug({ slug: 'pending-critic' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    } satisfies Partial<TRPCError>)
+
+    await expect(caller.critic.getBySlug({ slug: 'inactive-critic' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('verifies and unverifies critics as admin', async () => {
     const db = getTestDb()
     const admin = await seedUser({ role: 'admin' })
@@ -80,6 +116,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'pending-critic',
           userId: criticUser.profile?.id ?? '',
           title: 'Pending Critic',
           verifiedAt: null,
@@ -213,6 +250,18 @@ describe('criticRouter', () => {
     expect(updated.user.website).toBeNull()
   })
 
+  it('falls back to the user id when a critic display name cannot be slugified', async () => {
+    const admin = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(admin.authUser)
+
+    const created = await caller.critic.adminCreate({
+      displayName: '李雷',
+      email: 'unicode@example.com',
+    })
+
+    expect(created.slug).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  })
+
   it('rejects non-admin critic CRUD mutations', async () => {
     const provider = await seedUser({ role: 'provider' })
     const caller = createTestCaller(provider.authUser)
@@ -236,6 +285,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'email-test-critic',
           userId: criticUser.profile?.id ?? '',
           title: 'Email Test',
           verifiedAt: new Date(),

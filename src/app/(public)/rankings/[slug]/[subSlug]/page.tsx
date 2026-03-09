@@ -18,12 +18,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   })
 
   if (!ranking.category) {
-    return { title: 'Category Not Found | Preseason' }
+    return { title: 'Category Not Found' }
   }
 
+  const title = `${ranking.category.name} Rankings`
+  const description = `Top tools recommended by LLMs in the ${ranking.category.name} subcategory.`
   return {
-    title: `${ranking.category.name} Rankings | Preseason`,
-    description: `Top tools recommended by LLMs in the ${ranking.category.name} subcategory.`,
+    title,
+    description,
+    openGraph: { title, description, type: 'article' },
+    twitter: { card: 'summary_large_image', title, description },
   }
 }
 

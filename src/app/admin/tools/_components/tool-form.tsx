@@ -19,6 +19,7 @@ import {
 } from '~/components/ui/form'
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
+import { slugify } from '~/lib/slug'
 import { api } from '~/trpc/react'
 
 const formSchema = z.object({
@@ -61,13 +62,6 @@ type Tool = {
 type ToolFormProps = {
   tool?: Tool
   subcategories: Subcategory[]
-}
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
 }
 
 function isLocalLogoPath(value: string) {

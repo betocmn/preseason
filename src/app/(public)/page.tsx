@@ -52,7 +52,7 @@ export default async function HomePage() {
               {activeMatches.slice(0, 12).map((match) => (
                 <MatchCard
                   key={match.id}
-                  id={match.id}
+                  slug={match.slug}
                   status={match.status}
                   toolA={match.toolA}
                   toolB={match.toolB}

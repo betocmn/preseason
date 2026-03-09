@@ -10,8 +10,17 @@ import { promptLevelEnum } from '~/server/db/schema'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
-  title: 'Prompts | Preseason',
+  title: 'Prompts',
   description: 'Browse vibe-coding prompts used to generate tool recommendations.',
+  openGraph: {
+    title: 'Prompts',
+    description: 'Browse vibe-coding prompts used to generate tool recommendations.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Prompts',
+    description: 'Browse vibe-coding prompts used to generate tool recommendations.',
+  },
 }
 
 function formatLevel(level: string): string {

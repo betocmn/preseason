@@ -119,6 +119,7 @@ describe('settleExpiredMatches', () => {
       .insert(matches)
       .values([
         {
+          slug: 'settler-test-active',
           toolAId: fixture.toolA?.id ?? '',
           toolBId: fixture.toolB?.id ?? '',
           categoryId: fixture.category?.id ?? '',
@@ -179,6 +180,7 @@ describe('settleExpiredMatches', () => {
 
     await database.insert(matches).values([
       {
+        slug: 'settler-nonexpired-1',
         toolAId: fixture.toolA?.id ?? '',
         toolBId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
@@ -187,6 +189,7 @@ describe('settleExpiredMatches', () => {
         periodEnd: '2026-03-03',
       },
       {
+        slug: 'settler-nonexpired-2',
         toolAId: fixture.toolA?.id ?? '',
         toolBId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
@@ -217,6 +220,7 @@ describe('settleExpiredMatches', () => {
       .insert(matches)
       .values([
         {
+          slug: 'settler-tie-match',
           toolAId: fixture.toolA?.id ?? '',
           toolBId: fixture.toolB?.id ?? '',
           categoryId: fixture.category?.id ?? '',
