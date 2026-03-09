@@ -24,12 +24,14 @@ describe('criticRouter', () => {
 
     await db.insert(criticProfiles).values([
       {
+        slug: 'verified-critic',
         userId: verifiedUser.profile?.id ?? '',
         title: 'Verified Critic',
         verifiedAt: new Date(),
         isActive: true,
       },
       {
+        slug: 'unverified-critic',
         userId: unverifiedUser.profile?.id ?? '',
         title: 'Unverified Critic',
         verifiedAt: null,
@@ -51,6 +53,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'reviewer',
           userId: criticUser.profile?.id ?? '',
           title: 'Reviewer',
           verifiedAt: new Date(),
@@ -80,6 +83,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'pending-critic',
           userId: criticUser.profile?.id ?? '',
           title: 'Pending Critic',
           verifiedAt: null,
@@ -236,6 +240,7 @@ describe('criticRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'email-test-critic',
           userId: criticUser.profile?.id ?? '',
           title: 'Email Test',
           verifiedAt: new Date(),
