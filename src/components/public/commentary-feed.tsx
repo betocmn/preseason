@@ -16,6 +16,7 @@ type CommentItem = {
   createdAt: Date | null
   critic: {
     id: string
+    slug: string
     user: {
       displayName: string
       avatarUrl: string | null
@@ -74,7 +75,7 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <Link
-                    href={`/critics/${comment.critic.id}`}
+                    href={`/critics/${comment.critic.slug}`}
                     className="relative z-20 flex items-center gap-2 hover:underline"
                   >
                     <Avatar className="h-7 w-7">
