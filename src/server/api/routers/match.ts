@@ -391,8 +391,9 @@ export const matchRouter = createTRPCRouter({
         categoryRow?.slug ?? '',
         periodStartStr,
       )
+      const slugPrefix = baseSlug.slice(0, 245)
       const existingSlugs = await ctx.db.query.matches.findMany({
-        where: sql`${matches.slug} LIKE ${`${baseSlug}%`}`,
+        where: sql`${matches.slug} LIKE ${`${slugPrefix}%`}`,
         columns: { slug: true },
       })
       const slug = deduplicateSlug(baseSlug, new Set(existingSlugs.map((m) => m.slug)))
