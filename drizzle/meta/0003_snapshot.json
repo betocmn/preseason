@@ -97,16 +97,12 @@
         "preseason_category_group_name_unique": {
           "name": "preseason_category_group_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         },
         "preseason_category_group_slug_unique": {
           "name": "preseason_category_group_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -212,12 +208,8 @@
           "name": "preseason_comment_critic_id_preseason_critic_profile_id_fk",
           "tableFrom": "preseason_comment",
           "tableTo": "preseason_critic_profile",
-          "columnsFrom": [
-            "critic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["critic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -338,12 +330,8 @@
           "name": "preseason_critic_profile_user_id_preseason_user_profile_id_fk",
           "tableFrom": "preseason_critic_profile",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -351,12 +339,8 @@
           "name": "critic_verified_by_user_fk",
           "tableFrom": "preseason_critic_profile",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": [
-            "verified_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["verified_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -366,16 +350,12 @@
         "preseason_critic_profile_slug_unique": {
           "name": "preseason_critic_profile_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         },
         "preseason_critic_profile_user_id_unique": {
           "name": "preseason_critic_profile_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -475,9 +455,7 @@
         "preseason_llm_slug_unique": {
           "name": "preseason_llm_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -664,12 +642,8 @@
           "name": "preseason_match_tool_a_id_preseason_tool_id_fk",
           "tableFrom": "preseason_match",
           "tableTo": "preseason_tool",
-          "columnsFrom": [
-            "tool_a_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tool_a_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -677,12 +651,8 @@
           "name": "preseason_match_tool_b_id_preseason_tool_id_fk",
           "tableFrom": "preseason_match",
           "tableTo": "preseason_tool",
-          "columnsFrom": [
-            "tool_b_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tool_b_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -690,12 +660,8 @@
           "name": "preseason_match_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_match",
           "tableTo": "preseason_category",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -703,12 +669,8 @@
           "name": "preseason_match_winner_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_match",
           "tableTo": "preseason_tool",
-          "columnsFrom": [
-            "winner_tool_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["winner_tool_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -718,9 +680,7 @@
         "preseason_match_slug_unique": {
           "name": "preseason_match_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -937,12 +897,8 @@
           "name": "preseason_recommendation_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_recommendation",
           "tableTo": "preseason_tool",
-          "columnsFrom": [
-            "tool_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tool_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -950,12 +906,8 @@
           "name": "preseason_recommendation_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_recommendation",
           "tableTo": "preseason_category",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -963,12 +915,8 @@
           "name": "recommendation_run_result_fk",
           "tableFrom": "preseason_recommendation",
           "tableTo": "preseason_run_result",
-          "columnsFrom": [
-            "run_result_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_result_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1084,12 +1032,8 @@
           "name": "preseason_run_result_run_id_preseason_run_id_fk",
           "tableFrom": "preseason_run_result",
           "tableTo": "preseason_run",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1097,12 +1041,8 @@
           "name": "preseason_run_result_prompt_id_preseason_prompt_id_fk",
           "tableFrom": "preseason_run_result",
           "tableTo": "preseason_prompt",
-          "columnsFrom": [
-            "prompt_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["prompt_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1110,12 +1050,8 @@
           "name": "preseason_run_result_llm_id_preseason_llm_id_fk",
           "tableFrom": "preseason_run_result",
           "tableTo": "preseason_llm",
-          "columnsFrom": [
-            "llm_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["llm_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1353,12 +1289,8 @@
           "name": "preseason_category_category_group_id_preseason_category_group_id_fk",
           "tableFrom": "preseason_category",
           "tableTo": "preseason_category_group",
-          "columnsFrom": [
-            "category_group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_group_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1368,16 +1300,12 @@
         "preseason_category_name_unique": {
           "name": "preseason_category_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         },
         "preseason_category_slug_unique": {
           "name": "preseason_category_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -1443,12 +1371,8 @@
           "name": "preseason_tool_category_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_tool_category",
           "tableTo": "preseason_tool",
-          "columnsFrom": [
-            "tool_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tool_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1456,12 +1380,8 @@
           "name": "preseason_tool_category_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_tool_category",
           "tableTo": "preseason_category",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1582,12 +1502,8 @@
           "name": "preseason_tool_provider_user_id_preseason_user_profile_id_fk",
           "tableFrom": "preseason_tool",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": [
-            "provider_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["provider_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1597,16 +1513,12 @@
         "preseason_tool_name_unique": {
           "name": "preseason_tool_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         },
         "preseason_tool_slug_unique": {
           "name": "preseason_tool_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -1718,9 +1630,7 @@
         "preseason_user_profile_email_unique": {
           "name": "preseason_user_profile_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1732,59 +1642,32 @@
     "public.comment_target": {
       "name": "comment_target",
       "schema": "public",
-      "values": [
-        "recommendation",
-        "match",
-        "tool",
-        "prompt"
-      ]
+      "values": ["recommendation", "match", "tool", "prompt"]
     },
     "public.match_status": {
       "name": "match_status",
       "schema": "public",
-      "values": [
-        "active",
-        "settled",
-        "archived"
-      ]
+      "values": ["active", "settled", "archived"]
     },
     "public.parse_status": {
       "name": "parse_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "success",
-        "failed"
-      ]
+      "values": ["pending", "success", "failed"]
     },
     "public.prompt_level": {
       "name": "prompt_level",
       "schema": "public",
-      "values": [
-        "software-dev-beginner",
-        "software-dev-experienced",
-        "vibe-coder"
-      ]
+      "values": ["software-dev-beginner", "software-dev-experienced", "vibe-coder"]
     },
     "public.run_status": {
       "name": "run_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "running",
-        "completed",
-        "failed"
-      ]
+      "values": ["pending", "running", "completed", "failed"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "admin",
-        "provider",
-        "critic",
-        "user"
-      ]
+      "values": ["admin", "provider", "critic", "user"]
     }
   },
   "schemas": {},

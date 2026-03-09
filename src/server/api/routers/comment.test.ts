@@ -392,7 +392,11 @@ describe('commentRouter', () => {
     const critic = (
       await db
         .insert(criticProfiles)
-        .values({ slug: 'admin-delete-critic', userId: criticUser.profile?.id ?? '', isActive: true })
+        .values({
+          slug: 'admin-delete-critic',
+          userId: criticUser.profile?.id ?? '',
+          isActive: true,
+        })
         .returning()
     )[0]
     const comment = (

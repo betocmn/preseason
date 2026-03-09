@@ -3,8 +3,15 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'About',
   description: 'Learn about Preseason and our mission to track what tools AI models recommend.',
-  openGraph: { title: 'About', description: 'Learn about Preseason and our mission to track what tools AI models recommend.' },
-  twitter: { card: 'summary_large_image', title: 'About', description: 'Learn about Preseason and our mission to track what tools AI models recommend.' },
+  openGraph: {
+    title: 'About',
+    description: 'Learn about Preseason and our mission to track what tools AI models recommend.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'About',
+    description: 'Learn about Preseason and our mission to track what tools AI models recommend.',
+  },
 }
 
 export default function AboutPage() {

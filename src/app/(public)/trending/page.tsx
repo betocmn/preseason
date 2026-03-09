@@ -15,8 +15,15 @@ import { api } from '~/trpc/server'
 export const metadata: Metadata = {
   title: 'Trending',
   description: 'See which tools are gaining or losing momentum in LLM recommendations.',
-  openGraph: { title: 'Trending', description: 'See which tools are gaining or losing momentum in LLM recommendations.' },
-  twitter: { card: 'summary_large_image', title: 'Trending', description: 'See which tools are gaining or losing momentum in LLM recommendations.' },
+  openGraph: {
+    title: 'Trending',
+    description: 'See which tools are gaining or losing momentum in LLM recommendations.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Trending',
+    description: 'See which tools are gaining or losing momentum in LLM recommendations.',
+  },
 }
 
 export default async function TrendingPage() {
