@@ -416,6 +416,27 @@ ALTER TABLE preseason_tool
   - `Assistant response: <primary completion>`
   - `Extract recommendations into JSON only.`
 
+OpenRouter send path (actual request behavior):
+
+- Runner invokes:
+  - `llmService.complete(provider, { model, systemPrompt, userPrompt })`
+- `LlmService` routes provider through `normalizeProviderId(...)` and a provider class.
+- `BaseLlmProvider` normalizes model IDs:
+  - if model already starts with provider namespace, use as-is
+  - if model contains `/`, use as-is
+  - otherwise prepend namespace (e.g. `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`, `google/...`)
+- `BaseLlmProvider` sends exactly two message types to OpenRouter:
+  - `{ role: 'system', content: systemPrompt }`
+  - `{ role: 'user', content: userPrompt }`
+- `openrouter-client.ts` calls `chat.completions.create({ model, messages })` via OpenAI SDK and maps response to:
+  - `content`, `model`, `finishReason`, `usage`, and `latencyMs`
+
+OpenRouter response contract used in pipeline:
+
+- First pass (generation): free-form natural output with concrete tool names.
+- Second pass (fallback): strict JSON contract via system prompt for parser compatibility.
+- In fallback, parser accepts keys `tool`/`toolName` and `category`/`categorySlug`.
+
 ### LLM service / model tech stack
 
 - Gateway: OpenRouter API (`src/server/llm/service/openrouter-client.ts`), provider normalizes model namespace prefixes.
