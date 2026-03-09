@@ -6,15 +6,15 @@ ALTER TABLE "preseason_match" ADD COLUMN "slug" varchar(255);--> statement-break
 WITH match_slug_candidates AS (
   SELECT
     m.id,
-    CONCAT(
+    LEFT(CONCAT(
       ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
       TO_CHAR(m.period_start::date, 'YYYY-MM-DD')
-    ) AS base_slug,
+    ), 255) AS base_slug,
     ROW_NUMBER() OVER (
-      PARTITION BY CONCAT(
+      PARTITION BY LEFT(CONCAT(
         ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
         TO_CHAR(m.period_start::date, 'YYYY-MM-DD')
-      )
+      ), 255)
       ORDER BY m.period_start, m.id
     ) AS slug_rank
   FROM "preseason_match" m
@@ -23,10 +23,10 @@ WITH match_slug_candidates AS (
   INNER JOIN "preseason_category" c ON c.id = m.category_id
 )
 UPDATE "preseason_match" m
-SET slug = LEFT(CASE
+SET slug = CASE
   WHEN candidate.slug_rank = 1 THEN candidate.base_slug
-  ELSE CONCAT(candidate.base_slug, '-', candidate.slug_rank)
-END, 255)
+  ELSE LEFT(LEFT(candidate.base_slug, 255 - LENGTH('-' || candidate.slug_rank)) || '-' || candidate.slug_rank, 255)
+END
 FROM match_slug_candidates candidate
 WHERE candidate.id = m.id;--> statement-breakpoint
 

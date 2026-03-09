@@ -116,7 +116,7 @@ export async function generateMatches(
   const existingMatchSlugs = await database
     .select({ slug: matches.slug })
     .from(matches)
-    .where(sql`${matches.slug} LIKE ${`%-${periodStart.slice(0, 7)}%`}`)
+    .where(sql`${matches.slug} LIKE ${`%-${periodStart.slice(0, 10)}%`}`)
   const usedSlugs = new Set(existingMatchSlugs.map((m) => m.slug))
 
   const matchesToCreate: Array<{
