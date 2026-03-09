@@ -57,7 +57,7 @@ WITH critic_slug_candidates AS (
         ),
         ''
       )
-      ORDER BY cp.created_at, cp.id
+      ORDER BY cp.id
     ) AS slug_rank
   FROM "preseason_critic_profile" cp
   INNER JOIN "preseason_user_profile" up ON up.id = cp.user_id
