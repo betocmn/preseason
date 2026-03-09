@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import { buildMatchSlug } from '~/lib/slug'
+import { buildMatchSlug, deduplicateSlug } from '~/lib/slug'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -385,12 +385,17 @@ export const matchRouter = createTRPCRouter({
       ])
 
       const periodStartStr = toDateString(input.periodStart)
-      const slug = buildMatchSlug(
+      const baseSlug = buildMatchSlug(
         toolARow?.slug ?? '',
         toolBRow?.slug ?? '',
         categoryRow?.slug ?? '',
         periodStartStr,
       )
+      const existingSlugs = await ctx.db.query.matches.findMany({
+        where: sql`${matches.slug} LIKE ${`${baseSlug}%`}`,
+        columns: { slug: true },
+      })
+      const slug = deduplicateSlug(baseSlug, new Set(existingSlugs.map((m) => m.slug)))
 
       const inserted = await ctx.db
         .insert(matches)
