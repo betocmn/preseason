@@ -250,6 +250,18 @@ describe('criticRouter', () => {
     expect(updated.user.website).toBeNull()
   })
 
+  it('falls back to the user id when a critic display name cannot be slugified', async () => {
+    const admin = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(admin.authUser)
+
+    const created = await caller.critic.adminCreate({
+      displayName: '李雷',
+      email: 'unicode@example.com',
+    })
+
+    expect(created.slug).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  })
+
   it('rejects non-admin critic CRUD mutations', async () => {
     const provider = await seedUser({ role: 'provider' })
     const caller = createTestCaller(provider.authUser)

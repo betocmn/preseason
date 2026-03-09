@@ -845,7 +845,7 @@ async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingDa
     const [criticProfile] = await db
       .insert(schema.criticProfiles)
       .values({
-        slug: slugify(critic.displayName),
+        slug: slugify(critic.displayName, authId),
         userId: authId,
         title: critic.title,
         expertiseAreas: critic.expertiseAreas,
