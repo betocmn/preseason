@@ -241,7 +241,7 @@ export const commentRouter = createTRPCRouter({
             type: 'match',
             label: `${match.toolA.name} vs ${match.toolB.name}`,
             sublabel: match.category?.name ?? '',
-            href: `/matches/${comment.targetId}`,
+            href: `/matches/${match.slug}`,
             logos: [
               { url: match.toolA.logoUrl, name: match.toolA.name },
               { url: match.toolB.logoUrl, name: match.toolB.name },
@@ -289,6 +289,7 @@ export const commentRouter = createTRPCRouter({
           createdAt: comment.createdAt,
           critic: {
             id: comment.critic.id,
+            slug: comment.critic.slug,
             user: comment.critic.user,
             title: comment.critic.title,
           },

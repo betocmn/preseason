@@ -713,6 +713,7 @@ describe('Database Schema', () => {
       )
 
       await db.insert(matches).values({
+        slug: 'supabase-vs-planetscale-database-2025-01',
         toolAId: toolA.id,
         toolBId: toolB.id,
         categoryId: cat.id,
@@ -749,6 +750,7 @@ describe('Database Schema', () => {
       )
 
       await db.insert(matches).values({
+        slug: 'supabase-vs-neon-database-2025-01',
         toolAId: toolA.id,
         toolBId: toolB.id,
         categoryId: cat.id,
@@ -757,6 +759,7 @@ describe('Database Schema', () => {
       })
       await expect(
         db.insert(matches).values({
+          slug: 'supabase-vs-neon-database-2025-01-dup',
           toolAId: toolA.id,
           toolBId: toolB.id,
           categoryId: cat.id,
@@ -788,6 +791,7 @@ describe('Database Schema', () => {
       const statusValues = ['active', 'settled', 'archived'] as const
       for (const [i, status] of statusValues.entries()) {
         await db.insert(matches).values({
+          slug: `status-test-${status}`,
           toolAId: toolA.id,
           toolBId: toolB.id,
           categoryId: cat.id,
@@ -817,6 +821,7 @@ describe('Database Schema', () => {
       })
 
       await db.insert(criticProfiles).values({
+        slug: 'senior-engineer',
         userId,
         title: 'Senior Engineer',
         expertiseAreas: ['auth', 'database'],
@@ -840,8 +845,10 @@ describe('Database Schema', () => {
         displayName: 'Critic',
       })
 
-      await db.insert(criticProfiles).values({ userId })
-      await expect(db.insert(criticProfiles).values({ userId })).rejects.toThrow()
+      await db.insert(criticProfiles).values({ slug: 'unique-critic', userId })
+      await expect(
+        db.insert(criticProfiles).values({ slug: 'unique-critic-2', userId }),
+      ).rejects.toThrow()
     })
 
     it('should cascade delete when user is deleted', async () => {
@@ -852,7 +859,7 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      await db.insert(criticProfiles).values({ userId })
+      await db.insert(criticProfiles).values({ slug: 'cascade-critic', userId })
 
       await db.delete(userProfiles).where(eq(userProfiles.id, userId))
       const result = await db.select().from(criticProfiles)
@@ -873,7 +880,9 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ userId }).returning())
+      const critic = first(
+        await db.insert(criticProfiles).values({ slug: 'comment-critic', userId }).returning(),
+      )
 
       await db.insert(comments).values({
         criticId: critic.id,
@@ -895,7 +904,9 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ userId }).returning())
+      const critic = first(
+        await db.insert(criticProfiles).values({ slug: 'target-critic', userId }).returning(),
+      )
 
       const targets = ['recommendation', 'match', 'tool'] as const
       for (const targetType of targets) {
@@ -919,7 +930,12 @@ describe('Database Schema', () => {
         email: 'critic@example.com',
         displayName: 'Critic',
       })
-      const critic = first(await db.insert(criticProfiles).values({ userId }).returning())
+      const critic = first(
+        await db
+          .insert(criticProfiles)
+          .values({ slug: 'cascade-comment-critic', userId })
+          .returning(),
+      )
       await db.insert(comments).values({
         criticId: critic.id,
         targetType: 'tool',

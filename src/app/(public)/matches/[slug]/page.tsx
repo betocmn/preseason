@@ -11,30 +11,34 @@ import { formatPeriod } from '~/lib/utils'
 import { api } from '~/trpc/server'
 
 type Props = {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params
+  const { slug } = await params
   try {
     const caller = await api()
-    const { match } = await caller.match.getById({ id })
+    const { match } = await caller.match.getBySlug({ slug })
+    const title = `${match.toolA.name} vs ${match.toolB.name}`
+    const description = `Head-to-head match in ${match.category.name}: ${match.toolA.name} vs ${match.toolB.name}. See which tool LLMs recommend more.`
     return {
-      title: `${match.toolA.name} vs ${match.toolB.name} | Preseason`,
-      description: `Head-to-head match in ${match.category.name}: ${match.toolA.name} vs ${match.toolB.name}.`,
+      title,
+      description,
+      openGraph: { title, description, type: 'article' },
+      twitter: { card: 'summary_large_image', title, description },
     }
   } catch {
-    return { title: 'Match | Preseason' }
+    return { title: 'Match' }
   }
 }
 
 export default async function MatchDetailPage({ params }: Props) {
-  const { id } = await params
+  const { slug } = await params
   const caller = await api()
 
   const matchData = await (async () => {
     try {
-      return await caller.match.getById({ id })
+      return await caller.match.getBySlug({ slug })
     } catch (error) {
       if (error instanceof TRPCError && error.code === 'NOT_FOUND') notFound()
       throw error
@@ -42,7 +46,7 @@ export default async function MatchDetailPage({ params }: Props) {
   })()
 
   const { match, breakdown } = matchData
-  const comments = await caller.comment.listByTarget({ targetType: 'match', targetId: id })
+  const comments = await caller.comment.listByTarget({ targetType: 'match', targetId: match.id })
 
   const isActive = match.status === 'active'
 

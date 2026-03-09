@@ -17,17 +17,21 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { level, slug } = await params
-  if (!isPromptLevel(level)) return { title: 'Prompt | Preseason' }
+  if (!isPromptLevel(level)) return { title: 'Prompt' }
 
   try {
     const caller = await api()
     const prompt = await caller.prompt.getBySlug({ slug, level })
+    const title = prompt.title
+    const description = prompt.description ?? `Prompt: ${prompt.title}`
     return {
-      title: `${prompt.title} | Preseason`,
-      description: prompt.description ?? `Prompt: ${prompt.title}`,
+      title,
+      description,
+      openGraph: { title, description, type: 'article' },
+      twitter: { card: 'summary_large_image', title, description },
     }
   } catch {
-    return { title: 'Prompt | Preseason' }
+    return { title: 'Prompt' }
   }
 }
 

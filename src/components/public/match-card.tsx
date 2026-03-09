@@ -6,7 +6,7 @@ import { Card, CardContent } from '~/components/ui/card'
 import { cn, formatPeriod } from '~/lib/utils'
 
 type MatchCardProps = {
-  id: string
+  slug: string
   status: 'active' | 'settled' | 'archived'
   toolA: { id: string; name: string; slug: string; logoUrl?: string | null }
   toolB: { id: string; name: string; slug: string; logoUrl?: string | null }
@@ -21,7 +21,7 @@ type MatchCardProps = {
 }
 
 export function MatchCard({
-  id,
+  slug,
   status,
   toolA,
   toolB,
@@ -38,7 +38,7 @@ export function MatchCard({
 
   return (
     <Card className={cn('transition-colors hover:bg-accent/50', className)}>
-      <Link href={`/matches/${id}`}>
+      <Link href={`/matches/${slug}`}>
         <CardContent className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <Badge variant="secondary" className="text-xs">

@@ -5,8 +5,17 @@ import { MatchesPageContent } from '~/components/public/matches-page-content'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
-  title: 'Live Matches | Preseason',
+  title: 'Live Matches',
   description: 'Head-to-head tool battles based on LLM recommendations.',
+  openGraph: {
+    title: 'Live Matches',
+    description: 'Head-to-head tool battles based on LLM recommendations.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Live Matches',
+    description: 'Head-to-head tool battles based on LLM recommendations.',
+  },
 }
 
 type Props = {

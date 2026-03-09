@@ -100,7 +100,7 @@ describe('commentRouter', () => {
     const critic = (
       await db
         .insert(criticProfiles)
-        .values({ userId: criticUser.profile?.id ?? '', isActive: true })
+        .values({ slug: 'list-critic', userId: criticUser.profile?.id ?? '', isActive: true })
         .returning()
     )[0]
     const targetId = crypto.randomUUID()
@@ -131,6 +131,7 @@ describe('commentRouter', () => {
       await db
         .insert(criticProfiles)
         .values({
+          slug: 'paginate-critic',
           userId: criticUser.profile?.id ?? '',
           isActive: true,
           verifiedAt: new Date(),
@@ -187,6 +188,7 @@ describe('commentRouter', () => {
 
     const criticUser = await seedUser({ role: 'critic' })
     await db.insert(criticProfiles).values({
+      slug: 'excluded-critic',
       userId: criticUser.profile?.id ?? '',
       isActive: true,
       verifiedAt: new Date(),
@@ -221,6 +223,7 @@ describe('commentRouter', () => {
 
     const criticUser = await seedUser({ role: 'critic' })
     await db.insert(criticProfiles).values({
+      slug: 'unverified-critic',
       userId: criticUser.profile?.id ?? '',
       isActive: true,
       verifiedAt: null,
@@ -247,13 +250,13 @@ describe('commentRouter', () => {
     const criticOne = (
       await db
         .insert(criticProfiles)
-        .values({ userId: criticOneUser.profile?.id ?? '', isActive: true })
+        .values({ slug: 'critic-one', userId: criticOneUser.profile?.id ?? '', isActive: true })
         .returning()
     )[0]
     const criticTwo = (
       await db
         .insert(criticProfiles)
-        .values({ userId: criticTwoUser.profile?.id ?? '', isActive: true })
+        .values({ slug: 'critic-two', userId: criticTwoUser.profile?.id ?? '', isActive: true })
         .returning()
     )[0]
     const ownComment = (
@@ -334,7 +337,7 @@ describe('commentRouter', () => {
     const critic = (
       await db
         .insert(criticProfiles)
-        .values({ userId: criticUser.profile?.id ?? '', isActive: true })
+        .values({ slug: 'prompt-critic', userId: criticUser.profile?.id ?? '', isActive: true })
         .returning()
     )[0]
 
@@ -361,6 +364,7 @@ describe('commentRouter', () => {
 
     const criticUser = await seedUser({ role: 'critic' })
     await db.insert(criticProfiles).values({
+      slug: 'prompt-excluded-critic',
       userId: criticUser.profile?.id ?? '',
       isActive: true,
       verifiedAt: new Date(),
@@ -388,7 +392,11 @@ describe('commentRouter', () => {
     const critic = (
       await db
         .insert(criticProfiles)
-        .values({ userId: criticUser.profile?.id ?? '', isActive: true })
+        .values({
+          slug: 'admin-delete-critic',
+          userId: criticUser.profile?.id ?? '',
+          isActive: true,
+        })
         .returning()
     )[0]
     const comment = (

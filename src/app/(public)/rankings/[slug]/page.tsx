@@ -15,12 +15,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ranking = await caller.ranking.byCategorySlug({ categorySlug: slug, days: 30 })
 
   if (!ranking.categoryGroup) {
-    return { title: 'Category Not Found | Preseason' }
+    return { title: 'Category Not Found' }
   }
 
+  const title = `${ranking.categoryGroup.name} Rankings`
+  const description = `Top tools recommended by LLMs in the ${ranking.categoryGroup.name} category.`
   return {
-    title: `${ranking.categoryGroup.name} Rankings | Preseason`,
-    description: `Top tools recommended by LLMs in the ${ranking.categoryGroup.name} category.`,
+    title,
+    description,
+    openGraph: { title, description, type: 'article' },
+    twitter: { card: 'summary_large_image', title, description },
   }
 }
 
