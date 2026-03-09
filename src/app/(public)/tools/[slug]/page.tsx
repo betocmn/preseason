@@ -21,12 +21,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     const caller = await api()
     const tool = await caller.tool.getBySlug({ slug })
+    const title = tool.name
+    const description = tool.description ?? `See how LLMs recommend ${tool.name}.`
     return {
-      title: `${tool.name} | Preseason`,
-      description: tool.description ?? `See how LLMs recommend ${tool.name}.`,
+      title,
+      description,
+      openGraph: { title, description, type: 'article' },
+      twitter: { card: 'summary_large_image', title, description },
     }
   } catch {
-    return { title: 'Tool | Preseason' }
+    return { title: 'Tool' }
   }
 }
 

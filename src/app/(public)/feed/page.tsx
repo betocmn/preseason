@@ -3,8 +3,10 @@ import { FeedList } from '~/components/public/feed-list'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
-  title: 'Feed | Preseason',
+  title: 'Feed',
   description: 'Browse the latest LLM tool recommendations from vibe-coding prompts.',
+  openGraph: { title: 'Feed', description: 'Browse the latest LLM tool recommendations from vibe-coding prompts.' },
+  twitter: { card: 'summary_large_image', title: 'Feed', description: 'Browse the latest LLM tool recommendations from vibe-coding prompts.' },
 }
 
 export default async function FeedPage() {
