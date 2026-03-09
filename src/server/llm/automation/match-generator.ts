@@ -1,5 +1,5 @@
 import { eq, inArray, sql } from 'drizzle-orm'
-import { buildMatchSlug } from '~/lib/slug'
+import { buildMatchSlug, deduplicateSlug } from '~/lib/slug'
 import { db } from '~/server/db'
 import { matches, recommendations, subcategories, tools } from '~/server/db/schema'
 
@@ -112,6 +112,13 @@ export async function generateMatches(
   const toolSlugMap = new Map(toolRows.map((t) => [t.id, t.slug]))
   const categorySlugMap = new Map(categoryRows.map((c) => [c.id, c.slug]))
 
+  // Pre-fetch existing match slugs for the current period to handle collisions
+  const existingMatchSlugs = await database
+    .select({ slug: matches.slug })
+    .from(matches)
+    .where(sql`${matches.slug} LIKE ${`%-${periodStart.slice(0, 7)}%`}`)
+  const usedSlugs = new Set(existingMatchSlugs.map((m) => m.slug))
+
   const matchesToCreate: Array<{
     slug: string
     toolAId: string
@@ -147,13 +154,17 @@ export async function generateMatches(
 
         activeKeys.add(key)
 
+        const baseSlug = buildMatchSlug(
+          toolSlugMap.get(leftId) ?? '',
+          toolSlugMap.get(rightId) ?? '',
+          categorySlugMap.get(categoryId) ?? '',
+          periodStart,
+        )
+        const slug = deduplicateSlug(baseSlug, usedSlugs)
+        usedSlugs.add(slug)
+
         matchesToCreate.push({
-          slug: buildMatchSlug(
-            toolSlugMap.get(leftId) ?? '',
-            toolSlugMap.get(rightId) ?? '',
-            categorySlugMap.get(categoryId) ?? '',
-            periodStart,
-          ),
+          slug,
           toolAId: leftId,
           toolBId: rightId,
           categoryId,
