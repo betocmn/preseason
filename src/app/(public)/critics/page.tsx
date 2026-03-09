@@ -3,8 +3,10 @@ import { CriticsGrid } from '~/components/public/critics-grid'
 import { RecentCommentaryList } from '~/components/public/recent-commentary-list'
 
 export const metadata: Metadata = {
-  title: 'Critics | Preseason',
+  title: 'Critics',
   description: 'Verified critics who provide expert commentary on tool recommendations.',
+  openGraph: { title: 'Critics', description: 'Verified critics who provide expert commentary on tool recommendations.' },
+  twitter: { card: 'summary_large_image', title: 'Critics', description: 'Verified critics who provide expert commentary on tool recommendations.' },
 }
 
 export default function CriticsPage() {
