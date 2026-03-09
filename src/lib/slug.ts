@@ -31,11 +31,16 @@ export function buildMatchSlug(
   return raw.length > 255 ? raw.slice(0, 255).replace(/-+$/, '') : raw
 }
 
-export function deduplicateSlug(baseSlug: string, existingSlugs: Set<string>): string {
-  let slug = baseSlug
+export function deduplicateSlug(
+  baseSlug: string,
+  existingSlugs: Set<string>,
+  maxLength = 255,
+): string {
+  let slug = baseSlug.slice(0, maxLength)
   let counter = 2
   while (existingSlugs.has(slug)) {
-    slug = `${baseSlug}-${counter}`
+    const suffix = `-${counter}`
+    slug = `${baseSlug.slice(0, maxLength - suffix.length)}${suffix}`
     counter++
   }
   return slug
