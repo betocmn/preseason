@@ -139,7 +139,7 @@ export default async function ToolDetailPage({ params }: Props) {
             {toolMatches.map((match) => (
               <MatchCard
                 key={match.id}
-                id={match.id}
+                slug={match.slug}
                 status={match.status}
                 toolA={match.toolA}
                 toolB={match.toolB}

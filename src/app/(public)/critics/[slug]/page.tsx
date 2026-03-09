@@ -10,7 +10,7 @@ import { Separator } from '~/components/ui/separator'
 import { api } from '~/trpc/server'
 
 type Props = {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }
 
 function formatDate(date: Date | null) {
@@ -23,28 +23,32 @@ function formatDate(date: Date | null) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params
+  const { slug } = await params
   try {
     const caller = await api()
-    const critic = await caller.critic.getById({ id })
+    const critic = await caller.critic.getBySlug({ slug })
+    const title = `${critic.user.displayName} | Critics`
+    const description = critic.title
+      ? `${critic.user.displayName} — ${critic.title}. Verified critic on Preseason.`
+      : `${critic.user.displayName} is a verified critic on Preseason.`
     return {
-      title: `${critic.user.displayName} | Critics | Preseason`,
-      description: critic.title
-        ? `${critic.user.displayName} — ${critic.title}`
-        : `${critic.user.displayName} is a verified critic on Preseason.`,
+      title,
+      description,
+      openGraph: { title, description, type: 'profile' },
+      twitter: { card: 'summary_large_image', title, description },
     }
   } catch {
-    return { title: 'Critic | Preseason' }
+    return { title: 'Critic' }
   }
 }
 
 export default async function CriticDetailPage({ params }: Props) {
-  const { id } = await params
+  const { slug } = await params
   const caller = await api()
 
   const critic = await (async () => {
     try {
-      return await caller.critic.getById({ id })
+      return await caller.critic.getBySlug({ slug })
     } catch (error) {
       if (
         error instanceof TRPCError &&
