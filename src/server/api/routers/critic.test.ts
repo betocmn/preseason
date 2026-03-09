@@ -75,6 +75,39 @@ describe('criticRouter', () => {
     expect(result.user).not.toHaveProperty('email')
   })
 
+  it('does not expose unverified or inactive critics by slug', async () => {
+    const db = getTestDb()
+    const unverifiedUser = await seedUser({ role: 'critic', displayName: 'Pending Critic' })
+    const inactiveUser = await seedUser({ role: 'critic', displayName: 'Inactive Critic' })
+
+    await db.insert(criticProfiles).values([
+      {
+        slug: 'pending-critic',
+        userId: unverifiedUser.profile?.id ?? '',
+        title: 'Pending Critic',
+        verifiedAt: null,
+        isActive: true,
+      },
+      {
+        slug: 'inactive-critic',
+        userId: inactiveUser.profile?.id ?? '',
+        title: 'Inactive Critic',
+        verifiedAt: new Date(),
+        isActive: false,
+      },
+    ])
+
+    const caller = createTestCaller(null)
+
+    await expect(caller.critic.getBySlug({ slug: 'pending-critic' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    } satisfies Partial<TRPCError>)
+
+    await expect(caller.critic.getBySlug({ slug: 'inactive-critic' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('verifies and unverifies critics as admin', async () => {
     const db = getTestDb()
     const admin = await seedUser({ role: 'admin' })

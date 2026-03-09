@@ -97,10 +97,14 @@ const publicUserColumns = {
   website: true,
 } as const
 
+function publicCriticWhere() {
+  return and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt))
+}
+
 export const criticRouter = createTRPCRouter({
   list: publicProcedure.query(async ({ ctx }) => {
     return ctx.db.query.criticProfiles.findMany({
-      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
+      where: publicCriticWhere(),
       orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
       with: {
         user: {
@@ -111,7 +115,7 @@ export const criticRouter = createTRPCRouter({
   }),
 
   listWithCount: publicProcedure.input(paginationInputSchema).query(async ({ ctx, input }) => {
-    const where = and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt))
+    const where = publicCriticWhere()
 
     const [critics, totalRows] = await Promise.all([
       ctx.db.query.criticProfiles.findMany({
@@ -154,7 +158,7 @@ export const criticRouter = createTRPCRouter({
 
   listWithComments: publicProcedure.query(async ({ ctx }) => {
     const critics = await ctx.db.query.criticProfiles.findMany({
-      where: and(eq(criticProfiles.isActive, true), isNotNull(criticProfiles.verifiedAt)),
+      where: publicCriticWhere(),
       orderBy: [desc(criticProfiles.verifiedAt), desc(criticProfiles.createdAt)],
       with: {
         user: { columns: publicUserColumns },
@@ -260,7 +264,7 @@ export const criticRouter = createTRPCRouter({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const critic = await ctx.db.query.criticProfiles.findFirst({
-        where: eq(criticProfiles.id, input.id),
+        where: and(eq(criticProfiles.id, input.id), publicCriticWhere()),
         with: {
           user: { columns: publicUserColumns },
           comments: { orderBy: [desc(comments.createdAt)] },
@@ -369,7 +373,7 @@ export const criticRouter = createTRPCRouter({
     .input(z.object({ slug: z.string().min(1).max(255) }))
     .query(async ({ ctx, input }) => {
       const critic = await ctx.db.query.criticProfiles.findFirst({
-        where: eq(criticProfiles.slug, input.slug),
+        where: and(eq(criticProfiles.slug, input.slug), publicCriticWhere()),
         with: {
           user: { columns: publicUserColumns },
           comments: { orderBy: [desc(comments.createdAt)] },
