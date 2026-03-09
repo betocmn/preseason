@@ -23,10 +23,10 @@ WITH match_slug_candidates AS (
   INNER JOIN "preseason_category" c ON c.id = m.category_id
 )
 UPDATE "preseason_match" m
-SET slug = CASE
+SET slug = LEFT(CASE
   WHEN candidate.slug_rank = 1 THEN candidate.base_slug
   ELSE CONCAT(candidate.base_slug, '-', candidate.slug_rank)
-END
+END, 255)
 FROM match_slug_candidates candidate
 WHERE candidate.id = m.id;--> statement-breakpoint
 
@@ -63,11 +63,11 @@ WITH critic_slug_candidates AS (
   INNER JOIN "preseason_user_profile" up ON up.id = cp.user_id
 )
 UPDATE "preseason_critic_profile" cp
-SET slug = CASE
+SET slug = LEFT(CASE
   WHEN candidate.base_slug IS NULL THEN cp.id::text
   WHEN candidate.slug_rank = 1 THEN candidate.base_slug
   ELSE CONCAT(candidate.base_slug, '-', candidate.slug_rank)
-END
+END, 255)
 FROM critic_slug_candidates candidate
 WHERE candidate.id = cp.id;--> statement-breakpoint
 

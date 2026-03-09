@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMatchSlug, slugify } from './slug'
+import { buildMatchSlug, deduplicateSlug, slugify } from './slug'
 
 describe('slugify', () => {
   it('normalizes accented characters', () => {
@@ -23,5 +23,20 @@ describe('buildMatchSlug', () => {
     const slug = buildMatchSlug(longSlug, longSlug, 'cat', '2025-03-15')
     expect(slug.length).toBeLessThanOrEqual(255)
     expect(slug).not.toMatch(/-$/)
+  })
+})
+
+describe('deduplicateSlug', () => {
+  it('appends counter on collision', () => {
+    const existing = new Set(['my-slug'])
+    expect(deduplicateSlug('my-slug', existing)).toBe('my-slug-2')
+  })
+
+  it('keeps deduplicated slug within maxLength', () => {
+    const base = 'a'.repeat(255)
+    const existing = new Set([base.slice(0, 255)])
+    const result = deduplicateSlug(base, existing)
+    expect(result.length).toBeLessThanOrEqual(255)
+    expect(result).toMatch(/-2$/)
   })
 })
