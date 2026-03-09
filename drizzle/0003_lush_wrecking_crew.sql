@@ -3,19 +3,73 @@ ALTER TABLE "preseason_critic_profile" ADD COLUMN "slug" varchar(255);--> statem
 ALTER TABLE "preseason_match" ADD COLUMN "slug" varchar(255);--> statement-breakpoint
 
 -- Backfill match slugs from tool + category slugs + period
-UPDATE "preseason_match" m
-SET slug = CONCAT(
-  ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
-  TO_CHAR(m.period_start::date, 'YYYY-MM')
+WITH match_slug_candidates AS (
+  SELECT
+    m.id,
+    CONCAT(
+      ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
+      TO_CHAR(m.period_start::date, 'YYYY-MM')
+    ) AS base_slug,
+    ROW_NUMBER() OVER (
+      PARTITION BY CONCAT(
+        ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
+        TO_CHAR(m.period_start::date, 'YYYY-MM')
+      )
+      ORDER BY m.period_start, m.id
+    ) AS slug_rank
+  FROM "preseason_match" m
+  INNER JOIN "preseason_tool" ta ON ta.id = m.tool_a_id
+  INNER JOIN "preseason_tool" tb ON tb.id = m.tool_b_id
+  INNER JOIN "preseason_category" c ON c.id = m.category_id
 )
-FROM "preseason_tool" ta, "preseason_tool" tb, "preseason_category" c
-WHERE ta.id = m.tool_a_id AND tb.id = m.tool_b_id AND c.id = m.category_id;--> statement-breakpoint
+UPDATE "preseason_match" m
+SET slug = CASE
+  WHEN candidate.slug_rank = 1 THEN candidate.base_slug
+  ELSE CONCAT(candidate.base_slug, '-', candidate.slug_rank)
+END
+FROM match_slug_candidates candidate
+WHERE candidate.id = m.id;--> statement-breakpoint
 
 -- Backfill critic slugs from user display names
+WITH critic_slug_candidates AS (
+  SELECT
+    cp.id,
+    NULLIF(
+      LOWER(
+        REGEXP_REPLACE(
+          REGEXP_REPLACE(up.display_name, '[^a-zA-Z0-9]+', '-', 'g'),
+          '(^-|-$)',
+          '',
+          'g'
+        )
+      ),
+      ''
+    ) AS base_slug,
+    ROW_NUMBER() OVER (
+      PARTITION BY NULLIF(
+        LOWER(
+          REGEXP_REPLACE(
+            REGEXP_REPLACE(up.display_name, '[^a-zA-Z0-9]+', '-', 'g'),
+            '(^-|-$)',
+            '',
+            'g'
+          )
+        ),
+        ''
+      )
+      ORDER BY cp.created_at, cp.id
+    ) AS slug_rank
+  FROM "preseason_critic_profile" cp
+  INNER JOIN "preseason_user_profile" up ON up.id = cp.user_id
+)
 UPDATE "preseason_critic_profile" cp
-SET slug = LOWER(REGEXP_REPLACE(REGEXP_REPLACE(up.display_name, '[^a-zA-Z0-9]+', '-', 'g'), '(^-|-$)', '', 'g'))
-FROM "preseason_user_profile" up
-WHERE up.id = cp.user_id;--> statement-breakpoint
+SET slug = CASE
+  WHEN candidate.base_slug IS NULL THEN cp.id::text
+  WHEN candidate.slug_rank = 1 THEN candidate.base_slug
+  ELSE CONCAT(candidate.base_slug, '-', candidate.slug_rank)
+END
+FROM critic_slug_candidates candidate
+WHERE candidate.id = cp.id;--> statement-breakpoint
 
 -- Handle any NULL slugs that might remain (fallback to id)
 UPDATE "preseason_match" SET slug = id::text WHERE slug IS NULL;--> statement-breakpoint
