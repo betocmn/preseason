@@ -1,6 +1,7 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
+import { buildMatchSlug } from '~/lib/slug'
 import { db } from '~/server/db'
-import { matches, recommendations } from '~/server/db/schema'
+import { matches, recommendations, subcategories, tools } from '~/server/db/schema'
 
 type DatabaseClient = typeof db
 
@@ -85,7 +86,34 @@ export async function generateMatches(
     toolsByCategory.set(row.categoryId, toolIds)
   }
 
+  // Collect all tool and category IDs we need slugs for
+  const allToolIds = new Set<string>()
+  const allCategoryIds = new Set<string>()
+  for (const [categoryId, toolIds] of toolsByCategory) {
+    allCategoryIds.add(categoryId)
+    for (const id of toolIds) allToolIds.add(id)
+  }
+
+  const [toolRows, categoryRows] = await Promise.all([
+    allToolIds.size > 0
+      ? database
+          .select({ id: tools.id, slug: tools.slug })
+          .from(tools)
+          .where(inArray(tools.id, [...allToolIds]))
+      : [],
+    allCategoryIds.size > 0
+      ? database
+          .select({ id: subcategories.id, slug: subcategories.slug })
+          .from(subcategories)
+          .where(inArray(subcategories.id, [...allCategoryIds]))
+      : [],
+  ])
+
+  const toolSlugMap = new Map(toolRows.map((t) => [t.id, t.slug]))
+  const categorySlugMap = new Map(categoryRows.map((c) => [c.id, c.slug]))
+
   const matchesToCreate: Array<{
+    slug: string
     toolAId: string
     toolBId: string
     categoryId: string
@@ -120,6 +148,12 @@ export async function generateMatches(
         activeKeys.add(key)
 
         matchesToCreate.push({
+          slug: buildMatchSlug(
+            toolSlugMap.get(leftId) ?? '',
+            toolSlugMap.get(rightId) ?? '',
+            categorySlugMap.get(categoryId) ?? '',
+            periodStart,
+          ),
           toolAId: leftId,
           toolBId: rightId,
           categoryId,
