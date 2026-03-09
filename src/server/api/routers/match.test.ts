@@ -90,6 +90,7 @@ describe('matchRouter', () => {
     const db = getTestDb()
     await db.insert(matches).values([
       {
+        slug: 'supabase-vs-planetscale-database-2025-01',
         toolAId: fixture.toolA?.id ?? '',
         toolBId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
@@ -98,6 +99,7 @@ describe('matchRouter', () => {
         periodEnd: '2025-01-07',
       },
       {
+        slug: 'supabase-vs-planetscale-database-2025-01-s',
         toolAId: fixture.toolA?.id ?? '',
         toolBId: fixture.toolB?.id ?? '',
         categoryId: fixture.category?.id ?? '',
@@ -143,6 +145,7 @@ describe('matchRouter', () => {
       await db
         .insert(matches)
         .values({
+          slug: 'test-breakdown-match',
           toolAId: fixture.toolA?.id ?? '',
           toolBId: fixture.toolB?.id ?? '',
           categoryId: fixture.category?.id ?? '',
@@ -190,6 +193,7 @@ describe('matchRouter', () => {
       await db
         .insert(matches)
         .values({
+          slug: 'test-period-match',
           toolAId: fixture.toolA?.id ?? '',
           toolBId: fixture.toolB?.id ?? '',
           categoryId: fixture.category?.id ?? '',
@@ -240,6 +244,7 @@ describe('matchRouter', () => {
       await db
         .insert(matches)
         .values({
+          slug: 'test-settled-match',
           toolAId: fixture.toolA?.id ?? '',
           toolBId: fixture.toolB?.id ?? '',
           categoryId: fixture.category?.id ?? '',

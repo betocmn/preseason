@@ -14,6 +14,7 @@ import { inArray, like, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
+import { buildMatchSlug, slugify } from '~/lib/slug'
 import * as schema from './schema'
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -748,10 +749,17 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
     const winnerId = toolAScore > toolBScore ? toolAId : toolBId
 
     const periodEnd = dateStr(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))
+    const periodStartStr = dateStr(startDate)
+
+    // Resolve slug using canonical ordering
+    const toolASeedSlug = toolAObj.id < toolBObj.id ? toolASlug : toolBSlug
+    const toolBSeedSlug = toolAObj.id < toolBObj.id ? toolBSlug : toolASlug
+    const matchSlug = buildMatchSlug(toolASeedSlug, toolBSeedSlug, def.catSlug, periodStartStr)
 
     const [match] = await db
       .insert(schema.matches)
       .values({
+        slug: matchSlug,
         toolAId,
         toolBId,
         categoryId: cat.id,
@@ -761,7 +769,7 @@ async function seedMatches(data: Awaited<ReturnType<typeof loadExistingData>>) {
           def.status === 'settled'
             ? new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000)
             : null,
-        periodStart: dateStr(startDate),
+        periodStart: periodStartStr,
         periodEnd,
         toolAScore,
         toolBScore,
@@ -837,6 +845,7 @@ async function seedCriticComments(data: Awaited<ReturnType<typeof loadExistingDa
     const [criticProfile] = await db
       .insert(schema.criticProfiles)
       .values({
+        slug: slugify(critic.displayName),
         userId: authId,
         title: critic.title,
         expertiseAreas: critic.expertiseAreas,
