@@ -8,12 +8,12 @@ WITH match_slug_candidates AS (
     m.id,
     CONCAT(
       ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
-      TO_CHAR(m.period_start::date, 'YYYY-MM')
+      TO_CHAR(m.period_start::date, 'YYYY-MM-DD')
     ) AS base_slug,
     ROW_NUMBER() OVER (
       PARTITION BY CONCAT(
         ta.slug, '-vs-', tb.slug, '-', c.slug, '-',
-        TO_CHAR(m.period_start::date, 'YYYY-MM')
+        TO_CHAR(m.period_start::date, 'YYYY-MM-DD')
       )
       ORDER BY m.period_start, m.id
     ) AS slug_rank

@@ -26,8 +26,9 @@ export function buildMatchSlug(
   categorySlug: string,
   periodStart: string,
 ): string {
-  const month = periodStart.slice(0, 7)
-  return `${toolASlug}-vs-${toolBSlug}-${categorySlug}-${month}`
+  const date = periodStart.slice(0, 10)
+  const raw = `${toolASlug}-vs-${toolBSlug}-${categorySlug}-${date}`
+  return raw.length > 255 ? raw.slice(0, 255).replace(/-+$/, '') : raw
 }
 
 export function deduplicateSlug(baseSlug: string, existingSlugs: Set<string>): string {
