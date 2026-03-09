@@ -1,4 +1,4 @@
-export function slugify(text: string): string {
+function normalizeSlug(text: string): string {
   return text
     .toLowerCase()
     .normalize('NFKD')
@@ -6,6 +6,18 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+export function slugify(text: string, fallback?: string): string {
+  const slug = normalizeSlug(text)
+  if (slug.length > 0) {
+    return slug
+  }
+  if (fallback === undefined) {
+    return ''
+  }
+
+  return normalizeSlug(fallback) || fallback.toLowerCase()
 }
 
 export function buildMatchSlug(
