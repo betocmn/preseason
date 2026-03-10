@@ -52,7 +52,7 @@ export function extractModelFamilyKey(modelId: string): string {
   const name = parts.length > 1 ? parts.slice(1).join('/') : modelId
 
   return name
-    .replace(/-\d{8}$/, '')
+    .replace(/-\d{4}-?\d{2}-?\d{2}$/, '')
     .replace(/:\w+$/, '')
     .replace(/@\w+$/, '')
     .toLowerCase()
