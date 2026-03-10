@@ -31,8 +31,7 @@ async function seedLlm(
 
 describe('computeSnapshotKey', () => {
   it('produces deterministic key from params', () => {
-    const key = computeSnapshotKey({
-      requestedModelId: 'claude-3-opus-20240229',
+    const key = computeSnapshotKey('claude-3-opus-20240229', {
       temperature: 0.2,
       topP: 1,
       maxTokens: 1200,
@@ -42,15 +41,12 @@ describe('computeSnapshotKey', () => {
   })
 
   it('uses "default" for missing optional params', () => {
-    const key = computeSnapshotKey({
-      requestedModelId: 'gpt-4o',
-    })
+    const key = computeSnapshotKey('gpt-4o', {})
     expect(key).toBe('gpt-4o:default:default:default:default')
   })
 
   it('uses "default" for null params', () => {
-    const key = computeSnapshotKey({
-      requestedModelId: 'gpt-4o',
+    const key = computeSnapshotKey('gpt-4o', {
       temperature: null,
       topP: null,
       maxTokens: null,
@@ -60,8 +56,7 @@ describe('computeSnapshotKey', () => {
   })
 
   it('includes all params when fully specified', () => {
-    const key = computeSnapshotKey({
-      requestedModelId: 'mistral-large',
+    const key = computeSnapshotKey('mistral-large', {
       temperature: 0.7,
       topP: 0.9,
       maxTokens: 2048,
@@ -89,7 +84,6 @@ describe('getOrCreateModelSnapshot', () => {
     const llm = await seedLlm(db)
 
     const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
-      requestedModelId: 'claude-3-opus-20240229',
       temperature: 0.2,
       topP: 1,
       maxTokens: 1200,
@@ -113,7 +107,6 @@ describe('getOrCreateModelSnapshot', () => {
     const llm = await seedLlm(db)
 
     const params = {
-      requestedModelId: 'claude-3-opus-20240229',
       temperature: 0.2,
     }
 
@@ -130,7 +123,6 @@ describe('getOrCreateModelSnapshot', () => {
     const llm2 = await seedLlm(db, { slug: 'claude-opus-2' })
 
     const params = {
-      requestedModelId: 'claude-3-opus-20240229',
       temperature: 0.2,
     }
 
@@ -146,7 +138,6 @@ describe('getOrCreateModelSnapshot', () => {
     const llm = await seedLlm(db)
 
     const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
-      requestedModelId: 'claude-3-opus-20240229',
       seed: 42,
     })
 
@@ -158,7 +149,6 @@ describe('getOrCreateModelSnapshot', () => {
     const llm = await seedLlm(db)
 
     const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
-      requestedModelId: 'claude-3-opus-20240229',
       seed: null,
     })
 
@@ -169,24 +159,27 @@ describe('getOrCreateModelSnapshot', () => {
     const db = getTestDb()
 
     await expect(
-      getOrCreateModelSnapshot(db, '00000000-0000-0000-0000-000000000000', {
-        requestedModelId: 'claude-3-opus-20240229',
-      }),
+      getOrCreateModelSnapshot(db, '00000000-0000-0000-0000-000000000000', {}),
     ).rejects.toThrow('LLM not found')
   })
 
   it('stores all inference params', async () => {
     const db = getTestDb()
-    const llm = await seedLlm(db)
+    const llm = await seedLlm(db, {
+      name: 'GPT-4o',
+      slug: 'gpt-4o',
+      provider: 'openai',
+      modelId: 'openai/gpt-4o',
+    })
 
     const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
-      requestedModelId: 'gpt-4o',
       temperature: 0.5,
       topP: 0.9,
       maxTokens: 2048,
       seed: 99,
     })
 
+    expect(snapshot.requestedModelId).toBe('openai/gpt-4o')
     expect(snapshot.temperature).toBe(0.5)
     expect(snapshot.topP).toBe(0.9)
     expect(snapshot.maxTokens).toBe(2048)
@@ -202,10 +195,26 @@ describe('getOrCreateModelSnapshot', () => {
       modelId: 'openai/gpt-4o-2024-08-06',
     })
 
-    const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
-      requestedModelId: 'openai/gpt-4o-2024-08-06',
-    })
+    const snapshot = await getOrCreateModelSnapshot(db, llm.id, {})
 
     expect(snapshot.modelFamilyKey).toBe('gpt-4o')
+  })
+
+  it('uses the llm model id instead of caller-supplied model metadata', async () => {
+    const db = getTestDb()
+    const llm = await seedLlm(db, {
+      name: 'Claude Opus',
+      slug: 'claude-opus',
+      provider: 'anthropic',
+      modelId: 'anthropic/claude-3-opus-20240229',
+    })
+
+    const snapshot = await getOrCreateModelSnapshot(db, llm.id, {
+      temperature: 0.2,
+    })
+
+    expect(snapshot.provider).toBe('anthropic')
+    expect(snapshot.requestedModelId).toBe('anthropic/claude-3-opus-20240229')
+    expect(snapshot.modelFamilyKey).toBe('claude-3-opus')
   })
 })
