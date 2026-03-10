@@ -335,6 +335,23 @@ describe('runBenchmark', () => {
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
+  it('should return the persisted summary for an already qc_failed run', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const summary1 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+    const summary2 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(summary1.status).toBe('qc_failed')
+    expect(summary2.status).toBe('qc_failed')
+    expect(summary2.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
   it('should not execute duplicate LLM calls while the same run is already running', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
@@ -446,6 +463,49 @@ describe('runBenchmark', () => {
     expect(summary.runId).toBe(runId)
     expect(summary.completedCases).toBe(15)
     expect(llmService.complete).toHaveBeenCalledTimes(14)
+  })
+
+  it('should resume a failed run using its stored case snapshot', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedFullPanel(db)
+    const caseIds = caseRows.map((benchmarkCase) => benchmarkCase.id)
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        status: 'failed',
+        qcSummaryJson: { snapshotCaseIds: caseIds },
+        expectedCaseCount: caseIds.length,
+      })
+      .returning()
+
+    const firstCase = caseRows[0]
+    if (!run || !firstCase) {
+      throw new Error('Expected seeded run and case')
+    }
+
+    await db
+      .update(benchmarkCases)
+      .set({ isActive: false })
+      .where(eq(benchmarkCases.id, firstCase.id))
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(summary.runId).toBe(run.id)
+    expect(summary.totalCases).toBe(15)
+    expect(summary.completedCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+
+    const resumedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, run.id),
+    })
+    expect(resumedRun?.expectedCaseCount).toBe(caseIds.length)
   })
 
   it('should handle invalid output — missing tags', async () => {
