@@ -147,6 +147,16 @@ async function seedModelSnapshot(db: ReturnType<typeof getTestDb>, llmId: string
   )
 }
 
+async function seedSeasonPanel(
+  db: ReturnType<typeof getTestDb>,
+  seasonId: string,
+  promptVersionId: string,
+  modelSnapshotId: string,
+) {
+  await db.insert(benchmarkSeasonPrompts).values({ seasonId, promptVersionId })
+  await db.insert(benchmarkSeasonModels).values({ seasonId, modelSnapshotId })
+}
+
 describe('Benchmark Schema', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -220,6 +230,7 @@ describe('Benchmark Schema', () => {
       const pv = await seedPromptVersion(db, prompt.id)
       const ms = await seedModelSnapshot(db, llm.id)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       await db.insert(benchmarkCases).values({
         seasonId: season.id,
         promptVersionId: pv.id,
@@ -316,6 +327,7 @@ describe('Benchmark Schema', () => {
       const group = await seedCategoryGroup(db)
       const sub = await seedSubcategory(db, group.id)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -369,6 +381,7 @@ describe('Benchmark Schema', () => {
       const group = await seedCategoryGroup(db)
       const sub = await seedSubcategory(db, group.id)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -427,6 +440,7 @@ describe('Benchmark Schema', () => {
       const group = await seedCategoryGroup(db)
       const sub = await seedSubcategory(db, group.id)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -487,6 +501,7 @@ describe('Benchmark Schema', () => {
       const sub = await seedSubcategory(db, group.id)
       const tool = await seedTool(db)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -547,6 +562,7 @@ describe('Benchmark Schema', () => {
       const sub = await seedSubcategory(db, group.id)
       const tool = await seedTool(db)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -806,6 +822,7 @@ describe('Benchmark Schema', () => {
       const pv = await seedPromptVersion(db, prompt.id)
       const ms = await seedModelSnapshot(db, llm.id)
 
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
@@ -862,6 +879,7 @@ describe('Benchmark Schema', () => {
       const ms = await seedModelSnapshot(db, llm.id)
 
       // Case belongs to season A
+      await seedSeasonPanel(db, seasonA.id, pv.id, ms.id)
       const benchmarkCase = first(
         await db
           .insert(benchmarkCases)
