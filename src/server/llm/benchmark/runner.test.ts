@@ -297,8 +297,66 @@ describe('runBenchmark', () => {
       .from(benchmarkRuns)
       .where(
         and(eq(benchmarkRuns.seasonId, season.id), eq(benchmarkRuns.scheduledFor, '2026-03-10')),
-      )
+    )
     expect(allRuns).toHaveLength(1)
+  })
+
+  it('should return the persisted summary for an already completed run', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary1 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+    const summary2 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(summary1.status).toBe('completed')
+    expect(summary2.status).toBe('completed')
+    expect(summary2.qc.passed).toBe(true)
+    expect(summary2.completedCases).toBe(15)
+    expect(summary2.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
+  it('should not execute duplicate LLM calls while the same run is already running', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    let releaseFirstCall: (() => void) | null = null
+    const firstCallBlocked = new Promise<void>((resolve) => {
+      releaseFirstCall = resolve
+    })
+
+    let signalFirstCall: (() => void) | null = null
+    const firstCallStarted = new Promise<void>((resolve) => {
+      signalFirstCall = resolve
+    })
+
+    let callCount = 0
+    const llmService = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        signalFirstCall?.()
+        await firstCallBlocked
+      }
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const firstRunPromise = runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+    await firstCallStarted
+
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(secondSummary.status).toBe('running')
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    releaseFirstCall?.()
+    const firstSummary = await firstRunPromise
+
+    expect(firstSummary.status).toBe('completed')
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
   it('should resume a partially completed run', async () => {
