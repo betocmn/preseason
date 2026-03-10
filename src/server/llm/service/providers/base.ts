@@ -1,4 +1,7 @@
-import { complete as completeWithOpenRouter } from '~/server/llm/service/openrouter-client'
+import {
+  complete as completeWithOpenRouter,
+  type OpenRouterInferenceParams,
+} from '~/server/llm/service/openrouter-client'
 import type { CompletionRequest, CompletionResponse, ProviderId } from '~/server/llm/service/types'
 
 export abstract class BaseLlmProvider {
@@ -42,20 +45,38 @@ export abstract class BaseLlmProvider {
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
     const model = this.normalizeModel(request.model)
 
-    const completion = await completeWithOpenRouter(model, [
-      {
-        role: 'system',
-        content: request.systemPrompt,
-      },
-      {
-        role: 'user',
-        content: request.userPrompt,
-      },
-    ])
+    const inferenceParams: OpenRouterInferenceParams | undefined =
+      request.temperature !== undefined ||
+      request.topP !== undefined ||
+      request.maxTokens !== undefined ||
+      request.seed !== undefined
+        ? {
+            temperature: request.temperature,
+            top_p: request.topP,
+            max_tokens: request.maxTokens,
+            seed: request.seed,
+          }
+        : undefined
+
+    const completion = await completeWithOpenRouter(
+      model,
+      [
+        {
+          role: 'system',
+          content: request.systemPrompt,
+        },
+        {
+          role: 'user',
+          content: request.userPrompt,
+        },
+      ],
+      inferenceParams,
+    )
 
     return {
       ...completion,
-      model: completion.model || model,
+      requestedModel: model,
+      returnedModel: completion.returnedModel || model,
       provider: this.provider,
     }
   }

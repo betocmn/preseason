@@ -9,15 +9,23 @@ export const PROVIDER_IDS = [
 
 export type ProviderId = (typeof PROVIDER_IDS)[number]
 
+export type InferenceParams = {
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+  seed?: number
+}
+
 export type CompletionRequest = {
   model: string
   systemPrompt: string
   userPrompt: string
-}
+} & InferenceParams
 
 export type CompletionResponse = {
   content: string
-  model: string
+  requestedModel: string
+  returnedModel: string
   provider: ProviderId
   finishReason: string
   usage: {
