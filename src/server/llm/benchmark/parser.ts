@@ -14,7 +14,7 @@ export function parseBenchmarkResponse(
   eligibleCategorySlugs: string[],
 ): ParseResult {
   const openIdx = rawContent.indexOf(OPEN_TAG)
-  const closeIdx = rawContent.indexOf(CLOSE_TAG)
+  const closeIdx = openIdx === -1 ? -1 : rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
 
   if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
     return { status: 'invalid_output', reason: 'Missing <preseason_benchmark_json> tags' }

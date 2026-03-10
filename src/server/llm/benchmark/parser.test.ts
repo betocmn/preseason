@@ -51,6 +51,22 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
   })
 
+  it('should ignore closing tag mentions in the natural-language preamble', () => {
+    const json = buildValidAppendix([
+      { slug: 'auth', decision: 'tool', tool: 'Clerk' },
+      { slug: 'database', decision: 'none' },
+    ])
+    const raw = wrapInTags(
+      json,
+      'Do not literally print </preseason_benchmark_json> before the JSON block.\n\n',
+    )
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.rawAppendix).toBe(json)
+  })
+
   it('should return invalid_output for malformed JSON', () => {
     const raw = wrapInTags('{ not valid json }')
     const result = parseBenchmarkResponse(raw, ELIGIBLE)
