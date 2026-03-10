@@ -20,7 +20,7 @@ import {
   toolCandidates,
   tools,
 } from '~/server/db/schema'
-import { LlmService } from '~/server/llm/service'
+import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { runBenchmark } from './runner'
@@ -70,6 +70,15 @@ function createMockLlmService(completeFn: MockCompleteFn) {
     getProvider: vi.fn(),
   }
   return service as unknown as LlmService & { complete: ReturnType<typeof vi.fn> }
+}
+
+function createDeferred() {
+  let resolve: () => void = () => {}
+  const promise = new Promise<void>((settle) => {
+    resolve = settle
+  })
+
+  return { promise, resolve }
 }
 
 type TestDb = ReturnType<typeof getTestDb>
@@ -297,7 +306,7 @@ describe('runBenchmark', () => {
       .from(benchmarkRuns)
       .where(
         and(eq(benchmarkRuns.seasonId, season.id), eq(benchmarkRuns.scheduledFor, '2026-03-10')),
-    )
+      )
     expect(allRuns).toHaveLength(1)
   })
 
@@ -324,35 +333,28 @@ describe('runBenchmark', () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
 
-    let releaseFirstCall: (() => void) | null = null
-    const firstCallBlocked = new Promise<void>((resolve) => {
-      releaseFirstCall = resolve
-    })
-
-    let signalFirstCall: (() => void) | null = null
-    const firstCallStarted = new Promise<void>((resolve) => {
-      signalFirstCall = resolve
-    })
+    const firstCallBlocked = createDeferred()
+    const firstCallStarted = createDeferred()
 
     let callCount = 0
     const llmService = createMockLlmService(async (_provider, request) => {
       callCount++
       if (callCount === 1) {
-        signalFirstCall?.()
-        await firstCallBlocked
+        firstCallStarted.resolve()
+        await firstCallBlocked.promise
       }
       return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
     })
 
     const firstRunPromise = runBenchmark(season.id, '2026-03-10', { database: db, llmService })
-    await firstCallStarted
+    await firstCallStarted.promise
 
     const secondSummary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
 
     expect(secondSummary.status).toBe('running')
     expect(llmService.complete).toHaveBeenCalledTimes(1)
 
-    releaseFirstCall?.()
+    firstCallBlocked.resolve()
     const firstSummary = await firstRunPromise
 
     expect(firstSummary.status).toBe('completed')
@@ -368,10 +370,19 @@ describe('runBenchmark', () => {
       .values({ seasonId: season.id, scheduledFor: '2026-03-10', status: 'running' })
       .returning()
 
-    const firstCase = caseRows[0]!
+    expect(run).toBeDefined()
+    const runId = run?.id
+    expect(runId).toBeDefined()
+
+    const firstCase = caseRows[0]
+    expect(firstCase).toBeDefined()
+    if (!runId || !firstCase) {
+      throw new Error('Expected seeded run and case')
+    }
+
     await db.insert(benchmarkCaseResults).values({
       seasonId: season.id,
-      runId: run!.id,
+      runId,
       caseId: firstCase.id,
       status: 'completed',
       parserVersion: 'strict-v1',
@@ -383,7 +394,7 @@ describe('runBenchmark', () => {
 
     const summary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
 
-    expect(summary.runId).toBe(run!.id)
+    expect(summary.runId).toBe(runId)
     expect(summary.completedCases).toBe(15)
     expect(llmService.complete).toHaveBeenCalledTimes(14)
   })
@@ -482,7 +493,10 @@ describe('runBenchmark', () => {
       .select()
       .from(benchmarkCaseResults)
       .where(
-        and(eq(benchmarkCaseResults.runId, summary.runId), eq(benchmarkCaseResults.status, 'failed')),
+        and(
+          eq(benchmarkCaseResults.runId, summary.runId),
+          eq(benchmarkCaseResults.status, 'failed'),
+        ),
       )
     expect(failedResults).toHaveLength(15)
 
@@ -534,7 +548,7 @@ describe('runBenchmark', () => {
       .from(toolCandidates)
       .where(eq(toolCandidates.normalizedName, 'someunknownauthtool'))
     expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.seenCount).toBeGreaterThanOrEqual(1)
+    expect(candidates[0]?.seenCount).toBeGreaterThanOrEqual(1)
   })
 
   it('should detect model drift and mark as invalid_output', async () => {

@@ -426,8 +426,8 @@ describe('Benchmark Schema', () => {
         .returning()
 
       expect(decision).toBeDefined()
-      expect(decision!.decisionType).toBe('none')
-      expect(decision!.toolId).toBeNull()
+      expect(decision?.decisionType).toBe('none')
+      expect(decision?.toolId).toBeNull()
     })
 
     it('should allow decision_type=tool with null tool_id when unresolved_tool', async () => {
@@ -485,9 +485,9 @@ describe('Benchmark Schema', () => {
         .returning()
 
       expect(decision).toBeDefined()
-      expect(decision!.decisionType).toBe('tool')
-      expect(decision!.toolId).toBeNull()
-      expect(decision!.resolutionStatus).toBe('unresolved_tool')
+      expect(decision?.decisionType).toBe('tool')
+      expect(decision?.toolId).toBeNull()
+      expect(decision?.resolutionStatus).toBe('unresolved_tool')
     })
 
     it('should allow decision_type=tool with valid tool_id', async () => {
@@ -547,8 +547,8 @@ describe('Benchmark Schema', () => {
         .returning()
 
       expect(decision).toBeDefined()
-      expect(decision!.decisionType).toBe('tool')
-      expect(decision!.toolId).toBe(tool.id)
+      expect(decision?.decisionType).toBe('tool')
+      expect(decision?.toolId).toBe(tool.id)
     })
 
     it('should enforce unique constraint on (case_result_id, category_id)', async () => {
@@ -918,15 +918,17 @@ describe('Benchmark Schema', () => {
       const protocol = await seedProtocol(db)
       const seasonA = await seedSeason(db, protocol.id)
 
-      const [seasonB] = await db
-        .insert(benchmarkSeasons)
-        .values({
-          protocolId: protocol.id,
-          slug: 'season-2',
-          name: 'Season 2',
-          status: 'draft',
-        })
-        .returning()
+      const seasonB = first(
+        await db
+          .insert(benchmarkSeasons)
+          .values({
+            protocolId: protocol.id,
+            slug: 'season-2',
+            name: 'Season 2',
+            status: 'draft',
+          })
+          .returning(),
+      )
 
       const prompt = await seedPrompt(db)
       const llm = await seedLlm(db)
@@ -957,7 +959,7 @@ describe('Benchmark Schema', () => {
       // Try to insert case result with season B — should fail
       await expect(
         db.insert(benchmarkCaseResults).values({
-          seasonId: seasonB!.id,
+          seasonId: seasonB.id,
           runId: run.id,
           caseId: benchmarkCase.id,
           status: 'completed',
@@ -1077,10 +1079,12 @@ describe('Benchmark Schema', () => {
       const db = getTestDb()
       const protocol = await seedProtocol(db)
       const seasonA = await seedSeason(db, protocol.id)
-      const [seasonB] = await db
-        .insert(benchmarkSeasons)
-        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
-        .returning()
+      const seasonB = first(
+        await db
+          .insert(benchmarkSeasons)
+          .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+          .returning(),
+      )
 
       const run = first(
         await db
@@ -1090,7 +1094,7 @@ describe('Benchmark Schema', () => {
       )
 
       await expect(
-        db.update(benchmarkRuns).set({ seasonId: seasonB!.id }).where(eq(benchmarkRuns.id, run.id)),
+        db.update(benchmarkRuns).set({ seasonId: seasonB.id }).where(eq(benchmarkRuns.id, run.id)),
       ).rejects.toThrow(/immutable/)
     })
 
@@ -1098,10 +1102,12 @@ describe('Benchmark Schema', () => {
       const db = getTestDb()
       const protocol = await seedProtocol(db)
       const seasonA = await seedSeason(db, protocol.id)
-      const [seasonB] = await db
-        .insert(benchmarkSeasons)
-        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
-        .returning()
+      const seasonB = first(
+        await db
+          .insert(benchmarkSeasons)
+          .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+          .returning(),
+      )
       const prompt = await seedPrompt(db)
       const llm = await seedLlm(db)
       const pv = await seedPromptVersion(db, prompt.id)
@@ -1118,7 +1124,7 @@ describe('Benchmark Schema', () => {
       await expect(
         db
           .update(benchmarkCases)
-          .set({ seasonId: seasonB!.id })
+          .set({ seasonId: seasonB.id })
           .where(eq(benchmarkCases.id, benchmarkCase.id)),
       ).rejects.toThrow(/immutable/)
     })
@@ -1127,10 +1133,12 @@ describe('Benchmark Schema', () => {
       const db = getTestDb()
       const protocol = await seedProtocol(db)
       const seasonA = await seedSeason(db, protocol.id)
-      const [seasonB] = await db
-        .insert(benchmarkSeasons)
-        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
-        .returning()
+      const seasonB = first(
+        await db
+          .insert(benchmarkSeasons)
+          .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+          .returning(),
+      )
       const prompt = await seedPrompt(db)
       const llm = await seedLlm(db)
       const pv = await seedPromptVersion(db, prompt.id)
@@ -1166,7 +1174,7 @@ describe('Benchmark Schema', () => {
       await expect(
         db
           .update(benchmarkCaseResults)
-          .set({ seasonId: seasonB!.id })
+          .set({ seasonId: seasonB.id })
           .where(eq(benchmarkCaseResults.id, caseResult.id)),
       ).rejects.toThrow(/immutable|season_id/)
     })
