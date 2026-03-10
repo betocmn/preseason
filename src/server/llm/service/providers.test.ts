@@ -19,7 +19,8 @@ describe('llm providers', () => {
     completeMock.mockReset()
     completeMock.mockResolvedValue({
       content: '{"recommendations":[]}',
-      model: 'mock-model',
+      requestedModel: 'mock-requested-model',
+      returnedModel: 'mock-returned-model',
       finishReason: 'stop',
       usage: {
         promptTokens: 10,
@@ -67,6 +68,7 @@ describe('llm providers', () => {
         expect.objectContaining({ role: 'system', content: 'sys' }),
         expect.objectContaining({ role: 'user', content: 'usr' }),
       ]),
+      undefined,
     )
   })
 
@@ -129,5 +131,56 @@ describe('llm providers', () => {
         userPrompt: 'usr',
       }),
     ).rejects.toThrow('rate limited')
+  })
+
+  it('passes inference params to client when provided', async () => {
+    const provider = new AnthropicProvider()
+
+    await provider.complete({
+      model: 'claude-3-5-sonnet',
+      systemPrompt: 'sys',
+      userPrompt: 'usr',
+      temperature: 0.2,
+      topP: 1,
+      maxTokens: 1200,
+      seed: 42,
+    })
+
+    expect(completeMock).toHaveBeenCalledWith('anthropic/claude-3-5-sonnet', expect.any(Array), {
+      temperature: 0.2,
+      top_p: 1,
+      max_tokens: 1200,
+      seed: 42,
+    })
+  })
+
+  it('omits inference params when not provided', async () => {
+    const provider = new AnthropicProvider()
+
+    await provider.complete({
+      model: 'claude-3-5-sonnet',
+      systemPrompt: 'sys',
+      userPrompt: 'usr',
+    })
+
+    expect(completeMock).toHaveBeenCalledWith(
+      'anthropic/claude-3-5-sonnet',
+      expect.any(Array),
+      undefined,
+    )
+  })
+
+  it('response includes both requestedModel and returnedModel', async () => {
+    const provider = new OpenAiProvider()
+
+    const result = await provider.complete({
+      model: 'gpt-4o',
+      systemPrompt: 'sys',
+      userPrompt: 'usr',
+    })
+
+    expect(result.requestedModel).toBe('openai/gpt-4o')
+    expect(result.returnedModel).toBe('mock-returned-model')
+    expect(result).not.toHaveProperty('model')
   })
 })
