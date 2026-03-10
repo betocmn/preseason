@@ -9,6 +9,7 @@ describe('classifyModelTier', () => {
     { modelId: 'openai/gpt-4o-2024-08-06', expected: 'frontier' },
     { modelId: 'gpt-4-turbo', expected: 'frontier' },
     { modelId: 'gemini-1.5-pro', expected: 'frontier' },
+    { modelId: 'google/gemini-pro-1.5', expected: 'frontier' },
     { modelId: 'google/gemini-2.0-pro', expected: 'frontier' },
   ])('classifies $modelId as frontier', ({ modelId, expected }) => {
     expect(classifyModelTier(modelId)).toBe(expected)
