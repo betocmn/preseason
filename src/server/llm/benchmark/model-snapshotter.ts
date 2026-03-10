@@ -5,19 +5,18 @@ import { benchmarkModelSnapshots, llms } from '~/server/db/schema'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
 
 export type ModelSnapshotParams = {
-  requestedModelId: string
   temperature?: number | null
   topP?: number | null
   maxTokens?: number | null
   seed?: number | null
 }
 
-export function computeSnapshotKey(params: ModelSnapshotParams): string {
+export function computeSnapshotKey(requestedModelId: string, params: ModelSnapshotParams): string {
   const temp = params.temperature ?? 'default'
   const topP = params.topP ?? 'default'
   const maxTokens = params.maxTokens ?? 'default'
   const seed = params.seed ?? 'default'
-  return `${params.requestedModelId}:${temp}:${topP}:${maxTokens}:${seed}`
+  return `${requestedModelId}:${temp}:${topP}:${maxTokens}:${seed}`
 }
 
 export async function getOrCreateModelSnapshot(
@@ -25,8 +24,6 @@ export async function getOrCreateModelSnapshot(
   llmId: string,
   params: ModelSnapshotParams,
 ) {
-  const snapshotKey = computeSnapshotKey(params)
-
   const llm = await database.query.llms.findFirst({
     where: eq(llms.id, llmId),
   })
@@ -35,8 +32,14 @@ export async function getOrCreateModelSnapshot(
     throw new Error(`LLM not found: ${llmId}`)
   }
 
-  const tier = classifyModelTier(params.requestedModelId)
-  const modelFamilyKey = extractModelFamilyKey(params.requestedModelId)
+  const requestedModelId = llm.modelId.trim()
+  if (!requestedModelId) {
+    throw new Error(`LLM ${llmId} has no modelId`)
+  }
+
+  const snapshotKey = computeSnapshotKey(requestedModelId, params)
+  const tier = classifyModelTier(requestedModelId)
+  const modelFamilyKey = extractModelFamilyKey(requestedModelId)
   const isDeterministic = params.seed !== undefined && params.seed !== null
 
   const [snapshot] = await database
@@ -47,7 +50,7 @@ export async function getOrCreateModelSnapshot(
       provider: llm.provider,
       tier,
       modelFamilyKey,
-      requestedModelId: params.requestedModelId,
+      requestedModelId,
       temperature: params.temperature ?? null,
       topP: params.topP ?? null,
       maxTokens: params.maxTokens ?? null,
