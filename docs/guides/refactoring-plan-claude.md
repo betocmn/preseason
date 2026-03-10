@@ -981,7 +981,7 @@ The methodology page and any marketing copy must honestly state:
 ```
 PR 1: Schema + aliases          ─── pure additive, zero risk ✅ DONE
   │
-PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract
+PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract ✅ DONE
   │
 PR 3: LLM service hardening     ─── extends existing service, drift detection
   │
