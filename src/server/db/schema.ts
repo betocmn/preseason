@@ -638,6 +638,16 @@ export const benchmarkCases = createTable(
       t.promptVersionId,
       t.modelSnapshotId,
     ),
+    foreignKey({
+      columns: [t.seasonId, t.promptVersionId],
+      foreignColumns: [benchmarkSeasonPrompts.seasonId, benchmarkSeasonPrompts.promptVersionId],
+      name: 'benchmark_case_season_prompt_fk',
+    }),
+    foreignKey({
+      columns: [t.seasonId, t.modelSnapshotId],
+      foreignColumns: [benchmarkSeasonModels.seasonId, benchmarkSeasonModels.modelSnapshotId],
+      name: 'benchmark_case_season_model_fk',
+    }),
   ],
 )
 
