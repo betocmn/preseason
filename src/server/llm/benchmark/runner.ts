@@ -48,6 +48,8 @@ export type BenchmarkRunSummary = {
 
 type BenchmarkRunRecord = Awaited<ReturnType<typeof createOrLoadRun>>
 type RunMetrics = Omit<BenchmarkRunSummary, 'runId' | 'seasonId' | 'status' | 'errors'>
+// Resumable runs stash their frozen case ids here until a terminal QC payload replaces it.
+type RunCaseSnapshot = { snapshotCaseIds: string[] }
 
 const RUN_STALE_AFTER_MS = 30 * 60 * 1000
 const RUN_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
@@ -204,7 +206,7 @@ async function claimRunExecution(
   while (true) {
     const run = await findRunById(database, runId)
 
-    if (run.status === 'completed' || run.status === 'published') {
+    if (run.status === 'completed' || run.status === 'published' || run.status === 'qc_failed') {
       return { run, execute: false }
     }
 
@@ -214,7 +216,7 @@ async function claimRunExecution(
 
     let whereClause: ReturnType<typeof and> | undefined
 
-    if (run.status === 'pending' || run.status === 'failed' || run.status === 'qc_failed') {
+    if (run.status === 'pending' || run.status === 'failed') {
       whereClause = and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, run.status))
     } else if (run.status === 'running') {
       whereClause = run.startedAt
@@ -248,6 +250,72 @@ async function claimRunExecution(
       return { run: claimedRun, execute: true }
     }
   }
+}
+
+function getRunCaseSnapshot(run: BenchmarkRunRecord): string[] | null {
+  const qcSummary = run.qcSummaryJson
+  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
+    return null
+  }
+
+  const snapshotCaseIds = (qcSummary as Partial<RunCaseSnapshot>).snapshotCaseIds
+  if (!Array.isArray(snapshotCaseIds) || !snapshotCaseIds.every((id) => typeof id === 'string')) {
+    return null
+  }
+
+  return snapshotCaseIds
+}
+
+async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, seasonId: string) {
+  const caseIds =
+    getRunCaseSnapshot(run) ??
+    (
+      await database
+        .select({ id: benchmarkCases.id })
+        .from(benchmarkCases)
+        .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
+        .orderBy(benchmarkCases.promptVersionId, benchmarkCases.modelSnapshotId, benchmarkCases.id)
+    ).map((row) => row.id)
+
+  if (getRunCaseSnapshot(run) == null) {
+    await database
+      .update(benchmarkRuns)
+      .set({
+        qcSummaryJson: { snapshotCaseIds: caseIds },
+        expectedCaseCount: caseIds.length,
+      })
+      .where(eq(benchmarkRuns.id, run.id))
+  } else if (run.expectedCaseCount == null) {
+    await database
+      .update(benchmarkRuns)
+      .set({ expectedCaseCount: caseIds.length })
+      .where(eq(benchmarkRuns.id, run.id))
+  }
+
+  if (caseIds.length === 0) {
+    return []
+  }
+
+  const cases = await database.query.benchmarkCases.findMany({
+    where: and(eq(benchmarkCases.seasonId, seasonId), inArray(benchmarkCases.id, caseIds)),
+    with: {
+      promptVersion: { with: { categories: true } },
+      modelSnapshot: true,
+    },
+  })
+
+  if (cases.length !== caseIds.length) {
+    throw new Error('Benchmark run case snapshot no longer matches stored benchmark cases')
+  }
+
+  const orderById = new Map(caseIds.map((id, index) => [id, index]))
+  cases.sort((left, right) => {
+    const leftIndex = orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER
+    const rightIndex = orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER
+    return leftIndex - rightIndex
+  })
+
+  return cases
 }
 
 function startRunHeartbeat(
@@ -370,18 +438,7 @@ async function executeRun(
         .where(eq(benchmarkRuns.id, run.id))
     }
 
-    const allCases = await database.query.benchmarkCases.findMany({
-      where: and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)),
-      with: {
-        promptVersion: { with: { categories: true } },
-        modelSnapshot: true,
-      },
-    })
-
-    await database
-      .update(benchmarkRuns)
-      .set({ expectedCaseCount: allCases.length })
-      .where(eq(benchmarkRuns.id, run.id))
+    const allCases = await loadRunCases(database, run, seasonId)
 
     if (allCases.length === 0) {
       const qc = evaluateQc({
