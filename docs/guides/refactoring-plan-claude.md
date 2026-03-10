@@ -988,7 +988,7 @@ PR 1: Schema + aliases          ─── pure additive, zero risk ✅ DONE
   │
 PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract ✅ DONE
   │
-PR 3: LLM service hardening     ─── extends existing service, drift detection
+PR 3: LLM service hardening     ─── extends existing service, drift detection ✅ DONE
   │
 PR 4: Benchmark runner           ─── new cron endpoint, start shadow mode
   │                                   ┌─────────────────────────────────────┐
