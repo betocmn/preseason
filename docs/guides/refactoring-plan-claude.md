@@ -162,7 +162,7 @@ later with justification.
 
 ---
 
-## PR 1: Benchmark schema and tool alias migration
+## PR 1: Benchmark schema and tool alias migration ✅ DONE
 
 **Goal:** Add all new benchmark tables, enums, and the tool alias/candidate system.
 No behavioral changes yet — pure additive schema work.
@@ -341,7 +341,7 @@ the source of truth; markdown files are deleted in PR 8.
 
 ---
 
-## PR 2: Prompts to database and benchmark prompt builder
+## PR 2: Prompts to database and benchmark prompt builder ✅ DONE
 
 **Goal:** Move prompts from disk files to the database. Build the immutable
 prompt version system with explicit category eligibility and difficulty tiers.
@@ -447,7 +447,7 @@ freezePromptVersion(promptId, options: {
 
 ---
 
-## PR 3: LLM service hardening and model snapshots
+## PR 3: LLM service hardening and model snapshots ✅ DONE
 
 **Goal:** Extend the LLM service to persist inference parameters and create
 immutable model snapshots. Add model capability tiers.
