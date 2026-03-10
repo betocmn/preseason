@@ -146,16 +146,12 @@ describe('llm providers', () => {
       seed: 42,
     })
 
-    expect(completeMock).toHaveBeenCalledWith(
-      'anthropic/claude-3-5-sonnet',
-      expect.any(Array),
-      {
-        temperature: 0.2,
-        top_p: 1,
-        max_tokens: 1200,
-        seed: 42,
-      },
-    )
+    expect(completeMock).toHaveBeenCalledWith('anthropic/claude-3-5-sonnet', expect.any(Array), {
+      temperature: 0.2,
+      top_p: 1,
+      max_tokens: 1200,
+      seed: 42,
+    })
   })
 
   it('omits inference params when not provided', async () => {
