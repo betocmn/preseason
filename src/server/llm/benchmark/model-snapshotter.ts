@@ -27,19 +27,6 @@ export async function getOrCreateModelSnapshot(
 ) {
   const snapshotKey = computeSnapshotKey(params)
 
-  const existing = await database.query.benchmarkModelSnapshots.findFirst({
-    where: eq(benchmarkModelSnapshots.snapshotKey, snapshotKey),
-  })
-
-  if (existing) {
-    if (existing.llmId !== llmId) {
-      throw new Error(
-        `Snapshot key "${snapshotKey}" already exists for a different LLM: ${existing.llmId}`,
-      )
-    }
-    return existing
-  }
-
   const llm = await database.query.llms.findFirst({
     where: eq(llms.id, llmId),
   })
@@ -68,10 +55,22 @@ export async function getOrCreateModelSnapshot(
       isDeterministic,
       snapshotKey,
     })
+    .onConflictDoNothing({ target: benchmarkModelSnapshots.snapshotKey })
     .returning()
 
   if (!snapshot) {
-    throw new Error('Failed to create model snapshot')
+    const conflicting = await database.query.benchmarkModelSnapshots.findFirst({
+      where: eq(benchmarkModelSnapshots.snapshotKey, snapshotKey),
+    })
+    if (!conflicting) {
+      throw new Error('Failed to create model snapshot')
+    }
+    if (conflicting.llmId !== llmId) {
+      throw new Error(
+        `Snapshot key "${snapshotKey}" already exists for a different LLM: ${conflicting.llmId}`,
+      )
+    }
+    return conflicting
   }
 
   return snapshot
