@@ -4,11 +4,12 @@
 
 Rebuild Preseason's public methodology so authoritative rankings and matches come from a frozen, reproducible benchmark protocol instead of the current exploration pipeline.
 
-This plan is intentionally non-destructive:
+This plan is phased, but not permanently additive:
 
-- Keep the current exploration pipeline, tables, and routes working during migration.
+- Keep the current exploration pipeline, tables, and routes working only long enough to migrate safely.
 - Build benchmark infrastructure in parallel.
-- Switch only the authoritative public surfaces to benchmark data after the new protocol has accumulated enough history to support public claims.
+- Switch the authoritative public surfaces to benchmark data after the new protocol has accumulated enough history to support public claims.
+- End with a final cleanup PR that removes the legacy exploration stack and file-backed prompt path if we no longer need them.
 
 ## Current-state constraints
 
@@ -34,15 +35,27 @@ There are also panel-shape constraints we need to respect:
 
 Exploration should keep answering "what are models doing in the wild right now?" Benchmark should answer "within this frozen season, what do models select under a reproducible protocol?"
 
-### 2. The season is the unit of public claim
+### 2. Prompt source of truth moves to the database
+
+Prompt markdown files are fine for bootstrapping, but they should not remain the source of truth.
+
+The plan should be:
+
+- store editable prompt content in the database
+- freeze benchmark prompt versions from the database, not from disk
+- either export prompt files for Promptfoo or teach Promptfoo to read from the database
+
+This keeps prompt editing, prompt versioning, and benchmark reproducibility in one place.
+
+### 3. The season is the unit of public claim
 
 Public claims must be scoped to a frozen prompt panel and frozen model panel. We should say "within Benchmark Season 1" rather than implying universal truth across all developer workflows.
 
-### 3. We cannot defensibly backfill legacy exploration data into benchmark tables
+### 4. We cannot defensibly backfill legacy exploration data into benchmark tables
 
 Old `preseason_recommendation` rows do not carry immutable prompt snapshots, frozen model snapshots, or explicit inference params. They can remain valuable as exploration history, but they should not become authoritative benchmark evidence.
 
-### 4. To launch with weeks of benchmark data, run the new protocol in shadow first
+### 5. To launch with weeks of benchmark data, run the new protocol in shadow first
 
 The correct path is:
 
@@ -51,17 +64,21 @@ The correct path is:
 3. Accumulate at least several weeks of benchmark snapshots.
 4. Cut public authoritative pages over only after the benchmark history is real.
 
-### 5. Do not use opaque model weighting as the primary public score
+### 6. Model weighting should be supported now, but only through immutable weight snapshots
 
-Model-weighted rankings are tempting, but they make the public score harder to explain and easier to challenge. For launch, the better approach is:
+Model weighting belongs in the design, but it must be explicit and reproducible.
 
-- Keep the season's model panel intentionally balanced.
-- Use unweighted support rate across the frozen case panel as the primary public metric.
-- Expose model coverage and, if needed later, a secondary model-family-balanced audit metric.
+The benchmark should support:
 
-Given the current seed panel is already close to provider-balanced, composition discipline is a better first control than hidden weights.
+- a default uniform weight snapshot
+- future non-uniform model weight snapshots when we decide they are needed
+- published benchmark snapshots that point to the exact weight snapshot used
+- visible methodology text that explains whether a public ranking is weighted or uniform
+- raw unweighted counts remaining visible even when weighted rates are used
 
-### 6. Prompt difficulty tiers should exist, but as a panel-design and audit tool first
+Given the current seed panel is already close to provider-balanced, season composition is still the first control. Weighting is a supported mechanism, not an excuse to ignore panel quality.
+
+### 7. Prompt difficulty tiers should exist, but as a panel-design and audit tool first
 
 Add prompt difficulty tiers to benchmark prompt versions so we can:
 
@@ -69,9 +86,9 @@ Add prompt difficulty tiers to benchmark prompt versions so we can:
 - inspect whether rankings are robust across tiers
 - avoid having a public benchmark dominated by only simple CRUD prompts
 
-Difficulty tier should not become a hidden scoring weight in the first public release. The public benchmark should remain simple to explain.
+Difficulty tier should influence season design and diagnostics first. If we ever weight by prompt tier later, that should use the same immutable snapshot pattern as model weights.
 
-### 7. Public benchmark pages should publish only when sample size is good enough
+### 8. Public benchmark pages should publish only when sample size is good enough
 
 We need publication thresholds in addition to parser/QC thresholds. If a category or head-to-head pair does not have enough benchmark evidence, it should show as insufficient data instead of pretending to be authoritative.
 
@@ -81,30 +98,46 @@ Do not switch the public authoritative pages to benchmark data until all of the 
 
 - The active benchmark season has at least 21 published daily runs. Target 28 before public cutover.
 - The benchmark methodology page is live and lists the active prompt panel, model panel, scoring version, parser version, and QC summary.
+- If any public ranking is weighted, the methodology page lists the exact model weight snapshot used.
 - Unknown benchmark tools are entering `tool_candidates`, not `tools`.
 - No active-season model snapshot drift has been silently mixed into published benchmark data.
 - Each public benchmark category has at least 3 eligible prompt versions in the season. Categories below that bar stay exploratory or display insufficient benchmark coverage.
-- Each published category snapshot has at least 100 eligible benchmark decisions and at least 3 completed model snapshots.
-- Each published head-to-head snapshot has at least 30 decisive cases.
+- Each published category snapshot has at least 100 eligible benchmark selections and at least 3 completed model snapshots.
+- Each published head-to-head snapshot has at least 30 decisive trials.
 
 These numbers can be tuned later, but the first release should be stricter rather than looser.
 
 ## Data model additions
 
-Adopt the terminology from the benchmark rebuild proposal:
+Use clearer internal names than the earlier proposal:
 
 - `benchmark_protocol`
 - `benchmark_season`
 - `benchmark_run`
 - `benchmark_prompt_version`
 - `benchmark_model_snapshot`
-- `benchmark_case`
-- `benchmark_case_result`
-- `benchmark_case_decision`
+- `benchmark_trial`
+- `benchmark_trial_result`
+- `benchmark_selection`
 - `benchmark_leaderboard_snapshot`
 - `benchmark_head_to_head_snapshot`
+- `benchmark_model_weight_snapshot`
+- `benchmark_model_weight`
 - `tool_alias`
 - `tool_candidate`
+
+Human meanings:
+
+- Season: the frozen panel for public claims
+- Trial: one prompt version x model snapshot pair inside a season
+- Trial result: one recorded execution of a trial inside a benchmark run
+- Selection: one category-level `tool` or `none` outcome inside a trial result
+
+Also change the prompt source of truth:
+
+- `preseason_prompt` becomes the editable prompt registry and stores prompt content
+- `benchmark_prompt_version` stores immutable frozen copies used by benchmark execution
+- prompt files become import or export artifacts only during migration
 
 Use these additional fields and enums beyond the earlier proposal:
 
@@ -112,6 +145,7 @@ Use these additional fields and enums beyond the earlier proposal:
 - Add a benchmark window type enum so snapshot windows are explicit, not stringly typed.
 - Add a QC status enum for benchmark runs and snapshots.
 - Add a model family key on `benchmark_model_snapshots` if the returned model string alone is not enough to group closely related variants later.
+- Add model weight snapshot tables so weighted benchmark publications can point to immutable weight inputs.
 
 ## PR plan
 
@@ -124,16 +158,19 @@ Create the new benchmark tables, enums, and integrity constraints without distur
 
 Scope:
 
-- Extend `src/server/db/schema.ts` with the benchmark entities from the rebuild proposal.
+- Extend `src/server/db/schema.ts` with the benchmark entities from this plan.
 - Include explicit snapshot and run integrity constraints:
   - unique `(seasonId, scheduledFor)` on `benchmark_runs`
-  - unique `(seasonId, promptVersionId, modelSnapshotId)` on `benchmark_cases`
-  - unique `(runId, caseId)` on `benchmark_case_results`
-  - unique `(caseResultId, categoryId)` on `benchmark_case_decisions`
+  - unique `(seasonId, promptVersionId, modelSnapshotId)` on `benchmark_trials`
+  - unique `(runId, trialId)` on `benchmark_trial_results`
+  - unique `(trialResultId, categoryId)` on `benchmark_selections`
   - canonical `tool_a_id < tool_b_id` on head-to-head snapshots
 - Add prompt difficulty tier, benchmark window type, and QC status enums.
+- Add prompt content storage to the existing `preseason_prompt` table so prompt text can move into the database.
+- Add `benchmark_model_weight_snapshots` and `benchmark_model_weights`.
 - Add `tool_aliases` and `tool_candidates`.
 - Backfill `tool_aliases` from `tools.aliases`.
+- Import current prompt markdown into the prompt table as a one-time migration step.
 - Seed `benchmark-v2` protocol and a draft `season-1`.
 - Do not backfill legacy recommendation rows into benchmark tables.
 
@@ -141,7 +178,8 @@ Tests:
 
 - Schema integrity and uniqueness tests.
 - Alias and tool candidate uniqueness tests.
-- Decision integrity tests.
+- Selection integrity tests.
+- Prompt content migration tests.
 
 Exit criteria:
 
@@ -156,11 +194,13 @@ Freeze the inputs the benchmark will rely on before any new execution happens.
 Scope:
 
 - Build benchmark prompt version freezing services:
-  - snapshot markdown content
+  - snapshot database-backed prompt content
   - snapshot benchmark system prompt
   - store prompt hash
   - normalize eligible categories into `benchmark_prompt_version_categories`
   - assign prompt difficulty tier
+- Replace file-based prompt loading with database-backed loading for active prompts.
+- Add an export path for Promptfoo if shared prompt files are still needed outside the app.
 - Build benchmark model snapshot freezing services:
   - persist requested model id
   - explicit inference params
@@ -170,7 +210,7 @@ Scope:
 - Build season composition services:
   - attach frozen prompt versions to a season
   - attach frozen model snapshots to a season
-  - generate `benchmark_cases`
+  - generate `benchmark_trials`
 - Seed `season-1` from the current 15 vibe-coder prompts and current model panel, but mark any under-covered categories as not yet benchmark-public.
 - Add a machine-readable season manifest service or admin JSON view that lists:
   - active prompt versions
@@ -183,8 +223,9 @@ Tests:
 
 - Prompt freezing stores immutable snapshots.
 - Eligible category normalization is exact.
-- Season case generation is stable and idempotent.
+- Season trial generation is stable and idempotent.
 - Categories with fewer than 3 eligible prompt versions are flagged as below publication coverage.
+- Database-backed prompt loading works without the markdown directory.
 
 Exit criteria:
 
@@ -212,7 +253,7 @@ Scope:
   - latency
 - Define benchmark defaults for the first season, such as low temperature and fixed max tokens.
 - Add active-season drift handling:
-  - if a benchmark case returns a model identity that no longer matches the frozen snapshot expectation, mark the case invalid
+  - if a benchmark trial returns a model identity that no longer matches the frozen snapshot expectation, mark the trial result invalid
   - fail benchmark publication for that run
   - require a future season refresh instead of silently mixing snapshots
 
@@ -244,10 +285,10 @@ Scope:
   - a short natural answer
   - one JSON appendix inside fixed benchmark tags
 - Validate the appendix with Zod.
-- Enforce exactly one eligible-category decision per category per case.
+- Enforce exactly one eligible-category selection per category per trial.
 - Implement `createOrLoadBenchmarkRun(seasonId, scheduledFor)` so runs resume instead of duplicating.
 - Add a dedicated benchmark cron route. Keep the existing `/api/cron/run` route as exploration.
-- Only execute missing or failed cases on rerun.
+- Only execute missing or failed trials on rerun.
 - Mark missing or malformed appendix output as `invalid_output`. Do not salvage prose.
 - Persist QC summaries per run.
 
@@ -255,14 +296,14 @@ Tests:
 
 - Prompt builder emits the strict appendix contract.
 - Missing appendix, malformed JSON, extra categories, and missing categories all fail.
-- Idempotent reruns fill only missing cases.
+- Idempotent reruns fill only missing trials.
 - Invalid outputs are stored as invalid, not rescued.
 
 Exit criteria:
 
 - The benchmark can run daily in shadow mode without duplicate run records.
 
-### PR5: Tool governance, candidate review, and decision replay
+### PR5: Tool governance, candidate review, and selection replay
 
 Goal:
 Remove benchmark auto-creation of tools and replace it with a reviewable resolution workflow.
@@ -275,14 +316,14 @@ Scope:
   3. exact approved alias in `tool_aliases`
 - Unmatched benchmark tools:
   - upsert into `tool_candidates`
-  - keep the decision unresolved
+  - keep the selection unresolved
   - exclude unresolved tools from public support counts
 - Add minimal admin flows:
   - candidate queue
   - approve by linking to existing tool
   - approve by intentionally creating a new tool
   - add alias entry
-  - replay affected benchmark case decisions after approval
+  - replay affected benchmark selections after approval
 - Leave exploration parser behavior alone for now.
 
 Tests:
@@ -290,7 +331,7 @@ Tests:
 - Unknown tools no longer auto-create benchmark tools.
 - Candidate upserts are idempotent.
 - Approved aliases resolve correctly on replay.
-- Unresolved decisions do not enter published support counts.
+- Unresolved selections do not enter published support counts.
 
 Exit criteria:
 
@@ -303,15 +344,23 @@ Replace raw recommendation aggregation with published benchmark snapshots.
 
 Scope:
 
-- Add benchmark leaderboard computation from `benchmark_case_decisions`.
+- Add benchmark leaderboard computation from `benchmark_selections`.
 - Compute at least these snapshot windows:
   - `run_day`
   - `trailing_7d`
   - `trailing_28d`
   - `season_to_date`
 - Make `trailing_28d` the default public benchmark window at launch.
-- Primary public metric:
-  - support rate over eligible benchmark decisions
+- Support both scoring modes from day one:
+  - uniform
+  - model-weighted
+- Persist the exact weight context used by each published snapshot:
+  - `weightingMode`
+  - `modelWeightSnapshotId`
+- Primary published metrics:
+  - unweighted support count
+  - unweighted support rate
+  - weighted support rate when weighting is enabled
 - Publish:
   - support count
   - support rate
@@ -322,13 +371,14 @@ Scope:
 - Do not ship an authoritative overall leaderboard in this phase.
 - Add publication thresholds:
   - category hidden or labeled insufficient data when below the benchmark bar
-- Add secondary diagnostics, not primary rank keys:
+- Add secondary diagnostics:
   - per-difficulty-tier breakdown
-  - optional model-family-balanced audit metric if later needed
+  - model-family-balanced audit metric when weighting is enabled
 
 Tests:
 
-- Support rate uses eligible-case denominators.
+- Support rate uses eligible-selection denominators.
+- Weighted snapshots use the correct immutable weight snapshot.
 - Confidence intervals are stable.
 - Trend compares the correct published snapshots.
 - Insufficient-data categories do not publish authoritative ranks.
@@ -337,31 +387,31 @@ Exit criteria:
 
 - We can publish benchmark-backed category rankings without touching legacy public routes yet.
 
-### PR7: Head-to-head snapshots from case outcomes
+### PR7: Head-to-head snapshots from trial outcomes
 
 Goal:
-Rebuild matches on top of benchmark case outcomes instead of raw mention counts.
+Rebuild matches on top of benchmark selection outcomes instead of raw mention counts.
 
 Scope:
 
 - Add benchmark head-to-head snapshot computation.
-- Use category decisions to compute:
+- Use category selections to compute:
   - tool A wins
   - tool B wins
   - abstain
   - abstain_other
-  - decisive case count
+  - decisive trial count
   - decisive win rate
   - Wilson 95% CI
 - Generate featured pairs from latest benchmark leaderboard snapshots or admin-curated pairs, not from raw all-time counts.
 - Keep the old match table and routes alive until UI cutover.
-- Require a minimum decisive-case threshold before publishing a public head-to-head.
+- Require a minimum decisive-trial threshold before publishing a public head-to-head.
 
 Tests:
 
-- Head-to-head math comes from case decisions, not recommendation counts.
+- Head-to-head math comes from benchmark selections, not recommendation counts.
 - Other-tool selections become abstain-other, not wins.
-- Decisive win rate uses decisive cases only.
+- Decisive win rate uses decisive trials only.
 - Low-sample pairs stay unpublished.
 
 Exit criteria:
@@ -395,6 +445,7 @@ Scope:
   - public claim boundaries
   - prompt panel
   - model panel
+  - active weight snapshot when applicable
   - scoring methodology
   - QC summary
 - Remove or relabel the current overall ranking as exploratory.
@@ -443,10 +494,35 @@ Tests:
 - Partial runs resume safely.
 - QC-failed runs do not publish.
 - Shadow mode can coexist with exploration cron without collisions.
+- Weighted publications keep pointing to the original immutable weight snapshot even after a newer snapshot exists.
 
 Exit criteria:
 
 - We can accumulate weeks of benchmark history before exposing it as public authority.
+
+### PR10: Remove legacy exploration and file-backed prompt code
+
+Goal:
+Delete the old stack once the benchmark has replaced it.
+
+Scope:
+
+- Remove the legacy exploration ranking and match paths if they are no longer needed.
+- Delete old recommendation-count-based match generation and settlement code.
+- Delete legacy cron routes that only exist for the old methodology.
+- Remove the file-based prompt loader and prompt markdown directory if Promptfoo export has been solved.
+- Remove `tools.aliases` after `tool_aliases` has fully replaced it.
+- Drop legacy tables that no longer serve any retained workflow.
+- Trim or rewrite docs so they describe only the surviving system.
+
+Tests:
+
+- No application path still depends on deleted legacy tables or prompt files.
+- Benchmark cron and public routes still work after cleanup.
+
+Exit criteria:
+
+- The repository reflects the benchmark architecture instead of carrying two full systems forever.
 
 ## Season 1 recommendations
 
@@ -455,14 +531,14 @@ For the first benchmark season:
 - Scope claims honestly to "vibe-coder web-app prompts" because that is what the current prompt corpus represents.
 - Keep the current provider-balanced model panel unless there is a strong reason to swap models before the shadow period starts.
 - Add more prompt coverage before making categories like `cms` authoritative, because the current panel only covers them in 2 prompt metadata entries.
+- Start with a uniform weight snapshot unless there is a specific reason to activate non-uniform weights immediately.
 - Do not publish an overall "best tool overall" benchmark leaderboard yet.
 
 ## Non-goals for the first release
 
 - Retroactively converting old exploration recommendations into authoritative benchmark evidence.
-- Shipping a hidden weighted-score public ranking.
+- Shipping hidden weighting. Any weighted publication must point to an immutable weight snapshot and still expose unweighted counts.
 - Claiming coverage across all developer workflows or skill levels.
-- Deleting legacy exploration tables, routes, or cron jobs in the first wave.
 - Multi-turn benchmark interactions or heuristic parse recovery.
 
 ## Suggested implementation order
@@ -473,5 +549,6 @@ If we want benchmark history before the eventual public cutover, the order shoul
 2. PR5 next, so unresolved tools do not pollute the benchmark during the shadow period.
 3. PR6 and PR7 while history is accumulating.
 4. PR8 and PR9 only after the benchmark has enough published runs to support real public pages.
+5. PR10 last, once we are sure the legacy stack is no longer needed.
 
 That sequencing is what lets Preseason launch with weeks of benchmark data already in hand instead of switching public authority on day one.
