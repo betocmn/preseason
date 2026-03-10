@@ -52,9 +52,13 @@ const updatePromptInput = z
     },
   )
 
-async function readPromptFile(slug: string, level: PromptLevel) {
+async function readPromptContent(
+  slug: string,
+  level: PromptLevel,
+  database?: Parameters<typeof getPromptContent>[2],
+) {
   try {
-    return await getPromptContent(slug, level)
+    return await getPromptContent(slug, level, database)
   } catch {
     return null
   }
@@ -191,7 +195,7 @@ export const promptRouter = createTRPCRouter({
 
           const totalRecs = topTools.reduce((sum, t) => sum + Number(t.recCount), 0)
 
-          const content = await readPromptFile(prompt.slug, prompt.level as PromptLevel)
+          const content = await readPromptContent(prompt.slug, prompt.level as PromptLevel, ctx.db)
 
           return {
             ...prompt,
@@ -257,7 +261,7 @@ export const promptRouter = createTRPCRouter({
         })
       }
 
-      const content = await readPromptFile(prompt.slug, prompt.level as PromptLevel)
+      const content = await readPromptContent(prompt.slug, prompt.level as PromptLevel, ctx.db)
       return { ...prompt, content }
     }),
 

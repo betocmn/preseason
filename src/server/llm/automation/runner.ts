@@ -176,7 +176,7 @@ export async function runAutomation(
       let userPrompt: string | null = null
 
       try {
-        userPrompt = await getPromptContent(prompt.slug, resolvePromptLevel(prompt.level))
+        userPrompt = await getPromptContent(prompt.slug, resolvePromptLevel(prompt.level), database)
       } catch (error) {
         const message = getErrorMessage(error)
 
