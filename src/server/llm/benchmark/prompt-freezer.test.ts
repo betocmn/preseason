@@ -172,6 +172,15 @@ describe('freezePromptVersion', () => {
     )
   })
 
+  it('should reject prompts without eligible categories', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+
+    await expect(freezePromptVersion(db, prompt.id, { categoryIds: [] })).rejects.toThrow(
+      'at least one eligible category',
+    )
+  })
+
   it('should auto-increment version number', async () => {
     const db = getTestDb()
     const prompt = await seedPromptWithContent(db)
@@ -224,6 +233,26 @@ describe('freezePromptVersion', () => {
 
     expect(pvCategories).toHaveLength(3)
     expect(pvCategories.map((c) => c.categoryId).sort()).toEqual([...categoryIds].sort())
+  })
+
+  it('should roll back the version when category insertion fails', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+    const categoryIds = await seedCategories(db, 2)
+    const duplicateCategoryId = first(categoryIds)
+
+    await expect(
+      freezePromptVersion(db, prompt.id, {
+        categoryIds: [duplicateCategoryId, duplicateCategoryId],
+      }),
+    ).rejects.toThrow()
+
+    const versions = await db
+      .select()
+      .from(benchmarkPromptVersions)
+      .where(eq(benchmarkPromptVersions.promptId, prompt.id))
+
+    expect(versions).toHaveLength(0)
   })
 
   it('should throw when prompt has no contentMd', async () => {

@@ -47,7 +47,12 @@ export async function freezePromptVersion(
     throw new Error(`Prompt ${promptId} has no contentMd`)
   }
 
-  const contentHash = createHash('sha256').update(prompt.contentMd).digest('hex')
+  if (options.categoryIds.length === 0) {
+    throw new Error(`Prompt ${promptId} must have at least one eligible category`)
+  }
+
+  const contentMd = prompt.contentMd
+  const contentHash = createHash('sha256').update(contentMd).digest('hex')
   const tier = options.tierOverride ?? classifyPromptTier(options.categoryIds.length)
 
   const existing = await database.query.benchmarkPromptVersions.findFirst({
@@ -78,46 +83,46 @@ export async function freezePromptVersion(
     )
   }
 
-  const latestVersion = await database
-    .select({ version: benchmarkPromptVersions.version })
-    .from(benchmarkPromptVersions)
-    .where(eq(benchmarkPromptVersions.promptId, promptId))
-    .orderBy(desc(benchmarkPromptVersions.version))
-    .limit(1)
-
-  const nextVersion = (latestVersion[0]?.version ?? 0) + 1
-
   const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'vibe-coder'
   const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
-  const [version] = await database
-    .insert(benchmarkPromptVersions)
-    .values({
-      promptId,
-      slug: prompt.slug,
-      level: prompt.level,
-      version: nextVersion,
-      tier,
-      contentMd: prompt.contentMd,
-      contentHash,
-      systemPromptSnapshot,
-      promptContractVersion: '1.0',
-    })
-    .returning()
+  return await database.transaction(async (tx) => {
+    const latestVersion = await tx
+      .select({ version: benchmarkPromptVersions.version })
+      .from(benchmarkPromptVersions)
+      .where(eq(benchmarkPromptVersions.promptId, promptId))
+      .orderBy(desc(benchmarkPromptVersions.version))
+      .limit(1)
 
-  if (!version) {
-    throw new Error('Failed to create prompt version')
-  }
+    const nextVersion = (latestVersion[0]?.version ?? 0) + 1
 
-  if (options.categoryIds.length > 0) {
-    await database.insert(benchmarkPromptVersionCategories).values(
+    const [version] = await tx
+      .insert(benchmarkPromptVersions)
+      .values({
+        promptId,
+        slug: prompt.slug,
+        level: prompt.level,
+        version: nextVersion,
+        tier,
+        contentMd,
+        contentHash,
+        systemPromptSnapshot,
+        promptContractVersion: '1.0',
+      })
+      .returning()
+
+    if (!version) {
+      throw new Error('Failed to create prompt version')
+    }
+
+    await tx.insert(benchmarkPromptVersionCategories).values(
       options.categoryIds.map((categoryId, i) => ({
         promptVersionId: version.id,
         categoryId,
         displayOrder: i + 1,
       })),
     )
-  }
 
-  return version
+    return version
+  })
 }
