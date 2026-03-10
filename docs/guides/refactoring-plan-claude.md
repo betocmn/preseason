@@ -63,10 +63,15 @@ This plan adds:
 ### 3. Prompts live in the database, not on disk
 
 The current system loads prompt markdown from files at runtime. This plan moves
-prompts entirely to the database. The `prompts` table gets a `content_md` column,
-and `benchmark_prompt_versions` snapshots from there. The markdown files in
-`src/server/llm/prompts/` are deleted. Promptfoo evals can read prompt content
-from the DB via a small adapter — or we export prompts to temp files at eval time.
+prompts entirely to the database for app runtime and benchmark freezing. The
+`prompts` table gets a `content_md` column, and `benchmark_prompt_versions`
+snapshot from there. Promptfoo remains file-based until PR 8 to avoid expanding
+the scope of PR 2; the markdown files in `src/server/llm/prompts/` are deleted
+only once a Promptfoo export/adapter path is added during legacy cleanup.
+
+Because nothing is deployed and all current data is local/dev-only, we do **not**
+need a historical backfill or data-preservation migration. Resetting or reseeding
+local data is acceptable during this refactor.
 
 ### 4. Model weighting infrastructure ships now, but Season 1 launches uniform
 
@@ -344,12 +349,12 @@ prompt version system with explicit category eligibility and difficulty tiers.
 ### Migration: prompts from disk to DB
 
 1. Read all markdown files from `src/server/llm/prompts/{level}/*.md`
-2. Populate the new `prompts.content_md` column for each existing prompt record
+2. Populate the new `prompts.content_md` column for the seeded prompt corpus
+   (no historical backfill requirement; local reset/reseed is acceptable)
 3. Update `src/server/llm/prompts/index.ts` to read from `prompts.content_md`
    instead of the filesystem
-4. Verify Promptfoo evals still work — add a thin adapter that exports prompt
-   content from DB to temp files at eval time, or configure Promptfoo to call
-   a local endpoint that returns prompt text
+4. Defer Promptfoo DB integration to PR 8; keep CLI evals file-based until the
+   prompt markdown directory is removed alongside a dedicated export/adapter step
 
 ### New files
 
@@ -979,9 +984,9 @@ The methodology page and any marketing copy must honestly state:
 ## Rollout sequence
 
 ```
-PR 1: Schema + aliases          ─── pure additive, zero risk
+PR 1: Schema + aliases          ─── pure additive, zero risk ✅ DONE
   │
-PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract
+PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract ✅ DONE
   │
 PR 3: LLM service hardening     ─── extends existing service, drift detection
   │
@@ -1039,6 +1044,8 @@ Drop these enums (if no longer referenced):
 #### Prompt files (now in DB)
 - `src/server/llm/prompts/vibe-coder/*.md` — all prompt markdown files
 - `src/server/llm/prompts/index.ts` — filesystem prompt loader
+- `src/server/llm/evals/promptfooconfig.yaml` file-based prompt references,
+  replaced by the Promptfoo export/adapter path
 
 #### Old cron routes
 - `src/app/api/cron/run/route.ts` — replaced by `/api/cron/benchmark-run`
