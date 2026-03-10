@@ -375,6 +375,70 @@ describe('runBenchmark', () => {
     expect(summary.errors[0]).toContain('LLM service unavailable')
   })
 
+  it('should roll back completed results when decision persistence fails', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const appendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'X'.repeat(300),
+          reasoning: 'Too long',
+          confidence: 0.7,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Fine',
+          confidence: 0.9,
+        },
+      ],
+    })
+    const response = `Answer\n\n<preseason_benchmark_json>\n${appendix}\n</preseason_benchmark_json>`
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(response, request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(summary.failedCases).toBe(15)
+    expect(summary.completedCases).toBe(0)
+
+    const completedResults = await db
+      .select()
+      .from(benchmarkCaseResults)
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, summary.runId),
+          eq(benchmarkCaseResults.status, 'completed'),
+        ),
+      )
+    expect(completedResults).toHaveLength(0)
+
+    const failedResults = await db
+      .select()
+      .from(benchmarkCaseResults)
+      .where(
+        and(eq(benchmarkCaseResults.runId, summary.runId), eq(benchmarkCaseResults.status, 'failed')),
+      )
+    expect(failedResults).toHaveLength(15)
+
+    const decisions = await db
+      .select()
+      .from(benchmarkCaseDecisions)
+      .innerJoin(
+        benchmarkCaseResults,
+        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+      )
+      .where(eq(benchmarkCaseResults.runId, summary.runId))
+    expect(decisions).toHaveLength(0)
+  })
+
   it('should create tool candidates for unresolved tools', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)

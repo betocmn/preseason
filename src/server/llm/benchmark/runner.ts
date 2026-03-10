@@ -254,84 +254,120 @@ export async function runBenchmark(
 
       const parseResult = parseBenchmarkResponse(completion.content, eligibleCategorySlugs)
 
-      const [caseResult] = await database
-        .insert(benchmarkCaseResults)
-        .values({
-          seasonId,
-          runId: run.id,
-          caseId: benchmarkCase.id,
-          status: parseResult.status === 'ok' ? 'completed' : 'invalid_output',
-          naturalResponse: parseResult.status === 'ok' ? parseResult.naturalResponse : null,
-          appendixRaw: parseResult.status === 'ok' ? parseResult.rawAppendix : null,
-          appendixJson: parseResult.status === 'ok' ? parseResult.appendix : null,
-          rawResponse: completion.content,
-          requestedModelId: modelSnapshot.requestedModelId,
-          returnedModelId: completion.returnedModel,
-          provider: completion.provider,
-          finishReason: completion.finishReason,
-          promptTokens: completion.usage.promptTokens,
-          completionTokens: completion.usage.completionTokens,
-          totalTokens: completion.usage.totalTokens,
-          latencyMs: completion.latencyMs,
-          temperature: modelSnapshot.temperature,
-          topP: modelSnapshot.topP,
-          maxTokens: modelSnapshot.maxTokens,
-          parserVersion: PARSER_VERSION,
-          systemPromptSnapshot: systemPrompt,
-          errorMessage: parseResult.status === 'invalid_output' ? parseResult.reason : null,
-        })
-        .onConflictDoNothing()
-        .returning()
-
-      if (!caseResult) continue
-
       if (parseResult.status === 'ok') {
         const categoryIdBySlug = new Map(
           promptVersion.categories.map((c) => [categorySlugById.get(c.categoryId), c.categoryId]),
         )
 
-        for (const decision of parseResult.appendix.categories) {
-          const categoryId = categoryIdBySlug.get(decision.category_slug)
-          if (!categoryId) continue
+        const caseResult = await database.transaction(async (tx) => {
+          const [insertedCaseResult] = await tx
+            .insert(benchmarkCaseResults)
+            .values({
+              seasonId,
+              runId: run.id,
+              caseId: benchmarkCase.id,
+              status: 'completed',
+              naturalResponse: parseResult.naturalResponse,
+              appendixRaw: parseResult.rawAppendix,
+              appendixJson: parseResult.appendix,
+              rawResponse: completion.content,
+              requestedModelId: modelSnapshot.requestedModelId,
+              returnedModelId: completion.returnedModel,
+              provider: completion.provider,
+              finishReason: completion.finishReason,
+              promptTokens: completion.usage.promptTokens,
+              completionTokens: completion.usage.completionTokens,
+              totalTokens: completion.usage.totalTokens,
+              latencyMs: completion.latencyMs,
+              temperature: modelSnapshot.temperature,
+              topP: modelSnapshot.topP,
+              maxTokens: modelSnapshot.maxTokens,
+              parserVersion: PARSER_VERSION,
+              systemPromptSnapshot: systemPrompt,
+              errorMessage: null,
+            })
+            .onConflictDoNothing()
+            .returning()
 
-          if (decision.decision === 'tool' && decision.tool) {
-            const resolved = await resolveToolWithCandidateQueue(
-              database,
-              decision.tool,
-              toolIndex,
-              categoryId,
-            )
+          if (!insertedCaseResult) return null
 
-            await database
-              .insert(benchmarkCaseDecisions)
-              .values({
-                caseResultId: caseResult.id,
+          for (const decision of parseResult.appendix.categories) {
+            const categoryId = categoryIdBySlug.get(decision.category_slug)
+            if (!categoryId) continue
+
+            if (decision.decision === 'tool' && decision.tool) {
+              const resolved = await resolveToolWithCandidateQueue(
+                tx,
+                decision.tool,
+                toolIndex,
                 categoryId,
-                decisionType: 'tool',
-                toolId: resolved.status === 'resolved' ? resolved.toolId : null,
-                rawToolName: decision.tool,
-                reasoning: decision.reasoning,
-                selfReportedConfidence: decision.confidence,
-                resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
-              })
-              .onConflictDoNothing()
-          } else {
-            await database
-              .insert(benchmarkCaseDecisions)
-              .values({
-                caseResultId: caseResult.id,
-                categoryId,
-                decisionType: 'none',
-                toolId: null,
-                rawToolName: null,
-                reasoning: decision.reasoning,
-                selfReportedConfidence: decision.confidence,
-                resolutionStatus: 'resolved',
-              })
-              .onConflictDoNothing()
+              )
+
+              await tx
+                .insert(benchmarkCaseDecisions)
+                .values({
+                  caseResultId: insertedCaseResult.id,
+                  categoryId,
+                  decisionType: 'tool',
+                  toolId: resolved.status === 'resolved' ? resolved.toolId : null,
+                  rawToolName: decision.tool,
+                  reasoning: decision.reasoning,
+                  selfReportedConfidence: decision.confidence,
+                  resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
+                })
+                .onConflictDoNothing()
+            } else {
+              await tx
+                .insert(benchmarkCaseDecisions)
+                .values({
+                  caseResultId: insertedCaseResult.id,
+                  categoryId,
+                  decisionType: 'none',
+                  toolId: null,
+                  rawToolName: null,
+                  reasoning: decision.reasoning,
+                  selfReportedConfidence: decision.confidence,
+                  resolutionStatus: 'resolved',
+                })
+                .onConflictDoNothing()
+            }
           }
-        }
+
+          return insertedCaseResult
+        })
+
+        if (!caseResult) continue
       } else {
+        const [caseResult] = await database
+          .insert(benchmarkCaseResults)
+          .values({
+            seasonId,
+            runId: run.id,
+            caseId: benchmarkCase.id,
+            status: 'invalid_output',
+            naturalResponse: null,
+            appendixRaw: null,
+            appendixJson: null,
+            rawResponse: completion.content,
+            requestedModelId: modelSnapshot.requestedModelId,
+            returnedModelId: completion.returnedModel,
+            provider: completion.provider,
+            finishReason: completion.finishReason,
+            promptTokens: completion.usage.promptTokens,
+            completionTokens: completion.usage.completionTokens,
+            totalTokens: completion.usage.totalTokens,
+            latencyMs: completion.latencyMs,
+            temperature: modelSnapshot.temperature,
+            topP: modelSnapshot.topP,
+            maxTokens: modelSnapshot.maxTokens,
+            parserVersion: PARSER_VERSION,
+            systemPromptSnapshot: systemPrompt,
+            errorMessage: parseResult.reason,
+          })
+          .onConflictDoNothing()
+          .returning()
+
+        if (!caseResult) continue
         errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
       }
     } catch (error) {
