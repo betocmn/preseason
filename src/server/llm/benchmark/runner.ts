@@ -1,4 +1,4 @@
-import { and, count, countDistinct, eq } from 'drizzle-orm'
+import { and, count, countDistinct, eq, inArray, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -29,10 +29,12 @@ export type BenchmarkRunOptions = {
   now?: () => Date
 }
 
+export type BenchmarkRunSummaryStatus = 'completed' | 'failed' | 'qc_failed' | 'running'
+
 export type BenchmarkRunSummary = {
   runId: string
   seasonId: string
-  status: 'completed' | 'failed' | 'qc_failed'
+  status: BenchmarkRunSummaryStatus
   totalCases: number
   completedCases: number
   failedCases: number
@@ -42,8 +44,201 @@ export type BenchmarkRunSummary = {
   errors: string[]
 }
 
+type BenchmarkRunRecord = Awaited<ReturnType<typeof createOrLoadRun>>
+type RunMetrics = Omit<BenchmarkRunSummary, 'runId' | 'seasonId' | 'status' | 'errors'>
+
+const RUN_STALE_AFTER_MS = 30 * 60 * 1000
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
+}
+
+function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): BenchmarkRunSummaryStatus {
+  if (status === 'published') return 'completed'
+  return status
+}
+
+function isRunStale(run: BenchmarkRunRecord, currentTime: Date) {
+  if (run.status !== 'running') return false
+  if (!run.startedAt) return true
+  return currentTime.getTime() - run.startedAt.getTime() >= RUN_STALE_AFTER_MS
+}
+
+async function findRunById(database: DatabaseClient, runId: string) {
+  const run = await database.query.benchmarkRuns.findFirst({
+    where: eq(benchmarkRuns.id, runId),
+  })
+
+  if (!run) throw new Error('Benchmark run not found')
+  return run
+}
+
+async function getRunTotalCases(
+  database: DatabaseClient,
+  seasonId: string,
+  expectedCaseCount: number | null,
+) {
+  if (expectedCaseCount != null) return expectedCaseCount
+
+  const [row] = await database
+    .select({ cnt: count() })
+    .from(benchmarkCases)
+    .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
+
+  return Number(row?.cnt ?? 0)
+}
+
+async function calculateRunMetrics(
+  database: DatabaseClient,
+  runId: string,
+  totalCases: number,
+): Promise<RunMetrics> {
+  const statusCounts = await database
+    .select({ status: benchmarkCaseResults.status, cnt: count() })
+    .from(benchmarkCaseResults)
+    .where(eq(benchmarkCaseResults.runId, runId))
+    .groupBy(benchmarkCaseResults.status)
+
+  const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
+  const completedCases = countByStatus.get('completed') ?? 0
+  const failedCases = countByStatus.get('failed') ?? 0
+  const invalidOutputCases = countByStatus.get('invalid_output') ?? 0
+
+  let unresolvedToolCount = 0
+  let totalToolDecisions = 0
+
+  if (completedCases > 0) {
+    const [unresolvedRow] = await database
+      .select({ cnt: count() })
+      .from(benchmarkCaseDecisions)
+      .innerJoin(benchmarkCaseResults, eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id))
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          eq(benchmarkCaseDecisions.resolutionStatus, 'unresolved_tool'),
+        ),
+      )
+
+    unresolvedToolCount = Number(unresolvedRow?.cnt ?? 0)
+
+    const [toolDecisionRow] = await database
+      .select({ cnt: count() })
+      .from(benchmarkCaseDecisions)
+      .innerJoin(benchmarkCaseResults, eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id))
+      .where(
+        and(eq(benchmarkCaseResults.runId, runId), eq(benchmarkCaseDecisions.decisionType, 'tool')),
+      )
+
+    totalToolDecisions = Number(toolDecisionRow?.cnt ?? 0)
+  }
+
+  const [distinctModelsRow] = await database
+    .select({ cnt: countDistinct(benchmarkCases.modelSnapshotId) })
+    .from(benchmarkCaseResults)
+    .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+    .where(and(eq(benchmarkCaseResults.runId, runId), eq(benchmarkCaseResults.status, 'completed')))
+
+  const [distinctPromptsRow] = await database
+    .select({ cnt: countDistinct(benchmarkCases.promptVersionId) })
+    .from(benchmarkCaseResults)
+    .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+    .where(and(eq(benchmarkCaseResults.runId, runId), eq(benchmarkCaseResults.status, 'completed')))
+
+  const distinctModelSnapshots = Number(distinctModelsRow?.cnt ?? 0)
+  const distinctPromptVersions = Number(distinctPromptsRow?.cnt ?? 0)
+
+  const qc = evaluateQc({
+    totalCases,
+    completedCases,
+    failedCases,
+    invalidOutputCases,
+    unresolvedToolDecisions: unresolvedToolCount,
+    totalToolDecisions,
+    distinctModelSnapshots,
+    distinctPromptVersions,
+  })
+
+  return {
+    totalCases,
+    completedCases,
+    failedCases,
+    invalidOutputCases,
+    unresolvedToolCount,
+    qc,
+  }
+}
+
+async function buildRunSummary(
+  database: DatabaseClient,
+  run: BenchmarkRunRecord,
+  seasonId: string,
+): Promise<BenchmarkRunSummary> {
+  const totalCases = await getRunTotalCases(database, seasonId, run.expectedCaseCount ?? null)
+  const metrics = await calculateRunMetrics(database, run.id, totalCases)
+
+  return {
+    runId: run.id,
+    seasonId,
+    status: normalizeSummaryStatus(run.status),
+    ...metrics,
+    errors: run.errorLog ? run.errorLog.split('\n').filter((line) => line.length > 0) : [],
+  }
+}
+
+async function claimRunExecution(
+  database: DatabaseClient,
+  runId: string,
+  currentTime: Date,
+): Promise<{ run: BenchmarkRunRecord; execute: boolean }> {
+  while (true) {
+    const run = await findRunById(database, runId)
+
+    if (run.status === 'completed' || run.status === 'published') {
+      return { run, execute: false }
+    }
+
+    if (run.status === 'running' && !isRunStale(run, currentTime)) {
+      return { run, execute: false }
+    }
+
+    let whereClause:
+      | ReturnType<typeof and>
+      | undefined
+
+    if (run.status === 'pending' || run.status === 'failed' || run.status === 'qc_failed') {
+      whereClause = and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, run.status))
+    } else if (run.status === 'running') {
+      whereClause = run.startedAt
+        ? and(
+            eq(benchmarkRuns.id, run.id),
+            eq(benchmarkRuns.status, 'running'),
+            eq(benchmarkRuns.startedAt, run.startedAt),
+          )
+        : and(
+            eq(benchmarkRuns.id, run.id),
+            eq(benchmarkRuns.status, 'running'),
+            isNull(benchmarkRuns.startedAt),
+          )
+    }
+
+    if (!whereClause) {
+      return { run, execute: false }
+    }
+
+    const [claimedRun] = await database
+      .update(benchmarkRuns)
+      .set({
+        status: 'running',
+        startedAt: currentTime,
+        completedAt: null,
+      })
+      .where(whereClause)
+      .returning()
+
+    if (claimedRun) {
+      return { run: claimedRun, execute: true }
+    }
+  }
 }
 
 async function createOrLoadRun(database: DatabaseClient, seasonId: string, scheduledFor: string) {
@@ -72,37 +267,13 @@ export async function runBenchmark(
   const llmService = options.llmService ?? new LlmService()
   const now = options.now ?? (() => new Date())
 
-  const run = await createOrLoadRun(database, seasonId, scheduledFor)
+  const initialRun = await createOrLoadRun(database, seasonId, scheduledFor)
+  const currentTime = now()
+  const { run, execute } = await claimRunExecution(database, initialRun.id, currentTime)
 
-  if (run.status === 'published' || run.status === 'completed') {
-    const qc = evaluateQc({
-      totalCases: run.expectedCaseCount ?? 0,
-      completedCases: run.completedCaseCount ?? 0,
-      failedCases: run.failedCaseCount ?? 0,
-      invalidOutputCases: 0,
-      unresolvedToolDecisions: 0,
-      totalToolDecisions: 0,
-      distinctModelSnapshots: 0,
-      distinctPromptVersions: 0,
-    })
-    return {
-      runId: run.id,
-      seasonId,
-      status: run.status === 'published' ? 'completed' : run.status,
-      totalCases: run.expectedCaseCount ?? 0,
-      completedCases: run.completedCaseCount ?? 0,
-      failedCases: run.failedCaseCount ?? 0,
-      invalidOutputCases: 0,
-      unresolvedToolCount: 0,
-      qc,
-      errors: [],
-    }
+  if (!execute) {
+    return await buildRunSummary(database, run, seasonId)
   }
-
-  await database
-    .update(benchmarkRuns)
-    .set({ status: 'running', startedAt: now() })
-    .where(eq(benchmarkRuns.id, run.id))
 
   const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
     where: eq(benchmarkModelWeightConfigs.isActive, true),
@@ -388,104 +559,18 @@ export async function runBenchmark(
     }
   }
 
-  const statusCounts = await database
-    .select({ status: benchmarkCaseResults.status, cnt: count() })
-    .from(benchmarkCaseResults)
-    .where(eq(benchmarkCaseResults.runId, run.id))
-    .groupBy(benchmarkCaseResults.status)
-
-  const countByStatus = new Map(statusCounts.map((r) => [r.status, Number(r.cnt)]))
-  const completedCount = countByStatus.get('completed') ?? 0
-  const failedCount = countByStatus.get('failed') ?? 0
-  const invalidOutputCount = countByStatus.get('invalid_output') ?? 0
-
-  const completedResultIds = await database
-    .select({ id: benchmarkCaseResults.id })
-    .from(benchmarkCaseResults)
-    .where(
-      and(eq(benchmarkCaseResults.runId, run.id), eq(benchmarkCaseResults.status, 'completed')),
-    )
-
-  const completedIds = completedResultIds.map((r) => r.id)
-
-  let unresolvedCount = 0
-  let totalToolDecisions = 0
-
-  if (completedIds.length > 0) {
-    const [unresolvedRow] = await database
-      .select({ cnt: count() })
-      .from(benchmarkCaseDecisions)
-      .innerJoin(
-        benchmarkCaseResults,
-        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
-      )
-      .where(
-        and(
-          eq(benchmarkCaseResults.runId, run.id),
-          eq(benchmarkCaseDecisions.resolutionStatus, 'unresolved_tool'),
-        ),
-      )
-
-    unresolvedCount = Number(unresolvedRow?.cnt ?? 0)
-
-    const [toolDecisionRow] = await database
-      .select({ cnt: count() })
-      .from(benchmarkCaseDecisions)
-      .innerJoin(
-        benchmarkCaseResults,
-        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
-      )
-      .where(
-        and(
-          eq(benchmarkCaseResults.runId, run.id),
-          eq(benchmarkCaseDecisions.decisionType, 'tool'),
-        ),
-      )
-
-    totalToolDecisions = Number(toolDecisionRow?.cnt ?? 0)
-  }
-
-  const [distinctModelsRow] = await database
-    .select({ cnt: countDistinct(benchmarkCases.modelSnapshotId) })
-    .from(benchmarkCaseResults)
-    .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
-    .where(
-      and(eq(benchmarkCaseResults.runId, run.id), eq(benchmarkCaseResults.status, 'completed')),
-    )
-
-  const [distinctPromptsRow] = await database
-    .select({ cnt: countDistinct(benchmarkCases.promptVersionId) })
-    .from(benchmarkCaseResults)
-    .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
-    .where(
-      and(eq(benchmarkCaseResults.runId, run.id), eq(benchmarkCaseResults.status, 'completed')),
-    )
-
-  const distinctModelSnapshots = Number(distinctModelsRow?.cnt ?? 0)
-  const distinctPromptVersions = Number(distinctPromptsRow?.cnt ?? 0)
-
-  const qc = evaluateQc({
-    totalCases: allCases.length,
-    completedCases: completedCount,
-    failedCases: failedCount,
-    invalidOutputCases: invalidOutputCount,
-    unresolvedToolDecisions: unresolvedCount,
-    totalToolDecisions,
-    distinctModelSnapshots,
-    distinctPromptVersions,
-  })
-
-  const finalStatus = qc.passed ? 'completed' : 'qc_failed'
+  const metrics = await calculateRunMetrics(database, run.id, allCases.length)
+  const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
 
   await database
     .update(benchmarkRuns)
     .set({
       status: finalStatus,
       completedAt: now(),
-      completedCaseCount: completedCount,
-      failedCaseCount: failedCount + invalidOutputCount,
-      qcStatus: qc.passed ? 'passed' : 'failed',
-      qcSummaryJson: qc,
+      completedCaseCount: metrics.completedCases,
+      failedCaseCount: metrics.failedCases + metrics.invalidOutputCases,
+      qcStatus: metrics.qc.passed ? 'passed' : 'failed',
+      qcSummaryJson: metrics.qc,
       errorLog: errors.length > 0 ? errors.join('\n') : null,
     })
     .where(eq(benchmarkRuns.id, run.id))
@@ -494,12 +579,7 @@ export async function runBenchmark(
     runId: run.id,
     seasonId,
     status: finalStatus,
-    totalCases: allCases.length,
-    completedCases: completedCount,
-    failedCases: failedCount,
-    invalidOutputCases: invalidOutputCount,
-    unresolvedToolCount: unresolvedCount,
-    qc,
+    ...metrics,
     errors,
   }
 }
