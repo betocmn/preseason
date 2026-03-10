@@ -72,4 +72,8 @@ describe('extractModelFamilyKey', () => {
   it('strips provider prefix and date suffix together', () => {
     expect(extractModelFamilyKey('anthropic/claude-3-opus-20240229')).toBe('claude-3-opus')
   })
+
+  it('strips tag before date suffix so tagged IDs normalize correctly', () => {
+    expect(extractModelFamilyKey('openai/gpt-4o-2024-08-06:free')).toBe('gpt-4o')
+  })
 })
