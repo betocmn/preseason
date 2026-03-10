@@ -135,9 +135,9 @@ describe('Tool Resolver', () => {
         .from(toolCandidates)
         .where(eq(toolCandidates.normalizedName, 'unknowntool'))
       expect(candidates).toHaveLength(1)
-      expect(candidates[0]!.rawName).toBe('UnknownTool')
-      expect(candidates[0]!.seenCount).toBe(1)
-      expect(candidates[0]!.status).toBe('pending')
+      expect(candidates[0]?.rawName).toBe('UnknownTool')
+      expect(candidates[0]?.seenCount).toBe(1)
+      expect(candidates[0]?.status).toBe('pending')
     })
 
     it('should increment seenCount on second occurrence', async () => {
@@ -152,7 +152,7 @@ describe('Tool Resolver', () => {
         .from(toolCandidates)
         .where(eq(toolCandidates.normalizedName, 'unknowntool'))
       expect(candidates).toHaveLength(1)
-      expect(candidates[0]!.seenCount).toBe(2)
+      expect(candidates[0]?.seenCount).toBe(2)
     })
 
     it('should record suggestedCategoryId', async () => {
@@ -167,7 +167,7 @@ describe('Tool Resolver', () => {
         .select()
         .from(toolCandidates)
         .where(eq(toolCandidates.normalizedName, 'newtool'))
-      expect(candidates[0]!.suggestedCategoryId).toBe(category.id)
+      expect(candidates[0]?.suggestedCategoryId).toBe(category.id)
     })
   })
 })

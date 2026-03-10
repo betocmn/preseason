@@ -18,7 +18,8 @@ function isAuthorized(request: Request) {
 }
 
 function formatScheduledFor(date: Date): string {
-  return date.toISOString().split('T')[0]!
+  const [scheduledFor] = date.toISOString().split('T')
+  return scheduledFor ?? date.toISOString()
 }
 
 export async function GET(request: Request) {

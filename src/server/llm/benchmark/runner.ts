@@ -1,4 +1,4 @@
-import { and, count, countDistinct, eq, inArray, isNull } from 'drizzle-orm'
+import { and, count, countDistinct, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -55,6 +55,7 @@ function getErrorMessage(error: unknown): string {
 
 function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): BenchmarkRunSummaryStatus {
   if (status === 'published') return 'completed'
+  if (status === 'pending') return 'running'
   return status
 }
 
@@ -111,7 +112,10 @@ async function calculateRunMetrics(
     const [unresolvedRow] = await database
       .select({ cnt: count() })
       .from(benchmarkCaseDecisions)
-      .innerJoin(benchmarkCaseResults, eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id))
+      .innerJoin(
+        benchmarkCaseResults,
+        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+      )
       .where(
         and(
           eq(benchmarkCaseResults.runId, runId),
@@ -124,7 +128,10 @@ async function calculateRunMetrics(
     const [toolDecisionRow] = await database
       .select({ cnt: count() })
       .from(benchmarkCaseDecisions)
-      .innerJoin(benchmarkCaseResults, eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id))
+      .innerJoin(
+        benchmarkCaseResults,
+        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+      )
       .where(
         and(eq(benchmarkCaseResults.runId, runId), eq(benchmarkCaseDecisions.decisionType, 'tool')),
       )
@@ -201,9 +208,7 @@ async function claimRunExecution(
       return { run, execute: false }
     }
 
-    let whereClause:
-      | ReturnType<typeof and>
-      | undefined
+    let whereClause: ReturnType<typeof and> | undefined
 
     if (run.status === 'pending' || run.status === 'failed' || run.status === 'qc_failed') {
       whereClause = and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, run.status))
