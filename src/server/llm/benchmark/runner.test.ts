@@ -81,6 +81,12 @@ function createDeferred() {
   return { promise, resolve }
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 type TestDb = ReturnType<typeof getTestDb>
 
 async function seedFullPanel(db: TestDb) {
@@ -350,6 +356,49 @@ describe('runBenchmark', () => {
     await firstCallStarted.promise
 
     const secondSummary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(secondSummary.status).toBe('running')
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    firstCallBlocked.resolve()
+    const firstSummary = await firstRunPromise
+
+    expect(firstSummary.status).toBe('completed')
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
+  it('should keep an active long-running run from being reclaimed as stale', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const firstCallBlocked = createDeferred()
+    const firstCallStarted = createDeferred()
+
+    let callCount = 0
+    const llmService = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        firstCallStarted.resolve()
+        await firstCallBlocked.promise
+      }
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const firstRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 20,
+    })
+    await firstCallStarted.promise
+    await wait(160)
+
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 20,
+    })
 
     expect(secondSummary.status).toBe('running')
     expect(llmService.complete).toHaveBeenCalledTimes(1)

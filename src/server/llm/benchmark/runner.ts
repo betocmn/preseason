@@ -27,6 +27,8 @@ export type BenchmarkRunOptions = {
   database?: DatabaseClient
   llmService?: LlmService
   now?: () => Date
+  runStaleAfterMs?: number
+  runHeartbeatIntervalMs?: number
 }
 
 export type BenchmarkRunSummaryStatus = 'completed' | 'failed' | 'qc_failed' | 'running'
@@ -48,6 +50,7 @@ type BenchmarkRunRecord = Awaited<ReturnType<typeof createOrLoadRun>>
 type RunMetrics = Omit<BenchmarkRunSummary, 'runId' | 'seasonId' | 'status' | 'errors'>
 
 const RUN_STALE_AFTER_MS = 30 * 60 * 1000
+const RUN_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
@@ -59,10 +62,10 @@ function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): Benchmark
   return status
 }
 
-function isRunStale(run: BenchmarkRunRecord, currentTime: Date) {
+function isRunStale(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
   if (run.status !== 'running') return false
   if (!run.startedAt) return true
-  return currentTime.getTime() - run.startedAt.getTime() >= RUN_STALE_AFTER_MS
+  return currentTime.getTime() - run.startedAt.getTime() >= staleAfterMs
 }
 
 async function findRunById(database: DatabaseClient, runId: string) {
@@ -196,6 +199,7 @@ async function claimRunExecution(
   database: DatabaseClient,
   runId: string,
   currentTime: Date,
+  staleAfterMs: number,
 ): Promise<{ run: BenchmarkRunRecord; execute: boolean }> {
   while (true) {
     const run = await findRunById(database, runId)
@@ -204,7 +208,7 @@ async function claimRunExecution(
       return { run, execute: false }
     }
 
-    if (run.status === 'running' && !isRunStale(run, currentTime)) {
+    if (run.status === 'running' && !isRunStale(run, currentTime, staleAfterMs)) {
       return { run, execute: false }
     }
 
@@ -246,6 +250,47 @@ async function claimRunExecution(
   }
 }
 
+function startRunHeartbeat(
+  database: DatabaseClient,
+  runId: string,
+  now: () => Date,
+  heartbeatIntervalMs: number,
+) {
+  let inFlightHeartbeat = Promise.resolve()
+  let heartbeatError: unknown = null
+
+  const heartbeat = () => {
+    inFlightHeartbeat = inFlightHeartbeat
+      .catch(() => undefined)
+      .then(async () => {
+        await database
+          .update(benchmarkRuns)
+          .set({ startedAt: now() })
+          .where(and(eq(benchmarkRuns.id, runId), eq(benchmarkRuns.status, 'running')))
+      })
+      .catch((error) => {
+        heartbeatError ??= error
+      })
+
+    return inFlightHeartbeat
+  }
+
+  const timer = setInterval(() => {
+    void heartbeat()
+  }, heartbeatIntervalMs)
+  timer.unref?.()
+
+  return {
+    stop: async () => {
+      clearInterval(timer)
+      await inFlightHeartbeat
+      if (heartbeatError) {
+        throw heartbeatError
+      }
+    },
+  }
+}
+
 async function createOrLoadRun(database: DatabaseClient, seasonId: string, scheduledFor: string) {
   const [inserted] = await database
     .insert(benchmarkRuns)
@@ -271,17 +316,24 @@ export async function runBenchmark(
   const database = options.database ?? defaultDb
   const llmService = options.llmService ?? new LlmService()
   const now = options.now ?? (() => new Date())
+  const runStaleAfterMs = options.runStaleAfterMs ?? RUN_STALE_AFTER_MS
+  const runHeartbeatIntervalMs = options.runHeartbeatIntervalMs ?? RUN_HEARTBEAT_INTERVAL_MS
 
   const initialRun = await createOrLoadRun(database, seasonId, scheduledFor)
   const currentTime = now()
-  const { run, execute } = await claimRunExecution(database, initialRun.id, currentTime)
+  const { run, execute } = await claimRunExecution(
+    database,
+    initialRun.id,
+    currentTime,
+    runStaleAfterMs,
+  )
 
   if (!execute) {
     return await buildRunSummary(database, run, seasonId)
   }
 
   try {
-    return await executeRun(database, llmService, now, run, seasonId)
+    return await executeRun(database, llmService, now, runHeartbeatIntervalMs, run, seasonId)
   } catch (error) {
     const message = getErrorMessage(error)
     await database
@@ -300,192 +352,155 @@ async function executeRun(
   database: DatabaseClient,
   llmService: LlmService,
   now: () => Date,
+  runHeartbeatIntervalMs: number,
   run: BenchmarkRunRecord,
   seasonId: string,
 ): Promise<BenchmarkRunSummary> {
-  const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
-    where: eq(benchmarkModelWeightConfigs.isActive, true),
-  })
+  const heartbeat = startRunHeartbeat(database, run.id, now, runHeartbeatIntervalMs)
 
-  if (weightConfig) {
-    await database
-      .update(benchmarkRuns)
-      .set({ weightConfigId: weightConfig.id })
-      .where(eq(benchmarkRuns.id, run.id))
-  }
+  try {
+    const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
+      where: eq(benchmarkModelWeightConfigs.isActive, true),
+    })
 
-  const allCases = await database.query.benchmarkCases.findMany({
-    where: and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)),
-    with: {
-      promptVersion: { with: { categories: true } },
-      modelSnapshot: true,
-    },
-  })
+    if (weightConfig) {
+      await database
+        .update(benchmarkRuns)
+        .set({ weightConfigId: weightConfig.id })
+        .where(eq(benchmarkRuns.id, run.id))
+    }
 
-  await database
-    .update(benchmarkRuns)
-    .set({ expectedCaseCount: allCases.length })
-    .where(eq(benchmarkRuns.id, run.id))
-
-  if (allCases.length === 0) {
-    const qc = evaluateQc({
-      totalCases: 0,
-      completedCases: 0,
-      failedCases: 0,
-      invalidOutputCases: 0,
-      unresolvedToolDecisions: 0,
-      totalToolDecisions: 0,
-      distinctModelSnapshots: 0,
-      distinctPromptVersions: 0,
+    const allCases = await database.query.benchmarkCases.findMany({
+      where: and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)),
+      with: {
+        promptVersion: { with: { categories: true } },
+        modelSnapshot: true,
+      },
     })
 
     await database
       .update(benchmarkRuns)
-      .set({
-        status: 'qc_failed',
-        completedAt: now(),
-        completedCaseCount: 0,
-        failedCaseCount: 0,
-        qcStatus: 'failed',
-        qcSummaryJson: qc,
-      })
+      .set({ expectedCaseCount: allCases.length })
       .where(eq(benchmarkRuns.id, run.id))
 
-    return {
-      runId: run.id,
-      seasonId,
-      status: 'qc_failed',
-      totalCases: 0,
-      completedCases: 0,
-      failedCases: 0,
-      invalidOutputCases: 0,
-      unresolvedToolCount: 0,
-      qc,
-      errors: [],
-    }
-  }
-
-  const allSubcategories = await database
-    .select({ id: subcategories.id, slug: subcategories.slug })
-    .from(subcategories)
-
-  const categorySlugById = new Map(allSubcategories.map((s) => [s.id, s.slug]))
-
-  const existingResults = await database
-    .select({ caseId: benchmarkCaseResults.caseId, status: benchmarkCaseResults.status })
-    .from(benchmarkCaseResults)
-    .where(eq(benchmarkCaseResults.runId, run.id))
-
-  const completedCaseIds = new Set(
-    existingResults.filter((r) => r.status === 'completed').map((r) => r.caseId),
-  )
-  const retryableCaseIds = existingResults
-    .filter((r) => r.status === 'failed' || r.status === 'invalid_output')
-    .map((r) => r.caseId)
-
-  if (retryableCaseIds.length > 0) {
-    await database
-      .delete(benchmarkCaseResults)
-      .where(
-        and(
-          eq(benchmarkCaseResults.runId, run.id),
-          inArray(benchmarkCaseResults.caseId, retryableCaseIds),
-        ),
-      )
-  }
-
-  const pendingCases = allCases.filter((c) => !completedCaseIds.has(c.id))
-
-  const toolIndex = await buildToolResolutionIndex(database)
-
-  const errors: string[] = []
-
-  for (const benchmarkCase of pendingCases) {
-    try {
-      const { promptVersion, modelSnapshot } = benchmarkCase
-
-      const eligibleCategorySlugs = promptVersion.categories
-        .map((c) => categorySlugById.get(c.categoryId))
-        .filter((slug): slug is string => slug !== undefined)
-
-      if (eligibleCategorySlugs.length === 0) {
-        throw new Error('No eligible category slugs found for prompt version')
-      }
-
-      const userPrompt = buildBenchmarkPrompt(promptVersion.contentMd ?? '', eligibleCategorySlugs)
-      const systemPrompt =
-        promptVersion.systemPromptSnapshot ??
-        buildGenerationSystemPrompt(
-          promptVersion.level as
-            | 'vibe-coder'
-            | 'software-dev-beginner'
-            | 'software-dev-experienced',
-        )
-
-      const completion = await llmService.complete(modelSnapshot.provider, {
-        model: modelSnapshot.requestedModelId,
-        systemPrompt,
-        userPrompt,
-        temperature: modelSnapshot.temperature ?? undefined,
-        topP: modelSnapshot.topP ?? undefined,
-        maxTokens: modelSnapshot.maxTokens ?? undefined,
-        seed: modelSnapshot.seed ?? undefined,
+    if (allCases.length === 0) {
+      const qc = evaluateQc({
+        totalCases: 0,
+        completedCases: 0,
+        failedCases: 0,
+        invalidOutputCases: 0,
+        unresolvedToolDecisions: 0,
+        totalToolDecisions: 0,
+        distinctModelSnapshots: 0,
+        distinctPromptVersions: 0,
       })
 
-      const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
+      await database
+        .update(benchmarkRuns)
+        .set({
+          status: 'qc_failed',
+          completedAt: now(),
+          completedCaseCount: 0,
+          failedCaseCount: 0,
+          qcStatus: 'failed',
+          qcSummaryJson: qc,
+        })
+        .where(eq(benchmarkRuns.id, run.id))
 
-      if (drift.hasDrift) {
-        const [result] = await database
-          .insert(benchmarkCaseResults)
-          .values({
-            seasonId,
-            runId: run.id,
-            caseId: benchmarkCase.id,
-            status: 'invalid_output',
-            rawResponse: completion.content,
-            requestedModelId: modelSnapshot.requestedModelId,
-            returnedModelId: completion.returnedModel,
-            provider: completion.provider,
-            finishReason: completion.finishReason,
-            promptTokens: completion.usage.promptTokens,
-            completionTokens: completion.usage.completionTokens,
-            totalTokens: completion.usage.totalTokens,
-            latencyMs: completion.latencyMs,
-            temperature: modelSnapshot.temperature,
-            topP: modelSnapshot.topP,
-            maxTokens: modelSnapshot.maxTokens,
-            parserVersion: PARSER_VERSION,
-            systemPromptSnapshot: systemPrompt,
-            errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
-          })
-          .onConflictDoNothing()
-          .returning()
-
-        if (!result) continue
-        errors.push(
-          `[case ${benchmarkCase.id}] Model drift: ${drift.requestedModel} → ${drift.returnedModel}`,
-        )
-        continue
+      return {
+        runId: run.id,
+        seasonId,
+        status: 'qc_failed',
+        totalCases: 0,
+        completedCases: 0,
+        failedCases: 0,
+        invalidOutputCases: 0,
+        unresolvedToolCount: 0,
+        qc,
+        errors: [],
       }
+    }
 
-      const parseResult = parseBenchmarkResponse(completion.content, eligibleCategorySlugs)
+    const allSubcategories = await database
+      .select({ id: subcategories.id, slug: subcategories.slug })
+      .from(subcategories)
 
-      if (parseResult.status === 'ok') {
-        const categoryIdBySlug = new Map(
-          promptVersion.categories.map((c) => [categorySlugById.get(c.categoryId), c.categoryId]),
+    const categorySlugById = new Map(allSubcategories.map((s) => [s.id, s.slug]))
+
+    const existingResults = await database
+      .select({ caseId: benchmarkCaseResults.caseId, status: benchmarkCaseResults.status })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+
+    const completedCaseIds = new Set(
+      existingResults.filter((r) => r.status === 'completed').map((r) => r.caseId),
+    )
+    const retryableCaseIds = existingResults
+      .filter((r) => r.status === 'failed' || r.status === 'invalid_output')
+      .map((r) => r.caseId)
+
+    if (retryableCaseIds.length > 0) {
+      await database
+        .delete(benchmarkCaseResults)
+        .where(
+          and(
+            eq(benchmarkCaseResults.runId, run.id),
+            inArray(benchmarkCaseResults.caseId, retryableCaseIds),
+          ),
         )
+    }
 
-        const caseResult = await database.transaction(async (tx) => {
-          const [insertedCaseResult] = await tx
+    const pendingCases = allCases.filter((c) => !completedCaseIds.has(c.id))
+
+    const toolIndex = await buildToolResolutionIndex(database)
+
+    const errors: string[] = []
+
+    for (const benchmarkCase of pendingCases) {
+      try {
+        const { promptVersion, modelSnapshot } = benchmarkCase
+
+        const eligibleCategorySlugs = promptVersion.categories
+          .map((c) => categorySlugById.get(c.categoryId))
+          .filter((slug): slug is string => slug !== undefined)
+
+        if (eligibleCategorySlugs.length === 0) {
+          throw new Error('No eligible category slugs found for prompt version')
+        }
+
+        const userPrompt = buildBenchmarkPrompt(
+          promptVersion.contentMd ?? '',
+          eligibleCategorySlugs,
+        )
+        const systemPrompt =
+          promptVersion.systemPromptSnapshot ??
+          buildGenerationSystemPrompt(
+            promptVersion.level as
+              | 'vibe-coder'
+              | 'software-dev-beginner'
+              | 'software-dev-experienced',
+          )
+
+        const completion = await llmService.complete(modelSnapshot.provider, {
+          model: modelSnapshot.requestedModelId,
+          systemPrompt,
+          userPrompt,
+          temperature: modelSnapshot.temperature ?? undefined,
+          topP: modelSnapshot.topP ?? undefined,
+          maxTokens: modelSnapshot.maxTokens ?? undefined,
+          seed: modelSnapshot.seed ?? undefined,
+        })
+
+        const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
+
+        if (drift.hasDrift) {
+          const [result] = await database
             .insert(benchmarkCaseResults)
             .values({
               seasonId,
               runId: run.id,
               caseId: benchmarkCase.id,
-              status: 'completed',
-              naturalResponse: parseResult.naturalResponse,
-              appendixRaw: parseResult.rawAppendix,
-              appendixJson: parseResult.appendix,
+              status: 'invalid_output',
               rawResponse: completion.content,
               requestedModelId: modelSnapshot.requestedModelId,
               returnedModelId: completion.returnedModel,
@@ -500,131 +515,179 @@ async function executeRun(
               maxTokens: modelSnapshot.maxTokens,
               parserVersion: PARSER_VERSION,
               systemPromptSnapshot: systemPrompt,
-              errorMessage: null,
+              errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
             })
             .onConflictDoNothing()
             .returning()
 
-          if (!insertedCaseResult) return null
+          if (!result) continue
+          errors.push(
+            `[case ${benchmarkCase.id}] Model drift: ${drift.requestedModel} → ${drift.returnedModel}`,
+          )
+          continue
+        }
 
-          for (const decision of parseResult.appendix.categories) {
-            const categoryId = categoryIdBySlug.get(decision.category_slug)
-            if (!categoryId) continue
+        const parseResult = parseBenchmarkResponse(completion.content, eligibleCategorySlugs)
 
-            if (decision.decision === 'tool' && decision.tool) {
-              const resolved = await resolveToolWithCandidateQueue(
-                tx,
-                decision.tool,
-                toolIndex,
-                categoryId,
-              )
+        if (parseResult.status === 'ok') {
+          const categoryIdBySlug = new Map(
+            promptVersion.categories.map((c) => [categorySlugById.get(c.categoryId), c.categoryId]),
+          )
 
-              await tx
-                .insert(benchmarkCaseDecisions)
-                .values({
-                  caseResultId: insertedCaseResult.id,
+          const caseResult = await database.transaction(async (tx) => {
+            const [insertedCaseResult] = await tx
+              .insert(benchmarkCaseResults)
+              .values({
+                seasonId,
+                runId: run.id,
+                caseId: benchmarkCase.id,
+                status: 'completed',
+                naturalResponse: parseResult.naturalResponse,
+                appendixRaw: parseResult.rawAppendix,
+                appendixJson: parseResult.appendix,
+                rawResponse: completion.content,
+                requestedModelId: modelSnapshot.requestedModelId,
+                returnedModelId: completion.returnedModel,
+                provider: completion.provider,
+                finishReason: completion.finishReason,
+                promptTokens: completion.usage.promptTokens,
+                completionTokens: completion.usage.completionTokens,
+                totalTokens: completion.usage.totalTokens,
+                latencyMs: completion.latencyMs,
+                temperature: modelSnapshot.temperature,
+                topP: modelSnapshot.topP,
+                maxTokens: modelSnapshot.maxTokens,
+                parserVersion: PARSER_VERSION,
+                systemPromptSnapshot: systemPrompt,
+                errorMessage: null,
+              })
+              .onConflictDoNothing()
+              .returning()
+
+            if (!insertedCaseResult) return null
+
+            for (const decision of parseResult.appendix.categories) {
+              const categoryId = categoryIdBySlug.get(decision.category_slug)
+              if (!categoryId) continue
+
+              if (decision.decision === 'tool' && decision.tool) {
+                const resolved = await resolveToolWithCandidateQueue(
+                  tx,
+                  decision.tool,
+                  toolIndex,
                   categoryId,
-                  decisionType: 'tool',
-                  toolId: resolved.status === 'resolved' ? resolved.toolId : null,
-                  rawToolName: decision.tool,
-                  reasoning: decision.reasoning,
-                  selfReportedConfidence: decision.confidence,
-                  resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
-                })
-                .onConflictDoNothing()
-            } else {
-              await tx
-                .insert(benchmarkCaseDecisions)
-                .values({
-                  caseResultId: insertedCaseResult.id,
-                  categoryId,
-                  decisionType: 'none',
-                  toolId: null,
-                  rawToolName: null,
-                  reasoning: decision.reasoning,
-                  selfReportedConfidence: decision.confidence,
-                  resolutionStatus: 'resolved',
-                })
-                .onConflictDoNothing()
+                )
+
+                await tx
+                  .insert(benchmarkCaseDecisions)
+                  .values({
+                    caseResultId: insertedCaseResult.id,
+                    categoryId,
+                    decisionType: 'tool',
+                    toolId: resolved.status === 'resolved' ? resolved.toolId : null,
+                    rawToolName: decision.tool,
+                    reasoning: decision.reasoning,
+                    selfReportedConfidence: decision.confidence,
+                    resolutionStatus:
+                      resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
+                  })
+                  .onConflictDoNothing()
+              } else {
+                await tx
+                  .insert(benchmarkCaseDecisions)
+                  .values({
+                    caseResultId: insertedCaseResult.id,
+                    categoryId,
+                    decisionType: 'none',
+                    toolId: null,
+                    rawToolName: null,
+                    reasoning: decision.reasoning,
+                    selfReportedConfidence: decision.confidence,
+                    resolutionStatus: 'resolved',
+                  })
+                  .onConflictDoNothing()
+              }
             }
-          }
 
-          return insertedCaseResult
-        })
+            return insertedCaseResult
+          })
 
-        if (!caseResult) continue
-      } else {
-        const [caseResult] = await database
+          if (!caseResult) continue
+        } else {
+          const [caseResult] = await database
+            .insert(benchmarkCaseResults)
+            .values({
+              seasonId,
+              runId: run.id,
+              caseId: benchmarkCase.id,
+              status: 'invalid_output',
+              naturalResponse: null,
+              appendixRaw: null,
+              appendixJson: null,
+              rawResponse: completion.content,
+              requestedModelId: modelSnapshot.requestedModelId,
+              returnedModelId: completion.returnedModel,
+              provider: completion.provider,
+              finishReason: completion.finishReason,
+              promptTokens: completion.usage.promptTokens,
+              completionTokens: completion.usage.completionTokens,
+              totalTokens: completion.usage.totalTokens,
+              latencyMs: completion.latencyMs,
+              temperature: modelSnapshot.temperature,
+              topP: modelSnapshot.topP,
+              maxTokens: modelSnapshot.maxTokens,
+              parserVersion: PARSER_VERSION,
+              systemPromptSnapshot: systemPrompt,
+              errorMessage: parseResult.reason,
+            })
+            .onConflictDoNothing()
+            .returning()
+
+          if (!caseResult) continue
+          errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
+        }
+      } catch (error) {
+        const message = getErrorMessage(error)
+        errors.push(`[case ${benchmarkCase.id}] ${message}`)
+
+        await database
           .insert(benchmarkCaseResults)
           .values({
             seasonId,
             runId: run.id,
             caseId: benchmarkCase.id,
-            status: 'invalid_output',
-            naturalResponse: null,
-            appendixRaw: null,
-            appendixJson: null,
-            rawResponse: completion.content,
-            requestedModelId: modelSnapshot.requestedModelId,
-            returnedModelId: completion.returnedModel,
-            provider: completion.provider,
-            finishReason: completion.finishReason,
-            promptTokens: completion.usage.promptTokens,
-            completionTokens: completion.usage.completionTokens,
-            totalTokens: completion.usage.totalTokens,
-            latencyMs: completion.latencyMs,
-            temperature: modelSnapshot.temperature,
-            topP: modelSnapshot.topP,
-            maxTokens: modelSnapshot.maxTokens,
+            status: 'failed',
+            errorMessage: message,
             parserVersion: PARSER_VERSION,
-            systemPromptSnapshot: systemPrompt,
-            errorMessage: parseResult.reason,
           })
           .onConflictDoNothing()
-          .returning()
-
-        if (!caseResult) continue
-        errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
       }
-    } catch (error) {
-      const message = getErrorMessage(error)
-      errors.push(`[case ${benchmarkCase.id}] ${message}`)
-
-      await database
-        .insert(benchmarkCaseResults)
-        .values({
-          seasonId,
-          runId: run.id,
-          caseId: benchmarkCase.id,
-          status: 'failed',
-          errorMessage: message,
-          parserVersion: PARSER_VERSION,
-        })
-        .onConflictDoNothing()
     }
-  }
 
-  const metrics = await calculateRunMetrics(database, run.id, allCases.length)
-  const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
+    const metrics = await calculateRunMetrics(database, run.id, allCases.length)
+    const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
 
-  await database
-    .update(benchmarkRuns)
-    .set({
+    await database
+      .update(benchmarkRuns)
+      .set({
+        status: finalStatus,
+        completedAt: now(),
+        completedCaseCount: metrics.completedCases,
+        failedCaseCount: metrics.failedCases + metrics.invalidOutputCases,
+        qcStatus: metrics.qc.passed ? 'passed' : 'failed',
+        qcSummaryJson: metrics.qc,
+        errorLog: errors.length > 0 ? errors.join('\n') : null,
+      })
+      .where(eq(benchmarkRuns.id, run.id))
+
+    return {
+      runId: run.id,
+      seasonId,
       status: finalStatus,
-      completedAt: now(),
-      completedCaseCount: metrics.completedCases,
-      failedCaseCount: metrics.failedCases + metrics.invalidOutputCases,
-      qcStatus: metrics.qc.passed ? 'passed' : 'failed',
-      qcSummaryJson: metrics.qc,
-      errorLog: errors.length > 0 ? errors.join('\n') : null,
-    })
-    .where(eq(benchmarkRuns.id, run.id))
-
-  return {
-    runId: run.id,
-    seasonId,
-    status: finalStatus,
-    ...metrics,
-    errors,
+      ...metrics,
+      errors,
+    }
+  } finally {
+    await heartbeat.stop()
   }
 }
