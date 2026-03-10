@@ -68,13 +68,23 @@ and `benchmark_prompt_versions` snapshots from there. The markdown files in
 `src/server/llm/prompts/` are deleted. Promptfoo evals can read prompt content
 from the DB via a small adapter — or we export prompts to temp files at eval time.
 
-### 4. Model weighting is a launch feature, not a follow-up
+### 4. Model weighting infrastructure ships now, but Season 1 launches uniform
 
-Model tiers (`frontier`, `mid`, `small`) are not just filters — they carry
-scoring weights. A frontier model's recommendation carries more signal than a
-small model's. Weights are stored in a `benchmark_model_weight_configs` table
-and snapshotted per run, so results always reference the weight config that
-produced them. Weights can change monthly without invalidating historical data.
+Model tiers (`frontier`, `mid`, `small`) and the weighting infrastructure are
+built from day one. Weights are stored in a `benchmark_model_weight_configs`
+table and snapshotted per run, so results always reference the weight config
+that produced them.
+
+However, **Season 1 launches with uniform weights** (all tiers = 1.0). This is
+the most defensible position for a public launch:
+- "Every model gets one equal vote" is simple, transparent, and hard to attack
+- The current 8-model panel is already roughly provider-balanced
+- Non-uniform weighting requires justification that we don't yet have data for
+- We avoid the Twitter reply: "you're manipulating rankings with arbitrary weights"
+
+Non-uniform weights can be activated for Season 2+ once we've validated tier
+classifications against actual benchmark variance. The infrastructure is ready;
+the judgment call is deferred until we have evidence.
 
 ### 5. Eight PRs, not eleven phases
 
@@ -83,12 +93,17 @@ and some large enough to split. This plan targets 8 PRs that each deliver a
 testable, deployable increment. PR 8 is an aggressive legacy cleanup since
 nothing is deployed yet. Each PR has a clear "done when" gate.
 
-### 6. Backfill strategy for launch data
+### 6. Shadow mode accumulation, not synthetic backfill
 
-To launch with weeks of historical data, we need to retroactively run the
-benchmark protocol against the existing prompt corpus. PR 4 includes a
-backfill command that replays the benchmark runner against historical dates,
-producing case results as if the benchmark had been running all along.
+The initial instinct was to backfill weeks of data in one batch. But running
+28 benchmark executions on the same day produces 28 identical data points —
+same model versions, same provider behavior, no real temporal variance. It's
+technically reproducible but intellectually dishonest.
+
+Instead: land PRs 1-4, then run the benchmark cron daily in shadow mode for
+3-4 weeks while the public site still shows exploration data. This produces
+genuinely independent daily observations and tests cron reliability. The
+public switch happens only after the shadow period meets the launch bar.
 
 ### 7. Keep the "overall" ranking but label it clearly
 
@@ -97,6 +112,31 @@ keeps it but:
 - Labels it "Exploratory Composite" in the UI
 - Removes it from any "benchmark-grade" claims
 - Category-level rankings are the authoritative benchmark output
+
+---
+
+## Launch bar
+
+Do not switch public pages to benchmark data until ALL of these are true:
+
+| Requirement | Threshold |
+|-------------|-----------|
+| Published daily runs in active season | >= 21 (target 28) |
+| Eligible prompt versions per public category | >= 3 |
+| Eligible benchmark decisions per public category | >= 100 |
+| Completed model snapshots per public category | >= 3 |
+| Decisive trials per published head-to-head | >= 30 |
+| Methodology page | Live, listing prompt panel, model panel, scoring version |
+| Weight snapshot transparency | If weighted, methodology lists exact config used |
+| Unresolved tool backlog | Not threatening QC pass rate |
+| Model snapshot drift incidents | Zero in published runs |
+
+Categories below the coverage bar show "Insufficient benchmark data" instead
+of pretending to be authoritative. This is better than hiding them — it signals
+the benchmark is honest about its limits.
+
+These thresholds are deliberately strict for first release. They can be relaxed
+later with justification.
 
 ---
 
@@ -133,6 +173,7 @@ decision_type: tool, none, invalid
 tool_candidate_status: pending, approved, rejected
 prompt_tier: basic, intermediate, advanced
 model_tier: frontier, mid, small
+benchmark_window_type: run_day, trailing_7d, trailing_28d, season_to_date
 ```
 
 ### New tables
@@ -170,6 +211,8 @@ Explicit category eligibility per prompt version (replaces the weak
 Immutable record of a model configuration.
 - `id`, `llm_id` (FK → llms), `name`, `provider`
 - `tier` (model_tier) — capability classification
+- `model_family_key` (varchar, nullable) — groups related model variants
+  (e.g., `claude-3-opus`, `gpt-4o`) for drift detection and audit
 - `requested_model_id`, `label_returned_model_id`
 - `temperature`, `top_p`, `max_tokens`, `seed`
 - `is_deterministic`, `snapshot_key` (unique), `created_at`
@@ -239,15 +282,19 @@ Review queue for unknown tool mentions.
 - `approved_tool_id` (FK, nullable), `notes`
 
 #### `benchmark_model_weight_configs`
-Versioned weight assignments for model tiers. Weights can change monthly
-without invalidating historical results because each run snapshots its config.
-- `id`, `slug` (unique, e.g. `weights-2026-03`)
+Versioned weight assignments for model tiers. Weights can change between
+seasons without invalidating historical results because each run snapshots
+its config.
+- `id`, `slug` (unique, e.g. `uniform-v1`, `weighted-2026-04`)
 - `name`, `description`
-- `frontier_weight` (real, default 1.5)
+- `frontier_weight` (real, default 1.0)
 - `mid_weight` (real, default 1.0)
-- `small_weight` (real, default 0.6)
+- `small_weight` (real, default 1.0)
 - `is_active` (boolean, only one active at a time)
 - `created_at`
+
+Season 1 seeds a `uniform-v1` config with all weights = 1.0. Non-uniform
+configs can be created for Season 2+ when justified by data.
 
 ### Schema changes to existing tables
 
@@ -450,6 +497,20 @@ Initial classification based on known models:
 Admin can override via the model snapshot. Tiers drive both filtering and
 scoring weights (see PR 5).
 
+### Model snapshot drift detection
+
+OpenRouter can silently swap the model behind an alias (e.g., provider updates
+`claude-3-opus` to a newer checkpoint). This breaks benchmark reproducibility.
+
+When a benchmark case result returns a `returned_model_id` that differs from the
+frozen snapshot's `requested_model_id`:
+- Mark the case result as `invalid_output` with reason `model_drift`
+- Include the mismatch in the QC summary
+- Block run publication if drift is detected
+- Require a season refresh (new model snapshot) to continue cleanly
+
+This prevents silently mixing different model versions in the same season's data.
+
 ### Tests
 
 - OpenRouter client passes explicit params
@@ -457,6 +518,8 @@ scoring weights (see PR 5).
 - Token usage and latency captured
 - Model snapshotter deduplicates by snapshot key
 - Tier assignment for known models
+- Drift detection: mismatched returned model marks result invalid
+- Drift detection: run with drifted results fails QC
 
 ### Done when
 
@@ -555,21 +618,13 @@ QC summary persisted as JSON on the run record.
 
 Keep existing `/api/cron/run` for exploration mode.
 
-### Backfill command
+### Shadow mode accumulation
 
-For launch with historical data, add a utility:
-
-```typescript
-async function backfillBenchmarkRuns(
-  seasonId: string,
-  startDate: Date,
-  endDate: Date
-)
-```
-
-- For each date in range, execute `executeBenchmarkRun(seasonId, date)`
-- Idempotent: safe to re-run if interrupted
-- Use this to generate weeks of benchmark data before public launch
+After this PR lands, start running the benchmark cron daily alongside the
+existing exploration cron. Both can coexist safely — different tables, different
+routes. Accumulate 21-28 days of published runs before switching public pages
+(PR 7). This produces genuinely independent daily observations rather than
+synthetic backfill.
 
 ### Tests
 
@@ -581,10 +636,10 @@ async function backfillBenchmarkRuns(
 - Extra category → `invalid_output` status
 - Missing eligible category → `invalid_output` status
 - Unresolved tool → `tool_candidates` entry, `tool_id = null`
+- Model drift detected → `invalid_output` with reason
 - Usage, latency, returned model persisted on case result
 - QC passes when thresholds met
 - QC fails and blocks publication when thresholds violated
-- Backfill creates runs for each date in range
 
 ### Done when
 
@@ -613,21 +668,38 @@ scoring. Add tier-filtered views.
 The fundamental unit is one **case decision** — a category-level tool choice from
 one prompt×model evaluation.
 
+#### Ranking window types
+
+Rankings are computed over explicit time windows, not ad-hoc date ranges:
+
+| Window | Meaning | Use |
+|--------|---------|-----|
+| `run_day` | Single run | Diagnostics, daily monitoring |
+| `trailing_7d` | Last 7 published runs | Short-term trend |
+| `trailing_28d` | Last 28 published runs | **Default public window at launch** |
+| `season_to_date` | All published runs in season | Full season view |
+
+The `trailing_28d` window is the default because it balances recency with
+statistical mass. A new enum `benchmark_window_type` makes these explicit
+rather than stringly typed.
+
 #### Model-weighted scoring
 
 Each case decision carries a weight based on its model's tier, pulled from the
-`benchmark_model_weight_configs` record snapshotted on the run:
+`benchmark_model_weight_configs` record snapshotted on the run.
 
-| Model tier | Default weight |
-|------------|---------------|
-| `frontier` | 1.5 |
-| `mid` | 1.0 |
-| `small` | 0.6 |
+For Season 1, all weights are 1.0 (uniform). The infrastructure supports
+non-uniform weights for future seasons:
 
-These defaults reflect that frontier models tend to give more deliberate,
-higher-quality recommendations. Weights are tunable and versioned — when you
-update weights (e.g. monthly as model capabilities shift), create a new config
-and set it active. Historical runs keep pointing to the config that scored them.
+| Model tier | Season 1 weight | Example future weight |
+|------------|----------------|----------------------|
+| `frontier` | 1.0 | 1.5 |
+| `mid` | 1.0 | 1.0 |
+| `small` | 1.0 | 0.6 |
+
+When uniform, `weighted_support_rate` equals `raw_support_rate`. The scoring
+code always runs through the weighting path so the switch to non-uniform is
+a config change, not a code change.
 
 The `weighted_support_count` for a tool sums the weights of all decisions that
 selected it, rather than counting each decision as 1.
@@ -641,16 +713,27 @@ For each tool in a category:
 | `weighted_support` | Sum of `model_weight` for decisions selecting this tool |
 | `weighted_eligible` | Sum of `model_weight` for all eligible decisions (tool + none) |
 | `weighted_support_rate` | `weighted_support / weighted_eligible` |
-| `raw_support_count` | Unweighted count (for transparency) |
+| `raw_support_count` | Unweighted count (always shown for transparency) |
 | `raw_eligible_count` | Unweighted count |
 | `raw_support_rate` | `raw_support_count / raw_eligible_count` |
 | `model_coverage` | Distinct model snapshots selecting tool / total distinct model snapshots |
 | `prompt_coverage` | Distinct prompt versions selecting tool / total distinct prompt versions |
 | `ci_low`, `ci_high` | Wilson 95% CI on `raw_support_rate` (CI on weighted rates is misleading) |
 
-Both weighted and unweighted rates are computed and returned. The **primary sort**
-uses `weighted_support_rate`. The unweighted rate is shown for transparency so
-users can see how weighting affects rankings.
+Both weighted and unweighted rates are always computed and returned. When
+weights are uniform (Season 1), they're identical, but both fields are present
+so the API contract doesn't change when non-uniform weights are activated.
+
+#### Publication thresholds per category
+
+A category ranking is only published as authoritative when:
+- >= 100 eligible decisions in the window
+- >= 3 distinct model snapshots contributing
+- >= 3 distinct prompt versions contributing
+
+Below these thresholds, the category shows "Insufficient benchmark data"
+with the raw numbers visible. This prevents thin-coverage categories (e.g.,
+`cms` with only 2 prompt mentions) from producing misleading rankings.
 
 #### Sorting
 
@@ -660,8 +743,9 @@ users can see how weighting affects rankings.
 
 #### Trend
 
-Compare metrics between the latest completed run and the previous completed run
-in the same season. `trend = weighted_support_rate_current - weighted_support_rate_previous`.
+Compare the current window snapshot to the previous non-overlapping window of
+the same type. For `trailing_28d`: compare days 1-28 vs days 29-56.
+`trend = current_support_rate - previous_support_rate`.
 
 #### Prompt-tier filtered rankings
 
@@ -711,6 +795,9 @@ vote) but show weighted results alongside for context. This keeps matchups
 intuitive — "5 out of 8 models picked Clerk over Auth0" is clearer than
 weighted fractional scores.
 
+Head-to-heads require >= 30 decisive trials to publish. Below that threshold,
+show "Not enough data for this matchup" instead of unreliable percentages.
+
 Head-to-heads are computed on demand from case decisions, not pre-materialized.
 Featured matchups can be admin-curated or auto-generated from top-2 tools per
 category in the latest ranking.
@@ -730,14 +817,19 @@ This avoids the epistemological problem of comparing Supabase (database) vs Cler
 ### Tests
 
 - Weighted support rate correctly applies model tier weights
+- Uniform weights produce identical weighted and raw rates
 - Changing weight config changes weighted results but not raw counts
 - Both weighted and raw rates returned in API response
 - Wilson CI computed on raw rate against known values
-- Trend compares consecutive completed runs using weighted rate
+- Window types: trailing_28d uses correct run set
+- Trend compares non-overlapping windows correctly
+- Publication thresholds: category with < 100 decisions marked insufficient
+- Publication thresholds: category with < 3 models marked insufficient
 - Prompt-tier filter narrows to correct subset
 - Model-tier filter narrows to correct subset
 - Head-to-head: A/B wins from case decisions (unweighted primary)
 - Head-to-head: weighted wins shown as secondary metric
+- Head-to-head: < 30 decisive trials marked insufficient
 - Other-tool selection counted separately
 - Decisive win rate uses decisive cases only
 - Weight config snapshotted on run — historical runs use their own config
@@ -891,22 +983,25 @@ PR 1: Schema + aliases          ─── pure additive, zero risk
   │
 PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract
   │
-PR 3: LLM service hardening     ─── extends existing service, backwards compatible
+PR 3: LLM service hardening     ─── extends existing service, drift detection
   │
-PR 4: Benchmark runner           ─── new cron endpoint, old cron untouched
-  │                                   Run backfill to generate launch data
-  │
-PR 5: Scoring + weighted ranks   ─── new routers with model weighting
-  │
+PR 4: Benchmark runner           ─── new cron endpoint, start shadow mode
+  │                                   ┌─────────────────────────────────────┐
+  │                                   │  Shadow accumulation: 21-28 days   │
+  │                                   │  Daily benchmark cron runs here    │
+  │                                   └─────────────────────────────────────┘
+PR 5: Scoring + weighted ranks   ─── new routers with window types + thresholds
+  │                                   (can build while shadow data accumulates)
 PR 6: Admin controls             ─── admin-only, no public impact
-  │
-PR 7: Public switchover + docs   ─── the visible change, all infrastructure ready
+  │                                   (can build while shadow data accumulates)
+PR 7: Public switchover + docs   ─── only after launch bar is met
   │
 PR 8: Legacy cleanup             ─── remove old pipeline code, tables, files
 ```
 
-PRs 1-4 build the data generation pipeline. PRs 5-7 build the consumption layer.
-PR 8 cleans house. Since nothing is deployed, PR 8 can follow quickly after PR 7.
+PRs 1-4 must land first to start shadow accumulation. PRs 5-6 can be built in
+parallel while data accumulates. PR 7 is gated on the launch bar. PR 8 follows
+immediately since nothing is deployed.
 
 ---
 
@@ -1008,3 +1103,41 @@ results separately.
 Let tool companies see their benchmark performance, compare against competitors,
 and submit alias corrections. Read-only view of case decisions mentioning their
 tools.
+
+---
+
+## Season 1 recommendations
+
+For the first benchmark season, before sharing publicly:
+
+- **Scope claims honestly** to "vibe-coder web-app prompts" — that is what the
+  current 15-prompt corpus represents. Do not imply coverage of all developer
+  workflows.
+- **Use uniform model weights** (all tiers = 1.0). Explain this transparently
+  in the methodology page. Non-uniform weighting is a Season 2 decision.
+- **Keep the current provider-balanced 8-model panel** unless there is a
+  specific reason to change it before shadow mode starts.
+- **Flag under-covered categories** like `cms` (only 2 prompt mentions) as
+  "insufficient benchmark data" rather than publishing thin rankings.
+- **Do not publish an overall "best tool" leaderboard** as benchmark-grade.
+  Category rankings are the authoritative output.
+- **Add more prompts before Season 2** to cover under-represented categories
+  and add `software-dev-beginner` and `software-dev-experienced` levels.
+
+---
+
+## Non-goals for first release
+
+These are explicitly out of scope and should not creep in:
+
+- **Retroactive conversion** of old exploration recommendations into benchmark
+  evidence. Old data lacks immutable snapshots and explicit inference params.
+- **Hidden weighting.** If a publication is weighted, the methodology page must
+  list the exact weight snapshot used. Raw unweighted counts must always be visible.
+- **Universal coverage claims.** Do not imply the benchmark covers all developer
+  workflows when the prompt panel is 15 vibe-coder web-app prompts.
+- **Multi-turn benchmark interactions** or heuristic parse recovery. Single-turn,
+  strict appendix only.
+- **Prompt-tier weighting.** Prompt difficulty tiers are for season design and
+  filtering, not scoring weights. If we ever weight by tier, use the same
+  immutable snapshot pattern as model weights.
