@@ -9,9 +9,17 @@ export type OpenRouterMessage = {
   content: string
 }
 
+export type OpenRouterInferenceParams = {
+  temperature?: number
+  top_p?: number
+  max_tokens?: number
+  seed?: number
+}
+
 export type OpenRouterCompletionResponse = {
   content: string
-  model: string
+  requestedModel: string
+  returnedModel: string
   finishReason: string
   usage: {
     promptTokens: number
@@ -90,6 +98,7 @@ function getErrorMessage(error: unknown) {
 export async function complete(
   model: string,
   messages: OpenRouterMessage[],
+  params?: OpenRouterInferenceParams,
 ): Promise<OpenRouterCompletionResponse> {
   const startedAt = Date.now()
 
@@ -97,13 +106,18 @@ export async function complete(
     const response = await getClient().chat.completions.create({
       model,
       messages,
+      ...(params?.temperature !== undefined && { temperature: params.temperature }),
+      ...(params?.top_p !== undefined && { top_p: params.top_p }),
+      ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
+      ...(params?.seed !== undefined && { seed: params.seed }),
     })
 
     const firstChoice = response.choices[0]
 
     return {
       content: getContent(firstChoice),
-      model: response.model,
+      requestedModel: model,
+      returnedModel: response.model,
       finishReason: firstChoice?.finish_reason ?? 'unknown',
       usage: {
         promptTokens: response.usage?.prompt_tokens ?? 0,
