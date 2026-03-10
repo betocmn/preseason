@@ -43,13 +43,14 @@ async function seedCategories(db: ReturnType<typeof getTestDb>, count: number) {
   const ids: string[] = []
 
   for (let i = 0; i < count; i++) {
+    const slug = slugs[i] ?? `cat-${i}`
     const sub = first(
       await db
         .insert(subcategories)
         .values({
           categoryId: group.id,
-          name: slugs[i]!,
-          slug: slugs[i]!,
+          name: slug,
+          slug,
           displayOrder: i + 1,
         })
         .returning(),
@@ -99,7 +100,9 @@ describe('freezePromptVersion', () => {
 
     const version = await freezePromptVersion(db, prompt.id, { categoryIds })
 
-    const expectedHash = createHash('sha256').update(prompt.contentMd!).digest('hex')
+    const expectedHash = createHash('sha256')
+      .update(prompt.contentMd ?? '')
+      .digest('hex')
     expect(version.contentHash).toBe(expectedHash)
     expect(version.version).toBe(1)
     expect(version.tier).toBe('basic')

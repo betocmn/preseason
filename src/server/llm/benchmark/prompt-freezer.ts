@@ -7,9 +7,9 @@ import {
   benchmarkPromptVersions,
   prompts,
 } from '~/server/db/schema'
-import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 import type { PromptLevel } from '~/server/llm/prompts'
 import { isPromptLevel } from '~/server/llm/prompts'
+import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 type PromptTier = 'basic' | 'intermediate' | 'advanced'
 
