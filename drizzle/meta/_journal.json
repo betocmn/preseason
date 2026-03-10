@@ -57,6 +57,13 @@
       "when": 1773119016292,
       "tag": "0007_productive_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773119800000,
+      "tag": "0008_immutable_season_id",
+      "breakpoints": true
     }
   ]
 }
