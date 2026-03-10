@@ -534,7 +534,7 @@ This prevents silently mixing different model versions in the same season's data
 
 ---
 
-## PR 4: Benchmark runner with idempotent runs and backfill
+## PR 4: Benchmark runner with idempotent runs and backfill ✅ DONE
 
 **Goal:** Build the new benchmark execution pipeline. This is the core engine.
 
@@ -990,7 +990,7 @@ PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt c
   │
 PR 3: LLM service hardening     ─── extends existing service, drift detection ✅ DONE
   │
-PR 4: Benchmark runner           ─── new cron endpoint, start shadow mode
+PR 4: Benchmark runner           ─── new cron endpoint, start shadow mode ✅ DONE
   │                                   ┌─────────────────────────────────────┐
   │                                   │  Shadow accumulation: 21-28 days   │
   │                                   │  Daily benchmark cron runs here    │
