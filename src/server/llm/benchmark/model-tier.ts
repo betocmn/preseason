@@ -10,6 +10,7 @@ const MODEL_TIER_RULES: TierRule[] = [
   { pattern: 'gpt-4o', tier: 'frontier' },
   { pattern: 'gpt-4-turbo', tier: 'frontier' },
   { pattern: 'gemini-1.5-pro', tier: 'frontier' },
+  { pattern: 'gemini-pro-1.5', tier: 'frontier' },
   { pattern: 'gemini-2.0-pro', tier: 'frontier' },
 
   // Mid (order matters: gpt-4o-mini must be checked before gpt-4o above,
