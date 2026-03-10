@@ -86,7 +86,7 @@ Add prompt difficulty tiers to benchmark prompt versions so we can:
 - inspect whether rankings are robust across tiers
 - avoid having a public benchmark dominated by only simple CRUD prompts
 
-Difficulty tier should influence season design and diagnostics first. If we ever weight by prompt tier later, that should use the same immutable snapshot pattern as model weights.
+Difficulty tier should influence season design and diagnostics first. Assign tiers through a documented rubric that considers category breadth, integration count, operational constraints, and domain complexity. If we ever weight by prompt tier later, that should use the same immutable snapshot pattern as model weights.
 
 ### 8. Public benchmark pages should publish only when sample size is good enough
 
@@ -101,6 +101,7 @@ Do not switch the public authoritative pages to benchmark data until all of the 
 - If any public ranking is weighted, the methodology page lists the exact model weight snapshot used.
 - Unknown benchmark tools are entering `tool_candidates`, not `tools`.
 - No active-season model snapshot drift has been silently mixed into published benchmark data.
+- Public benchmark history comes from real benchmark executions, not synthetic backfill with retroactive dates.
 - Each public benchmark category has at least 3 eligible prompt versions in the season. Categories below that bar stay exploratory or display insufficient benchmark coverage.
 - Each published category snapshot has at least 100 eligible benchmark selections and at least 3 completed model snapshots.
 - Each published head-to-head snapshot has at least 30 decisive trials.
@@ -149,7 +150,7 @@ Use these additional fields and enums beyond the earlier proposal:
 
 ## PR plan
 
-Every PR should include the tests for the behavior it introduces. Do not defer the entire test burden to the end.
+Every PR should include the tests for the behavior it introduces. Do not defer the entire test burden to the end. Unless the local environment is blocked, each PR should also exit with `pnpm run check` and `pnpm run test` passing.
 
 ### PR1: Benchmark schema and protocol scaffolding
 
@@ -199,6 +200,7 @@ Scope:
   - store prompt hash
   - normalize eligible categories into `benchmark_prompt_version_categories`
   - assign prompt difficulty tier
+- Add a documented prompt tier rubric and make tier assignment reviewable in admin or seed code.
 - Replace file-based prompt loading with database-backed loading for active prompts.
 - Add an export path for Promptfoo if shared prompt files are still needed outside the app.
 - Build benchmark model snapshot freezing services:
@@ -361,6 +363,9 @@ Scope:
   - unweighted support count
   - unweighted support rate
   - weighted support rate when weighting is enabled
+- Statistical policy:
+  - Wilson confidence intervals are computed on raw unweighted rates only
+  - weighted rates are reported without pseudo-confidence intervals
 - Publish:
   - support count
   - support rate
@@ -374,6 +379,7 @@ Scope:
 - Add secondary diagnostics:
   - per-difficulty-tier breakdown
   - model-family-balanced audit metric when weighting is enabled
+- Add public query support for prompt difficulty tier filters on benchmark ranking endpoints.
 
 Tests:
 
@@ -403,6 +409,7 @@ Scope:
   - decisive trial count
   - decisive win rate
   - Wilson 95% CI
+- Keep head-to-head primary scoring unweighted even when leaderboard weighting is enabled. If weighted head-to-head totals are shown at all, treat them as secondary diagnostics.
 - Generate featured pairs from latest benchmark leaderboard snapshots or admin-curated pairs, not from raw all-time counts.
 - Keep the old match table and routes alive until UI cutover.
 - Require a minimum decisive-trial threshold before publishing a public head-to-head.
@@ -446,9 +453,10 @@ Scope:
   - prompt panel
   - model panel
   - active weight snapshot when applicable
+  - prompt difficulty rubric
   - scoring methodology
   - QC summary
-- Remove or relabel the current overall ranking as exploratory.
+- Remove or relabel the current overall ranking as exploratory composite if we keep it at all.
 
 Tests:
 
@@ -538,6 +546,7 @@ For the first benchmark season:
 
 - Retroactively converting old exploration recommendations into authoritative benchmark evidence.
 - Shipping hidden weighting. Any weighted publication must point to an immutable weight snapshot and still expose unweighted counts.
+- Synthetic benchmark history created by replaying current runs and stamping old dates.
 - Claiming coverage across all developer workflows or skill levels.
 - Multi-turn benchmark interactions or heuristic parse recovery.
 
