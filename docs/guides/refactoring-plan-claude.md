@@ -979,7 +979,7 @@ The methodology page and any marketing copy must honestly state:
 ## Rollout sequence
 
 ```
-PR 1: Schema + aliases          ─── pure additive, zero risk
+PR 1: Schema + aliases          ─── pure additive, zero risk ✅ DONE
   │
 PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract
   │
