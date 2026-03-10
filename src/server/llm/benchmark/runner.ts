@@ -351,7 +351,9 @@ export async function runBenchmark(
   const existingResults = await database
     .select({ caseId: benchmarkCaseResults.caseId })
     .from(benchmarkCaseResults)
-    .where(eq(benchmarkCaseResults.runId, run.id))
+    .where(
+      and(eq(benchmarkCaseResults.runId, run.id), eq(benchmarkCaseResults.status, 'completed')),
+    )
 
   const completedCaseIds = new Set(existingResults.map((r) => r.caseId))
   const pendingCases = allCases.filter((c) => !completedCaseIds.has(c.id))
