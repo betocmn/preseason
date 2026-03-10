@@ -64,13 +64,18 @@ export async function freezePromptVersion(
     },
   })
 
+  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'vibe-coder'
+  const systemPromptSnapshot = buildGenerationSystemPrompt(level)
+
   if (existing) {
     const existingCategoryIds = existing.categories.map((category) => category.categoryId)
     const samePrompt = existing.promptId === promptId
     const sameTier = existing.tier === tier
     const sameCategories = hasSameCategoryOrder(existingCategoryIds, options.categoryIds)
+    const sameLevel = existing.level === prompt.level
+    const sameSnapshot = existing.systemPromptSnapshot === systemPromptSnapshot
 
-    if (samePrompt && sameTier && sameCategories) {
+    if (samePrompt && sameTier && sameCategories && sameLevel && sameSnapshot) {
       return existing
     }
 
@@ -82,9 +87,6 @@ export async function freezePromptVersion(
       `Prompt ${promptId} already has frozen content with different benchmark metadata`,
     )
   }
-
-  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'vibe-coder'
-  const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
   return await database.transaction(async (tx) => {
     const latestVersion = await tx

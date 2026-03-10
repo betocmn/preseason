@@ -255,6 +255,23 @@ describe('freezePromptVersion', () => {
     expect(versions).toHaveLength(0)
   })
 
+  it('should reject refreezing when prompt level has changed', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+    const categoryIds = await seedCategories(db, 2)
+
+    await freezePromptVersion(db, prompt.id, { categoryIds })
+
+    await db
+      .update(prompts)
+      .set({ level: 'software-dev-experienced' })
+      .where(eq(prompts.id, prompt.id))
+
+    await expect(freezePromptVersion(db, prompt.id, { categoryIds })).rejects.toThrow(
+      'different benchmark metadata',
+    )
+  })
+
   it('should throw when prompt has no contentMd', async () => {
     const db = getTestDb()
     const prompt = first(
