@@ -49,7 +49,10 @@ export type BenchmarkRunSummary = {
 type BenchmarkRunRecord = Awaited<ReturnType<typeof createOrLoadRun>>
 type RunMetrics = Omit<BenchmarkRunSummary, 'runId' | 'seasonId' | 'status' | 'errors'>
 // Resumable runs stash their frozen case ids here until a terminal QC payload replaces it.
-type RunCaseSnapshot = { snapshotCaseIds: string[] }
+type RunCaseSnapshot = {
+  snapshotCaseIds: string[]
+  lastHeartbeatAt?: string
+}
 
 const RUN_STALE_AFTER_MS = 30 * 60 * 1000
 const RUN_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
@@ -66,8 +69,11 @@ function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): Benchmark
 
 function isRunStale(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
   if (run.status !== 'running') return false
-  if (!run.startedAt) return true
-  return currentTime.getTime() - run.startedAt.getTime() >= staleAfterMs
+  const lastHeartbeatAt = getRunHeartbeatAt(run)
+  const staleSince = lastHeartbeatAt ?? run.startedAt
+
+  if (!staleSince) return true
+  return currentTime.getTime() - staleSince.getTime() >= staleAfterMs
 }
 
 async function findRunById(database: DatabaseClient, runId: string) {
@@ -252,23 +258,52 @@ async function claimRunExecution(
   }
 }
 
-function getRunCaseSnapshot(run: BenchmarkRunRecord): string[] | null {
+function getRunCaseSnapshot(run: BenchmarkRunRecord): RunCaseSnapshot | null {
   const qcSummary = run.qcSummaryJson
   if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
     return null
   }
 
   const snapshotCaseIds = (qcSummary as Partial<RunCaseSnapshot>).snapshotCaseIds
+  const lastHeartbeatAt = (qcSummary as Partial<RunCaseSnapshot>).lastHeartbeatAt
+
   if (!Array.isArray(snapshotCaseIds) || !snapshotCaseIds.every((id) => typeof id === 'string')) {
     return null
   }
 
-  return snapshotCaseIds
+  if (typeof lastHeartbeatAt !== 'string') {
+    return { snapshotCaseIds }
+  }
+
+  return { snapshotCaseIds, lastHeartbeatAt }
+}
+
+function getRunHeartbeatAt(run: BenchmarkRunRecord): Date | null {
+  const qcSummary = run.qcSummaryJson
+  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
+    return null
+  }
+
+  const heartbeatAt = (qcSummary as { lastHeartbeatAt?: unknown }).lastHeartbeatAt
+  if (typeof heartbeatAt !== 'string') return null
+
+  const parsed = new Date(heartbeatAt)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function buildRunCaseSummaryPatch(
+  run: BenchmarkRunRecord,
+  update: Partial<RunCaseSnapshot>,
+): Record<string, unknown> {
+  const qcSummary = run.qcSummaryJson
+  const base =
+    qcSummary && typeof qcSummary === 'object' && !Array.isArray(qcSummary) ? qcSummary : {}
+  return { ...(base as Record<string, unknown>), ...update }
 }
 
 async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, seasonId: string) {
   const caseIds =
-    getRunCaseSnapshot(run) ??
+    getRunCaseSnapshot(run)?.snapshotCaseIds ??
     (
       await database
         .select({ id: benchmarkCases.id })
@@ -278,13 +313,22 @@ async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, s
     ).map((row) => row.id)
 
   if (getRunCaseSnapshot(run) == null) {
+    const latestRun = await database.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, run.id),
+    })
+
+    if (!latestRun) throw new Error('Benchmark run not found')
+
+    const nextQcSummary = buildRunCaseSummaryPatch(latestRun, { snapshotCaseIds: caseIds })
+
     await database
       .update(benchmarkRuns)
       .set({
-        qcSummaryJson: { snapshotCaseIds: caseIds },
+        qcSummaryJson: nextQcSummary,
         expectedCaseCount: caseIds.length,
       })
       .where(eq(benchmarkRuns.id, run.id))
+    run.qcSummaryJson = nextQcSummary
   } else if (run.expectedCaseCount == null) {
     await database
       .update(benchmarkRuns)
@@ -320,7 +364,7 @@ async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, s
 
 function startRunHeartbeat(
   database: DatabaseClient,
-  runId: string,
+  run: BenchmarkRunRecord,
   now: () => Date,
   heartbeatIntervalMs: number,
 ) {
@@ -331,10 +375,13 @@ function startRunHeartbeat(
     inFlightHeartbeat = inFlightHeartbeat
       .catch(() => undefined)
       .then(async () => {
+        const heartbeatAt = now().toISOString()
         await database
           .update(benchmarkRuns)
-          .set({ startedAt: now() })
-          .where(and(eq(benchmarkRuns.id, runId), eq(benchmarkRuns.status, 'running')))
+          .set({
+            qcSummaryJson: buildRunCaseSummaryPatch(run, { lastHeartbeatAt: heartbeatAt }),
+          })
+          .where(and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, 'running')))
       })
       .catch((error) => {
         heartbeatError ??= error
@@ -424,7 +471,7 @@ async function executeRun(
   run: BenchmarkRunRecord,
   seasonId: string,
 ): Promise<BenchmarkRunSummary> {
-  const heartbeat = startRunHeartbeat(database, run.id, now, runHeartbeatIntervalMs)
+  const heartbeat = startRunHeartbeat(database, run, now, runHeartbeatIntervalMs)
 
   try {
     const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
@@ -730,7 +777,7 @@ async function executeRun(
         status: finalStatus,
         completedAt: now(),
         completedCaseCount: metrics.completedCases,
-        failedCaseCount: metrics.failedCases + metrics.invalidOutputCases,
+        failedCaseCount: metrics.failedCases,
         qcStatus: metrics.qc.passed ? 'passed' : 'failed',
         qcSummaryJson: metrics.qc,
         errorLog: errors.length > 0 ? errors.join('\n') : null,

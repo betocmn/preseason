@@ -408,6 +408,19 @@ describe('runBenchmark', () => {
       runHeartbeatIntervalMs: 20,
     })
     await firstCallStarted.promise
+    const runBeforeSecondCall = await db.query.benchmarkRuns.findFirst({
+      where: and(
+        eq(benchmarkRuns.seasonId, season.id),
+        eq(benchmarkRuns.scheduledFor, '2026-03-10'),
+      ),
+    })
+    expect(runBeforeSecondCall).toBeDefined()
+    expect(runBeforeSecondCall?.startedAt).toBeInstanceOf(Date)
+    const startedAtBeforeHeartbeat = runBeforeSecondCall?.startedAt
+    if (!startedAtBeforeHeartbeat) {
+      throw new Error('Expected running benchmark run start time')
+    }
+
     await wait(160)
 
     const secondSummary = await runBenchmark(season.id, '2026-03-10', {
@@ -416,6 +429,13 @@ describe('runBenchmark', () => {
       runStaleAfterMs: 100,
       runHeartbeatIntervalMs: 20,
     })
+    const runAfterHeartbeat = await db.query.benchmarkRuns.findFirst({
+      where: and(
+        eq(benchmarkRuns.seasonId, season.id),
+        eq(benchmarkRuns.scheduledFor, '2026-03-10'),
+      ),
+    })
+    expect(runAfterHeartbeat?.startedAt?.getTime()).toBe(startedAtBeforeHeartbeat.getTime())
 
     expect(secondSummary.status).toBe('running')
     expect(llmService.complete).toHaveBeenCalledTimes(1)
@@ -532,6 +552,25 @@ describe('runBenchmark', () => {
       )
     expect(invalidResults).toHaveLength(15)
     expect(invalidResults[0]?.errorMessage).toContain('Missing')
+  })
+
+  it('should persist failedCaseCount as failed outcomes only', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
+
+    expect(summary.failedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+
+    const run = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, summary.runId),
+    })
+    expect(run?.failedCaseCount).toBe(0)
   })
 
   it('should handle LLM call failure', async () => {
