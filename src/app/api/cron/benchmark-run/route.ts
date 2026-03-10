@@ -7,14 +7,18 @@ import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
 
-function isAuthorized(request: Request) {
+function isAuthorized(request: Request, expectedToken: string | undefined) {
+  if (!expectedToken) {
+    return false
+  }
+
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return false
   }
 
   const token = authHeader.slice('Bearer '.length).trim()
-  return token.length > 0 && token === env.CRON_SECRET
+  return token.length > 0 && token === expectedToken
 }
 
 function formatScheduledFor(date: Date): string {
@@ -27,7 +31,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
   }
 
-  if (!isAuthorized(request)) {
+  if (!isAuthorized(request, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

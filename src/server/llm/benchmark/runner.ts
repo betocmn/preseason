@@ -268,7 +268,7 @@ export async function runBenchmark(
   scheduledFor: string,
   options: BenchmarkRunOptions = {},
 ): Promise<BenchmarkRunSummary> {
-  const database = options.database ?? (defaultDb as unknown as DatabaseClient)
+  const database = options.database ?? defaultDb
   const llmService = options.llmService ?? new LlmService()
   const now = options.now ?? (() => new Date())
 
