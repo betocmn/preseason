@@ -191,6 +191,35 @@ describe('validateBenchmarkAppendix', () => {
     }
   })
 
+  it('should fail when a category appears more than once', () => {
+    const data = {
+      schema_version: 'benchmark-v1' as const,
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool' as const,
+          tool: 'Clerk',
+          reasoning: 'Best fit',
+          confidence: 0.85,
+        },
+        {
+          category_slug: 'auth',
+          decision: 'none' as const,
+          reasoning: 'Duplicate entry',
+          confidence: 0.5,
+        },
+      ],
+    }
+
+    const result = validateBenchmarkAppendix(data, ['auth'])
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('Duplicate categories')
+      expect(result.error).toContain('auth')
+    }
+  })
+
   it('should fail on malformed JSON (non-object)', () => {
     const result = validateBenchmarkAppendix('not json', ['auth'])
     expect(result.success).toBe(false)

@@ -40,7 +40,25 @@ export function validateBenchmarkAppendix(
     return { success: false, error: parsed.error.issues.map((i) => i.message).join('; ') }
   }
 
-  const responseSlugs = new Set(parsed.data.categories.map((c) => c.category_slug))
+  const responseSlugCounts = new Map<string, number>()
+  for (const category of parsed.data.categories) {
+    responseSlugCounts.set(
+      category.category_slug,
+      (responseSlugCounts.get(category.category_slug) ?? 0) + 1,
+    )
+  }
+
+  const duplicate = [...responseSlugCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([slug]) => slug)
+  if (duplicate.length > 0) {
+    return {
+      success: false,
+      error: `Duplicate categories in appendix: ${duplicate.join(', ')}`,
+    }
+  }
+
+  const responseSlugs = new Set(responseSlugCounts.keys())
   const eligibleSet = new Set(eligibleCategorySlugs)
 
   const missing = eligibleCategorySlugs.filter((s) => !responseSlugs.has(s))
