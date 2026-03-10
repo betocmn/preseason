@@ -122,6 +122,56 @@ describe('freezePromptVersion', () => {
     expect(v1.contentHash).toBe(v2.contentHash)
   })
 
+  it('should reject refreezing identical content with different categoryIds', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+    const categoryIds = await seedCategories(db, 3)
+
+    await freezePromptVersion(db, prompt.id, { categoryIds: categoryIds.slice(0, 2) })
+
+    await expect(
+      freezePromptVersion(db, prompt.id, { categoryIds: categoryIds.slice(1, 3) }),
+    ).rejects.toThrow('different benchmark metadata')
+  })
+
+  it('should reject refreezing identical content with a different tier override', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+    const categoryIds = await seedCategories(db, 2)
+
+    await freezePromptVersion(db, prompt.id, { categoryIds })
+
+    await expect(
+      freezePromptVersion(db, prompt.id, {
+        categoryIds,
+        tierOverride: 'advanced',
+      }),
+    ).rejects.toThrow('different benchmark metadata')
+  })
+
+  it('should reject identical content frozen for a different prompt', async () => {
+    const db = getTestDb()
+    const firstPrompt = await seedPromptWithContent(db)
+    const secondPrompt = first(
+      await db
+        .insert(prompts)
+        .values({
+          title: 'Build another todo app',
+          slug: 'build-another-todo-app',
+          level: 'vibe-coder',
+          contentMd: 'Build a simple todo application with task management.',
+        })
+        .returning(),
+    )
+    const categoryIds = await seedCategories(db, 2)
+
+    await freezePromptVersion(db, firstPrompt.id, { categoryIds })
+
+    await expect(freezePromptVersion(db, secondPrompt.id, { categoryIds })).rejects.toThrow(
+      'different prompt',
+    )
+  })
+
   it('should auto-increment version number', async () => {
     const db = getTestDb()
     const prompt = await seedPromptWithContent(db)

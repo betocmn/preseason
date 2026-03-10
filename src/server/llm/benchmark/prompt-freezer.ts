@@ -19,6 +19,14 @@ export function classifyPromptTier(categoryCount: number): PromptTier {
   return 'advanced'
 }
 
+function hasSameCategoryOrder(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  return left.every((categoryId, index) => categoryId === right[index])
+}
+
 export async function freezePromptVersion(
   database: PostgresJsDatabase<typeof schema>,
   promptId: string,
@@ -40,13 +48,34 @@ export async function freezePromptVersion(
   }
 
   const contentHash = createHash('sha256').update(prompt.contentMd).digest('hex')
+  const tier = options.tierOverride ?? classifyPromptTier(options.categoryIds.length)
 
   const existing = await database.query.benchmarkPromptVersions.findFirst({
     where: eq(benchmarkPromptVersions.contentHash, contentHash),
+    with: {
+      categories: {
+        orderBy: (fields, { asc }) => [asc(fields.displayOrder)],
+      },
+    },
   })
 
   if (existing) {
-    return existing
+    const existingCategoryIds = existing.categories.map((category) => category.categoryId)
+    const samePrompt = existing.promptId === promptId
+    const sameTier = existing.tier === tier
+    const sameCategories = hasSameCategoryOrder(existingCategoryIds, options.categoryIds)
+
+    if (samePrompt && sameTier && sameCategories) {
+      return existing
+    }
+
+    if (!samePrompt) {
+      throw new Error(`Prompt content already frozen for a different prompt: ${existing.promptId}`)
+    }
+
+    throw new Error(
+      `Prompt ${promptId} already has frozen content with different benchmark metadata`,
+    )
   }
 
   const latestVersion = await database
@@ -58,7 +87,6 @@ export async function freezePromptVersion(
 
   const nextVersion = (latestVersion[0]?.version ?? 0) + 1
 
-  const tier = options.tierOverride ?? classifyPromptTier(options.categoryIds.length)
   const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'vibe-coder'
   const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
