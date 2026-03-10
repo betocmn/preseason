@@ -1,4 +1,4 @@
-import { and, count, countDistinct, eq, isNull } from 'drizzle-orm'
+import { and, count, countDistinct, eq, inArray, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -349,13 +349,28 @@ export async function runBenchmark(
   const categorySlugById = new Map(allSubcategories.map((s) => [s.id, s.slug]))
 
   const existingResults = await database
-    .select({ caseId: benchmarkCaseResults.caseId })
+    .select({ caseId: benchmarkCaseResults.caseId, status: benchmarkCaseResults.status })
     .from(benchmarkCaseResults)
-    .where(
-      and(eq(benchmarkCaseResults.runId, run.id), eq(benchmarkCaseResults.status, 'completed')),
-    )
+    .where(eq(benchmarkCaseResults.runId, run.id))
 
-  const completedCaseIds = new Set(existingResults.map((r) => r.caseId))
+  const completedCaseIds = new Set(
+    existingResults.filter((r) => r.status === 'completed').map((r) => r.caseId),
+  )
+  const retryableCaseIds = existingResults
+    .filter((r) => r.status === 'failed' || r.status === 'invalid_output')
+    .map((r) => r.caseId)
+
+  if (retryableCaseIds.length > 0) {
+    await database
+      .delete(benchmarkCaseResults)
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, run.id),
+          inArray(benchmarkCaseResults.caseId, retryableCaseIds),
+        ),
+      )
+  }
+
   const pendingCases = allCases.filter((c) => !completedCaseIds.has(c.id))
 
   const toolIndex = await buildToolResolutionIndex(database)
