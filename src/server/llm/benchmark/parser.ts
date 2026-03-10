@@ -9,12 +9,33 @@ export type ParseResult =
   | { status: 'ok'; appendix: BenchmarkAppendix; rawAppendix: string; naturalResponse: string }
   | { status: 'invalid_output'; reason: string }
 
+function findAppendixTagBlock(rawContent: string) {
+  let searchFrom = rawContent.length
+
+  while (searchFrom >= 0) {
+    const openIdx = rawContent.lastIndexOf(OPEN_TAG, searchFrom)
+    if (openIdx === -1) {
+      return null
+    }
+
+    const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+    if (closeIdx !== -1) {
+      return { openIdx, closeIdx }
+    }
+
+    searchFrom = openIdx - 1
+  }
+
+  return null
+}
+
 export function parseBenchmarkResponse(
   rawContent: string,
   eligibleCategorySlugs: string[],
 ): ParseResult {
-  const openIdx = rawContent.indexOf(OPEN_TAG)
-  const closeIdx = openIdx === -1 ? -1 : rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+  const tagBlock = findAppendixTagBlock(rawContent)
+  const openIdx = tagBlock?.openIdx ?? -1
+  const closeIdx = tagBlock?.closeIdx ?? -1
 
   if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
     return { status: 'invalid_output', reason: 'Missing <preseason_benchmark_json> tags' }
