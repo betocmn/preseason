@@ -280,6 +280,29 @@ export async function runBenchmark(
     return await buildRunSummary(database, run, seasonId)
   }
 
+  try {
+    return await executeRun(database, llmService, now, run, seasonId)
+  } catch (error) {
+    const message = getErrorMessage(error)
+    await database
+      .update(benchmarkRuns)
+      .set({
+        status: 'failed',
+        completedAt: now(),
+        errorLog: message,
+      })
+      .where(eq(benchmarkRuns.id, run.id))
+    throw error
+  }
+}
+
+async function executeRun(
+  database: DatabaseClient,
+  llmService: LlmService,
+  now: () => Date,
+  run: BenchmarkRunRecord,
+  seasonId: string,
+): Promise<BenchmarkRunSummary> {
   const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
     where: eq(benchmarkModelWeightConfigs.isActive, true),
   })
