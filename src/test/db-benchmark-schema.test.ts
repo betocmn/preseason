@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   benchmarkCaseDecisions,
@@ -1064,6 +1065,110 @@ describe('Benchmark Schema', () => {
           promptContractVersion: '1.0',
         }),
       ).rejects.toThrow()
+    })
+  })
+
+  // ========================================================================
+  // Season ID Immutability
+  // ========================================================================
+
+  describe('Season ID Immutability', () => {
+    it('should prevent updating season_id on benchmark_run', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const seasonA = await seedSeason(db, protocol.id)
+      const [seasonB] = await db
+        .insert(benchmarkSeasons)
+        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+        .returning()
+
+      const run = first(
+        await db
+          .insert(benchmarkRuns)
+          .values({ seasonId: seasonA.id, scheduledFor: '2026-03-10' })
+          .returning(),
+      )
+
+      await expect(
+        db.update(benchmarkRuns).set({ seasonId: seasonB!.id }).where(eq(benchmarkRuns.id, run.id)),
+      ).rejects.toThrow(/immutable/)
+    })
+
+    it('should prevent updating season_id on benchmark_case', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const seasonA = await seedSeason(db, protocol.id)
+      const [seasonB] = await db
+        .insert(benchmarkSeasons)
+        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+        .returning()
+      const prompt = await seedPrompt(db)
+      const llm = await seedLlm(db)
+      const pv = await seedPromptVersion(db, prompt.id)
+      const ms = await seedModelSnapshot(db, llm.id)
+
+      await seedSeasonPanel(db, seasonA.id, pv.id, ms.id)
+      const benchmarkCase = first(
+        await db
+          .insert(benchmarkCases)
+          .values({ seasonId: seasonA.id, promptVersionId: pv.id, modelSnapshotId: ms.id })
+          .returning(),
+      )
+
+      await expect(
+        db
+          .update(benchmarkCases)
+          .set({ seasonId: seasonB!.id })
+          .where(eq(benchmarkCases.id, benchmarkCase.id)),
+      ).rejects.toThrow(/immutable/)
+    })
+
+    it('should prevent updating season_id on benchmark_case_result', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const seasonA = await seedSeason(db, protocol.id)
+      const [seasonB] = await db
+        .insert(benchmarkSeasons)
+        .values({ protocolId: protocol.id, slug: 'season-2', name: 'Season 2', status: 'draft' })
+        .returning()
+      const prompt = await seedPrompt(db)
+      const llm = await seedLlm(db)
+      const pv = await seedPromptVersion(db, prompt.id)
+      const ms = await seedModelSnapshot(db, llm.id)
+
+      await seedSeasonPanel(db, seasonA.id, pv.id, ms.id)
+      const benchmarkCase = first(
+        await db
+          .insert(benchmarkCases)
+          .values({ seasonId: seasonA.id, promptVersionId: pv.id, modelSnapshotId: ms.id })
+          .returning(),
+      )
+
+      const run = first(
+        await db
+          .insert(benchmarkRuns)
+          .values({ seasonId: seasonA.id, scheduledFor: '2026-03-10' })
+          .returning(),
+      )
+
+      const caseResult = first(
+        await db
+          .insert(benchmarkCaseResults)
+          .values({
+            seasonId: seasonA.id,
+            runId: run.id,
+            caseId: benchmarkCase.id,
+            status: 'completed',
+          })
+          .returning(),
+      )
+
+      await expect(
+        db
+          .update(benchmarkCaseResults)
+          .set({ seasonId: seasonB!.id })
+          .where(eq(benchmarkCaseResults.id, caseResult.id)),
+      ).rejects.toThrow(/immutable|season_id/)
     })
   })
 })
