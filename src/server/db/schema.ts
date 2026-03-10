@@ -579,7 +579,12 @@ export const benchmarkModelWeightConfigs = createTable(
       .$defaultFn(() => new Date())
       .notNull(),
   }),
-  (t) => [index('benchmark_model_weight_config_slug_idx').on(t.slug)],
+  (t) => [
+    index('benchmark_model_weight_config_slug_idx').on(t.slug),
+    uniqueIndex('benchmark_model_weight_config_one_active_idx')
+      .on(t.isActive)
+      .where(sql`is_active = true`),
+  ],
 )
 
 export const benchmarkSeasonPrompts = createTable(
@@ -759,6 +764,7 @@ export const benchmarkCaseDecisions = createTable(
       'benchmark_decision_tool_check',
       sql`decision_type != 'tool' OR tool_id IS NOT NULL OR resolution_status = 'unresolved_tool'`,
     ),
+    check('benchmark_decision_non_tool_no_tool_id', sql`decision_type = 'tool' OR tool_id IS NULL`),
   ],
 )
 

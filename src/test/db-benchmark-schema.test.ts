@@ -611,6 +611,60 @@ describe('Benchmark Schema', () => {
         }),
       ).rejects.toThrow()
     })
+
+    it('should reject decision_type=none with non-null tool_id', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const season = await seedSeason(db, protocol.id)
+      const prompt = await seedPrompt(db)
+      const llm = await seedLlm(db)
+      const pv = await seedPromptVersion(db, prompt.id)
+      const ms = await seedModelSnapshot(db, llm.id)
+      const group = await seedCategoryGroup(db)
+      const sub = await seedSubcategory(db, group.id)
+      const tool = await seedTool(db)
+
+      await seedSeasonPanel(db, season.id, pv.id, ms.id)
+      const benchmarkCase = first(
+        await db
+          .insert(benchmarkCases)
+          .values({
+            seasonId: season.id,
+            promptVersionId: pv.id,
+            modelSnapshotId: ms.id,
+          })
+          .returning(),
+      )
+
+      const run = first(
+        await db
+          .insert(benchmarkRuns)
+          .values({ seasonId: season.id, scheduledFor: '2026-03-10' })
+          .returning(),
+      )
+
+      const caseResult = first(
+        await db
+          .insert(benchmarkCaseResults)
+          .values({
+            seasonId: season.id,
+            runId: run.id,
+            caseId: benchmarkCase.id,
+            status: 'completed',
+          })
+          .returning(),
+      )
+
+      await expect(
+        db.insert(benchmarkCaseDecisions).values({
+          caseResultId: caseResult.id,
+          categoryId: sub.id,
+          decisionType: 'none',
+          toolId: tool.id,
+          resolutionStatus: 'resolved',
+        }),
+      ).rejects.toThrow()
+    })
   })
 
   // ========================================================================
@@ -938,6 +992,55 @@ describe('Benchmark Schema', () => {
           isActive: false,
         }),
       ).rejects.toThrow()
+    })
+
+    it('should enforce only one active weight config', async () => {
+      const db = getTestDb()
+
+      await db.insert(benchmarkModelWeightConfigs).values({
+        slug: 'config-a',
+        name: 'Config A',
+        frontierWeight: 1.0,
+        midWeight: 1.0,
+        smallWeight: 1.0,
+        isActive: true,
+      })
+
+      await expect(
+        db.insert(benchmarkModelWeightConfigs).values({
+          slug: 'config-b',
+          name: 'Config B',
+          frontierWeight: 2.0,
+          midWeight: 2.0,
+          smallWeight: 2.0,
+          isActive: true,
+        }),
+      ).rejects.toThrow()
+    })
+
+    it('should allow multiple inactive weight configs', async () => {
+      const db = getTestDb()
+
+      await db.insert(benchmarkModelWeightConfigs).values({
+        slug: 'config-a',
+        name: 'Config A',
+        frontierWeight: 1.0,
+        midWeight: 1.0,
+        smallWeight: 1.0,
+        isActive: false,
+      })
+
+      await db.insert(benchmarkModelWeightConfigs).values({
+        slug: 'config-b',
+        name: 'Config B',
+        frontierWeight: 2.0,
+        midWeight: 2.0,
+        smallWeight: 2.0,
+        isActive: false,
+      })
+
+      const configs = await db.select().from(benchmarkModelWeightConfigs)
+      expect(configs).toHaveLength(2)
     })
   })
 
