@@ -21,8 +21,9 @@ The problems are real and well-documented:
 8. **No prompt difficulty weighting** — a trivial "build a todo app" prompt has the same
    influence as a complex multi-service architecture prompt.
 
-This plan rebuilds the methodology as a proper benchmark protocol while keeping the
-existing exploration pipeline intact during migration.
+This plan rebuilds the methodology as a proper benchmark protocol. Since nothing
+is deployed yet, we can aggressively remove legacy code after the new pipeline
+is functional — there's no live traffic to worry about.
 
 ---
 
@@ -59,24 +60,41 @@ This plan adds:
   difficulty. "What do frontier models recommend for hard problems?" is a more
   defensible claim than "What do all models recommend for all prompts?"
 
-### 3. Seven PRs, not eleven phases
+### 3. Prompts live in the database, not on disk
+
+The current system loads prompt markdown from files at runtime. This plan moves
+prompts entirely to the database. The `prompts` table gets a `content_md` column,
+and `benchmark_prompt_versions` snapshots from there. The markdown files in
+`src/server/llm/prompts/` are deleted. Promptfoo evals can read prompt content
+from the DB via a small adapter — or we export prompts to temp files at eval time.
+
+### 4. Model weighting is a launch feature, not a follow-up
+
+Model tiers (`frontier`, `mid`, `small`) are not just filters — they carry
+scoring weights. A frontier model's recommendation carries more signal than a
+small model's. Weights are stored in a `benchmark_model_weight_configs` table
+and snapshotted per run, so results always reference the weight config that
+produced them. Weights can change monthly without invalidating historical data.
+
+### 5. Eight PRs, not eleven phases
 
 The initial proposal has 11 phases, several of which are small enough to combine
-and some large enough to split. This plan targets 7 PRs that each deliver a
-testable, deployable increment. Each PR has a clear "done when" gate.
+and some large enough to split. This plan targets 8 PRs that each deliver a
+testable, deployable increment. PR 8 is an aggressive legacy cleanup since
+nothing is deployed yet. Each PR has a clear "done when" gate.
 
-### 4. Backfill strategy for launch data
+### 6. Backfill strategy for launch data
 
 To launch with weeks of historical data, we need to retroactively run the
-benchmark protocol against the existing prompt corpus. Phase 4 includes a
+benchmark protocol against the existing prompt corpus. PR 4 includes a
 backfill command that replays the benchmark runner against historical dates,
 producing case results as if the benchmark had been running all along.
 
-### 5. Keep the "overall" ranking but label it clearly
+### 7. Keep the "overall" ranking but label it clearly
 
 The initial proposal removes the overall ranking entirely. Instead, this plan
 keeps it but:
-- Labels it "Exploratory" or "Composite" in the UI
+- Labels it "Exploratory Composite" in the UI
 - Removes it from any "benchmark-grade" claims
 - Category-level rankings are the authoritative benchmark output
 
@@ -136,7 +154,7 @@ A frozen evaluation panel.
 Immutable snapshot of a prompt at a point in time.
 - `id`, `prompt_id` (FK → prompts), `slug`, `level`, `version` (integer)
 - `tier` (prompt_tier) — difficulty classification
-- `source_path`, `content_md`, `content_hash` (unique)
+- `content_md`, `content_hash` (unique)
 - `system_prompt_snapshot`, `prompt_contract_version`
 - `is_active`, `created_at`
 - Unique: `(prompt_id, version)`
@@ -176,6 +194,8 @@ The cartesian product of season prompts × season models.
 One benchmark batch on one date.
 - `id`, `season_id` (FK), `scheduled_for` (date), `trigger`
 - `status` (run_status_v2)
+- `weight_config_id` (FK → `benchmark_model_weight_configs`) — snapshots which
+  weight config was active when this run was scored
 - `started_at`, `completed_at`
 - `expected_case_count`, `completed_case_count`, `failed_case_count`
 - `qc_status`, `qc_summary_json` (jsonb)
@@ -218,6 +238,25 @@ Review queue for unknown tool mentions.
 - `status` (tool_candidate_status)
 - `approved_tool_id` (FK, nullable), `notes`
 
+#### `benchmark_model_weight_configs`
+Versioned weight assignments for model tiers. Weights can change monthly
+without invalidating historical results because each run snapshots its config.
+- `id`, `slug` (unique, e.g. `weights-2026-03`)
+- `name`, `description`
+- `frontier_weight` (real, default 1.5)
+- `mid_weight` (real, default 1.0)
+- `small_weight` (real, default 0.6)
+- `is_active` (boolean, only one active at a time)
+- `created_at`
+
+### Schema changes to existing tables
+
+#### `prompts` table — add `content_md`
+Add a `content_md` (text) column to store prompt markdown directly in the
+database instead of loading from disk files. Backfill from the existing
+markdown files in `src/server/llm/prompts/`. The `content_md` column becomes
+the source of truth; markdown files are deleted in PR 8.
+
 ### Indexes
 
 - `benchmark_runs`: `(season_id, status)`, `(season_id, scheduled_for)`
@@ -250,10 +289,20 @@ Review queue for unknown tool mentions.
 
 ---
 
-## PR 2: Benchmark prompt builder and version freezing
+## PR 2: Prompts to database and benchmark prompt builder
 
-**Goal:** Build the immutable prompt system. Prompts get frozen as versioned
-snapshots with explicit category eligibility and difficulty tiers.
+**Goal:** Move prompts from disk files to the database. Build the immutable
+prompt version system with explicit category eligibility and difficulty tiers.
+
+### Migration: prompts from disk to DB
+
+1. Read all markdown files from `src/server/llm/prompts/{level}/*.md`
+2. Populate the new `prompts.content_md` column for each existing prompt record
+3. Update `src/server/llm/prompts/index.ts` to read from `prompts.content_md`
+   instead of the filesystem
+4. Verify Promptfoo evals still work — add a thin adapter that exports prompt
+   content from DB to temp files at eval time, or configure Promptfoo to call
+   a local endpoint that returns prompt text
 
 ### New files
 
@@ -261,7 +310,7 @@ snapshots with explicit category eligibility and difficulty tiers.
   prompts with the machine-readable appendix contract
 - `src/server/llm/benchmark/schema.ts` — Zod schemas for the appendix JSON
 - `src/server/llm/benchmark/prompt-freezer.ts` — Service to create
-  `benchmark_prompt_versions` from existing prompts
+  `benchmark_prompt_versions` from DB prompt content
 
 ### Benchmark prompt contract
 
@@ -321,16 +370,12 @@ freezePromptVersion(promptId, options: {
 }): Promise<BenchmarkPromptVersion>
 ```
 
-- Reads current prompt markdown from disk
+- Reads `content_md` from the `prompts` table (DB is the source of truth)
 - Computes SHA-256 content hash
 - Checks for duplicate hash (skip if identical version exists)
 - Creates `benchmark_prompt_version` with full snapshot
 - Creates `benchmark_prompt_version_categories` rows
 - Auto-assigns tier based on category count and content analysis
-
-### Keep existing prompts system for exploration
-
-`src/server/llm/prompts/index.ts` remains untouched for exploration mode.
 
 ### Tests
 
@@ -402,8 +447,8 @@ Initial classification based on known models:
 | `mid` | Claude Sonnet, GPT-4o Mini, Mistral Large |
 | `small` | Llama 3.1 70B, DeepSeek V2.5 |
 
-Admin can override via the model snapshot. Tier is informational for filtering —
-it does not affect scoring weights in V1 (but enables future weighting).
+Admin can override via the model snapshot. Tiers drive both filtering and
+scoring weights (see PR 5).
 
 ### Tests
 
@@ -568,30 +613,55 @@ scoring. Add tier-filtered views.
 The fundamental unit is one **case decision** — a category-level tool choice from
 one prompt×model evaluation.
 
+#### Model-weighted scoring
+
+Each case decision carries a weight based on its model's tier, pulled from the
+`benchmark_model_weight_configs` record snapshotted on the run:
+
+| Model tier | Default weight |
+|------------|---------------|
+| `frontier` | 1.5 |
+| `mid` | 1.0 |
+| `small` | 0.6 |
+
+These defaults reflect that frontier models tend to give more deliberate,
+higher-quality recommendations. Weights are tunable and versioned — when you
+update weights (e.g. monthly as model capabilities shift), create a new config
+and set it active. Historical runs keep pointing to the config that scored them.
+
+The `weighted_support_count` for a tool sums the weights of all decisions that
+selected it, rather than counting each decision as 1.
+
 #### Category ranking metrics
 
 For each tool in a category:
 
 | Metric | Formula |
 |--------|---------|
-| `support_count` | Decisions where `decision_type = 'tool' AND tool_id = <tool>` |
-| `eligible_case_count` | Decisions where `decision_type IN ('tool', 'none')` |
-| `support_rate` | `support_count / eligible_case_count` |
-| `abstain_rate` | `none_count / eligible_case_count` |
+| `weighted_support` | Sum of `model_weight` for decisions selecting this tool |
+| `weighted_eligible` | Sum of `model_weight` for all eligible decisions (tool + none) |
+| `weighted_support_rate` | `weighted_support / weighted_eligible` |
+| `raw_support_count` | Unweighted count (for transparency) |
+| `raw_eligible_count` | Unweighted count |
+| `raw_support_rate` | `raw_support_count / raw_eligible_count` |
 | `model_coverage` | Distinct model snapshots selecting tool / total distinct model snapshots |
 | `prompt_coverage` | Distinct prompt versions selecting tool / total distinct prompt versions |
-| `ci_low`, `ci_high` | Wilson 95% confidence interval on support_rate |
+| `ci_low`, `ci_high` | Wilson 95% CI on `raw_support_rate` (CI on weighted rates is misleading) |
+
+Both weighted and unweighted rates are computed and returned. The **primary sort**
+uses `weighted_support_rate`. The unweighted rate is shown for transparency so
+users can see how weighting affects rankings.
 
 #### Sorting
 
-1. Support rate descending
-2. CI lower bound descending (tiebreaker — rewards consistency)
-3. Support count descending
+1. Weighted support rate descending
+2. CI lower bound descending (on raw rate — tiebreaker, rewards consistency)
+3. Raw support count descending
 
 #### Trend
 
 Compare metrics between the latest completed run and the previous completed run
-in the same season. `trend = current_support_rate - previous_support_rate`.
+in the same season. `trend = weighted_support_rate_current - weighted_support_rate_previous`.
 
 #### Prompt-tier filtered rankings
 
@@ -614,6 +684,10 @@ Similarly, support `?modelTier=frontier`:
 Both filters compose: `?promptTier=advanced&modelTier=frontier` gives the
 highest-signal slice of the data.
 
+When a model-tier filter is applied, weighting is still used within the filtered
+set (e.g. filtering to `frontier` only still uses 1.5 weight for each, which
+is equivalent to unweighted within that tier).
+
 ### Head-to-head computation
 
 For a category matchup between Tool A and Tool B:
@@ -628,8 +702,14 @@ For a category matchup between Tool A and Tool B:
 Published metrics:
 - `case_count`, `a_wins`, `b_wins`, `abstain_count`
 - `decisive_case_count = a_wins + b_wins`
-- `a_win_rate = a_wins / decisive_case_count`
+- `a_win_rate = a_wins / decisive_case_count` (unweighted for head-to-head simplicity)
 - Wilson 95% CI on `a_win_rate`
+- `weighted_a_wins`, `weighted_b_wins` (using model tier weights, shown as secondary)
+
+Head-to-heads use unweighted counts as the primary metric (each model gets one
+vote) but show weighted results alongside for context. This keeps matchups
+intuitive — "5 out of 8 models picked Clerk over Auth0" is clearer than
+weighted fractional scores.
 
 Head-to-heads are computed on demand from case decisions, not pre-materialized.
 Featured matchups can be admin-curated or auto-generated from top-2 tools per
@@ -642,29 +722,32 @@ removed from benchmark-grade output. Instead:
 
 - **Category rankings** are the authoritative benchmark output
 - **Overall ranking** is kept but labeled "Exploratory Composite" in the UI
-- Overall uses the old exploration pipeline data, not benchmark data
+- Overall can use benchmark data but is clearly marked as non-authoritative
 
 This avoids the epistemological problem of comparing Supabase (database) vs Clerk
 (auth) in a single ranking with arbitrary weights.
 
 ### Tests
 
-- Support rate uses eligible-case denominator
-- Abstains handled correctly (excluded from support rate denominator: no — they
-  are a valid `none` decision and included)
-- Wilson CI computed correctly against known values
-- Trend compares consecutive completed runs
+- Weighted support rate correctly applies model tier weights
+- Changing weight config changes weighted results but not raw counts
+- Both weighted and raw rates returned in API response
+- Wilson CI computed on raw rate against known values
+- Trend compares consecutive completed runs using weighted rate
 - Prompt-tier filter narrows to correct subset
 - Model-tier filter narrows to correct subset
-- Head-to-head: A/B wins from case decisions
+- Head-to-head: A/B wins from case decisions (unweighted primary)
+- Head-to-head: weighted wins shown as secondary metric
 - Other-tool selection counted separately
 - Decisive win rate uses decisive cases only
+- Weight config snapshotted on run — historical runs use their own config
 
 ### Done when
 
-- Benchmark ranking router returns tier-filterable category rankings
+- Benchmark ranking router returns tier-filterable, model-weighted category rankings
 - Head-to-head router computes matchups from case decisions
 - Wilson confidence intervals are computed
+- Weight configs are versioned and snapshotted per run
 - `pnpm run check && pnpm run test` pass
 
 ---
@@ -681,6 +764,12 @@ candidates, and publishing runs.
 - `freezeSeason` — Freeze prompt versions + model snapshots into the season,
   generate the case matrix, set status to `active`
 - `completeSeason` — Mark season as completed (no more runs)
+
+#### Model weight config management
+- `listWeightConfigs` — View all weight configs with their history
+- `createWeightConfig` — Create a new weight config (e.g. monthly update)
+- `activateWeightConfig` — Set a config as active (deactivates previous)
+- New runs automatically snapshot the active weight config
 
 #### Run management
 - `listBenchmarkRuns` — Paginated list with QC status
@@ -734,13 +823,13 @@ Label exploration vs benchmark clearly.
 - `/matches` — Featured head-to-heads from benchmark data
 - `/matches/[slug]` — Head-to-head detail with per-model/per-prompt breakdown
 
-#### Exploration pages (keep using old pipeline)
+#### Exploration pages (keep temporarily, removed in PR 8)
 - `/feed` — Raw recommendation feed (labeled "Exploration")
 - Prompt detail / LLM detail raw run history
 
 #### New visual indicators
 - Badge: "Benchmark" on authoritative pages
-- Badge: "Exploration" on raw feed pages
+- Badge: "Exploration" on raw feed pages (temporary, until PR 8 removes them)
 - Methodology link on every ranking page
 
 ### Documentation updates
@@ -798,41 +887,108 @@ The methodology page and any marketing copy must honestly state:
 ## Rollout sequence
 
 ```
-PR 1: Schema + aliases         ─── pure additive, zero risk
+PR 1: Schema + aliases          ─── pure additive, zero risk
   │
-PR 2: Prompt builder + freezer ─── new code, no prod changes
+PR 2: Prompts to DB + builder   ─── prompts move to DB, benchmark prompt contract
   │
-PR 3: LLM service hardening    ─── extends existing service, backwards compatible
+PR 3: LLM service hardening     ─── extends existing service, backwards compatible
   │
-PR 4: Benchmark runner          ─── new cron endpoint, old cron untouched
-  │                                  Run backfill to generate launch data
+PR 4: Benchmark runner           ─── new cron endpoint, old cron untouched
+  │                                   Run backfill to generate launch data
   │
-PR 5: Scoring + rankings API    ─── new routers, old routers untouched
+PR 5: Scoring + weighted ranks   ─── new routers with model weighting
   │
-PR 6: Admin controls            ─── admin-only, no public impact
+PR 6: Admin controls             ─── admin-only, no public impact
   │
-PR 7: Public switchover + docs  ─── the visible change, all infrastructure ready
+PR 7: Public switchover + docs   ─── the visible change, all infrastructure ready
+  │
+PR 8: Legacy cleanup             ─── remove old pipeline code, tables, files
 ```
 
-Each PR is independently deployable. PRs 1-4 can run in production generating
-benchmark data while the public site still shows exploration data. PR 7 is the
-flip — only merged when we're confident in the benchmark data quality.
+PRs 1-4 build the data generation pipeline. PRs 5-7 build the consumption layer.
+PR 8 cleans house. Since nothing is deployed, PR 8 can follow quickly after PR 7.
+
+---
+
+## PR 8: Legacy cleanup
+
+**Goal:** Remove all exploration-era code, tables, and files that are superseded
+by the benchmark pipeline. Since nothing is deployed to production yet, there is
+no live traffic to worry about.
+
+### Database removals (migration)
+
+Drop these tables:
+- `preseason_recommendation` — replaced by `benchmark_case_decisions`
+- `preseason_run_result` — replaced by `benchmark_case_results`
+- `preseason_run` — replaced by `benchmark_runs`
+- `preseason_match` — replaced by benchmark head-to-head computation
+
+Drop this column:
+- `preseason_tool.aliases` — replaced by `tool_aliases` table
+
+Drop these enums (if no longer referenced):
+- `run_status` — replaced by `run_status_v2`
+- `parse_status` — replaced by `case_result_status`
+- `match_status` — matches are now computed, not stateful
+
+### Code removals
+
+#### Automation pipeline (entire old pipeline)
+- `src/server/llm/automation/runner.ts`
+- `src/server/llm/automation/parser.ts`
+- `src/server/llm/automation/match-generator.ts`
+- `src/server/llm/automation/match-settler.ts`
+- Related test files
+
+#### Prompt files (now in DB)
+- `src/server/llm/prompts/vibe-coder/*.md` — all prompt markdown files
+- `src/server/llm/prompts/index.ts` — filesystem prompt loader
+
+#### Old cron routes
+- `src/app/api/cron/run/route.ts` — replaced by `/api/cron/benchmark-run`
+- `src/app/api/cron/settle/route.ts` — matches are computed, not settled
+
+#### Old routers
+- `src/server/api/routers/ranking.ts` — replaced by `benchmark-ranking.ts`
+- `src/server/api/routers/match.ts` — replaced by `benchmark-match.ts`
+- `src/server/api/routers/recommendation.ts` — feed can be rebuilt from
+  case decisions or removed entirely
+
+#### Old pages
+- `/feed` page and components (or rebuild as a benchmark case browser)
+- Any components that reference old `recommendation`, `runResult`, `match` types
+
+### Schema cleanup
+
+Remove Drizzle relations referencing dropped tables:
+- `runRelations`, `runResultRelations`, `recommendationRelations`, `matchRelations`
+- Update `subcategoryRelations`, `toolRelations` to remove references to
+  `recommendations` and `matches`
+
+### Tests
+
+- All remaining tests pass after removals
+- No imports reference deleted modules
+- `pnpm run check && pnpm run test` pass
+- `pnpm run build` succeeds (no broken page imports)
+
+### Done when
+
+- Zero references to old `recommendation`, `runResult`, `run`, `match` tables
+- No prompt markdown files on disk
+- Build succeeds cleanly
+- `pnpm run check && pnpm run test` pass
 
 ---
 
 ## Follow-up work (post-launch)
 
-These are explicitly NOT in the 7 PRs but should be tracked:
+These are explicitly NOT in the 8 PRs but should be tracked:
 
 ### Materialized snapshots (performance)
 If ranking queries become slow, add `benchmark_leaderboard_snapshots` and
-`benchmark_leaderboard_items` tables. Materialize on run publication. This is
-the deferred denormalization from the initial proposal.
-
-### Model-weighted scoring
-Use model tiers as scoring weights rather than just filters. A frontier model's
-vote could count 1.5× while a small model counts 0.75×. Requires careful
-calibration and transparency about the weighting.
+`benchmark_leaderboard_items` tables. Materialize on run publication.
 
 ### Prompt panel expansion
 Expand beyond web/SaaS development:
@@ -852,16 +1008,3 @@ results separately.
 Let tool companies see their benchmark performance, compare against competitors,
 and submit alias corrections. Read-only view of case decisions mentioning their
 tools.
-
-### Historical exploration data migration
-Optionally backfill historical `recommendation` rows into the benchmark format
-for trend analysis. Lower priority since benchmark runs will generate fresh data.
-
-### Delete legacy tables
-Once benchmark data has been running for 2+ months and exploration pages are
-sunset, clean up:
-- Remove `preseason_recommendation` table
-- Remove `preseason_run_result` table
-- Remove `preseason_run` table (replace with benchmark_runs)
-- Remove `tools.aliases` column (replaced by `tool_aliases` table)
-- Remove old ranking/match routers
