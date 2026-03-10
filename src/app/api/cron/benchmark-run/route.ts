@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { env } from '~/env'
 import { db } from '~/server/db'
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
   try {
     const activeSeason = await db.query.benchmarkSeasons.findFirst({
       where: eq(benchmarkSeasons.status, 'active'),
+      orderBy: desc(benchmarkSeasons.createdAt),
     })
 
     if (!activeSeason) {
