@@ -676,6 +676,10 @@ export const benchmarkCaseResults = createTable(
   'benchmark_case_result',
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom().notNull(),
+    seasonId: d
+      .uuid('season_id')
+      .notNull()
+      .references(() => benchmarkSeasons.id),
     runId: d
       .uuid('run_id')
       .notNull()
@@ -713,6 +717,7 @@ export const benchmarkCaseResults = createTable(
     uniqueIndex('benchmark_case_result_run_case_idx').on(t.runId, t.caseId),
     index('benchmark_case_result_run_status_idx').on(t.runId, t.status),
     index('benchmark_case_result_case_id_idx').on(t.caseId),
+    index('benchmark_case_result_season_id_idx').on(t.seasonId),
   ],
 )
 
@@ -740,7 +745,10 @@ export const benchmarkCaseDecisions = createTable(
     index('benchmark_case_decision_category_type_idx').on(t.categoryId, t.decisionType),
     index('benchmark_case_decision_tool_id_idx').on(t.toolId),
     index('benchmark_case_decision_result_id_idx').on(t.caseResultId),
-    check('benchmark_decision_tool_check', sql`decision_type != 'tool' OR tool_id IS NOT NULL`),
+    check(
+      'benchmark_decision_tool_check',
+      sql`decision_type != 'tool' OR tool_id IS NOT NULL OR resolution_status = 'unresolved_tool'`,
+    ),
   ],
 )
 
@@ -1046,6 +1054,10 @@ export const benchmarkRunRelations = relations(benchmarkRuns, ({ one, many }) =>
 }))
 
 export const benchmarkCaseResultRelations = relations(benchmarkCaseResults, ({ one, many }) => ({
+  season: one(benchmarkSeasons, {
+    fields: [benchmarkCaseResults.seasonId],
+    references: [benchmarkSeasons.id],
+  }),
   run: one(benchmarkRuns, {
     fields: [benchmarkCaseResults.runId],
     references: [benchmarkRuns.id],

@@ -338,6 +338,7 @@ describe('Benchmark Schema', () => {
         await db
           .insert(benchmarkCaseResults)
           .values({
+            seasonId: season.id,
             runId: run.id,
             caseId: benchmarkCase.id,
             status: 'completed',
@@ -390,6 +391,7 @@ describe('Benchmark Schema', () => {
         await db
           .insert(benchmarkCaseResults)
           .values({
+            seasonId: season.id,
             runId: run.id,
             caseId: benchmarkCase.id,
             status: 'completed',
@@ -412,6 +414,65 @@ describe('Benchmark Schema', () => {
       expect(decision).toBeDefined()
       expect(decision!.decisionType).toBe('none')
       expect(decision!.toolId).toBeNull()
+    })
+
+    it('should allow decision_type=tool with null tool_id when unresolved_tool', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const season = await seedSeason(db, protocol.id)
+      const prompt = await seedPrompt(db)
+      const llm = await seedLlm(db)
+      const pv = await seedPromptVersion(db, prompt.id)
+      const ms = await seedModelSnapshot(db, llm.id)
+      const group = await seedCategoryGroup(db)
+      const sub = await seedSubcategory(db, group.id)
+
+      const benchmarkCase = first(
+        await db
+          .insert(benchmarkCases)
+          .values({
+            seasonId: season.id,
+            promptVersionId: pv.id,
+            modelSnapshotId: ms.id,
+          })
+          .returning(),
+      )
+
+      const run = first(
+        await db
+          .insert(benchmarkRuns)
+          .values({ seasonId: season.id, scheduledFor: '2026-03-10' })
+          .returning(),
+      )
+
+      const caseResult = first(
+        await db
+          .insert(benchmarkCaseResults)
+          .values({
+            seasonId: season.id,
+            runId: run.id,
+            caseId: benchmarkCase.id,
+            status: 'completed',
+          })
+          .returning(),
+      )
+
+      const [decision] = await db
+        .insert(benchmarkCaseDecisions)
+        .values({
+          caseResultId: caseResult.id,
+          categoryId: sub.id,
+          decisionType: 'tool',
+          toolId: null,
+          rawToolName: 'UnknownTool',
+          resolutionStatus: 'unresolved_tool',
+        })
+        .returning()
+
+      expect(decision).toBeDefined()
+      expect(decision!.decisionType).toBe('tool')
+      expect(decision!.toolId).toBeNull()
+      expect(decision!.resolutionStatus).toBe('unresolved_tool')
     })
 
     it('should allow decision_type=tool with valid tool_id', async () => {
@@ -448,6 +509,7 @@ describe('Benchmark Schema', () => {
         await db
           .insert(benchmarkCaseResults)
           .values({
+            seasonId: season.id,
             runId: run.id,
             caseId: benchmarkCase.id,
             status: 'completed',
@@ -507,6 +569,7 @@ describe('Benchmark Schema', () => {
         await db
           .insert(benchmarkCaseResults)
           .values({
+            seasonId: season.id,
             runId: run.id,
             caseId: benchmarkCase.id,
             status: 'completed',
@@ -762,6 +825,7 @@ describe('Benchmark Schema', () => {
       )
 
       await db.insert(benchmarkCaseResults).values({
+        seasonId: season.id,
         runId: run.id,
         caseId: benchmarkCase.id,
         status: 'completed',
@@ -769,9 +833,61 @@ describe('Benchmark Schema', () => {
 
       await expect(
         db.insert(benchmarkCaseResults).values({
+          seasonId: season.id,
           runId: run.id,
           caseId: benchmarkCase.id,
           status: 'pending',
+        }),
+      ).rejects.toThrow()
+    })
+
+    it('should reject case result with mismatched season_id', async () => {
+      const db = getTestDb()
+      const protocol = await seedProtocol(db)
+      const seasonA = await seedSeason(db, protocol.id)
+
+      const [seasonB] = await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-2',
+          name: 'Season 2',
+          status: 'draft',
+        })
+        .returning()
+
+      const prompt = await seedPrompt(db)
+      const llm = await seedLlm(db)
+      const pv = await seedPromptVersion(db, prompt.id)
+      const ms = await seedModelSnapshot(db, llm.id)
+
+      // Case belongs to season A
+      const benchmarkCase = first(
+        await db
+          .insert(benchmarkCases)
+          .values({
+            seasonId: seasonA.id,
+            promptVersionId: pv.id,
+            modelSnapshotId: ms.id,
+          })
+          .returning(),
+      )
+
+      // Run belongs to season A
+      const run = first(
+        await db
+          .insert(benchmarkRuns)
+          .values({ seasonId: seasonA.id, scheduledFor: '2026-03-10' })
+          .returning(),
+      )
+
+      // Try to insert case result with season B — should fail
+      await expect(
+        db.insert(benchmarkCaseResults).values({
+          seasonId: seasonB!.id,
+          runId: run.id,
+          caseId: benchmarkCase.id,
+          status: 'completed',
         }),
       ).rejects.toThrow()
     })
