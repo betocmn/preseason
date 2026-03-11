@@ -1,7 +1,8 @@
-import { desc, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { anchorDateSchema, findLatestActiveBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { benchmarkSeasons, subcategories, tools } from '~/server/db/schema'
+import { subcategories, tools } from '~/server/db/schema'
 import { computeHeadToHead } from '~/server/llm/benchmark/scoring'
 
 export const benchmarkMatchRouter = createTRPCRouter({
@@ -16,10 +17,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
           windowType: z
             .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
             .default('trailing_28d'),
-          anchorDate: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional(),
+          anchorDate: anchorDateSchema.optional(),
           promptTier: z.enum(['basic', 'intermediate', 'advanced']).optional(),
           modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
         })
@@ -47,14 +45,11 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       let seasonId = input.seasonId
       if (!seasonId) {
-        const activeSeason = await ctx.db.query.benchmarkSeasons.findFirst({
-          where: eq(benchmarkSeasons.status, 'active'),
-          orderBy: [desc(benchmarkSeasons.createdAt)],
-        })
-        if (!activeSeason) {
+        const defaultSeasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
+        if (!defaultSeasonId) {
           return { category, toolA, toolB, result: null }
         }
-        seasonId = activeSeason.id
+        seasonId = defaultSeasonId
       }
 
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
