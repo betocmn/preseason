@@ -362,7 +362,7 @@ describe('benchmark public routers', () => {
         .returning(),
     )
 
-    const [promptA, promptB] = await db
+    const promptRows = await db
       .insert(prompts)
       .values([
         {
@@ -379,7 +379,10 @@ describe('benchmark public routers', () => {
         },
       ])
       .returning()
-    const [promptVersionA, promptVersionB] = await db
+    const promptA = first(promptRows)
+    const promptB = first(promptRows.slice(1))
+
+    const promptVersionRows = await db
       .insert(benchmarkPromptVersions)
       .values([
         {
@@ -406,6 +409,8 @@ describe('benchmark public routers', () => {
         },
       ])
       .returning()
+    const promptVersionA = first(promptVersionRows)
+    const promptVersionB = first(promptVersionRows.slice(1))
     await db.insert(benchmarkPromptVersionCategories).values([
       {
         promptVersionId: promptVersionA.id,
@@ -419,7 +424,7 @@ describe('benchmark public routers', () => {
       },
     ])
 
-    const [llmA, llmB] = await db
+    const llmRows = await db
       .insert(llms)
       .values([
         {
@@ -436,7 +441,10 @@ describe('benchmark public routers', () => {
         },
       ])
       .returning()
-    const [modelSnapshotA, modelSnapshotB] = await db
+    const llmA = first(llmRows)
+    const llmB = first(llmRows.slice(1))
+
+    const modelSnapshotRows = await db
       .insert(benchmarkModelSnapshots)
       .values([
         {
@@ -459,6 +467,8 @@ describe('benchmark public routers', () => {
         },
       ])
       .returning()
+    const modelSnapshotA = first(modelSnapshotRows)
+    const modelSnapshotB = first(modelSnapshotRows.slice(1))
 
     await seedSeasonDecision({
       db,

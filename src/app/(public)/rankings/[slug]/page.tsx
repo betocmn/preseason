@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
+import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
@@ -9,6 +11,7 @@ import { api } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ promptTier?: string; modelTier?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -30,11 +33,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function CategoryGroupRankingPage({ params }: Props) {
+export default async function CategoryGroupRankingPage({ params, searchParams }: Props) {
   const { slug } = await params
+  const { promptTier, modelTier } = await searchParams
   const caller = await api()
+  const validPromptTier = (['basic', 'intermediate', 'advanced'] as const).find(
+    (tier) => tier === promptTier,
+  )
+  const validModelTier = (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier)
   const [data, groups] = await Promise.all([
-    caller.benchmarkRanking.byCategoryGroup({ groupSlug: slug }),
+    caller.benchmarkRanking.byCategoryGroup({
+      groupSlug: slug,
+      promptTier: validPromptTier,
+      modelTier: validModelTier,
+    }),
     caller.category.listGroups(),
   ])
 
@@ -56,7 +68,17 @@ export default async function CategoryGroupRankingPage({ params }: Props) {
           Methodology
         </Link>
       </div>
-      <h2 className="mb-4 text-lg font-semibold">{data.categoryGroup.name}</h2>
+      <Suspense fallback={null}>
+        <BenchmarkRankingFilters
+          groups={groups}
+          currentGroup={slug}
+          currentPromptTier={validPromptTier}
+          currentModelTier={validModelTier}
+          basePath={`/rankings/${slug}`}
+          showCategorySelect={false}
+        />
+      </Suspense>
+      <h2 className="mb-4 mt-6 text-lg font-semibold">{data.categoryGroup.name}</h2>
       {data.ranking && data.ranking.items.length > 0 ? (
         <RankingTable
           items={data.ranking.items}
