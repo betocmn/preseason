@@ -1,3 +1,5 @@
+import { benchmarkMatchRouter } from '~/server/api/routers/benchmark-match'
+import { benchmarkRankingRouter } from '~/server/api/routers/benchmark-ranking'
 import { categoryRouter } from '~/server/api/routers/category'
 import { commentRouter } from '~/server/api/routers/comment'
 import { criticRouter } from '~/server/api/routers/critic'
@@ -20,6 +22,8 @@ export const appRouter = createTRPCRouter({
   recommendation: recommendationRouter,
   match: matchRouter,
   ranking: rankingRouter,
+  benchmarkRanking: benchmarkRankingRouter,
+  benchmarkMatch: benchmarkMatchRouter,
   critic: criticRouter,
   comment: commentRouter,
   user: userRouter,
