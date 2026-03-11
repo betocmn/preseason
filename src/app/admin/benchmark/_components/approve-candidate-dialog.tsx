@@ -73,9 +73,7 @@ export function ApproveCandidateDialog({
       router.refresh()
     },
     onError: (err) => {
-      toast.error(`Approved but replay failed: ${err.message}`)
-      setOpen(false)
-      router.refresh()
+      toast.error(`Approved but replay failed: ${err.message}. You can retry from here.`)
     },
   })
 
@@ -188,12 +186,27 @@ export function ApproveCandidateDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOpen(false)
+              if (replayMutation.isError) router.refresh()
+            }}
+          >
+            {replayMutation.isError ? 'Close' : 'Cancel'}
           </Button>
-          <Button onClick={createToolAndApprove} disabled={isPending || !canCreateTool}>
-            {approveMutation.isPending ? 'Approving...' : 'Create Tool and Approve'}
-          </Button>
+          {replayMutation.isError ? (
+            <Button
+              onClick={() => replayMutation.mutate({ candidateId })}
+              disabled={replayMutation.isPending}
+            >
+              {replayMutation.isPending ? 'Retrying...' : 'Retry Replay'}
+            </Button>
+          ) : (
+            <Button onClick={createToolAndApprove} disabled={isPending || !canCreateTool}>
+              {approveMutation.isPending ? 'Approving...' : 'Create Tool and Approve'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
