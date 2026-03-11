@@ -1,6 +1,6 @@
 'use client'
 
-import { Swords, UserCheck, Wrench } from 'lucide-react'
+import { FlaskConical, Swords, UserCheck, Wrench } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '~/lib/utils'
@@ -9,6 +9,7 @@ const navItems = [
   { href: '/beto-admin/tools', label: 'Tools', icon: Wrench },
   { href: '/beto-admin/critics', label: 'Critics', icon: UserCheck },
   { href: '/beto-admin/matches', label: 'Matches', icon: Swords },
+  { href: '/beto-admin/benchmark', label: 'Benchmark', icon: FlaskConical },
 ]
 
 export function AdminNav() {
