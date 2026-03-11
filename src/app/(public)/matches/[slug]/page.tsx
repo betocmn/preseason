@@ -19,6 +19,18 @@ type Props = {
   params: Promise<{ slug: string }>
 }
 
+type BreakdownEntry = {
+  id: string
+  label: string
+  tier: string
+  aWins: number
+  bWins: number
+  abstains: number
+  otherToolCount: number
+  decisiveCaseCount: number
+  aWinRate: number
+}
+
 function parseMatchSlug(slug: string) {
   const separatorIndex = slug.indexOf('--')
   if (separatorIndex === -1) return null
@@ -33,6 +45,66 @@ function parseMatchSlug(slug: string) {
   if (!categorySlug || !toolASlug || !toolBSlug) return null
 
   return { categorySlug, toolASlug, toolBSlug }
+}
+
+function formatTierLabel(tier: string) {
+  return tier.charAt(0).toUpperCase() + tier.slice(1)
+}
+
+function BreakdownTable({
+  title,
+  label,
+  rows,
+  toolAName,
+  toolBName,
+}: {
+  title: string
+  label: string
+  rows: BreakdownEntry[]
+  toolAName: string
+  toolBName: string
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{label}</TableHead>
+                <TableHead>Tier</TableHead>
+                <TableHead className="text-right">{toolAName}</TableHead>
+                <TableHead className="text-right">{toolBName}</TableHead>
+                <TableHead className="text-right">None</TableHead>
+                <TableHead className="text-right">Other</TableHead>
+                <TableHead className="text-right">A rate</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">{row.label}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatTierLabel(row.tier)}
+                  </TableCell>
+                  <TableCell className="font-mono-data text-right">{row.aWins}</TableCell>
+                  <TableCell className="font-mono-data text-right">{row.bWins}</TableCell>
+                  <TableCell className="font-mono-data text-right">{row.abstains}</TableCell>
+                  <TableCell className="font-mono-data text-right">{row.otherToolCount}</TableCell>
+                  <TableCell className="font-mono-data text-right">
+                    {row.decisiveCaseCount > 0 ? `${(row.aWinRate * 100).toFixed(0)}%` : 'n/a'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -208,6 +280,29 @@ export default async function MatchDetailPage({ params }: Props) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {hasResult && (result.modelBreakdown.length > 0 || result.promptBreakdown.length > 0) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {result.modelBreakdown.length > 0 && (
+            <BreakdownTable
+              title="Per-model breakdown"
+              label="Model"
+              rows={result.modelBreakdown}
+              toolAName={toolA.name}
+              toolBName={toolB.name}
+            />
+          )}
+          {result.promptBreakdown.length > 0 && (
+            <BreakdownTable
+              title="Per-prompt breakdown"
+              label="Prompt"
+              rows={result.promptBreakdown}
+              toolAName={toolA.name}
+              toolBName={toolB.name}
+            />
+          )}
+        </div>
       )}
     </div>
   )

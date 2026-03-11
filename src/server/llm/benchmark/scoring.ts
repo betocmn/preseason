@@ -95,7 +95,21 @@ export type HeadToHeadResult = {
   weightedAWins: number
   weightedBWins: number
   weightedAWinRate: number
+  modelBreakdown: HeadToHeadBreakdownEntry[]
+  promptBreakdown: HeadToHeadBreakdownEntry[]
   meetsPublicationThreshold: boolean
+}
+
+export type HeadToHeadBreakdownEntry = {
+  id: string
+  label: string
+  tier: PromptTier | ModelTier
+  aWins: number
+  bWins: number
+  abstains: number
+  otherToolCount: number
+  decisiveCaseCount: number
+  aWinRate: number
 }
 
 // ---------------------------------------------------------------------------
@@ -227,8 +241,11 @@ type DecisionRow = {
   toolId: string | null
   runId: string
   modelSnapshotId: string
+  modelName: string
   modelTier: 'frontier' | 'mid' | 'small'
   promptVersionId: string
+  promptSlug: string
+  promptTier: 'basic' | 'intermediate' | 'advanced'
   toolName: string | null
   toolSlug: string | null
   toolLogoUrl: string | null
@@ -263,8 +280,11 @@ async function queryDecisions(
       toolId: benchmarkCaseDecisions.toolId,
       runId: benchmarkCaseResults.runId,
       modelSnapshotId: benchmarkCases.modelSnapshotId,
+      modelName: benchmarkModelSnapshots.name,
       modelTier: benchmarkModelSnapshots.tier,
       promptVersionId: benchmarkCases.promptVersionId,
+      promptSlug: benchmarkPromptVersions.slug,
+      promptTier: benchmarkPromptVersions.tier,
       toolName: tools.name,
       toolSlug: tools.slug,
       toolLogoUrl: tools.logoUrl,
@@ -525,6 +545,8 @@ export async function computeHeadToHead(
     weightedAWins: 0,
     weightedBWins: 0,
     weightedAWinRate: 0,
+    modelBreakdown: [],
+    promptBreakdown: [],
     meetsPublicationThreshold: false,
   }
 
@@ -545,22 +567,42 @@ export async function computeHeadToHead(
   let otherToolCount = 0
   let weightedAWins = 0
   let weightedBWins = 0
+  const modelBreakdown = new Map<string, HeadToHeadBreakdownEntry>()
+  const promptBreakdown = new Map<string, HeadToHeadBreakdownEntry>()
 
   for (const d of decisions) {
     const wc = weightConfigs.get(d.runId) ?? defaultWeight
     const weight = getWeightForTier(wc, d.modelTier)
+    const outcome = classifyHeadToHeadDecision(d, filters)
 
-    if (d.decisionType === 'tool' && d.toolId === filters.toolAId) {
+    if (outcome === 'a') {
       aWins++
       weightedAWins += weight
-    } else if (d.decisionType === 'tool' && d.toolId === filters.toolBId) {
+    } else if (outcome === 'b') {
       bWins++
       weightedBWins += weight
-    } else if (d.decisionType === 'none') {
+    } else if (outcome === 'none') {
       abstains++
     } else {
       otherToolCount++
     }
+
+    applyBreakdownOutcome(
+      getBreakdownEntry(modelBreakdown, {
+        id: d.modelSnapshotId,
+        label: d.modelName,
+        tier: d.modelTier,
+      }),
+      outcome,
+    )
+    applyBreakdownOutcome(
+      getBreakdownEntry(promptBreakdown, {
+        id: d.promptVersionId,
+        label: d.promptSlug,
+        tier: d.promptTier,
+      }),
+      outcome,
+    )
   }
 
   const decisiveCaseCount = aWins + bWins
@@ -586,6 +628,74 @@ export async function computeHeadToHead(
     weightedAWins,
     weightedBWins,
     weightedAWinRate,
+    modelBreakdown: finalizeBreakdown(modelBreakdown),
+    promptBreakdown: finalizeBreakdown(promptBreakdown),
     meetsPublicationThreshold: decisiveCaseCount >= 30,
   }
+}
+
+type HeadToHeadOutcome = 'a' | 'b' | 'none' | 'other'
+
+function classifyHeadToHeadDecision(
+  decision: DecisionRow,
+  filters: Pick<HeadToHeadFilters, 'toolAId' | 'toolBId'>,
+): HeadToHeadOutcome {
+  if (decision.decisionType === 'tool' && decision.toolId === filters.toolAId) return 'a'
+  if (decision.decisionType === 'tool' && decision.toolId === filters.toolBId) return 'b'
+  if (decision.decisionType === 'none') return 'none'
+  return 'other'
+}
+
+function getBreakdownEntry(
+  entries: Map<string, HeadToHeadBreakdownEntry>,
+  seed: Pick<HeadToHeadBreakdownEntry, 'id' | 'label' | 'tier'>,
+) {
+  let entry = entries.get(seed.id)
+  if (!entry) {
+    entry = {
+      ...seed,
+      aWins: 0,
+      bWins: 0,
+      abstains: 0,
+      otherToolCount: 0,
+      decisiveCaseCount: 0,
+      aWinRate: 0,
+    }
+    entries.set(seed.id, entry)
+  }
+  return entry
+}
+
+function applyBreakdownOutcome(entry: HeadToHeadBreakdownEntry, outcome: HeadToHeadOutcome) {
+  if (outcome === 'a') {
+    entry.aWins++
+    return
+  }
+  if (outcome === 'b') {
+    entry.bWins++
+    return
+  }
+  if (outcome === 'none') {
+    entry.abstains++
+    return
+  }
+  entry.otherToolCount++
+}
+
+function finalizeBreakdown(entries: Map<string, HeadToHeadBreakdownEntry>) {
+  return Array.from(entries.values())
+    .map((entry) => {
+      const decisiveCaseCount = entry.aWins + entry.bWins
+      return {
+        ...entry,
+        decisiveCaseCount,
+        aWinRate: decisiveCaseCount > 0 ? entry.aWins / decisiveCaseCount : 0,
+      }
+    })
+    .sort(
+      (a, b) =>
+        b.decisiveCaseCount - a.decisiveCaseCount ||
+        b.aWins - a.aWins ||
+        a.label.localeCompare(b.label),
+    )
 }
