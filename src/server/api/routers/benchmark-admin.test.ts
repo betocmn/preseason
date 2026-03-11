@@ -10,8 +10,7 @@ import {
   benchmarkSeasonPrompts,
   toolCandidates,
 } from '~/server/db/schema'
-import { getTestDb } from '~/test/db'
-import { cleanTestDatabase, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
 
 async function seedProtocol() {
