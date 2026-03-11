@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
+import { Badge } from '~/components/ui/badge'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { api } from '~/trpc/server'
 
@@ -12,17 +14,14 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { subSlug } = await params
   const caller = await api()
-  const ranking = await caller.ranking.bySubcategorySlug({
-    subcategorySlug: subSlug,
-    days: 30,
-  })
+  const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
 
-  if (!ranking.category) {
+  if (!data.category) {
     return { title: 'Category Not Found' }
   }
 
-  const title = `${ranking.category.name} Rankings`
-  const description = `Top tools recommended by LLMs in the ${ranking.category.name} subcategory.`
+  const title = `${data.category.name} Rankings`
+  const description = `Benchmark rankings for tools in the ${data.category.name} subcategory.`
   return {
     title,
     description,
@@ -34,28 +33,42 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SubcategoryRankingPage({ params }: Props) {
   const { slug, subSlug } = await params
   const caller = await api()
-  const [ranking, groups] = await Promise.all([
-    caller.ranking.bySubcategorySlug({ subcategorySlug: subSlug, days: 30 }),
+  const [data, groups] = await Promise.all([
+    caller.benchmarkRanking.byCategory({ categorySlug: subSlug }),
     caller.category.listGroups(),
   ])
 
-  if (!ranking.category) {
+  if (!data.category) {
     notFound()
   }
-  if (ranking.category.categoryGroup.slug !== slug) {
+  if (data.category.categoryGroup.slug !== slug) {
     notFound()
   }
 
   return (
     <SidebarLayout groups={groups} section="rankings">
-      <h1 className="mb-6 text-xl font-bold tracking-tight">Rankings</h1>
-      <h2 className="mb-4 text-lg font-semibold">{ranking.category.name} (30 days)</h2>
-      {ranking.items.length > 0 ? (
-        <RankingTable items={ranking.items} />
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-xl font-bold tracking-tight">Rankings</h1>
+        <Badge variant="secondary" className="text-xs">
+          Benchmark
+        </Badge>
+        <Link
+          href="/methodology"
+          className="ml-auto text-sm text-muted-foreground hover:text-foreground"
+        >
+          Methodology
+        </Link>
+      </div>
+      <h2 className="mb-4 text-lg font-semibold">{data.category.name}</h2>
+      {data.ranking && data.ranking.items.length > 0 ? (
+        <RankingTable
+          items={data.ranking.items}
+          meetsPublicationThreshold={data.ranking.meetsPublicationThreshold}
+        />
       ) : (
         <EmptyState
-          title={`No tools ranked in ${ranking.category.name} yet`}
-          description="Rankings appear after LLM runs produce recommendations in this category."
+          title={`No benchmark data for ${data.category.name} yet`}
+          description="Rankings are computed from published benchmark runs. Check back after runs have completed."
         />
       )}
     </SidebarLayout>
