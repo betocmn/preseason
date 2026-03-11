@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schema from '~/server/db/schema'
 import {
@@ -121,51 +121,51 @@ export function getWeightForTier(
   }
 }
 
-export function getPreviousWindowAnchor(
-  windowType: WindowType,
-  anchorDate: string,
-): { anchorDate: string; windowType: WindowType } {
-  const d = new Date(anchorDate + 'T00:00:00Z')
+function getWindowSize(windowType: WindowType): number | null {
   switch (windowType) {
     case 'run_day':
-      d.setUTCDate(d.getUTCDate() - 1)
-      break
+      return 1
     case 'trailing_7d':
-      d.setUTCDate(d.getUTCDate() - 7)
-      break
+      return 7
     case 'trailing_28d':
-      d.setUTCDate(d.getUTCDate() - 28)
-      break
+      return 28
     case 'season_to_date':
-      // No meaningful previous window for season_to_date
-      return { anchorDate, windowType }
+      return null
   }
-  return { anchorDate: d.toISOString().slice(0, 10), windowType }
 }
 
-function getWindowDateRange(windowType: WindowType, anchorDate: string) {
-  const anchor = new Date(anchorDate + 'T00:00:00Z')
-  switch (windowType) {
-    case 'run_day':
-      return { start: anchorDate, end: anchorDate }
-    case 'trailing_7d': {
-      const start = new Date(anchor)
-      start.setUTCDate(start.getUTCDate() - 6)
-      return { start: start.toISOString().slice(0, 10), end: anchorDate }
-    }
-    case 'trailing_28d': {
-      const start = new Date(anchor)
-      start.setUTCDate(start.getUTCDate() - 27)
-      return { start: start.toISOString().slice(0, 10), end: anchorDate }
-    }
-    case 'season_to_date':
-      return { start: null, end: anchorDate }
+export function sliceRunIdsForWindow(runIds: string[], windowType: WindowType, offset = 0) {
+  const size = getWindowSize(windowType)
+  if (size == null) {
+    return offset === 0 ? [...runIds] : []
   }
+
+  return runIds.slice(offset, offset + size)
 }
 
 // ---------------------------------------------------------------------------
 // Database helpers
 // ---------------------------------------------------------------------------
+
+async function getPublishedRunIds(
+  db: DatabaseClient,
+  seasonId: string,
+  anchorDate: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: benchmarkRuns.id })
+    .from(benchmarkRuns)
+    .where(
+      and(
+        eq(benchmarkRuns.seasonId, seasonId),
+        eq(benchmarkRuns.status, 'published'),
+        lte(benchmarkRuns.scheduledFor, anchorDate),
+      ),
+    )
+    .orderBy(desc(benchmarkRuns.scheduledFor))
+
+  return rows.map((r) => r.id)
+}
 
 export async function getRunIdsForWindow(
   db: DatabaseClient,
@@ -173,21 +173,8 @@ export async function getRunIdsForWindow(
   windowType: WindowType,
   anchorDate: string,
 ): Promise<string[]> {
-  const range = getWindowDateRange(windowType, anchorDate)
-
-  const conditions = [eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')]
-
-  if (range.start) {
-    conditions.push(gte(benchmarkRuns.scheduledFor, range.start))
-  }
-  conditions.push(lte(benchmarkRuns.scheduledFor, range.end))
-
-  const rows = await db
-    .select({ id: benchmarkRuns.id })
-    .from(benchmarkRuns)
-    .where(and(...conditions))
-
-  return rows.map((r) => r.id)
+  const runIds = await getPublishedRunIds(db, seasonId, anchorDate)
+  return sliceRunIdsForWindow(runIds, windowType)
 }
 
 type WeightConfig = {
@@ -302,12 +289,8 @@ export async function computeCategoryRanking(
   db: DatabaseClient,
   filters: ScoringFilters,
 ): Promise<CategoryRankingResult> {
-  const runIds = await getRunIdsForWindow(
-    db,
-    filters.seasonId,
-    filters.windowType,
-    filters.anchorDate,
-  )
+  const publishedRunIds = await getPublishedRunIds(db, filters.seasonId, filters.anchorDate)
+  const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
 
   if (runIds.length === 0) {
     return {
@@ -383,39 +366,34 @@ export async function computeCategoryRanking(
 
   // Compute trend from previous window
   const trendMap = new Map<string, number>()
-  if (filters.windowType !== 'season_to_date') {
-    const prev = getPreviousWindowAnchor(filters.windowType, filters.anchorDate)
-    if (prev.anchorDate !== filters.anchorDate) {
-      const prevRunIds = await getRunIdsForWindow(
-        db,
-        filters.seasonId,
-        prev.windowType,
-        prev.anchorDate,
-      )
-      if (prevRunIds.length > 0) {
-        const prevWeights = await getWeightConfigsByRunIds(db, prevRunIds)
-        const prevDecisions = await queryDecisions(db, prevRunIds, filters.categoryId, {
-          promptTier: filters.promptTier,
-          modelTier: filters.modelTier,
-        })
+  const previousRunIds =
+    filters.windowType === 'season_to_date'
+      ? []
+      : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
+  const hasPreviousWindow = previousRunIds.length > 0
 
-        let prevTotalWeighted = 0
-        const prevToolWeighted = new Map<string, number>()
+  if (hasPreviousWindow) {
+    const prevWeights = await getWeightConfigsByRunIds(db, previousRunIds)
+    const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryId, {
+      promptTier: filters.promptTier,
+      modelTier: filters.modelTier,
+    })
 
-        for (const d of prevDecisions) {
-          const wc = prevWeights.get(d.runId) ?? defaultWeight
-          const weight = getWeightForTier(wc, d.modelTier)
-          prevTotalWeighted += weight
-          if (d.decisionType === 'tool' && d.toolId) {
-            prevToolWeighted.set(d.toolId, (prevToolWeighted.get(d.toolId) ?? 0) + weight)
-          }
-        }
+    let prevTotalWeighted = 0
+    const prevToolWeighted = new Map<string, number>()
 
-        if (prevTotalWeighted > 0) {
-          for (const [toolId, ws] of prevToolWeighted) {
-            trendMap.set(toolId, ws / prevTotalWeighted)
-          }
-        }
+    for (const d of prevDecisions) {
+      const wc = prevWeights.get(d.runId) ?? defaultWeight
+      const weight = getWeightForTier(wc, d.modelTier)
+      prevTotalWeighted += weight
+      if (d.decisionType === 'tool' && d.toolId) {
+        prevToolWeighted.set(d.toolId, (prevToolWeighted.get(d.toolId) ?? 0) + weight)
+      }
+    }
+
+    if (prevTotalWeighted > 0) {
+      for (const [toolId, ws] of prevToolWeighted) {
+        trendMap.set(toolId, ws / prevTotalWeighted)
       }
     }
   }
@@ -431,7 +409,7 @@ export async function computeCategoryRanking(
     const rawSupportRate = totalEligible > 0 ? agg.rawSupport / totalEligible : 0
     const ci = wilsonInterval(agg.rawSupport, totalEligible)
     const prevRate = trendMap.get(agg.toolId) ?? 0
-    const trend = weightedSupportRate - prevRate
+    const trend = hasPreviousWindow ? weightedSupportRate - prevRate : 0
 
     return {
       toolId: agg.toolId,
