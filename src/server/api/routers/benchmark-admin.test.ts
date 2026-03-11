@@ -1,4 +1,5 @@
 import type { TRPCError } from '@trpc/server'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   benchmarkCaseDecisions,
@@ -6,9 +7,9 @@ import {
   benchmarkCases,
   benchmarkProtocols,
   benchmarkRuns,
-  benchmarkSeasonModels,
-  benchmarkSeasonPrompts,
+  toolAliases,
   toolCandidates,
+  toolCategories,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
@@ -441,6 +442,57 @@ describe('benchmarkAdminRouter', () => {
       candidateId: candidate.id,
     })
     expect(replay.updatedCount).toBe(1)
+  })
+
+  it('approves a candidate by creating a new tool', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+
+    const db = getTestDb()
+    const [candidate] = await db
+      .insert(toolCandidates)
+      .values({
+        rawName: 'NewAuthTool',
+        normalizedName: 'newauthtool',
+        seenCount: 2,
+        suggestedCategoryId: category.id,
+      })
+      .returning()
+    if (!candidate) throw new Error('Failed to create candidate')
+
+    const approved = await caller.benchmarkAdmin.approveCandidate({
+      candidateId: candidate.id,
+      newTool: {
+        name: 'New Auth Tool',
+        slug: 'new-auth-tool',
+        categoryId: category.id,
+      },
+    })
+
+    expect(approved.status).toBe('approved')
+    expect(approved.approvedToolId).toBeTruthy()
+
+    const approvedToolId = approved.approvedToolId
+    if (!approvedToolId) {
+      throw new Error('Expected approved tool id')
+    }
+
+    const createdTool = await db.query.tools.findFirst({
+      where: (fields, { eq }) => eq(fields.id, approvedToolId),
+    })
+    expect(createdTool?.name).toBe('New Auth Tool')
+    expect(createdTool?.slug).toBe('new-auth-tool')
+
+    const alias = await db.query.toolAliases.findFirst({
+      where: eq(toolAliases.normalizedAlias, candidate.normalizedName),
+    })
+    expect(alias?.toolId).toBe(approvedToolId)
+
+    const toolCategory = await db.query.toolCategories.findFirst({
+      where: eq(toolCategories.toolId, approvedToolId),
+    })
+    expect(toolCategory?.categoryId).toBe(category.id)
   })
 
   it('rejects a candidate with notes', async () => {
