@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   anchorDateSchema,
   findBenchmarkSeasonId,
-  findLatestActiveBenchmarkSeasonId,
+  findLatestPublishedBenchmarkSeasonId,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories } from '~/server/db/schema'
@@ -24,7 +24,11 @@ const tierFiltersSchema = z.object({
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
 })
 
-async function resolveSeasonId(db: Parameters<typeof findBenchmarkSeasonId>[0], seasonId?: string) {
+async function resolveSeasonId(
+  db: Parameters<typeof findBenchmarkSeasonId>[0],
+  anchorDate: string,
+  seasonId?: string,
+) {
   if (seasonId) {
     const id = await findBenchmarkSeasonId(db, seasonId)
     if (!id) {
@@ -35,7 +39,7 @@ async function resolveSeasonId(db: Parameters<typeof findBenchmarkSeasonId>[0], 
     }
     return id
   }
-  return findLatestActiveBenchmarkSeasonId(db)
+  return findLatestPublishedBenchmarkSeasonId(db, anchorDate)
 }
 
 export const benchmarkRankingRouter = createTRPCRouter({
@@ -51,6 +55,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         .merge(tierFiltersSchema),
     )
     .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const category = await ctx.db.query.subcategories.findFirst({
         where: eq(subcategories.slug, input.categorySlug),
         with: { categoryGroup: true },
@@ -59,12 +64,10 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { category: null, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, input.seasonId)
+      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
       if (!seasonId) {
         return { category, ranking: null }
       }
-
-      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
 
       const ranking = await computeCategoryRanking(ctx.db, {
         categoryId: category.id,
@@ -90,6 +93,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         .merge(tierFiltersSchema),
     )
     .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const group = await ctx.db.query.categories.findFirst({
         where: eq(categories.slug, input.groupSlug),
         with: {
@@ -106,12 +110,10 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { categoryGroup: group, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, input.seasonId)
+      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
       if (!seasonId) {
         return { categoryGroup: group, ranking: null }
       }
-
-      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
 
       const subRankings = await Promise.all(
         group.subcategories.map((sub) =>

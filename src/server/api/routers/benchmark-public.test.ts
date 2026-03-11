@@ -172,6 +172,13 @@ async function seedBenchmarkPublicFixture() {
       })
       .returning(),
   )
+  await db.insert(benchmarkSeasons).values({
+    protocolId: protocol.id,
+    slug: 'season-fresh',
+    name: 'Fresh Season',
+    status: 'active',
+    createdAt: new Date('2026-03-04T00:00:00.000Z'),
+  })
 
   const prompt = first(
     await db
@@ -267,7 +274,7 @@ describe('benchmark public routers', () => {
     await cleanTestDatabase()
   })
 
-  it('uses the newest active benchmark season for rankings when seasonId is omitted', async () => {
+  it('uses the latest published benchmark season for rankings when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -280,7 +287,7 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
   })
 
-  it('uses the newest active benchmark season for matches when seasonId is omitted', async () => {
+  it('uses the latest published benchmark season for matches when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)

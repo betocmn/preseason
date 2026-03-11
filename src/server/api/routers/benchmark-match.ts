@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   anchorDateSchema,
   findBenchmarkSeasonId,
-  findLatestActiveBenchmarkSeasonId,
+  findLatestPublishedBenchmarkSeasonId,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories, tools } from '~/server/db/schema'
@@ -32,6 +32,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         }),
     )
     .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const [category, toolA, toolB] = await Promise.all([
         ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.categorySlug),
@@ -64,14 +65,12 @@ export const benchmarkMatchRouter = createTRPCRouter({
         }
         seasonId = benchmarkSeasonId
       } else {
-        const defaultSeasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
+        const defaultSeasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
         if (!defaultSeasonId) {
           return { category, toolA, toolB, result: null }
         }
         seasonId = defaultSeasonId
       }
-
-      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
 
       const result = await computeHeadToHead(ctx.db, {
         categoryId: category.id,
@@ -98,11 +97,10 @@ export const benchmarkMatchRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12
-
-      const seasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
-      if (!seasonId) return []
-
       const anchorDate = new Date().toISOString().slice(0, 10)
+
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+      if (!seasonId) return []
 
       // Get subcategories to generate matchups from
       let subs: { id: string; name: string; slug: string }[]
