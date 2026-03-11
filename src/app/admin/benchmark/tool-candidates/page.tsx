@@ -1,4 +1,6 @@
+import Link from 'next/link'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import {
   Table,
   TableBody,
@@ -22,16 +24,49 @@ function statusVariant(status: string) {
   }
 }
 
-export default async function ToolCandidatesPage() {
+type PageProps = {
+  searchParams?: Promise<{
+    status?: string
+  }>
+}
+
+function getStatusFilter(value: string | undefined) {
+  return value === 'pending' || value === 'approved' || value === 'rejected' ? value : undefined
+}
+
+export default async function ToolCandidatesPage({ searchParams }: PageProps) {
   const caller = await api()
+  const resolvedSearchParams = searchParams ? await searchParams : undefined
+  const status = getStatusFilter(resolvedSearchParams?.status)
   const categories = await caller.category.list()
-  const { items: candidates } = await caller.benchmarkAdmin.listToolCandidates({ limit: 100 })
+  const { items: candidates, total } = await caller.benchmarkAdmin.listToolCandidates({
+    limit: 100,
+    status,
+  })
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Tool Candidates</h1>
-        <p className="text-muted-foreground">Review unrecognized tool names from benchmark runs.</p>
+        <p className="text-muted-foreground">
+          Review unrecognized tool names from benchmark runs. Showing {total} candidate
+          {total === 1 ? '' : 's'}.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant={status === undefined ? 'default' : 'outline'} size="sm">
+          <Link href="/beto-admin/benchmark/tool-candidates">All</Link>
+        </Button>
+        <Button asChild variant={status === 'pending' ? 'default' : 'outline'} size="sm">
+          <Link href="/beto-admin/benchmark/tool-candidates?status=pending">Pending</Link>
+        </Button>
+        <Button asChild variant={status === 'approved' ? 'default' : 'outline'} size="sm">
+          <Link href="/beto-admin/benchmark/tool-candidates?status=approved">Approved</Link>
+        </Button>
+        <Button asChild variant={status === 'rejected' ? 'default' : 'outline'} size="sm">
+          <Link href="/beto-admin/benchmark/tool-candidates?status=rejected">Rejected</Link>
+        </Button>
       </div>
 
       <div className="rounded-md border">
