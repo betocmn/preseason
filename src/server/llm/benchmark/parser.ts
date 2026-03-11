@@ -18,6 +18,15 @@ function findAppendixTagBlock(rawContent: string) {
       return null
     }
 
+    const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
+    if (
+      contentStart === -1 ||
+      (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[')
+    ) {
+      searchFrom = openIdx - 1
+      continue
+    }
+
     const closeIdx =
       findJsonTerminatedCloseTag(rawContent, openIdx + OPEN_TAG.length) ??
       rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
@@ -31,14 +40,22 @@ function findAppendixTagBlock(rawContent: string) {
   return null
 }
 
-function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
-  let jsonStart = contentStart
-
-  while (jsonStart < rawContent.length && /\s/u.test(rawContent[jsonStart] ?? '')) {
-    jsonStart++
+function findFirstNonWhitespaceIndex(rawContent: string, start: number) {
+  let index = start
+  while (index < rawContent.length && /\s/u.test(rawContent[index] ?? '')) {
+    index++
   }
 
-  if (rawContent[jsonStart] !== '{') {
+  return index < rawContent.length ? index : -1
+}
+
+function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
+  const jsonStart = findFirstNonWhitespaceIndex(rawContent, contentStart)
+  if (jsonStart === -1) {
+    return null
+  }
+
+  if (rawContent[jsonStart] !== '{' && rawContent[jsonStart] !== '[') {
     return null
   }
 

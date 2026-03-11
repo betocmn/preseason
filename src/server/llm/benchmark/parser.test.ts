@@ -109,6 +109,32 @@ describe('parseBenchmarkResponse', () => {
     expect(result.rawAppendix).toBe(json)
   })
 
+  it('should ignore opening tag text inside appendix string fields', () => {
+    const json = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Mention <preseason_benchmark_json> literally in the rationale',
+          confidence: 0.8,
+        },
+        {
+          category_slug: 'database',
+          decision: 'none',
+          reasoning: 'No database tool needed',
+          confidence: 0.9,
+        },
+      ],
+    })
+    const result = parseBenchmarkResponse(wrapInTags(json), ELIGIBLE)
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.rawAppendix).toBe(json)
+  })
+
   it('should return invalid_output for malformed JSON', () => {
     const raw = wrapInTags('{ not valid json }')
     const result = parseBenchmarkResponse(raw, ELIGIBLE)
