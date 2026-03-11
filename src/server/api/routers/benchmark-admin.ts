@@ -246,6 +246,14 @@ export const benchmarkAdminRouter = createTRPCRouter({
       const promptVersions: Awaited<ReturnType<typeof freezePromptVersion>>[] = []
       for (const prompt of activePrompts) {
         const categorySlugs = prompt.expectedCategories ?? []
+        const unresolvedSlugs = categorySlugs.filter((slug) => !slugToId.has(slug))
+        if (unresolvedSlugs.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Prompt "${prompt.title ?? prompt.id}" has unresolvable category slugs: ${unresolvedSlugs.join(', ')}`,
+          })
+        }
+
         const categoryIds = categorySlugs
           .map((slug) => slugToId.get(slug))
           .filter((id): id is string => id !== undefined)
