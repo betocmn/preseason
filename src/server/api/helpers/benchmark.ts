@@ -40,7 +40,11 @@ export async function findLatestPublishedBenchmarkSeasonId(
         anchorDate ? lte(benchmarkRuns.scheduledFor, anchorDate) : undefined,
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor), desc(benchmarkRuns.id))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
     .limit(1)
 
   return rows[0]?.id ?? null

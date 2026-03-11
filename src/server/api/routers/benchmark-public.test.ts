@@ -34,10 +34,22 @@ async function seedSeasonDecision(args: {
   promptVersionId: string
   modelSnapshotId: string
   categoryId: string
-  toolId: string
-  rawToolName: string
+  decisionType?: 'tool' | 'none'
+  toolId?: string | null
+  rawToolName?: string | null
+  scheduledFor?: string
 }) {
-  const { db, seasonId, promptVersionId, modelSnapshotId, categoryId, toolId, rawToolName } = args
+  const {
+    db,
+    seasonId,
+    promptVersionId,
+    modelSnapshotId,
+    categoryId,
+    decisionType = 'tool',
+    toolId = null,
+    rawToolName = null,
+    scheduledFor = '2026-03-10',
+  } = args
 
   await db.insert(benchmarkSeasonPrompts).values({ seasonId, promptVersionId })
   await db.insert(benchmarkSeasonModels).values({ seasonId, modelSnapshotId })
@@ -54,7 +66,7 @@ async function seedSeasonDecision(args: {
       .insert(benchmarkRuns)
       .values({
         seasonId,
-        scheduledFor: '2026-03-10',
+        scheduledFor,
         status: 'published',
       })
       .returning(),
@@ -79,7 +91,7 @@ async function seedSeasonDecision(args: {
   await db.insert(benchmarkCaseDecisions).values({
     caseResultId: caseResult.id,
     categoryId,
-    decisionType: 'tool',
+    decisionType,
     toolId,
     rawToolName,
     resolutionStatus: 'resolved',
@@ -301,6 +313,188 @@ describe('benchmark public routers', () => {
 
     expect(result.result?.aWins).toBe(1)
     expect(result.result?.bWins).toBe(0)
+  })
+
+  it('aggregates category group rankings across all subcategories', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+    const databaseCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Database', slug: 'database', displayOrder: 2 })
+        .returning(),
+    )
+    const clerk = first(await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning())
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-group-aggregation',
+          name: 'Benchmark Group Aggregation',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const season = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-group-aggregation',
+          name: 'Season Group Aggregation',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const [promptA, promptB] = await db
+      .insert(prompts)
+      .values([
+        {
+          title: 'Build auth flows',
+          slug: 'build-auth-flows',
+          level: 'vibe-coder',
+          contentMd: '# Auth prompt',
+        },
+        {
+          title: 'Build database flows',
+          slug: 'build-database-flows',
+          level: 'vibe-coder',
+          contentMd: '# Database prompt',
+        },
+      ])
+      .returning()
+    const [promptVersionA, promptVersionB] = await db
+      .insert(benchmarkPromptVersions)
+      .values([
+        {
+          promptId: promptA.id,
+          slug: promptA.slug,
+          level: 'vibe-coder',
+          version: 1,
+          tier: 'advanced',
+          contentMd: promptA.contentMd ?? '# Auth prompt',
+          contentHash: 'group-auth',
+          promptContractVersion: '1.0',
+          systemPromptSnapshot: 'You are a pragmatic assistant.',
+        },
+        {
+          promptId: promptB.id,
+          slug: promptB.slug,
+          level: 'vibe-coder',
+          version: 1,
+          tier: 'basic',
+          contentMd: promptB.contentMd ?? '# Database prompt',
+          contentHash: 'group-database',
+          promptContractVersion: '1.0',
+          systemPromptSnapshot: 'You are a pragmatic assistant.',
+        },
+      ])
+      .returning()
+    await db.insert(benchmarkPromptVersionCategories).values([
+      {
+        promptVersionId: promptVersionA.id,
+        categoryId: authCategory.id,
+        displayOrder: 1,
+      },
+      {
+        promptVersionId: promptVersionB.id,
+        categoryId: databaseCategory.id,
+        displayOrder: 1,
+      },
+    ])
+
+    const [llmA, llmB] = await db
+      .insert(llms)
+      .values([
+        {
+          name: 'Claude Opus',
+          slug: 'claude-opus',
+          provider: 'anthropic',
+          modelId: 'claude-3-opus',
+        },
+        {
+          name: 'GPT-4.1 Mini',
+          slug: 'gpt-4-1-mini',
+          provider: 'openai',
+          modelId: 'gpt-4.1-mini',
+        },
+      ])
+      .returning()
+    const [modelSnapshotA, modelSnapshotB] = await db
+      .insert(benchmarkModelSnapshots)
+      .values([
+        {
+          llmId: llmA.id,
+          name: llmA.name,
+          provider: llmA.provider,
+          tier: 'frontier',
+          requestedModelId: llmA.modelId,
+          temperature: 0.2,
+          snapshotKey: 'group-model-a',
+        },
+        {
+          llmId: llmB.id,
+          name: llmB.name,
+          provider: llmB.provider,
+          tier: 'mid',
+          requestedModelId: llmB.modelId,
+          temperature: 0.2,
+          snapshotKey: 'group-model-b',
+        },
+      ])
+      .returning()
+
+    await seedSeasonDecision({
+      db,
+      seasonId: season.id,
+      promptVersionId: promptVersionA.id,
+      modelSnapshotId: modelSnapshotA.id,
+      categoryId: authCategory.id,
+      toolId: clerk.id,
+      rawToolName: 'Clerk',
+      scheduledFor: '2026-03-10',
+    })
+    await seedSeasonDecision({
+      db,
+      seasonId: season.id,
+      promptVersionId: promptVersionB.id,
+      modelSnapshotId: modelSnapshotB.id,
+      categoryId: databaseCategory.id,
+      decisionType: 'none',
+      scheduledFor: '2026-03-09',
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkRanking.byCategoryGroup({
+      groupSlug: 'devtools',
+      windowType: 'trailing_7d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.ranking?.totalDistinctModels).toBe(2)
+    expect(result.ranking?.totalDistinctPrompts).toBe(2)
+    expect(result.ranking?.totalEligibleDecisions).toBe(2)
+    expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
+    expect(result.ranking?.items[0]?.rawEligibleCount).toBe(2)
+    expect(result.ranking?.items[0]?.weightedSupportRate).toBeCloseTo(0.5, 5)
+    expect(result.ranking?.items[0]?.modelCoverage).toBeCloseTo(0.5, 5)
+    expect(result.ranking?.items[0]?.promptCoverage).toBeCloseTo(0.5, 5)
   })
 
   it('rejects non-benchmark season IDs for benchmark rankings', async () => {

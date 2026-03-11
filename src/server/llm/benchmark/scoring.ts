@@ -71,6 +71,14 @@ export type HeadToHeadFilters = {
   modelTier?: ModelTier
 }
 
+type RankingFilters = {
+  seasonId: string
+  windowType: WindowType
+  anchorDate: string
+  promptTier?: PromptTier
+  modelTier?: ModelTier
+}
+
 export type HeadToHeadResult = {
   toolAId: string
   toolBId: string
@@ -229,13 +237,13 @@ type DecisionRow = {
 async function queryDecisions(
   db: DatabaseClient,
   runIds: string[],
-  categoryId: string,
+  categoryIds: string[],
   filters: { promptTier?: PromptTier; modelTier?: ModelTier },
 ): Promise<DecisionRow[]> {
-  if (runIds.length === 0) return []
+  if (runIds.length === 0 || categoryIds.length === 0) return []
 
   const conditions = [
-    eq(benchmarkCaseDecisions.categoryId, categoryId),
+    inArray(benchmarkCaseDecisions.categoryId, categoryIds),
     inArray(benchmarkCaseResults.runId, runIds),
     eq(benchmarkCaseResults.status, 'completed'),
     eq(benchmarkCaseDecisions.resolutionStatus, 'resolved'),
@@ -289,12 +297,48 @@ export async function computeCategoryRanking(
   db: DatabaseClient,
   filters: ScoringFilters,
 ): Promise<CategoryRankingResult> {
+  return computeRankingForCategoryIds(db, {
+    categoryIds: [filters.categoryId],
+    resultCategoryId: filters.categoryId,
+    seasonId: filters.seasonId,
+    windowType: filters.windowType,
+    anchorDate: filters.anchorDate,
+    promptTier: filters.promptTier,
+    modelTier: filters.modelTier,
+  })
+}
+
+export async function computeCategoryGroupRanking(
+  db: DatabaseClient,
+  filters: RankingFilters & {
+    categoryGroupId: string
+    categoryIds: string[]
+  },
+): Promise<CategoryRankingResult> {
+  return computeRankingForCategoryIds(db, {
+    categoryIds: filters.categoryIds,
+    resultCategoryId: filters.categoryGroupId,
+    seasonId: filters.seasonId,
+    windowType: filters.windowType,
+    anchorDate: filters.anchorDate,
+    promptTier: filters.promptTier,
+    modelTier: filters.modelTier,
+  })
+}
+
+async function computeRankingForCategoryIds(
+  db: DatabaseClient,
+  filters: RankingFilters & {
+    categoryIds: string[]
+    resultCategoryId: string
+  },
+): Promise<CategoryRankingResult> {
   const publishedRunIds = await getPublishedRunIds(db, filters.seasonId, filters.anchorDate)
   const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
 
   if (runIds.length === 0) {
     return {
-      categoryId: filters.categoryId,
+      categoryId: filters.resultCategoryId,
       windowType: filters.windowType,
       anchorDate: filters.anchorDate,
       items: [],
@@ -306,7 +350,7 @@ export async function computeCategoryRanking(
   }
 
   const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
-  const decisions = await queryDecisions(db, runIds, filters.categoryId, {
+  const decisions = await queryDecisions(db, runIds, filters.categoryIds, {
     promptTier: filters.promptTier,
     modelTier: filters.modelTier,
   })
@@ -374,7 +418,7 @@ export async function computeCategoryRanking(
 
   if (previousRunIds.length > 0) {
     const prevWeights = await getWeightConfigsByRunIds(db, previousRunIds)
-    const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryId, {
+    const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryIds, {
       promptTier: filters.promptTier,
       modelTier: filters.modelTier,
     })
@@ -439,7 +483,7 @@ export async function computeCategoryRanking(
   )
 
   return {
-    categoryId: filters.categoryId,
+    categoryId: filters.resultCategoryId,
     windowType: filters.windowType,
     anchorDate: filters.anchorDate,
     items,
@@ -488,7 +532,7 @@ export async function computeHeadToHead(
   if (runIds.length === 0) return empty
 
   const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
-  const decisions = await queryDecisions(db, runIds, filters.categoryId, {
+  const decisions = await queryDecisions(db, runIds, [filters.categoryId], {
     promptTier: filters.promptTier,
     modelTier: filters.modelTier,
   })
