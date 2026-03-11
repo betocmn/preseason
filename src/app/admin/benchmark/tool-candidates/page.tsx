@@ -24,9 +24,12 @@ function statusVariant(status: string) {
   }
 }
 
+const PAGE_SIZE = 50
+
 type PageProps = {
   searchParams?: Promise<{
     status?: string
+    page?: string
   }>
 }
 
@@ -38,11 +41,15 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
   const caller = await api()
   const resolvedSearchParams = searchParams ? await searchParams : undefined
   const status = getStatusFilter(resolvedSearchParams?.status)
+  const page = Math.max(1, Number(resolvedSearchParams?.page) || 1)
+  const offset = (page - 1) * PAGE_SIZE
   const categories = await caller.category.list()
   const { items: candidates, total } = await caller.benchmarkAdmin.listToolCandidates({
-    limit: 100,
+    limit: PAGE_SIZE,
+    offset,
     status,
   })
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="space-y-6">
@@ -131,6 +138,35 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-muted-foreground text-sm">
+            Page {page} of {totalPages} ({total} total)
+          </p>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/beto-admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page - 1) }).toString()}`}
+                >
+                  Previous
+                </Link>
+              </Button>
+            )}
+            {page < totalPages && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/beto-admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page + 1) }).toString()}`}
+                >
+                  Next
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

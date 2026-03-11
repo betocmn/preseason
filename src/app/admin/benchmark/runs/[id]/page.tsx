@@ -45,7 +45,8 @@ export default async function RunDetailPage({ params }: PageProps) {
 
   const hasFailures = (run.resultStats.failed ?? 0) + (run.resultStats.invalid_output ?? 0) > 0
   const canPublish = run.status === 'completed' && run.qcStatus === 'passed'
-  const canRetry = ['completed', 'qc_failed', 'failed'].includes(run.status) && hasFailures
+  const canRetry =
+    (['completed', 'failed'].includes(run.status) && hasFailures) || run.status === 'qc_failed'
 
   const qcChecks: QcCheck[] = run.qcSummaryJson
     ? ((run.qcSummaryJson as { checks?: QcCheck[] }).checks ?? [])
