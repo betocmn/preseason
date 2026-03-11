@@ -230,11 +230,13 @@ async function claimRunExecution(
             eq(benchmarkRuns.id, run.id),
             eq(benchmarkRuns.status, 'running'),
             eq(benchmarkRuns.startedAt, run.startedAt),
+            getRunHeartbeatClaimClause(run),
           )
         : and(
             eq(benchmarkRuns.id, run.id),
             eq(benchmarkRuns.status, 'running'),
             isNull(benchmarkRuns.startedAt),
+            getRunHeartbeatClaimClause(run),
           )
     }
 
@@ -289,6 +291,18 @@ function getRunHeartbeatAt(run: BenchmarkRunRecord): Date | null {
 
   const parsed = new Date(heartbeatAt)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getRunHeartbeatClaimClause(run: BenchmarkRunRecord) {
+  if (
+    run.qcSummaryJson &&
+    typeof run.qcSummaryJson === 'object' &&
+    !Array.isArray(run.qcSummaryJson)
+  ) {
+    return eq(benchmarkRuns.qcSummaryJson, run.qcSummaryJson as Record<string, unknown>)
+  }
+
+  return isNull(benchmarkRuns.qcSummaryJson)
 }
 
 function buildRunCaseSummaryPatch(
