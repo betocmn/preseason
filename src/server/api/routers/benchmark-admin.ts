@@ -269,9 +269,13 @@ export const benchmarkAdminRouter = createTRPCRouter({
           })
         }
 
-        const categoryIds = categorySlugs
-          .map((slug) => slugToId.get(slug))
-          .filter((id): id is string => id !== undefined)
+        const categoryIds = [
+          ...new Set(
+            categorySlugs
+              .map((slug) => slugToId.get(slug))
+              .filter((id): id is string => id !== undefined),
+          ),
+        ]
 
         if (categoryIds.length === 0) continue
 
@@ -346,9 +350,16 @@ export const benchmarkAdminRouter = createTRPCRouter({
 
       const season = await ctx.db.query.benchmarkSeasons.findFirst({
         where: eq(benchmarkSeasons.id, input.seasonId),
+        with: { protocol: true },
       })
       if (!season) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Season not found' })
+      }
+      if (season.protocol.mode !== 'benchmark') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only benchmark-mode seasons can be completed through this endpoint',
+        })
       }
       if (season.status !== 'active') {
         throw new TRPCError({
