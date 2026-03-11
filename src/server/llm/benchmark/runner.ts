@@ -225,19 +225,12 @@ async function claimRunExecution(
     if (run.status === 'pending' || run.status === 'failed') {
       whereClause = and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, run.status))
     } else if (run.status === 'running') {
-      whereClause = run.startedAt
-        ? and(
-            eq(benchmarkRuns.id, run.id),
-            eq(benchmarkRuns.status, 'running'),
-            eq(benchmarkRuns.startedAt, run.startedAt),
-            getRunHeartbeatClaimClause(run),
-          )
-        : and(
-            eq(benchmarkRuns.id, run.id),
-            eq(benchmarkRuns.status, 'running'),
-            isNull(benchmarkRuns.startedAt),
-            getRunHeartbeatClaimClause(run),
-          )
+      whereClause = and(
+        eq(benchmarkRuns.id, run.id),
+        eq(benchmarkRuns.status, 'running'),
+        getRunStartedAtClaimClause(run),
+        getRunHeartbeatClaimClause(run),
+      )
     }
 
     if (!whereClause) {
@@ -305,6 +298,20 @@ function getRunHeartbeatClaimClause(run: BenchmarkRunRecord) {
   }
 
   return isNull(benchmarkRuns.qcSummaryJson)
+}
+
+function getRunStartedAtClaimClause(run: Pick<BenchmarkRunRecord, 'startedAt'>) {
+  return run.startedAt
+    ? eq(benchmarkRuns.startedAt, run.startedAt)
+    : isNull(benchmarkRuns.startedAt)
+}
+
+function getRunExecutionOwnershipClause(run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>) {
+  return and(
+    eq(benchmarkRuns.id, run.id),
+    eq(benchmarkRuns.status, 'running'),
+    getRunStartedAtClaimClause(run),
+  )
 }
 
 function buildRunCaseSummaryPatch(
@@ -397,7 +404,7 @@ function startRunHeartbeat(
           .set({
             qcSummaryJson: buildRunCaseSummaryPatch(run, { lastHeartbeatAt: heartbeatAt }),
           })
-          .where(and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, 'running')))
+          .where(getRunExecutionOwnershipClause(run))
       })
       .catch((error) => {
         heartbeatError ??= error
@@ -474,7 +481,7 @@ export async function runBenchmark(
         completedAt: now(),
         errorLog: message,
       })
-      .where(eq(benchmarkRuns.id, run.id))
+      .where(getRunExecutionOwnershipClause(run))
     throw error
   }
 }
@@ -515,7 +522,7 @@ async function executeRun(
         distinctPromptVersions: 0,
       })
 
-      await database
+      const [finalizedRun] = await database
         .update(benchmarkRuns)
         .set({
           status: 'qc_failed',
@@ -525,7 +532,13 @@ async function executeRun(
           qcStatus: 'failed',
           qcSummaryJson: qc,
         })
-        .where(eq(benchmarkRuns.id, run.id))
+        .where(getRunExecutionOwnershipClause(run))
+        .returning({ id: benchmarkRuns.id })
+
+      if (!finalizedRun) {
+        const latestRun = await findRunById(database, run.id)
+        return await buildRunSummary(database, latestRun, seasonId)
+      }
 
       return {
         runId: run.id,
@@ -787,7 +800,7 @@ async function executeRun(
     const metrics = await calculateRunMetrics(database, run.id, allCases.length)
     const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
 
-    await database
+    const [finalizedRun] = await database
       .update(benchmarkRuns)
       .set({
         status: finalStatus,
@@ -798,7 +811,13 @@ async function executeRun(
         qcSummaryJson: metrics.qc,
         errorLog: errors.length > 0 ? errors.join('\n') : null,
       })
-      .where(eq(benchmarkRuns.id, run.id))
+      .where(getRunExecutionOwnershipClause(run))
+      .returning({ id: benchmarkRuns.id })
+
+    if (!finalizedRun) {
+      const latestRun = await findRunById(database, run.id)
+      return await buildRunSummary(database, latestRun, seasonId)
+    }
 
     return {
       runId: run.id,
