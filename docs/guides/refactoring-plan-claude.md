@@ -657,7 +657,7 @@ synthetic backfill.
 
 ---
 
-## PR 5: Benchmark scoring, rankings, and head-to-head computation
+## PR 5: Benchmark scoring, rankings, and head-to-head computation ✅ DONE
 
 **Goal:** Replace ad-hoc recommendation aggregations with rigorous case-decision-based
 scoring. Add tier-filtered views.
@@ -849,7 +849,7 @@ This avoids the epistemological problem of comparing Supabase (database) vs Cler
 
 ---
 
-## PR 6: Admin controls and tool candidate review
+## PR 6: Admin controls and tool candidate review ✅ DONE
 
 **Goal:** Add admin UI and APIs for managing benchmark seasons, reviewing tool
 candidates, and publishing runs.
@@ -995,9 +995,9 @@ PR 4: Benchmark runner           ─── new cron endpoint, start shadow mode 
   │                                   │  Shadow accumulation: 21-28 days   │
   │                                   │  Daily benchmark cron runs here    │
   │                                   └─────────────────────────────────────┘
-PR 5: Scoring + weighted ranks   ─── new routers with window types + thresholds
+PR 5: Scoring + weighted ranks   ─── new routers with window types + thresholds ✅ DONE
   │                                   (can build while shadow data accumulates)
-PR 6: Admin controls             ─── admin-only, no public impact
+PR 6: Admin controls             ─── admin-only, no public impact ✅ DONE
   │                                   (can build while shadow data accumulates)
 PR 7: Public switchover + docs   ─── only after launch bar is met
   │
