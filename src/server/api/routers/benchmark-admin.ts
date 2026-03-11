@@ -827,11 +827,16 @@ export const benchmarkAdminRouter = createTRPCRouter({
             status: 'approved',
             approvedToolId,
           })
-          .where(eq(toolCandidates.id, input.candidateId))
+          .where(
+            and(eq(toolCandidates.id, input.candidateId), eq(toolCandidates.status, 'pending')),
+          )
           .returning()
 
         if (!updated) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Candidate status has changed since it was loaded; refresh and try again',
+          })
         }
 
         return updated
@@ -867,10 +872,15 @@ export const benchmarkAdminRouter = createTRPCRouter({
           status: 'rejected',
           notes: input.notes,
         })
-        .where(eq(toolCandidates.id, input.candidateId))
+        .where(and(eq(toolCandidates.id, input.candidateId), eq(toolCandidates.status, 'pending')))
         .returning()
 
-      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      if (!updated) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Candidate status has changed since it was loaded; refresh and try again',
+        })
+      }
       return updated
     }),
 
