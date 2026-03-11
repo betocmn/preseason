@@ -314,6 +314,24 @@ function getRunExecutionOwnershipClause(run: Pick<BenchmarkRunRecord, 'id' | 'st
   )
 }
 
+async function getRunSummaryIfOwnershipLost(
+  database: DatabaseClient,
+  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>,
+  seasonId: string,
+): Promise<BenchmarkRunSummary | null> {
+  const ownedRun = await database.query.benchmarkRuns.findFirst({
+    columns: { id: true },
+    where: getRunExecutionOwnershipClause(run),
+  })
+
+  if (ownedRun) {
+    return null
+  }
+
+  const latestRun = await findRunById(database, run.id)
+  return await buildRunSummary(database, latestRun, seasonId)
+}
+
 function buildRunCaseSummaryPatch(
   run: BenchmarkRunRecord,
   update: Partial<RunCaseSnapshot>,
@@ -590,6 +608,15 @@ async function executeRun(
     const errors: string[] = []
 
     for (const benchmarkCase of pendingCases) {
+      const summaryIfOwnershipLostBeforeCase = await getRunSummaryIfOwnershipLost(
+        database,
+        run,
+        seasonId,
+      )
+      if (summaryIfOwnershipLostBeforeCase) {
+        return summaryIfOwnershipLostBeforeCase
+      }
+
       try {
         const { promptVersion, modelSnapshot } = benchmarkCase
 
@@ -623,6 +650,15 @@ async function executeRun(
           maxTokens: modelSnapshot.maxTokens ?? undefined,
           seed: modelSnapshot.seed ?? undefined,
         })
+
+        const summaryIfOwnershipLostBeforeWrite = await getRunSummaryIfOwnershipLost(
+          database,
+          run,
+          seasonId,
+        )
+        if (summaryIfOwnershipLostBeforeWrite) {
+          return summaryIfOwnershipLostBeforeWrite
+        }
 
         const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
 
@@ -780,6 +816,15 @@ async function executeRun(
           errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
         }
       } catch (error) {
+        const summaryIfOwnershipLostBeforeFailureWrite = await getRunSummaryIfOwnershipLost(
+          database,
+          run,
+          seasonId,
+        )
+        if (summaryIfOwnershipLostBeforeFailureWrite) {
+          return summaryIfOwnershipLostBeforeFailureWrite
+        }
+
         const message = getErrorMessage(error)
         errors.push(`[case ${benchmarkCase.id}] ${message}`)
 

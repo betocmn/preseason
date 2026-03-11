@@ -588,6 +588,86 @@ describe('runBenchmark', () => {
     expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
   })
 
+  it('should stop a stale worker from inserting case results after reclaim', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const staleWorkerFirstCallStarted = createDeferred()
+    const staleWorkerFirstCallBlocked = createDeferred()
+
+    let staleWorkerCallCount = 0
+    const staleWorkerService = createMockLlmService(async (_provider, request) => {
+      staleWorkerCallCount++
+      if (staleWorkerCallCount === 1) {
+        staleWorkerFirstCallStarted.resolve()
+        await staleWorkerFirstCallBlocked.promise
+      }
+
+      return mockCompletionForRequest('Just a plain response with no appendix tags', request)
+    })
+
+    const reclaimingWorkerFirstCallStarted = createDeferred()
+    const reclaimingWorkerFirstCallBlocked = createDeferred()
+
+    let reclaimingWorkerCallCount = 0
+    const reclaimingWorkerService = createMockLlmService(async (_provider, request) => {
+      reclaimingWorkerCallCount++
+      if (reclaimingWorkerCallCount === 1) {
+        reclaimingWorkerFirstCallStarted.resolve()
+        await reclaimingWorkerFirstCallBlocked.promise
+      }
+
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const staleStartTime = new Date('2026-03-10T00:00:00.000Z')
+    const reclaimTime = new Date('2026-03-10T01:00:00.000Z')
+
+    const staleRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: staleWorkerService,
+      now: () => staleStartTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await staleWorkerFirstCallStarted.promise
+
+    const reclaimedRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: reclaimingWorkerService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await reclaimingWorkerFirstCallStarted.promise
+
+    staleWorkerFirstCallBlocked.resolve()
+    await wait(150)
+    reclaimingWorkerFirstCallBlocked.resolve()
+
+    const staleSummary = await staleRunPromise
+    const reclaimedSummary = await reclaimedRunPromise
+
+    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.completedCases).toBe(15)
+    expect(reclaimedSummary.invalidOutputCases).toBe(0)
+    expect(staleWorkerService.complete).toHaveBeenCalledTimes(1)
+    expect(staleSummary.runId).toBe(reclaimedSummary.runId)
+
+    const invalidResults = await db
+      .select({ id: benchmarkCaseResults.id })
+      .from(benchmarkCaseResults)
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, reclaimedSummary.runId),
+          eq(benchmarkCaseResults.status, 'invalid_output'),
+        ),
+      )
+    expect(invalidResults).toHaveLength(0)
+  })
+
   it('should resume a partially completed run', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedFullPanel(db)
