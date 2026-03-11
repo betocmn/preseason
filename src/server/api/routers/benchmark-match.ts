@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   anchorDateSchema,
@@ -7,8 +7,11 @@ import {
   findLatestActiveBenchmarkSeasonId,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { subcategories, tools } from '~/server/db/schema'
-import { computeHeadToHead } from '~/server/llm/benchmark/scoring'
+import { categories, subcategories, tools } from '~/server/db/schema'
+import {
+  computeCategoryRanking,
+  computeHeadToHead,
+} from '~/server/llm/benchmark/scoring'
 
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure
@@ -85,5 +88,93 @@ export const benchmarkMatchRouter = createTRPCRouter({
       })
 
       return { category, toolA, toolB, result }
+    }),
+
+  listFeatured: publicProcedure
+    .input(
+      z
+        .object({
+          categorySlug: z.string().min(1).max(100).optional(),
+          limit: z.number().int().min(1).max(50).default(12),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 12
+
+      const seasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
+      if (!seasonId) return []
+
+      const anchorDate = new Date().toISOString().slice(0, 10)
+
+      // Get subcategories to generate matchups from
+      let subs: { id: string; name: string; slug: string }[]
+      if (input?.categorySlug) {
+        const group = await ctx.db.query.categories.findFirst({
+          where: eq(categories.slug, input.categorySlug),
+          with: {
+            subcategories: {
+              orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+            },
+          },
+        })
+        subs = group?.subcategories ?? []
+      } else {
+        subs = await ctx.db.query.subcategories.findMany({
+          orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+        })
+      }
+
+      // For each subcategory, get top 2 tools and create a head-to-head
+      const matchups: {
+        category: { id: string; name: string; slug: string }
+        toolA: { id: string; name: string; slug: string; logoUrl: string | null }
+        toolB: { id: string; name: string; slug: string; logoUrl: string | null }
+        result: Awaited<ReturnType<typeof computeHeadToHead>>
+      }[] = []
+
+      for (const sub of subs) {
+        if (matchups.length >= limit) break
+
+        const ranking = await computeCategoryRanking(ctx.db, {
+          categoryId: sub.id,
+          seasonId,
+          windowType: 'trailing_28d',
+          anchorDate,
+        })
+
+        if (ranking.items.length < 2) continue
+
+        const top1 = ranking.items[0]!
+        const top2 = ranking.items[1]!
+
+        const result = await computeHeadToHead(ctx.db, {
+          categoryId: sub.id,
+          seasonId,
+          toolAId: top1.toolId,
+          toolBId: top2.toolId,
+          windowType: 'trailing_28d',
+          anchorDate,
+        })
+
+        matchups.push({
+          category: sub,
+          toolA: {
+            id: top1.toolId,
+            name: top1.toolName,
+            slug: top1.toolSlug,
+            logoUrl: top1.toolLogoUrl,
+          },
+          toolB: {
+            id: top2.toolId,
+            name: top2.toolName,
+            slug: top2.toolSlug,
+            logoUrl: top2.toolLogoUrl,
+          },
+          result,
+        })
+      }
+
+      return matchups
     }),
 })
