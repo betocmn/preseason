@@ -218,7 +218,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
       const slugToId = new Map(categoryRows.map((r) => [r.slug, r.id]))
 
       // Freeze prompt versions
-      const promptVersions = []
+      const promptVersions: Awaited<ReturnType<typeof freezePromptVersion>>[] = []
       for (const prompt of activePrompts) {
         const categorySlugs = prompt.expectedCategories ?? []
         const categoryIds = categorySlugs
@@ -249,44 +249,46 @@ export const benchmarkAdminRouter = createTRPCRouter({
         modelSnapshots.push(snapshot)
       }
 
-      // Insert junction rows and generate case matrix
-      await ctx.db.insert(benchmarkSeasonPrompts).values(
-        promptVersions.map((pv) => ({
+      // Insert junction rows, case matrix, and activate — all in a transaction
+      return await ctx.db.transaction(async (tx) => {
+        await tx.insert(benchmarkSeasonPrompts).values(
+          promptVersions.map((pv) => ({
+            seasonId: input.seasonId,
+            promptVersionId: pv.id,
+          })),
+        )
+
+        await tx.insert(benchmarkSeasonModels).values(
+          modelSnapshots.map((ms) => ({
+            seasonId: input.seasonId,
+            modelSnapshotId: ms.id,
+          })),
+        )
+
+        // Generate case matrix: prompt versions x model snapshots
+        const caseValues = promptVersions.flatMap((pv) =>
+          modelSnapshots.map((ms) => ({
+            seasonId: input.seasonId,
+            promptVersionId: pv.id,
+            modelSnapshotId: ms.id,
+          })),
+        )
+
+        await tx.insert(benchmarkCases).values(caseValues)
+
+        // Activate the season
+        await tx
+          .update(benchmarkSeasons)
+          .set({ status: 'active' })
+          .where(eq(benchmarkSeasons.id, input.seasonId))
+
+        return {
           seasonId: input.seasonId,
-          promptVersionId: pv.id,
-        })),
-      )
-
-      await ctx.db.insert(benchmarkSeasonModels).values(
-        modelSnapshots.map((ms) => ({
-          seasonId: input.seasonId,
-          modelSnapshotId: ms.id,
-        })),
-      )
-
-      // Generate case matrix: prompt versions x model snapshots
-      const caseValues = promptVersions.flatMap((pv) =>
-        modelSnapshots.map((ms) => ({
-          seasonId: input.seasonId,
-          promptVersionId: pv.id,
-          modelSnapshotId: ms.id,
-        })),
-      )
-
-      await ctx.db.insert(benchmarkCases).values(caseValues)
-
-      // Activate the season
-      await ctx.db
-        .update(benchmarkSeasons)
-        .set({ status: 'active' })
-        .where(eq(benchmarkSeasons.id, input.seasonId))
-
-      return {
-        seasonId: input.seasonId,
-        promptVersionCount: promptVersions.length,
-        modelSnapshotCount: modelSnapshots.length,
-        caseCount: caseValues.length,
-      }
+          promptVersionCount: promptVersions.length,
+          modelSnapshotCount: modelSnapshots.length,
+          caseCount: caseValues.length,
+        }
+      })
     }),
 
   completeSeason: protectedProcedure
@@ -372,20 +374,23 @@ export const benchmarkAdminRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Weight config not found' })
       }
 
-      // Deactivate all, then activate target
-      await ctx.db
-        .update(benchmarkModelWeightConfigs)
-        .set({ isActive: false })
-        .where(eq(benchmarkModelWeightConfigs.isActive, true))
+      // Deactivate all, then activate target — in a transaction to prevent race conditions
+      return await ctx.db.transaction(async (tx) => {
+        await tx
+          .update(benchmarkModelWeightConfigs)
+          .set({ isActive: false })
+          .where(eq(benchmarkModelWeightConfigs.isActive, true))
 
-      const [updated] = await ctx.db
-        .update(benchmarkModelWeightConfigs)
-        .set({ isActive: true })
-        .where(eq(benchmarkModelWeightConfigs.id, input.id))
-        .returning()
+        const [updated] = await tx
+          .update(benchmarkModelWeightConfigs)
+          .set({ isActive: true })
+          .where(eq(benchmarkModelWeightConfigs.id, input.id))
+          .returning()
 
-      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
-      return updated
+        if (!updated)
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+        return updated
+      })
     }),
 
   // ---------------------------------------------------------------------------
