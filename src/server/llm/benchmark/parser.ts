@@ -18,12 +18,75 @@ function findAppendixTagBlock(rawContent: string) {
       return null
     }
 
-    const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+    const closeIdx =
+      findJsonTerminatedCloseTag(rawContent, openIdx + OPEN_TAG.length) ??
+      rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
     if (closeIdx !== -1) {
       return { openIdx, closeIdx }
     }
 
     searchFrom = openIdx - 1
+  }
+
+  return null
+}
+
+function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
+  let jsonStart = contentStart
+
+  while (jsonStart < rawContent.length && /\s/u.test(rawContent[jsonStart] ?? '')) {
+    jsonStart++
+  }
+
+  if (rawContent[jsonStart] !== '{') {
+    return null
+  }
+
+  let depth = 0
+  let inString = false
+  let isEscaped = false
+
+  for (let idx = jsonStart; idx < rawContent.length; idx++) {
+    const char = rawContent[idx]
+    if (char === undefined) break
+
+    if (isEscaped) {
+      isEscaped = false
+      continue
+    }
+
+    if (inString) {
+      if (char === '\\') {
+        isEscaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === '{' || char === '[') {
+      depth++
+      continue
+    }
+
+    if (char === '}' || char === ']') {
+      depth--
+      if (depth !== 0) {
+        continue
+      }
+
+      let closeIdx = idx + 1
+      while (closeIdx < rawContent.length && /\s/u.test(rawContent[closeIdx] ?? '')) {
+        closeIdx++
+      }
+
+      return rawContent.startsWith(CLOSE_TAG, closeIdx) ? closeIdx : null
+    }
   }
 
   return null

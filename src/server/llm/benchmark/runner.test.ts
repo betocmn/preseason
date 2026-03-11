@@ -447,6 +447,82 @@ describe('runBenchmark', () => {
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
+  it('should refresh heartbeat metadata immediately when reclaiming a stale run', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedFullPanel(db)
+    const caseIds = caseRows.map((benchmarkCase) => benchmarkCase.id)
+    const staleHeartbeatAt = new Date('2026-03-10T00:00:00.000Z')
+    const reclaimTime = new Date('2026-03-10T01:00:00.000Z')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        status: 'running',
+        startedAt: staleHeartbeatAt,
+        qcSummaryJson: {
+          snapshotCaseIds: caseIds,
+          lastHeartbeatAt: staleHeartbeatAt.toISOString(),
+        },
+        expectedCaseCount: caseIds.length,
+      })
+      .returning()
+
+    if (!run) {
+      throw new Error('Expected seeded stale benchmark run')
+    }
+
+    const firstCallBlocked = createDeferred()
+    const firstCallStarted = createDeferred()
+
+    let callCount = 0
+    const llmService = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        firstCallStarted.resolve()
+        await firstCallBlocked.promise
+      }
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const firstRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+    await firstCallStarted.promise
+
+    const reclaimedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, run.id),
+    })
+    expect(reclaimedRun?.qcSummaryJson).toEqual(
+      expect.objectContaining({
+        snapshotCaseIds: caseIds,
+        lastHeartbeatAt: reclaimTime.toISOString(),
+      }),
+    )
+
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    expect(secondSummary.status).toBe('running')
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    firstCallBlocked.resolve()
+    const firstSummary = await firstRunPromise
+
+    expect(firstSummary.status).toBe('completed')
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
   it('should resume a partially completed run', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedFullPanel(db)

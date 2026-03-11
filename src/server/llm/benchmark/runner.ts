@@ -244,12 +244,14 @@ async function claimRunExecution(
       return { run, execute: false }
     }
 
+    const claimedHeartbeatAt = currentTime.toISOString()
     const [claimedRun] = await database
       .update(benchmarkRuns)
       .set({
         status: 'running',
         startedAt: currentTime,
         completedAt: null,
+        qcSummaryJson: buildRunCaseSummaryPatch(run, { lastHeartbeatAt: claimedHeartbeatAt }),
       })
       .where(whereClause)
       .returning()
