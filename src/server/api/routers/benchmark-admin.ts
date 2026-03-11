@@ -433,8 +433,13 @@ export const benchmarkAdminRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Weight config not found' })
       }
 
-      // Deactivate all, then activate target — in a transaction to prevent race conditions
+      // Lock active rows first to serialize concurrent activations, then
+      // deactivate all and activate the target within a single transaction.
       return await ctx.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT id FROM ${benchmarkModelWeightConfigs} WHERE is_active = true FOR UPDATE`,
+        )
+
         await tx
           .update(benchmarkModelWeightConfigs)
           .set({ isActive: false })
