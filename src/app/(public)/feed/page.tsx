@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { FeedList } from '~/components/public/feed-list'
+import { Badge } from '~/components/ui/badge'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -22,7 +23,12 @@ export default async function FeedPage() {
 
   return (
     <div className="container py-8">
-      <h1 className="mb-6 text-xl font-bold tracking-tight">Recommendation Feed</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-xl font-bold tracking-tight">Recommendation Feed</h1>
+        <Badge variant="outline" className="text-xs">
+          Exploration
+        </Badge>
+      </div>
       <FeedList categories={categories} llms={llms} />
     </div>
   )
