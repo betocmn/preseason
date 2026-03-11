@@ -148,13 +148,18 @@ async function seedBenchmarkPublicFixture() {
       })
       .returning(),
   )
-  await db.insert(benchmarkSeasons).values({
-    protocolId: explorationProtocol.id,
-    slug: 'season-exploration',
-    name: 'Exploration Season',
-    status: 'active',
-    createdAt: new Date('2026-03-03T00:00:00.000Z'),
-  })
+  const explorationSeason = first(
+    await db
+      .insert(benchmarkSeasons)
+      .values({
+        protocolId: explorationProtocol.id,
+        slug: 'season-exploration',
+        name: 'Exploration Season',
+        status: 'active',
+        createdAt: new Date('2026-03-03T00:00:00.000Z'),
+      })
+      .returning(),
+  )
   const newerSeason = first(
     await db
       .insert(benchmarkSeasons)
@@ -246,7 +251,7 @@ async function seedBenchmarkPublicFixture() {
     rawToolName: 'Clerk',
   })
 
-  return { authCategory, clerk, supabase }
+  return { authCategory, clerk, explorationSeason, supabase }
 }
 
 describe('benchmark public routers', () => {
@@ -291,6 +296,42 @@ describe('benchmark public routers', () => {
     expect(result.result?.bWins).toBe(0)
   })
 
+  it('rejects non-benchmark season IDs for benchmark rankings', async () => {
+    const fixture = await seedBenchmarkPublicFixture()
+
+    const caller = createTestCaller(null)
+
+    await expect(
+      caller.benchmarkRanking.byCategory({
+        categorySlug: 'auth',
+        seasonId: fixture.explorationSeason.id,
+        windowType: 'run_day',
+        anchorDate: '2026-03-10',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('rejects non-benchmark season IDs for benchmark matches', async () => {
+    const fixture = await seedBenchmarkPublicFixture()
+
+    const caller = createTestCaller(null)
+
+    await expect(
+      caller.benchmarkMatch.headToHead({
+        categorySlug: 'auth',
+        toolASlug: 'clerk',
+        toolBSlug: 'supabase',
+        seasonId: fixture.explorationSeason.id,
+        windowType: 'run_day',
+        anchorDate: '2026-03-10',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
   it('rejects identical tools for benchmark matches', async () => {
     const caller = createTestCaller(null)
 
@@ -305,6 +346,24 @@ describe('benchmark public routers', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
+  })
+
+  it('returns null category markers for missing benchmark match categories', async () => {
+    await seedBenchmarkPublicFixture()
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'missing-category',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'run_day',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.category).toBeNull()
+    expect(result.toolA?.slug).toBe('clerk')
+    expect(result.toolB?.slug).toBe('supabase')
+    expect(result.result).toBeNull()
   })
 
   it('rejects invalid anchor dates for benchmark rankings', async () => {
