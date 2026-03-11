@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
+import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
 import { Badge } from '~/components/ui/badge'
 import { api } from '~/trpc/server'
@@ -40,13 +41,34 @@ export default async function RankingsPage({ searchParams }: Props) {
     subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
   }))
 
-  // Default to first subcategory when no filter selected
-  const defaultSubcategorySlug = groups[0]?.subcategories[0]?.slug
-
   const validPromptTier = (['basic', 'intermediate', 'advanced'] as const).find(
     (t) => t === promptTier,
   )
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
+  const showIndex = !category && !sub
+  const indexGroups = showIndex
+    ? await Promise.all(
+        groups.map(async (group) => {
+          const data = await caller.benchmarkRanking.byCategoryGroup({
+            groupSlug: group.slug,
+            promptTier: validPromptTier,
+            modelTier: validModelTier,
+          })
+
+          return {
+            slug: group.slug,
+            name: group.name,
+            ranking: data.ranking
+              ? {
+                  items: data.ranking.items,
+                  totalEligibleDecisions: data.ranking.totalEligibleDecisions,
+                  meetsPublicationThreshold: data.ranking.meetsPublicationThreshold,
+                }
+              : null,
+          }
+        }),
+      )
+    : []
 
   return (
     <div className="container py-8">
@@ -74,13 +96,16 @@ export default async function RankingsPage({ searchParams }: Props) {
       </Suspense>
 
       <div className="mt-6">
-        <RankingsPageContent
-          currentGroup={category}
-          currentSub={sub}
-          promptTier={validPromptTier}
-          modelTier={validModelTier}
-          defaultSubcategorySlug={defaultSubcategorySlug}
-        />
+        {showIndex ? (
+          <RankingIndex groups={indexGroups} />
+        ) : (
+          <RankingsPageContent
+            currentGroup={category}
+            currentSub={sub}
+            promptTier={validPromptTier}
+            modelTier={validModelTier}
+          />
+        )}
       </div>
     </div>
   )

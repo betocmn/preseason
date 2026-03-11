@@ -9,7 +9,6 @@ type RankingsPageContentProps = {
   currentSub?: string
   promptTier?: 'basic' | 'intermediate' | 'advanced'
   modelTier?: 'frontier' | 'mid' | 'small'
-  defaultSubcategorySlug?: string
 }
 
 export function RankingsPageContent({
@@ -17,10 +16,8 @@ export function RankingsPageContent({
   currentSub,
   promptTier,
   modelTier,
-  defaultSubcategorySlug,
 }: RankingsPageContentProps) {
-  // When no filter at all, show the first subcategory's benchmark ranking
-  const effectiveSub = currentSub ?? (!currentGroup ? defaultSubcategorySlug : undefined)
+  const effectiveSub = currentSub
   const isGroup = !!currentGroup && !currentSub
 
   const groupQuery = api.benchmarkRanking.byCategoryGroup.useQuery(
@@ -49,6 +46,9 @@ export function RankingsPageContent({
     ? (groupQuery.data?.categoryGroup?.name ?? 'Category')
     : (subQuery.data?.category?.name ?? 'Category')
 
+  if (!currentGroup && !currentSub) {
+    return null
+  }
   if (isLoading) return null
 
   if (!ranking || ranking.items.length === 0) {

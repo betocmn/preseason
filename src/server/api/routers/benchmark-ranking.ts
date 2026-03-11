@@ -8,7 +8,7 @@ import {
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories } from '~/server/db/schema'
-import { computeCategoryRanking, computeCategoryGroupRanking } from '~/server/llm/benchmark/scoring'
+import { computeCategoryGroupRanking, computeCategoryRanking } from '~/server/llm/benchmark/scoring'
 
 const windowTypeSchema = z
   .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
