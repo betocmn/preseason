@@ -301,8 +301,22 @@ export const benchmarkAdminRouter = createTRPCRouter({
         modelSnapshots.push(snapshot)
       }
 
-      // Insert junction rows, case matrix, and activate — all in a transaction
+      // Insert junction rows, case matrix, and activate — all in a transaction.
+      // The status guard inside the transaction prevents concurrent freezes.
       return await ctx.db.transaction(async (tx) => {
+        const [guarded] = await tx
+          .update(benchmarkSeasons)
+          .set({ status: 'active' })
+          .where(and(eq(benchmarkSeasons.id, input.seasonId), eq(benchmarkSeasons.status, 'draft')))
+          .returning({ id: benchmarkSeasons.id })
+
+        if (!guarded) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Season state changed concurrently; refresh and try again',
+          })
+        }
+
         await tx.insert(benchmarkSeasonPrompts).values(
           promptVersions.map((pv) => ({
             seasonId: input.seasonId,
@@ -327,12 +341,6 @@ export const benchmarkAdminRouter = createTRPCRouter({
         )
 
         await tx.insert(benchmarkCases).values(caseValues)
-
-        // Activate the season
-        await tx
-          .update(benchmarkSeasons)
-          .set({ status: 'active' })
-          .where(eq(benchmarkSeasons.id, input.seasonId))
 
         return {
           seasonId: input.seasonId,
@@ -433,11 +441,11 @@ export const benchmarkAdminRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Weight config not found' })
       }
 
-      // Lock active rows first to serialize concurrent activations, then
-      // deactivate all and activate the target within a single transaction.
+      // Advisory lock serializes concurrent activations even when no config
+      // is currently active (row-level FOR UPDATE would skip that case).
       return await ctx.db.transaction(async (tx) => {
         await tx.execute(
-          sql`SELECT id FROM ${benchmarkModelWeightConfigs} WHERE is_active = true FOR UPDATE`,
+          sql`SELECT pg_advisory_xact_lock(${sql.raw("hashtext('weight_config_activate')")})`,
         )
 
         await tx
