@@ -190,9 +190,16 @@ export const benchmarkAdminRouter = createTRPCRouter({
 
       const season = await ctx.db.query.benchmarkSeasons.findFirst({
         where: eq(benchmarkSeasons.id, input.seasonId),
+        with: { protocol: true },
       })
       if (!season) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Season not found' })
+      }
+      if (season.protocol.mode !== 'benchmark') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only benchmark-mode seasons can be frozen through this endpoint',
+        })
       }
       if (season.status !== 'draft') {
         throw new TRPCError({
