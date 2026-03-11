@@ -638,14 +638,21 @@ export const benchmarkAdminRouter = createTRPCRouter({
         )
         .returning({ id: benchmarkCaseResults.id })
 
-      // Reset run to pending so the runner can pick it up
+      // Reset run to pending so the runner can pick it up.
+      // Preserve snapshotCaseIds so retries stay bound to the original case set.
+      const existingQc = run.qcSummaryJson
+      const preservedSnapshot =
+        existingQc && typeof existingQc === 'object' && !Array.isArray(existingQc)
+          ? { snapshotCaseIds: (existingQc as Record<string, unknown>).snapshotCaseIds }
+          : null
+
       await ctx.db
         .update(benchmarkRuns)
         .set({
           status: 'pending',
           completedAt: null,
           qcStatus: null,
-          qcSummaryJson: null,
+          qcSummaryJson: preservedSnapshot,
         })
         .where(eq(benchmarkRuns.id, input.runId))
 
