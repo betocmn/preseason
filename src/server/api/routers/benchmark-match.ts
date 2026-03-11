@@ -8,10 +8,7 @@ import {
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories, tools } from '~/server/db/schema'
-import {
-  computeCategoryRanking,
-  computeHeadToHead,
-} from '~/server/llm/benchmark/scoring'
+import { computeCategoryRanking, computeHeadToHead } from '~/server/llm/benchmark/scoring'
 
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure

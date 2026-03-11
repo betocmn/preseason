@@ -3,8 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
-import { Badge } from '~/components/ui/badge'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
+import { Badge } from '~/components/ui/badge'
 import { api } from '~/trpc/server'
 
 type Props = {
