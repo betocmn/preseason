@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
@@ -486,7 +486,67 @@ export const benchmarkAdminRouter = createTRPCRouter({
         statusBreakdown.map((r) => [r.status, Number(r.count)]),
       )
 
-      return { ...run, resultStats }
+      const caseRows = await ctx.db.query.benchmarkCases.findMany({
+        where: eq(benchmarkCases.seasonId, run.seasonId),
+        orderBy: [asc(benchmarkCases.id)],
+        with: {
+          promptVersion: {
+            with: {
+              prompt: true,
+            },
+          },
+          modelSnapshot: true,
+          results: {
+            where: eq(benchmarkCaseResults.runId, input.id),
+            with: {
+              decisions: {
+                orderBy: [asc(benchmarkCaseDecisions.categoryId)],
+                with: {
+                  category: true,
+                  tool: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      return {
+        ...run,
+        resultStats,
+        caseRows: caseRows.map((benchmarkCase) => ({
+          id: benchmarkCase.id,
+          promptVersion: {
+            id: benchmarkCase.promptVersion.id,
+            title: benchmarkCase.promptVersion.prompt?.title ?? benchmarkCase.promptVersion.slug,
+            version: benchmarkCase.promptVersion.version,
+            tier: benchmarkCase.promptVersion.tier,
+          },
+          modelSnapshot: {
+            id: benchmarkCase.modelSnapshot.id,
+            name: benchmarkCase.modelSnapshot.name,
+            tier: benchmarkCase.modelSnapshot.tier,
+            provider: benchmarkCase.modelSnapshot.provider,
+          },
+          result: benchmarkCase.results[0]
+            ? {
+                id: benchmarkCase.results[0].id,
+                status: benchmarkCase.results[0].status,
+                errorMessage: benchmarkCase.results[0].errorMessage,
+                returnedModelId: benchmarkCase.results[0].returnedModelId,
+                createdAt: benchmarkCase.results[0].createdAt,
+                decisions: benchmarkCase.results[0].decisions.map((decision) => ({
+                  id: decision.id,
+                  decisionType: decision.decisionType,
+                  resolutionStatus: decision.resolutionStatus,
+                  rawToolName: decision.rawToolName,
+                  categoryName: decision.category.name,
+                  toolName: decision.tool?.name ?? null,
+                })),
+              }
+            : null,
+        })),
+      }
     }),
 
   publishRun: protectedProcedure

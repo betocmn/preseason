@@ -21,6 +21,19 @@ type QcCheck = {
   threshold: number
 }
 
+function resultStatusVariant(status: string) {
+  switch (status) {
+    case 'completed':
+      return 'default' as const
+    case 'invalid_output':
+      return 'secondary' as const
+    case 'failed':
+      return 'destructive' as const
+    default:
+      return 'outline' as const
+  }
+}
+
 type PageProps = {
   params: Promise<{ id: string }>
 }
@@ -89,9 +102,9 @@ export default async function RunDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Case Result Stats */}
+      {/* Case Result Summary */}
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Case Results</h2>
+        <h2 className="text-xl font-semibold">Case Result Summary</h2>
         <div className="grid max-w-md grid-cols-2 gap-y-2 text-sm">
           <span className="text-muted-foreground">Expected</span>
           <span>{run.expectedCaseCount ?? '-'}</span>
@@ -103,6 +116,78 @@ export default async function RunDetailPage({ params }: PageProps) {
           <span>{run.resultStats.invalid_output ?? 0}</span>
           <span className="text-muted-foreground">Pending</span>
           <span>{run.resultStats.pending ?? 0}</span>
+        </div>
+      </section>
+
+      {/* Case Results */}
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Case Results</h2>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Prompt</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Decisions</TableHead>
+                <TableHead>Error</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {run.caseRows.map((caseRow) => {
+                const result = caseRow.result
+
+                return (
+                  <TableRow key={caseRow.id}>
+                    <TableCell>
+                      <div className="font-medium">{caseRow.promptVersion.title}</div>
+                      <div className="text-muted-foreground text-xs">
+                        v{caseRow.promptVersion.version} · {caseRow.promptVersion.tier}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{caseRow.modelSnapshot.name}</div>
+                      <div className="text-muted-foreground text-xs">
+                        {caseRow.modelSnapshot.provider} · {caseRow.modelSnapshot.tier}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={resultStatusVariant(result?.status ?? 'pending')}>
+                        {result?.status ?? 'pending'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      {result?.decisions.length ? (
+                        <div className="space-y-1 text-xs">
+                          {result.decisions.map((decision) => (
+                            <div key={decision.id}>
+                              <span className="font-medium">{decision.categoryName}:</span>{' '}
+                              {decision.decisionType === 'tool'
+                                ? (decision.toolName ?? decision.rawToolName ?? 'Unresolved')
+                                : decision.decisionType}
+                              {decision.decisionType === 'tool' &&
+                              decision.resolutionStatus === 'unresolved_tool'
+                                ? ' (unresolved)'
+                                : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-sm text-sm">
+                      {result?.errorMessage ? (
+                        <span className="text-destructive">{result.errorMessage}</span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
       </section>
 

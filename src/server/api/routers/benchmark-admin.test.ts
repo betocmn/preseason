@@ -351,6 +351,69 @@ describe('benchmarkAdminRouter', () => {
     }
   })
 
+  it('returns case rows on benchmark run detail', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    const { category } = await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const tool = await caller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Failed to create tool')
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+        qcStatus: 'passed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [benchmarkCase] = await db.select().from(benchmarkCases)
+    if (!benchmarkCase) throw new Error('No case found')
+
+    const [caseResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'completed',
+        returnedModelId: 'openai/gpt-4o',
+      })
+      .returning()
+    if (!caseResult) throw new Error('Failed to create case result')
+
+    await db.insert(benchmarkCaseDecisions).values({
+      caseResultId: caseResult.id,
+      categoryId: category.id,
+      decisionType: 'tool',
+      toolId: tool.id,
+      rawToolName: 'Clerk',
+    })
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.caseRows).toHaveLength(1)
+    expect(detail.caseRows[0]?.result?.status).toBe('completed')
+    expect(detail.caseRows[0]?.result?.decisions[0]?.toolName).toBe('Clerk')
+  })
+
   // ---------------------------------------------------------------------------
   // Tool candidate review
   // ---------------------------------------------------------------------------
