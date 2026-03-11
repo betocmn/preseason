@@ -270,4 +270,20 @@ describe('benchmark public routers', () => {
     expect(result.result?.aWins).toBe(1)
     expect(result.result?.bWins).toBe(0)
   })
+
+  it('rejects identical tools for benchmark matches', async () => {
+    const caller = createTestCaller(null)
+
+    await expect(
+      caller.benchmarkMatch.headToHead({
+        categorySlug: 'auth',
+        toolASlug: 'clerk',
+        toolBSlug: 'clerk',
+        windowType: 'run_day',
+        anchorDate: '2026-03-10',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
 })
