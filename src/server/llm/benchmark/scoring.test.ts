@@ -22,8 +22,8 @@ import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase }
 import {
   computeCategoryRanking,
   computeHeadToHead,
-  getPreviousWindowAnchor,
   getWeightForTier,
+  sliceRunIdsForWindow,
   wilsonInterval,
 } from './scoring'
 
@@ -89,28 +89,35 @@ describe('getWeightForTier', () => {
   })
 })
 
-describe('getPreviousWindowAnchor', () => {
-  it('returns previous day for run_day', () => {
-    const result = getPreviousWindowAnchor('run_day', '2026-03-10')
-    expect(result.anchorDate).toBe('2026-03-09')
-    expect(result.windowType).toBe('run_day')
+describe('sliceRunIdsForWindow', () => {
+  const runIds = ['run-8', 'run-7', 'run-6', 'run-5', 'run-4', 'run-3', 'run-2', 'run-1']
+
+  it('returns the latest published run for run_day', () => {
+    expect(sliceRunIdsForWindow(runIds, 'run_day')).toEqual(['run-8'])
   })
 
-  it('returns 7 days earlier for trailing_7d', () => {
-    const result = getPreviousWindowAnchor('trailing_7d', '2026-03-10')
-    expect(result.anchorDate).toBe('2026-03-03')
-    expect(result.windowType).toBe('trailing_7d')
+  it('returns the last seven published runs for trailing_7d', () => {
+    expect(sliceRunIdsForWindow(runIds, 'trailing_7d')).toEqual([
+      'run-8',
+      'run-7',
+      'run-6',
+      'run-5',
+      'run-4',
+      'run-3',
+      'run-2',
+    ])
   })
 
-  it('returns 28 days earlier for trailing_28d', () => {
-    const result = getPreviousWindowAnchor('trailing_28d', '2026-03-10')
-    expect(result.anchorDate).toBe('2026-02-10')
-    expect(result.windowType).toBe('trailing_28d')
+  it('returns the previous non-overlapping run slice when offset is provided', () => {
+    expect(sliceRunIdsForWindow(runIds, 'trailing_7d', 7)).toEqual(['run-1'])
   })
 
-  it('returns same date for season_to_date', () => {
-    const result = getPreviousWindowAnchor('season_to_date', '2026-03-10')
-    expect(result.anchorDate).toBe('2026-03-10')
+  it('returns the full published history for season_to_date', () => {
+    expect(sliceRunIdsForWindow(runIds, 'season_to_date')).toEqual(runIds)
+  })
+
+  it('returns no previous season_to_date slice', () => {
+    expect(sliceRunIdsForWindow(runIds, 'season_to_date', 1)).toEqual([])
   })
 })
 
@@ -676,56 +683,33 @@ describe('computeCategoryRanking', () => {
     const db = getTestDb()
     const fixture = await seedScoringFixture(db)
 
-    // Previous window: all 9 pick Clerk
-    const prevDecisions = fixture.caseRows.map((_, i) => ({
-      caseIndex: i,
-      categoryId: fixture.authCat.id,
-      decisionType: 'tool' as const,
-      toolId: fixture.clerk.id,
-      rawToolName: 'Clerk',
-    }))
-    await seedPublishedRun(db, fixture, '2026-03-03', prevDecisions)
+    const scheduledForDates = [
+      '2026-02-25',
+      '2026-02-26',
+      '2026-02-27',
+      '2026-02-28',
+      '2026-03-01',
+      '2026-03-02',
+      '2026-03-03',
+      '2026-03-04',
+      '2026-03-05',
+      '2026-03-06',
+      '2026-03-07',
+      '2026-03-08',
+      '2026-03-09',
+      '2026-03-10',
+    ]
 
-    // Current window: only 3 pick Clerk, 6 pick Supabase
-    // Need a second run on a different date
-    const run2 = first(
-      await db
-        .insert(benchmarkRuns)
-        .values({
-          seasonId: fixture.season.id,
-          scheduledFor: '2026-03-10',
-          status: 'published',
-          weightConfigId: fixture.weightConfig.id,
-          expectedCaseCount: fixture.caseRows.length,
-          completedCaseCount: fixture.caseRows.length,
-        })
-        .returning(),
-    )
-    for (let i = 0; i < fixture.caseRows.length; i++) {
-      const c = fixture.caseRows[i]!
-      const cr = first(
-        await db
-          .insert(benchmarkCaseResults)
-          .values({
-            runId: run2.id,
-            seasonId: fixture.season.id,
-            caseId: c.id,
-            status: 'completed',
-            requestedModelId: 'test',
-            returnedModelId: 'test',
-            provider: 'test',
-            parserVersion: 'strict-v1',
-          })
-          .returning(),
-      )
-      await db.insert(benchmarkCaseDecisions).values({
-        caseResultId: cr.id,
+    for (const [index, scheduledFor] of scheduledForDates.entries()) {
+      const decisions = fixture.caseRows.map((_, i) => ({
+        caseIndex: i,
         categoryId: fixture.authCat.id,
-        decisionType: 'tool',
-        toolId: i < 3 ? fixture.clerk.id : fixture.supabase.id,
-        rawToolName: i < 3 ? 'Clerk' : 'Supabase',
-        resolutionStatus: 'resolved',
-      })
+        decisionType: 'tool' as const,
+        toolId: index < 7 || i < 3 ? fixture.clerk.id : fixture.supabase.id,
+        rawToolName: index < 7 || i < 3 ? 'Clerk' : 'Supabase',
+      }))
+
+      await seedPublishedRun(db, fixture, scheduledFor, decisions)
     }
 
     const result = await computeCategoryRanking(db, {
@@ -735,8 +719,8 @@ describe('computeCategoryRanking', () => {
       anchorDate: '2026-03-10',
     })
 
-    // Current: Clerk 3/9, Supabase 6/9
-    // Previous (2026-03-03 window): Clerk 9/9
+    // Current window: latest 7 published runs, with Clerk only in 3/9 decisions per run.
+    // Previous window: preceding 7 published runs, with Clerk in all 9/9 decisions per run.
     // Clerk trend = 3/9 - 9/9 = -0.667
     const clerkItem = result.items.find((i) => i.toolSlug === 'clerk')!
     expect(clerkItem.trend).toBeLessThan(0)
@@ -764,6 +748,66 @@ describe('computeCategoryRanking', () => {
 
     // Only 9 eligible decisions (< 100 threshold)
     expect(result.meetsPublicationThreshold).toBe(false)
+  })
+
+  it('uses the last seven published runs instead of a seven day calendar span', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+    const scheduledForDates = [
+      '2026-01-01',
+      '2026-01-08',
+      '2026-01-15',
+      '2026-01-22',
+      '2026-01-29',
+      '2026-02-05',
+      '2026-02-12',
+      '2026-02-19',
+    ]
+
+    for (const scheduledFor of scheduledForDates) {
+      const decisions = fixture.caseRows.map((_, i) => ({
+        caseIndex: i,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool' as const,
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      }))
+
+      await seedPublishedRun(db, fixture, scheduledFor, decisions)
+    }
+
+    const result = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'trailing_7d',
+      anchorDate: '2026-02-19',
+    })
+
+    expect(result.totalEligibleDecisions).toBe(63)
+  })
+
+  it('returns neutral trend when no previous published window exists', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    const decisions = fixture.caseRows.map((_, i) => ({
+      caseIndex: i,
+      categoryId: fixture.authCat.id,
+      decisionType: 'tool' as const,
+      toolId: fixture.clerk.id,
+      rawToolName: 'Clerk',
+    }))
+
+    await seedPublishedRun(db, fixture, '2026-03-10', decisions)
+
+    const result = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.items[0]?.trend).toBe(0)
   })
 })
 
