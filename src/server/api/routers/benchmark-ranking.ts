@@ -10,8 +10,8 @@ import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories } from '~/server/db/schema'
 import {
   type CategoryRankingResult,
-  type ToolRankingEntry,
   computeCategoryRanking,
+  type ToolRankingEntry,
   wilsonInterval,
 } from '~/server/llm/benchmark/scoring'
 
@@ -24,10 +24,7 @@ const tierFiltersSchema = z.object({
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
 })
 
-async function resolveSeasonId(
-  db: Parameters<typeof findBenchmarkSeasonId>[0],
-  seasonId?: string,
-) {
+async function resolveSeasonId(db: Parameters<typeof findBenchmarkSeasonId>[0], seasonId?: string) {
   if (seasonId) {
     const id = await findBenchmarkSeasonId(db, seasonId)
     if (!id) {

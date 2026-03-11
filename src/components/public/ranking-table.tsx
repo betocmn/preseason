@@ -83,11 +83,7 @@ export function RankingTable({
               <TableRow key={item.toolId}>
                 <TableCell className="font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell>
-                  <ToolBadge
-                    name={item.toolName}
-                    slug={item.toolSlug}
-                    logoUrl={item.toolLogoUrl}
-                  />
+                  <ToolBadge name={item.toolName} slug={item.toolSlug} logoUrl={item.toolLogoUrl} />
                 </TableCell>
                 <TableCell className="font-mono-data text-right font-medium">
                   {(item.weightedSupportRate * 100).toFixed(1)}%

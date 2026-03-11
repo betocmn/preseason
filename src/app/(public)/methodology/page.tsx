@@ -82,14 +82,14 @@ export default function MethodologyPage() {
 
         <Section title="Scoring">
           <P>
-            The fundamental unit of measurement is a <strong className="text-foreground">case
-            decision</strong>: one model&apos;s tool choice for one category in one prompt
-            evaluation.
+            The fundamental unit of measurement is a{' '}
+            <strong className="text-foreground">case decision</strong>: one model&apos;s tool choice
+            for one category in one prompt evaluation.
           </P>
           <P>
             <strong className="text-foreground">Support rate:</strong> The fraction of eligible
-            decisions that selected a given tool. Shown as a percentage with the raw count
-            (e.g., 35.2% with 42/119 decisions).
+            decisions that selected a given tool. Shown as a percentage with the raw count (e.g.,
+            35.2% with 42/119 decisions).
           </P>
           <P>
             <strong className="text-foreground">Confidence interval:</strong> A Wilson 95%
@@ -154,8 +154,8 @@ export default function MethodologyPage() {
             resolution. Unresolved tools are excluded from rankings until reviewed.
           </P>
           <P>
-            Tools are never auto-created from model output. This prevents hallucinated or
-            misspelled tool names from polluting the database.
+            Tools are never auto-created from model output. This prevents hallucinated or misspelled
+            tool names from polluting the database.
           </P>
         </Section>
 
@@ -191,9 +191,10 @@ export default function MethodologyPage() {
 
         <Section title="Scope">
           <P>
-            The current prompt panel focuses on <strong className="text-foreground">web
-            application development</strong> scenarios, primarily full-stack and SaaS applications.
-            Rankings should be interpreted within this scope.
+            The current prompt panel focuses on{' '}
+            <strong className="text-foreground">web application development</strong> scenarios,
+            primarily full-stack and SaaS applications. Rankings should be interpreted within this
+            scope.
           </P>
           <P>
             Categories with limited prompt coverage (few prompts mentioning that category) will show
