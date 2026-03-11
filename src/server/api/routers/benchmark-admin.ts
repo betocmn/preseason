@@ -602,10 +602,21 @@ export const benchmarkAdminRouter = createTRPCRouter({
       const [updated] = await ctx.db
         .update(benchmarkRuns)
         .set({ status: 'published' })
-        .where(eq(benchmarkRuns.id, input.runId))
+        .where(
+          and(
+            eq(benchmarkRuns.id, input.runId),
+            eq(benchmarkRuns.status, 'completed'),
+            eq(benchmarkRuns.qcStatus, 'passed'),
+          ),
+        )
         .returning()
 
-      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      if (!updated) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Run state changed concurrently; refresh and try again',
+        })
+      }
       return updated
     }),
 
@@ -627,18 +638,6 @@ export const benchmarkAdminRouter = createTRPCRouter({
         })
       }
 
-      // Delete failed/invalid case results (cascade deletes their decisions)
-      const deleted = await ctx.db
-        .delete(benchmarkCaseResults)
-        .where(
-          and(
-            eq(benchmarkCaseResults.runId, input.runId),
-            inArray(benchmarkCaseResults.status, ['failed', 'invalid_output']),
-          ),
-        )
-        .returning({ id: benchmarkCaseResults.id })
-
-      // Reset run to pending so the runner can pick it up.
       // Preserve snapshotCaseIds so retries stay bound to the original case set.
       const existingQc = run.qcSummaryJson
       const preservedSnapshot =
@@ -646,17 +645,45 @@ export const benchmarkAdminRouter = createTRPCRouter({
           ? { snapshotCaseIds: (existingQc as Record<string, unknown>).snapshotCaseIds }
           : null
 
-      await ctx.db
-        .update(benchmarkRuns)
-        .set({
-          status: 'pending',
-          completedAt: null,
-          qcStatus: null,
-          qcSummaryJson: preservedSnapshot,
-        })
-        .where(eq(benchmarkRuns.id, input.runId))
+      // Atomically delete failed results and reset the run with a status guard.
+      const result = await ctx.db.transaction(async (tx) => {
+        const deleted = await tx
+          .delete(benchmarkCaseResults)
+          .where(
+            and(
+              eq(benchmarkCaseResults.runId, input.runId),
+              inArray(benchmarkCaseResults.status, ['failed', 'invalid_output']),
+            ),
+          )
+          .returning({ id: benchmarkCaseResults.id })
 
-      return { retriedCount: deleted.length }
+        const [updated] = await tx
+          .update(benchmarkRuns)
+          .set({
+            status: 'pending',
+            completedAt: null,
+            qcStatus: null,
+            qcSummaryJson: preservedSnapshot,
+          })
+          .where(
+            and(
+              eq(benchmarkRuns.id, input.runId),
+              inArray(benchmarkRuns.status, ['completed', 'qc_failed', 'failed']),
+            ),
+          )
+          .returning({ id: benchmarkRuns.id })
+
+        if (!updated) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Run state changed concurrently; refresh and try again',
+          })
+        }
+
+        return { retriedCount: deleted.length }
+      })
+
+      return result
     }),
 
   // ---------------------------------------------------------------------------
