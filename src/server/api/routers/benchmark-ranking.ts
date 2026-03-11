@@ -1,6 +1,11 @@
+import { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { anchorDateSchema, findLatestActiveBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
+import {
+  anchorDateSchema,
+  findBenchmarkSeasonId,
+  findLatestActiveBenchmarkSeasonId,
+} from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { subcategories } from '~/server/db/schema'
 import { computeCategoryRanking } from '~/server/llm/benchmark/scoring'
@@ -29,7 +34,16 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       let seasonId = input.seasonId
-      if (!seasonId) {
+      if (seasonId) {
+        const benchmarkSeasonId = await findBenchmarkSeasonId(ctx.db, seasonId)
+        if (!benchmarkSeasonId) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'seasonId must reference a benchmark season',
+          })
+        }
+        seasonId = benchmarkSeasonId
+      } else {
         const defaultSeasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
         if (!defaultSeasonId) {
           return { category, ranking: null }

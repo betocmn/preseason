@@ -24,6 +24,17 @@ export async function findLatestActiveBenchmarkSeasonId(database: DatabaseClient
   return rows[0]?.id ?? null
 }
 
+export async function findBenchmarkSeasonId(database: DatabaseClient, seasonId: string) {
+  const rows = await database
+    .select({ id: benchmarkSeasons.id })
+    .from(benchmarkSeasons)
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
+    .where(and(eq(benchmarkSeasons.id, seasonId), eq(benchmarkProtocols.mode, 'benchmark')))
+    .limit(1)
+
+  return rows[0]?.id ?? null
+}
+
 function isRealCalendarDate(value: string) {
   const [yearString, monthString, dayString] = value.split('-')
   if (yearString === undefined || monthString === undefined || dayString === undefined) {
