@@ -314,6 +314,25 @@ function getRunExecutionOwnershipClause(run: Pick<BenchmarkRunRecord, 'id' | 'st
   )
 }
 
+class OwnershipLostError extends Error {
+  constructor() {
+    super('Run ownership lost')
+    this.name = 'OwnershipLostError'
+  }
+}
+
+async function verifyRunOwnershipForUpdate(
+  tx: DatabaseClient,
+  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>,
+): Promise<void> {
+  const [owned] = await tx
+    .select({ id: benchmarkRuns.id })
+    .from(benchmarkRuns)
+    .where(getRunExecutionOwnershipClause(run))
+    .for('update')
+  if (!owned) throw new OwnershipLostError()
+}
+
 async function getRunSummaryIfOwnershipLost(
   database: DatabaseClient,
   run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>,
@@ -651,43 +670,38 @@ async function executeRun(
           seed: modelSnapshot.seed ?? undefined,
         })
 
-        const summaryIfOwnershipLostBeforeWrite = await getRunSummaryIfOwnershipLost(
-          database,
-          run,
-          seasonId,
-        )
-        if (summaryIfOwnershipLostBeforeWrite) {
-          return summaryIfOwnershipLostBeforeWrite
-        }
-
         const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
 
         if (drift.hasDrift) {
-          const [result] = await database
-            .insert(benchmarkCaseResults)
-            .values({
-              seasonId,
-              runId: run.id,
-              caseId: benchmarkCase.id,
-              status: 'invalid_output',
-              rawResponse: completion.content,
-              requestedModelId: modelSnapshot.requestedModelId,
-              returnedModelId: completion.returnedModel,
-              provider: completion.provider,
-              finishReason: completion.finishReason,
-              promptTokens: completion.usage.promptTokens,
-              completionTokens: completion.usage.completionTokens,
-              totalTokens: completion.usage.totalTokens,
-              latencyMs: completion.latencyMs,
-              temperature: modelSnapshot.temperature,
-              topP: modelSnapshot.topP,
-              maxTokens: modelSnapshot.maxTokens,
-              parserVersion: PARSER_VERSION,
-              systemPromptSnapshot: systemPrompt,
-              errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
-            })
-            .onConflictDoNothing()
-            .returning()
+          const result = await database.transaction(async (tx) => {
+            await verifyRunOwnershipForUpdate(tx, run)
+            const [inserted] = await tx
+              .insert(benchmarkCaseResults)
+              .values({
+                seasonId,
+                runId: run.id,
+                caseId: benchmarkCase.id,
+                status: 'invalid_output',
+                rawResponse: completion.content,
+                requestedModelId: modelSnapshot.requestedModelId,
+                returnedModelId: completion.returnedModel,
+                provider: completion.provider,
+                finishReason: completion.finishReason,
+                promptTokens: completion.usage.promptTokens,
+                completionTokens: completion.usage.completionTokens,
+                totalTokens: completion.usage.totalTokens,
+                latencyMs: completion.latencyMs,
+                temperature: modelSnapshot.temperature,
+                topP: modelSnapshot.topP,
+                maxTokens: modelSnapshot.maxTokens,
+                parserVersion: PARSER_VERSION,
+                systemPromptSnapshot: systemPrompt,
+                errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
+              })
+              .onConflictDoNothing()
+              .returning()
+            return inserted ?? null
+          })
 
           if (!result) continue
           errors.push(
@@ -704,6 +718,7 @@ async function executeRun(
           )
 
           const caseResult = await database.transaction(async (tx) => {
+            await verifyRunOwnershipForUpdate(tx, run)
             const [insertedCaseResult] = await tx
               .insert(benchmarkCaseResults)
               .values({
@@ -783,62 +798,73 @@ async function executeRun(
 
           if (!caseResult) continue
         } else {
-          const [caseResult] = await database
-            .insert(benchmarkCaseResults)
-            .values({
-              seasonId,
-              runId: run.id,
-              caseId: benchmarkCase.id,
-              status: 'invalid_output',
-              naturalResponse: null,
-              appendixRaw: null,
-              appendixJson: null,
-              rawResponse: completion.content,
-              requestedModelId: modelSnapshot.requestedModelId,
-              returnedModelId: completion.returnedModel,
-              provider: completion.provider,
-              finishReason: completion.finishReason,
-              promptTokens: completion.usage.promptTokens,
-              completionTokens: completion.usage.completionTokens,
-              totalTokens: completion.usage.totalTokens,
-              latencyMs: completion.latencyMs,
-              temperature: modelSnapshot.temperature,
-              topP: modelSnapshot.topP,
-              maxTokens: modelSnapshot.maxTokens,
-              parserVersion: PARSER_VERSION,
-              systemPromptSnapshot: systemPrompt,
-              errorMessage: parseResult.reason,
-            })
-            .onConflictDoNothing()
-            .returning()
+          const caseResult = await database.transaction(async (tx) => {
+            await verifyRunOwnershipForUpdate(tx, run)
+            const [inserted] = await tx
+              .insert(benchmarkCaseResults)
+              .values({
+                seasonId,
+                runId: run.id,
+                caseId: benchmarkCase.id,
+                status: 'invalid_output',
+                naturalResponse: null,
+                appendixRaw: null,
+                appendixJson: null,
+                rawResponse: completion.content,
+                requestedModelId: modelSnapshot.requestedModelId,
+                returnedModelId: completion.returnedModel,
+                provider: completion.provider,
+                finishReason: completion.finishReason,
+                promptTokens: completion.usage.promptTokens,
+                completionTokens: completion.usage.completionTokens,
+                totalTokens: completion.usage.totalTokens,
+                latencyMs: completion.latencyMs,
+                temperature: modelSnapshot.temperature,
+                topP: modelSnapshot.topP,
+                maxTokens: modelSnapshot.maxTokens,
+                parserVersion: PARSER_VERSION,
+                systemPromptSnapshot: systemPrompt,
+                errorMessage: parseResult.reason,
+              })
+              .onConflictDoNothing()
+              .returning()
+            return inserted ?? null
+          })
 
           if (!caseResult) continue
           errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
         }
       } catch (error) {
-        const summaryIfOwnershipLostBeforeFailureWrite = await getRunSummaryIfOwnershipLost(
-          database,
-          run,
-          seasonId,
-        )
-        if (summaryIfOwnershipLostBeforeFailureWrite) {
-          return summaryIfOwnershipLostBeforeFailureWrite
+        if (error instanceof OwnershipLostError) {
+          const latestRun = await findRunById(database, run.id)
+          return await buildRunSummary(database, latestRun, seasonId)
         }
 
         const message = getErrorMessage(error)
         errors.push(`[case ${benchmarkCase.id}] ${message}`)
 
-        await database
-          .insert(benchmarkCaseResults)
-          .values({
-            seasonId,
-            runId: run.id,
-            caseId: benchmarkCase.id,
-            status: 'failed',
-            errorMessage: message,
-            parserVersion: PARSER_VERSION,
+        try {
+          await database.transaction(async (tx) => {
+            await verifyRunOwnershipForUpdate(tx, run)
+            await tx
+              .insert(benchmarkCaseResults)
+              .values({
+                seasonId,
+                runId: run.id,
+                caseId: benchmarkCase.id,
+                status: 'failed',
+                errorMessage: message,
+                parserVersion: PARSER_VERSION,
+              })
+              .onConflictDoNothing()
           })
-          .onConflictDoNothing()
+        } catch (writeError) {
+          if (writeError instanceof OwnershipLostError) {
+            const latestRun = await findRunById(database, run.id)
+            return await buildRunSummary(database, latestRun, seasonId)
+          }
+          throw writeError
+        }
       }
     }
 
