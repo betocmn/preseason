@@ -122,6 +122,19 @@ async function seedBenchmarkPublicFixture() {
       })
       .returning(),
   )
+  const explorationProtocol = first(
+    await db
+      .insert(benchmarkProtocols)
+      .values({
+        slug: 'exploration-v1',
+        name: 'Exploration V1',
+        mode: 'exploration',
+        parserVersion: '1.0',
+        scoringVersion: '1.0',
+        promptContractVersion: '1.0',
+      })
+      .returning(),
+  )
 
   const olderSeason = first(
     await db
@@ -135,6 +148,13 @@ async function seedBenchmarkPublicFixture() {
       })
       .returning(),
   )
+  await db.insert(benchmarkSeasons).values({
+    protocolId: explorationProtocol.id,
+    slug: 'season-exploration',
+    name: 'Exploration Season',
+    status: 'active',
+    createdAt: new Date('2026-03-03T00:00:00.000Z'),
+  })
   const newerSeason = first(
     await db
       .insert(benchmarkSeasons)
@@ -242,7 +262,7 @@ describe('benchmark public routers', () => {
     await cleanTestDatabase()
   })
 
-  it('uses the newest active season for benchmark rankings when seasonId is omitted', async () => {
+  it('uses the newest active benchmark season for rankings when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -255,7 +275,7 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
   })
 
-  it('uses the newest active season for benchmark matches when seasonId is omitted', async () => {
+  it('uses the newest active benchmark season for matches when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -281,6 +301,34 @@ describe('benchmark public routers', () => {
         toolBSlug: 'clerk',
         windowType: 'run_day',
         anchorDate: '2026-03-10',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('rejects invalid anchor dates for benchmark rankings', async () => {
+    const caller = createTestCaller(null)
+
+    await expect(
+      caller.benchmarkRanking.byCategory({
+        categorySlug: 'auth',
+        anchorDate: '2026-02-30',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('rejects invalid anchor dates for benchmark matches', async () => {
+    const caller = createTestCaller(null)
+
+    await expect(
+      caller.benchmarkMatch.headToHead({
+        categorySlug: 'auth',
+        toolASlug: 'clerk',
+        toolBSlug: 'supabase',
+        anchorDate: '2026-02-30',
       }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
