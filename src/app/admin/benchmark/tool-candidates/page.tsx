@@ -24,6 +24,7 @@ function statusVariant(status: string) {
 
 export default async function ToolCandidatesPage() {
   const caller = await api()
+  const categories = await caller.category.list()
   const { items: candidates } = await caller.benchmarkAdmin.listToolCandidates({ limit: 100 })
 
   return (
@@ -73,6 +74,8 @@ export default async function ToolCandidatesPage() {
                       <ApproveCandidateDialog
                         candidateId={candidate.id}
                         candidateName={candidate.rawName}
+                        suggestedCategoryId={candidate.suggestedCategoryId}
+                        categories={categories}
                       />
                       <RejectCandidateDialog
                         candidateId={candidate.id}

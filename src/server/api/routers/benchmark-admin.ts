@@ -19,6 +19,7 @@ import {
   subcategories,
   toolAliases,
   toolCandidates,
+  toolCategories,
   tools,
 } from '~/server/db/schema'
 import { getOrCreateModelSnapshot } from '~/server/llm/benchmark/model-snapshotter'
@@ -27,6 +28,23 @@ import { freezePromptVersion } from '~/server/llm/benchmark/prompt-freezer'
 const BENCHMARK_DEFAULT_TEMPERATURE = 0.2
 const BENCHMARK_DEFAULT_TOP_P = 1
 const BENCHMARK_DEFAULT_MAX_TOKENS = 1200
+
+const createToolForCandidateSchema = z.object({
+  name: z.string().min(1).max(255),
+  slug: z.string().min(1).max(255),
+  categoryId: z.string().uuid(),
+})
+
+const approveCandidateInputSchema = z
+  .object({
+    candidateId: z.string().uuid(),
+    toolId: z.string().uuid().optional(),
+    newTool: createToolForCandidateSchema.optional(),
+  })
+  .refine((input) => (input.toolId ? 1 : 0) + (input.newTool ? 1 : 0) === 1, {
+    message: 'Provide either toolId or newTool',
+    path: ['toolId'],
+  })
 
 export const benchmarkAdminRouter = createTRPCRouter({
   // ---------------------------------------------------------------------------
@@ -584,12 +602,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
     }),
 
   approveCandidate: protectedProcedure
-    .input(
-      z.object({
-        candidateId: z.string().uuid(),
-        toolId: z.string().uuid(),
-      }),
-    )
+    .input(approveCandidateInputSchema)
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
@@ -606,37 +619,103 @@ export const benchmarkAdminRouter = createTRPCRouter({
         })
       }
 
-      // Verify tool exists
-      const tool = await ctx.db.query.tools.findFirst({
-        where: eq(tools.id, input.toolId),
+      return await ctx.db.transaction(async (tx) => {
+        let approvedToolId = input.toolId
+
+        if (input.newTool) {
+          const category = await tx.query.subcategories.findFirst({
+            where: eq(subcategories.id, input.newTool.categoryId),
+          })
+          if (!category) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Category not found',
+            })
+          }
+
+          const [createdTool] = await tx
+            .insert(tools)
+            .values({
+              name: input.newTool.name,
+              slug: input.newTool.slug,
+              isVerified: false,
+            })
+            .returning()
+
+          if (!createdTool) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to create tool',
+            })
+          }
+
+          await tx.insert(toolCategories).values({
+            toolId: createdTool.id,
+            categoryId: input.newTool.categoryId,
+            isPrimary: true,
+          })
+
+          approvedToolId = createdTool.id
+        } else {
+          const existingToolId = input.toolId
+          if (!existingToolId) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Tool not found',
+            })
+          }
+
+          const tool = await tx.query.tools.findFirst({
+            where: eq(tools.id, existingToolId),
+          })
+          if (!tool) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Tool not found' })
+          }
+
+          approvedToolId = existingToolId
+        }
+
+        if (!approvedToolId) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Approved tool was not resolved',
+          })
+        }
+
+        const existingAlias = await tx.query.toolAliases.findFirst({
+          where: eq(toolAliases.normalizedAlias, candidate.normalizedName),
+        })
+        if (existingAlias && existingAlias.toolId !== approvedToolId) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This candidate alias is already assigned to a different tool',
+          })
+        }
+
+        if (!existingAlias) {
+          await tx.insert(toolAliases).values({
+            toolId: approvedToolId,
+            alias: candidate.rawName,
+            normalizedAlias: candidate.normalizedName,
+            source: 'candidate_approval',
+          })
+        }
+
+        const [updated] = await tx
+          .update(toolCandidates)
+          .set({
+            status: 'approved',
+            approvedToolId,
+          })
+          .where(eq(toolCandidates.id, input.candidateId))
+          .returning()
+
+        if (!updated) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+        }
+
+        return updated
       })
-      if (!tool) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tool not found' })
-      }
-
-      // Create tool alias
-      await ctx.db
-        .insert(toolAliases)
-        .values({
-          toolId: input.toolId,
-          alias: candidate.rawName,
-          normalizedAlias: candidate.normalizedName,
-          source: 'candidate_approval',
-        })
-        .onConflictDoNothing({ target: toolAliases.normalizedAlias })
-
-      // Update candidate
-      const [updated] = await ctx.db
-        .update(toolCandidates)
-        .set({
-          status: 'approved',
-          approvedToolId: input.toolId,
-        })
-        .where(eq(toolCandidates.id, input.candidateId))
-        .returning()
-
-      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
-      return updated
     }),
 
   rejectCandidate: protectedProcedure
