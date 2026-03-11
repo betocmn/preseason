@@ -1,3 +1,4 @@
+import { benchmarkAdminRouter } from '~/server/api/routers/benchmark-admin'
 import { benchmarkMatchRouter } from '~/server/api/routers/benchmark-match'
 import { benchmarkRankingRouter } from '~/server/api/routers/benchmark-ranking'
 import { categoryRouter } from '~/server/api/routers/category'
@@ -14,6 +15,7 @@ import { userRouter } from '~/server/api/routers/user'
 import { createCallerFactory, createTRPCRouter } from '~/server/api/trpc'
 
 export const appRouter = createTRPCRouter({
+  benchmarkAdmin: benchmarkAdminRouter,
   category: categoryRouter,
   tool: toolRouter,
   llm: llmRouter,
