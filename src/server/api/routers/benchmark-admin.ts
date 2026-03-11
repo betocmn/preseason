@@ -709,6 +709,9 @@ export const benchmarkAdminRouter = createTRPCRouter({
           .set({
             status: 'pending',
             completedAt: null,
+            completedCaseCount: null,
+            failedCaseCount: null,
+            errorLog: null,
             qcStatus: null,
             qcSummaryJson: snapshotCaseIds.length > 0 ? { snapshotCaseIds } : null,
           })
