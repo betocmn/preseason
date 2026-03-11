@@ -25,6 +25,21 @@ import {
 import { getOrCreateModelSnapshot } from '~/server/llm/benchmark/model-snapshotter'
 import { freezePromptVersion } from '~/server/llm/benchmark/prompt-freezer'
 
+/**
+ * Extract snapshotCaseIds from a run's qcSummaryJson if available.
+ * Returns null when the QC payload has been replaced by final QC results.
+ */
+function extractSnapshotCaseIds(qcSummaryJson: unknown): string[] | null {
+  if (!qcSummaryJson || typeof qcSummaryJson !== 'object' || Array.isArray(qcSummaryJson)) {
+    return null
+  }
+  const ids = (qcSummaryJson as Record<string, unknown>).snapshotCaseIds
+  if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) {
+    return null
+  }
+  return ids as string[]
+}
+
 const BENCHMARK_DEFAULT_TEMPERATURE = 0.2
 const BENCHMARK_DEFAULT_TOP_P = 1
 const BENCHMARK_DEFAULT_MAX_TOKENS = 1200
@@ -501,19 +516,33 @@ export const benchmarkAdminRouter = createTRPCRouter({
         statusBreakdown.map((r) => [r.status, Number(r.count)]),
       )
 
-      // Count total cases for this season and add missing ones as pending
-      const totalCaseRows = await ctx.db
-        .select({ count: sql<number>`count(*)`.as('count') })
-        .from(benchmarkCases)
-        .where(eq(benchmarkCases.seasonId, run.seasonId))
-      const totalCases = Number(totalCaseRows[0]?.count ?? 0)
+      // Scope to the run's case snapshot when available so we only show cases
+      // that were actually part of this run, not the current season population.
+      const snapshotIds = extractSnapshotCaseIds(run.qcSummaryJson)
+      const caseWhereClause = snapshotIds
+        ? inArray(benchmarkCases.id, snapshotIds)
+        : eq(benchmarkCases.seasonId, run.seasonId)
+
+      // Count total cases for this run and add missing ones as pending
+      const totalCases =
+        run.expectedCaseCount ??
+        (snapshotIds
+          ? snapshotIds.length
+          : Number(
+              (
+                await ctx.db
+                  .select({ count: sql<number>`count(*)`.as('count') })
+                  .from(benchmarkCases)
+                  .where(caseWhereClause)
+              )[0]?.count ?? 0,
+            ))
       const resultCount = Object.values(resultStats).reduce((a, b) => a + b, 0)
       if (totalCases > resultCount) {
         resultStats.pending = (resultStats.pending ?? 0) + (totalCases - resultCount)
       }
 
       const caseRows = await ctx.db.query.benchmarkCases.findMany({
-        where: eq(benchmarkCases.seasonId, run.seasonId),
+        where: caseWhereClause,
         orderBy: [asc(benchmarkCases.id)],
         with: {
           promptVersion: {
@@ -639,14 +668,21 @@ export const benchmarkAdminRouter = createTRPCRouter({
       }
 
       // Preserve snapshotCaseIds so retries stay bound to the original case set.
-      const existingQc = run.qcSummaryJson
-      const preservedSnapshot =
-        existingQc && typeof existingQc === 'object' && !Array.isArray(existingQc)
-          ? { snapshotCaseIds: (existingQc as Record<string, unknown>).snapshotCaseIds }
-          : null
+      // The runner overwrites qcSummaryJson with QC results on completion, so
+      // the snapshot may no longer be in the JSON. Fall back to recovering the
+      // case IDs from the results that were actually produced for this run.
+      let snapshotCaseIds = extractSnapshotCaseIds(run.qcSummaryJson)
 
       // Atomically delete failed results and reset the run with a status guard.
       const result = await ctx.db.transaction(async (tx) => {
+        if (!snapshotCaseIds) {
+          const resultCaseRows = await tx
+            .select({ caseId: benchmarkCaseResults.caseId })
+            .from(benchmarkCaseResults)
+            .where(eq(benchmarkCaseResults.runId, input.runId))
+          snapshotCaseIds = [...new Set(resultCaseRows.map((r) => r.caseId))]
+        }
+
         const deleted = await tx
           .delete(benchmarkCaseResults)
           .where(
@@ -663,7 +699,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
             status: 'pending',
             completedAt: null,
             qcStatus: null,
-            qcSummaryJson: preservedSnapshot,
+            qcSummaryJson: snapshotCaseIds.length > 0 ? { snapshotCaseIds } : null,
           })
           .where(
             and(
