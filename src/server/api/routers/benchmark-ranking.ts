@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { benchmarkSeasons, subcategories } from '~/server/db/schema'
@@ -34,6 +34,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       if (!seasonId) {
         const activeSeason = await ctx.db.query.benchmarkSeasons.findFirst({
           where: eq(benchmarkSeasons.status, 'active'),
+          orderBy: [desc(benchmarkSeasons.createdAt)],
         })
         if (!activeSeason) {
           return { category, ranking: null }
