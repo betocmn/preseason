@@ -52,8 +52,12 @@ export default async function SeasonDetailPage({ params }: PageProps) {
           <Badge variant={season.status === 'active' ? 'default' : 'outline'}>
             {season.status}
           </Badge>
-          {season.status === 'draft' && <FreezeSeasonButton seasonId={season.id} />}
-          {season.status === 'active' && <CompleteSeasonButton seasonId={season.id} />}
+          {season.status === 'draft' && season.protocol.mode === 'benchmark' && (
+            <FreezeSeasonButton seasonId={season.id} />
+          )}
+          {season.status === 'active' && season.protocol.mode === 'benchmark' && (
+            <CompleteSeasonButton seasonId={season.id} />
+          )}
         </div>
       </div>
 

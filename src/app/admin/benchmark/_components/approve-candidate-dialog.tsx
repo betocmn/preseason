@@ -55,7 +55,7 @@ export function ApproveCandidateDialog({
 
   const { data: searchResults } = api.tool.search.useQuery(
     { query: searchQuery, limit: 10 },
-    { enabled: searchQuery.length > 0 },
+    { enabled: open && searchQuery.length > 0 },
   )
 
   const approveMutation = api.benchmarkAdmin.approveCandidate.useMutation({
