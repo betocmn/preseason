@@ -302,7 +302,12 @@ export async function computeCategoryRanking(
   db: DatabaseClient,
   filters: ScoringFilters,
 ): Promise<CategoryRankingResult> {
-  const runIds = await getRunIdsForWindow(db, filters.seasonId, filters.windowType, filters.anchorDate)
+  const runIds = await getRunIdsForWindow(
+    db,
+    filters.seasonId,
+    filters.windowType,
+    filters.anchorDate,
+  )
 
   if (runIds.length === 0) {
     return {
@@ -377,11 +382,16 @@ export async function computeCategoryRanking(
   }
 
   // Compute trend from previous window
-  let trendMap = new Map<string, number>()
+  const trendMap = new Map<string, number>()
   if (filters.windowType !== 'season_to_date') {
     const prev = getPreviousWindowAnchor(filters.windowType, filters.anchorDate)
     if (prev.anchorDate !== filters.anchorDate) {
-      const prevRunIds = await getRunIdsForWindow(db, filters.seasonId, prev.windowType, prev.anchorDate)
+      const prevRunIds = await getRunIdsForWindow(
+        db,
+        filters.seasonId,
+        prev.windowType,
+        prev.anchorDate,
+      )
       if (prevRunIds.length > 0) {
         const prevWeights = await getWeightConfigsByRunIds(db, prevRunIds)
         const prevDecisions = await queryDecisions(db, prevRunIds, filters.categoryId, {
@@ -416,7 +426,8 @@ export async function computeCategoryRanking(
     totalEligible >= 100 && totalDistinctModels >= 3 && totalDistinctPrompts >= 3
 
   const items: ToolRankingEntry[] = Array.from(toolAggs.values()).map((agg) => {
-    const weightedSupportRate = totalWeightedEligible > 0 ? agg.weightedSupport / totalWeightedEligible : 0
+    const weightedSupportRate =
+      totalWeightedEligible > 0 ? agg.weightedSupport / totalWeightedEligible : 0
     const rawSupportRate = totalEligible > 0 ? agg.rawSupport / totalEligible : 0
     const ci = wilsonInterval(agg.rawSupport, totalEligible)
     const prevRate = trendMap.get(agg.toolId) ?? 0
@@ -468,7 +479,12 @@ export async function computeHeadToHead(
   db: DatabaseClient,
   filters: HeadToHeadFilters,
 ): Promise<HeadToHeadResult> {
-  const runIds = await getRunIdsForWindow(db, filters.seasonId, filters.windowType, filters.anchorDate)
+  const runIds = await getRunIdsForWindow(
+    db,
+    filters.seasonId,
+    filters.windowType,
+    filters.anchorDate,
+  )
 
   const empty: HeadToHeadResult = {
     toolAId: filters.toolAId,
