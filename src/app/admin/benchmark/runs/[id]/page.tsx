@@ -31,7 +31,7 @@ export default async function RunDetailPage({ params }: PageProps) {
   const run = await caller.benchmarkAdmin.getBenchmarkRun({ id }).catch(() => notFound())
 
   const hasFailures = (run.resultStats.failed ?? 0) + (run.resultStats.invalid_output ?? 0) > 0
-  const canPublish = run.status === 'completed'
+  const canPublish = run.status === 'completed' && run.qcStatus === 'passed'
   const canRetry = ['completed', 'qc_failed', 'failed'].includes(run.status) && hasFailures
 
   const qcChecks: QcCheck[] = run.qcSummaryJson
