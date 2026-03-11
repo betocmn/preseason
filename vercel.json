@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/run", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/benchmark-run", "schedule": "0 7 * * *" },
     { "path": "/api/cron/settle", "schedule": "0 8 * * *" }
   ]
 }
