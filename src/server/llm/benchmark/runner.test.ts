@@ -523,6 +523,71 @@ describe('runBenchmark', () => {
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
+  it('should ignore terminal updates from a stale worker after reclaim finalizes the run', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const staleWorkerBlocked = createDeferred()
+    const staleWorkerPaused = createDeferred()
+
+    let staleWorkerCallCount = 0
+    const staleWorkerService = createMockLlmService(async (_provider, request) => {
+      staleWorkerCallCount++
+      if (staleWorkerCallCount === 2) {
+        staleWorkerPaused.resolve()
+        await staleWorkerBlocked.promise
+      }
+
+      return mockCompletionForRequest('Just a plain response with no appendix tags', request)
+    })
+
+    const reclaimingWorkerService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const staleStartTime = new Date('2026-03-10T00:00:00.000Z')
+    const reclaimTime = new Date('2026-03-10T01:00:00.000Z')
+
+    const staleRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: staleWorkerService,
+      now: () => staleStartTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await staleWorkerPaused.promise
+
+    const reclaimedSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: reclaimingWorkerService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.errors).toHaveLength(0)
+
+    staleWorkerBlocked.resolve()
+    const staleSummary = await staleRunPromise
+
+    expect(staleSummary.status).toBe('completed')
+    expect(staleSummary.errors).toHaveLength(0)
+
+    const persistedRun = await db.query.benchmarkRuns.findFirst({
+      where: and(
+        eq(benchmarkRuns.seasonId, season.id),
+        eq(benchmarkRuns.scheduledFor, '2026-03-10'),
+      ),
+    })
+
+    expect(persistedRun?.status).toBe('completed')
+    expect(persistedRun?.qcStatus).toBe('passed')
+    expect(persistedRun?.errorLog).toBeNull()
+    expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
+  })
+
   it('should resume a partially completed run', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedFullPanel(db)
