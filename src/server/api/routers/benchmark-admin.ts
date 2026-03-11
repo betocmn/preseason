@@ -8,9 +8,7 @@ import {
   benchmarkCaseDecisions,
   benchmarkCaseResults,
   benchmarkCases,
-  benchmarkModelSnapshots,
   benchmarkModelWeightConfigs,
-  benchmarkPromptVersions,
   benchmarkProtocols,
   benchmarkRuns,
   benchmarkSeasonModels,
@@ -19,9 +17,9 @@ import {
   llms,
   prompts,
   subcategories,
-  tools,
   toolAliases,
   toolCandidates,
+  tools,
 } from '~/server/db/schema'
 import { getOrCreateModelSnapshot } from '~/server/llm/benchmark/model-snapshotter'
 import { freezePromptVersion } from '~/server/llm/benchmark/prompt-freezer'
@@ -163,7 +161,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         })
         .returning()
 
-      return season!
+      if (!season) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Insert failed' })
+      return season
     }),
 
   freezeSeason: protectedProcedure
@@ -314,7 +313,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(benchmarkSeasons.id, input.seasonId))
         .returning()
 
-      return updated!
+      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      return updated
     }),
 
   // ---------------------------------------------------------------------------
@@ -356,7 +356,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         })
         .returning()
 
-      return config!
+      if (!config) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Insert failed' })
+      return config
     }),
 
   activateWeightConfig: protectedProcedure
@@ -383,7 +384,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(benchmarkModelWeightConfigs.id, input.id))
         .returning()
 
-      return updated!
+      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      return updated
     }),
 
   // ---------------------------------------------------------------------------
@@ -488,7 +490,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(benchmarkRuns.id, input.runId))
         .returning()
 
-      return updated!
+      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      return updated
     }),
 
   retryFailedCases: protectedProcedure
@@ -621,7 +624,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(toolCandidates.id, input.candidateId))
         .returning()
 
-      return updated!
+      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      return updated
     }),
 
   rejectCandidate: protectedProcedure
@@ -656,7 +660,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(toolCandidates.id, input.candidateId))
         .returning()
 
-      return updated!
+      if (!updated) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Update failed' })
+      return updated
     }),
 
   replayDecisions: protectedProcedure
