@@ -858,6 +858,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
     await requireRole(ctx.db, ctx.user.id, ['admin'])
 
     return ctx.db.query.benchmarkProtocols.findMany({
+      where: eq(benchmarkProtocols.mode, 'benchmark'),
       orderBy: [desc(benchmarkProtocols.createdAt)],
     })
   }),
