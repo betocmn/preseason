@@ -488,6 +488,12 @@ export const benchmarkAdminRouter = createTRPCRouter({
           message: `Run must be in completed status to publish (current: ${run.status})`,
         })
       }
+      if (run.qcStatus !== 'passed') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Run QC must pass before publishing (current: ${run.qcStatus ?? 'missing'})`,
+        })
+      }
 
       const [updated] = await ctx.db
         .update(benchmarkRuns)

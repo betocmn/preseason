@@ -318,6 +318,38 @@ describe('benchmarkAdminRouter', () => {
     }
   })
 
+  it('rejects publishing a completed run when QC has not passed', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+        qcStatus: 'failed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    try {
+      await caller.benchmarkAdmin.publishRun({ runId: run.id })
+      expect.unreachable('Should have thrown')
+    } catch (err) {
+      expect((err as TRPCError).code).toBe('BAD_REQUEST')
+    }
+  })
+
   // ---------------------------------------------------------------------------
   // Tool candidate review
   // ---------------------------------------------------------------------------
