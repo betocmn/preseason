@@ -482,9 +482,20 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .where(eq(benchmarkCaseResults.runId, input.id))
         .groupBy(benchmarkCaseResults.status)
 
-      const resultStats = Object.fromEntries(
+      const resultStats: Record<string, number> = Object.fromEntries(
         statusBreakdown.map((r) => [r.status, Number(r.count)]),
       )
+
+      // Count total cases for this season and add missing ones as pending
+      const totalCaseRows = await ctx.db
+        .select({ count: sql<number>`count(*)`.as('count') })
+        .from(benchmarkCases)
+        .where(eq(benchmarkCases.seasonId, run.seasonId))
+      const totalCases = Number(totalCaseRows[0]?.count ?? 0)
+      const resultCount = Object.values(resultStats).reduce((a, b) => a + b, 0)
+      if (totalCases > resultCount) {
+        resultStats.pending = (resultStats.pending ?? 0) + (totalCases - resultCount)
+      }
 
       const caseRows = await ctx.db.query.benchmarkCases.findMany({
         where: eq(benchmarkCases.seasonId, run.seasonId),
