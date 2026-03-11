@@ -7,21 +7,26 @@ import { computeHeadToHead } from '~/server/llm/benchmark/scoring'
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure
     .input(
-      z.object({
-        categorySlug: z.string().min(1).max(100),
-        toolASlug: z.string().min(1).max(255),
-        toolBSlug: z.string().min(1).max(255),
-        seasonId: z.string().uuid().optional(),
-        windowType: z
-          .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
-          .default('trailing_28d'),
-        anchorDate: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .optional(),
-        promptTier: z.enum(['basic', 'intermediate', 'advanced']).optional(),
-        modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
-      }),
+      z
+        .object({
+          categorySlug: z.string().min(1).max(100),
+          toolASlug: z.string().min(1).max(255),
+          toolBSlug: z.string().min(1).max(255),
+          seasonId: z.string().uuid().optional(),
+          windowType: z
+            .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
+            .default('trailing_28d'),
+          anchorDate: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .optional(),
+          promptTier: z.enum(['basic', 'intermediate', 'advanced']).optional(),
+          modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
+        })
+        .refine((input) => input.toolASlug !== input.toolBSlug, {
+          message: 'toolASlug and toolBSlug must be different',
+          path: ['toolBSlug'],
+        }),
     )
     .query(async ({ ctx, input }) => {
       const [category, toolA, toolB] = await Promise.all([

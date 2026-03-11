@@ -370,9 +370,9 @@ export async function computeCategoryRanking(
     filters.windowType === 'season_to_date'
       ? []
       : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
-  const hasPreviousWindow = previousRunIds.length > 0
+  let hasPreviousWindowTrendBaseline = false
 
-  if (hasPreviousWindow) {
+  if (previousRunIds.length > 0) {
     const prevWeights = await getWeightConfigsByRunIds(db, previousRunIds)
     const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryId, {
       promptTier: filters.promptTier,
@@ -392,6 +392,7 @@ export async function computeCategoryRanking(
     }
 
     if (prevTotalWeighted > 0) {
+      hasPreviousWindowTrendBaseline = true
       for (const [toolId, ws] of prevToolWeighted) {
         trendMap.set(toolId, ws / prevTotalWeighted)
       }
@@ -409,7 +410,7 @@ export async function computeCategoryRanking(
     const rawSupportRate = totalEligible > 0 ? agg.rawSupport / totalEligible : 0
     const ci = wilsonInterval(agg.rawSupport, totalEligible)
     const prevRate = trendMap.get(agg.toolId) ?? 0
-    const trend = hasPreviousWindow ? weightedSupportRate - prevRate : 0
+    const trend = hasPreviousWindowTrendBaseline ? weightedSupportRate - prevRate : 0
 
     return {
       toolId: agg.toolId,
@@ -483,6 +484,7 @@ export async function computeHeadToHead(
     meetsPublicationThreshold: false,
   }
 
+  if (filters.toolAId === filters.toolBId) return empty
   if (runIds.length === 0) return empty
 
   const weightConfigs = await getWeightConfigsByRunIds(db, runIds)

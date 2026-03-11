@@ -809,6 +809,62 @@ describe('computeCategoryRanking', () => {
 
     expect(result.items[0]?.trend).toBe(0)
   })
+
+  it('returns neutral trend when the previous filtered window has no eligible decisions', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    await seedPublishedRun(db, fixture, '2026-03-09', [
+      {
+        caseIndex: 1,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.supabase.id,
+        rawToolName: 'Supabase',
+      },
+      {
+        caseIndex: 2,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.supabase.id,
+        rawToolName: 'Supabase',
+      },
+    ])
+
+    await seedPublishedRun(db, fixture, '2026-03-10', [
+      {
+        caseIndex: 0,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+      {
+        caseIndex: 3,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+      {
+        caseIndex: 6,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+    ])
+
+    const result = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'run_day',
+      anchorDate: '2026-03-10',
+      modelTier: 'frontier',
+    })
+
+    expect(result.items[0]?.trend).toBe(0)
+  })
 })
 
 describe('computeHeadToHead', () => {
@@ -958,5 +1014,24 @@ describe('computeHeadToHead', () => {
     expect(result.ciLow).toBeLessThan(result.aWinRate)
     expect(result.ciHigh).toBeGreaterThan(result.aWinRate)
     expect(result.ciHigh).toBeLessThanOrEqual(1)
+  })
+
+  it('returns an empty result for identical tools', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    const result = await computeHeadToHead(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      toolAId: fixture.clerk.id,
+      toolBId: fixture.clerk.id,
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.aWins).toBe(0)
+    expect(result.bWins).toBe(0)
+    expect(result.decisiveCaseCount).toBe(0)
+    expect(result.meetsPublicationThreshold).toBe(false)
   })
 })
