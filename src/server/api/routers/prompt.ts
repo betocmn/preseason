@@ -1,9 +1,20 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { categories, prompts, subcategories } from '~/server/db/schema'
+import {
+  benchmarkCaseDecisions,
+  benchmarkCaseResults,
+  benchmarkCases,
+  benchmarkPromptVersions,
+  benchmarkRuns,
+  categories,
+  prompts,
+  subcategories,
+  tools,
+} from '~/server/db/schema'
 import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
 
 const promptLevelSchema = z.enum([
@@ -207,5 +218,132 @@ export const promptRouter = createTRPCRouter({
         })
       }
       return updated[0]
+    }),
+
+  listWithTopTools: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(20).default(5) }))
+    .query(async ({ ctx, input }) => {
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db)
+      if (!seasonId) return []
+
+      // Get published run IDs for the season
+      const publishedRuns = await ctx.db
+        .select({ id: benchmarkRuns.id })
+        .from(benchmarkRuns)
+        .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
+
+      const runIds = publishedRuns.map((r) => r.id)
+      if (runIds.length === 0) return []
+
+      // Get prompt versions used in this season with their parent prompt info
+      const promptVersionRows = await ctx.db
+        .select({
+          pvId: benchmarkPromptVersions.id,
+          promptId: benchmarkPromptVersions.promptId,
+          slug: benchmarkPromptVersions.slug,
+          level: benchmarkPromptVersions.level,
+          tier: benchmarkPromptVersions.tier,
+          contentMd: benchmarkPromptVersions.contentMd,
+          promptTitle: prompts.title,
+          promptDescription: prompts.description,
+        })
+        .from(benchmarkCases)
+        .innerJoin(
+          benchmarkPromptVersions,
+          eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+        )
+        .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
+        .where(eq(benchmarkCases.seasonId, seasonId))
+        .groupBy(
+          benchmarkPromptVersions.id,
+          benchmarkPromptVersions.promptId,
+          benchmarkPromptVersions.slug,
+          benchmarkPromptVersions.level,
+          benchmarkPromptVersions.tier,
+          benchmarkPromptVersions.contentMd,
+          prompts.title,
+          prompts.description,
+        )
+        .limit(input.limit)
+
+      if (promptVersionRows.length === 0) return []
+
+      const pvIds = promptVersionRows.map((pv) => pv.pvId)
+
+      // Get top tools per prompt version from benchmark decisions
+      const decisionRows = await ctx.db
+        .select({
+          promptVersionId: benchmarkCases.promptVersionId,
+          toolId: benchmarkCaseDecisions.toolId,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(benchmarkCaseDecisions)
+        .innerJoin(
+          benchmarkCaseResults,
+          eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+        )
+        .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+        .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
+        .where(
+          and(
+            inArray(benchmarkCaseResults.runId, runIds),
+            inArray(benchmarkCases.promptVersionId, pvIds),
+            eq(benchmarkCaseDecisions.decisionType, 'tool'),
+          ),
+        )
+        .groupBy(
+          benchmarkCases.promptVersionId,
+          benchmarkCaseDecisions.toolId,
+          tools.name,
+          tools.slug,
+          tools.logoUrl,
+        )
+        .orderBy(benchmarkCases.promptVersionId, desc(sql`count(*)`))
+
+      // Group decisions by prompt version and compute rates
+      const decisionsByPv = new Map<
+        string,
+        {
+          tool: { id: string; name: string; slug: string; logoUrl: string | null }
+          count: number
+        }[]
+      >()
+      for (const row of decisionRows) {
+        if (!row.toolId) continue
+        const list = decisionsByPv.get(row.promptVersionId) ?? []
+        list.push({
+          tool: {
+            id: row.toolId,
+            name: row.toolName,
+            slug: row.toolSlug,
+            logoUrl: row.toolLogoUrl,
+          },
+          count: row.count,
+        })
+        decisionsByPv.set(row.promptVersionId, list)
+      }
+
+      return promptVersionRows.map((pv) => {
+        const toolDecisions = decisionsByPv.get(pv.pvId) ?? []
+        const totalCount = toolDecisions.reduce((sum, d) => sum + d.count, 0)
+        const topTools = toolDecisions.slice(0, 4).map((d) => ({
+          tool: d.tool,
+          rate: totalCount > 0 ? d.count / totalCount : 0,
+          count: d.count,
+        }))
+
+        return {
+          id: pv.pvId,
+          title: pv.promptTitle,
+          slug: pv.slug,
+          content: pv.contentMd,
+          description: pv.promptDescription,
+          level: pv.level,
+          topTools,
+        }
+      })
     }),
 })
