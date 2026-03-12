@@ -13,11 +13,10 @@ const MobileNav = dynamic(() => import('~/components/public/mobile-nav').then((m
 })
 
 const navLinks = [
-  { href: '/matches', label: 'Head-to-Head' },
+  { href: '/matches', label: 'Matches' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/critics', label: 'Critics' },
   { href: '/prompts', label: 'Prompts' },
-  { href: '/methodology', label: 'Methodology' },
 ]
 
 export function Navbar() {

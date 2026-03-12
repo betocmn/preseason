@@ -5,7 +5,7 @@ const linkGroups = [
   {
     title: 'Product',
     links: [
-      { href: '/matches', label: 'Live Matches' },
+      { href: '/matches', label: 'Matches' },
       { href: '/rankings', label: 'Rankings' },
       { href: '/prompts', label: 'Prompts' },
       { href: '/critics', label: 'Critics' },
