@@ -8,7 +8,14 @@ import {
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories, tools } from '~/server/db/schema'
-import { computeCategoryRanking, computeHeadToHead } from '~/server/llm/benchmark/scoring'
+import {
+  computeHeadToHead,
+  type DecisionRow,
+  fetchDecisions,
+  headToHeadFromDecisions,
+  prepareScoringContext,
+  rankFromDecisions,
+} from '~/server/llm/benchmark/scoring'
 
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure
@@ -120,37 +127,57 @@ export const benchmarkMatchRouter = createTRPCRouter({
         })
       }
 
+      // Fetch shared scoring data once for all subcategories
+      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
+      if (scoringCtx.runIds.length === 0) return []
+
+      const allCategoryIds = subs.map((s) => s.id)
+      const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
+
+      // Group decisions by category
+      const decisionsByCategory = new Map<string, DecisionRow[]>()
+      for (const d of allDecisions) {
+        let list = decisionsByCategory.get(d.categoryId)
+        if (!list) {
+          list = []
+          decisionsByCategory.set(d.categoryId, list)
+        }
+        list.push(d)
+      }
+
       // For each subcategory, get top 2 tools and create a head-to-head
+      type HeadToHeadResult = ReturnType<typeof headToHeadFromDecisions>
       const matchups: {
         category: { id: string; name: string; slug: string }
         toolA: { id: string; name: string; slug: string; logoUrl: string | null }
         toolB: { id: string; name: string; slug: string; logoUrl: string | null }
-        result: Awaited<ReturnType<typeof computeHeadToHead>>
+        result: HeadToHeadResult
       }[] = []
 
       for (const sub of subs) {
         if (matchups.length >= limit) break
 
-        const ranking = await computeCategoryRanking(ctx.db, {
-          categoryId: sub.id,
-          seasonId,
-          windowType: 'trailing_28d',
+        const catDecisions = decisionsByCategory.get(sub.id) ?? []
+        const ranking = rankFromDecisions(
+          catDecisions,
+          scoringCtx.weightConfigs,
+          sub.id,
+          'trailing_28d',
           anchorDate,
-        })
+        )
 
         if (ranking.items.length < 2) continue
 
         const top1 = ranking.items[0]!
         const top2 = ranking.items[1]!
 
-        const result = await computeHeadToHead(ctx.db, {
-          categoryId: sub.id,
-          seasonId,
-          toolAId: top1.toolId,
-          toolBId: top2.toolId,
-          windowType: 'trailing_28d',
-          anchorDate,
-        })
+        const result = headToHeadFromDecisions(
+          catDecisions,
+          scoringCtx.weightConfigs,
+          top1.toolId,
+          top2.toolId,
+          sub.id,
+        )
 
         matchups.push({
           category: sub,
