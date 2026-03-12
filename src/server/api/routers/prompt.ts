@@ -270,7 +270,7 @@ export const promptRouter = createTRPCRouter({
           prompts.title,
           prompts.description,
         )
-        .orderBy(desc(benchmarkPromptVersions.id))
+        .orderBy(desc(benchmarkPromptVersions.createdAt))
         .limit(input.limit)
 
       if (promptVersionRows.length === 0) return []
