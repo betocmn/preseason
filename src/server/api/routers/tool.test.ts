@@ -193,7 +193,7 @@ describe('toolRouter', () => {
     expect(updated.description).toBeNull()
     expect(updated.website).toBeNull()
     expect(updated.logoUrl).toBeNull()
-    expect(updated.aliases).toBeNull()
+    expect(updated.toolAliases).toHaveLength(0)
     expect(updated.toolCategories).toHaveLength(0)
   })
 
