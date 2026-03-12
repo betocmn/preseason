@@ -253,7 +253,13 @@ export const promptRouter = createTRPCRouter({
           eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
         )
         .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
-        .where(eq(benchmarkCases.seasonId, seasonId))
+        .where(
+          and(
+            eq(benchmarkCases.seasonId, seasonId),
+            eq(prompts.isActive, true),
+            eq(benchmarkPromptVersions.isActive, true),
+          ),
+        )
         .groupBy(
           benchmarkPromptVersions.id,
           benchmarkPromptVersions.promptId,
@@ -264,6 +270,7 @@ export const promptRouter = createTRPCRouter({
           prompts.title,
           prompts.description,
         )
+        .orderBy(desc(benchmarkPromptVersions.id))
         .limit(input.limit)
 
       if (promptVersionRows.length === 0) return []
