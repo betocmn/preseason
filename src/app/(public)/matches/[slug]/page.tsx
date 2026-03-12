@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
@@ -108,10 +108,36 @@ function BreakdownTable({
   )
 }
 
+async function resolveLegacyMatch(caller: Awaited<ReturnType<typeof api>>, slug: string) {
+  try {
+    const { match } = await caller.match.getBySlug({ slug })
+    return {
+      categorySlug: match.category?.slug,
+      toolASlug: match.toolA.slug,
+      toolBSlug: match.toolB.slug,
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const parsed = parseMatchSlug(slug)
-  if (!parsed) return { title: 'Match Not Found' }
+  let parsed = parseMatchSlug(slug)
+
+  if (!parsed) {
+    // Legacy slug — try to resolve from DB for metadata
+    const caller = await api()
+    const legacy = await resolveLegacyMatch(caller, slug)
+    if (!legacy?.categorySlug || legacy.toolASlug === legacy.toolBSlug) {
+      return { title: 'Match Not Found' }
+    }
+    parsed = {
+      categorySlug: legacy.categorySlug,
+      toolASlug: legacy.toolASlug,
+      toolBSlug: legacy.toolBSlug,
+    }
+  }
 
   const caller = await api()
   const data = await caller.benchmarkMatch.headToHead(parsed)
@@ -132,7 +158,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function MatchDetailPage({ params }: Props) {
   const { slug } = await params
   const parsed = parseMatchSlug(slug)
-  if (!parsed) notFound()
+
+  if (!parsed) {
+    // Legacy slug — resolve from DB and redirect to benchmark URL
+    const caller = await api()
+    const legacy = await resolveLegacyMatch(caller, slug)
+    if (!legacy?.categorySlug || legacy.toolASlug === legacy.toolBSlug) {
+      notFound()
+    }
+    redirect(`/matches/${legacy.categorySlug}--${legacy.toolASlug}-vs-${legacy.toolBSlug}`)
+  }
 
   const caller = await api()
   const data = await caller.benchmarkMatch.headToHead(parsed)
