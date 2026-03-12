@@ -904,7 +904,7 @@ candidates, and publishing runs.
 
 ---
 
-## PR 7: Public pages switchover and documentation
+## PR 7: Public pages switchover and documentation ✅ DONE
 
 **Goal:** Wire public-facing pages to benchmark data. Update all documentation.
 Label exploration vs benchmark clearly.
@@ -1010,7 +1010,7 @@ immediately since nothing is deployed.
 
 ---
 
-## PR 8: Legacy cleanup
+## PR 8: Legacy cleanup ✅ DONE
 
 **Goal:** Remove all exploration-era code, tables, and files that are superseded
 by the benchmark pipeline. Since nothing is deployed to production yet, there is
