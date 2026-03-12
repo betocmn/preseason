@@ -4,11 +4,7 @@ import {
   categories,
   comments,
   criticProfiles,
-  llms,
   prompts,
-  recommendations,
-  runResults,
-  runs,
   subcategories,
   toolCategories,
   tools,
@@ -29,7 +25,7 @@ describe('commentRouter', () => {
     await cleanTestDatabase()
   })
 
-  async function seedRecommendationTarget() {
+  async function seedToolTarget() {
     const db = getTestDb()
     const [group] = await db
       .insert(categories)
@@ -42,56 +38,26 @@ describe('commentRouter', () => {
         { name: 'Database', slug: 'database', categoryId: group?.id ?? '' },
       ])
       .returning()
-    const [tool] = await db
+    const [authTool] = await db
       .insert(tools)
       .values([{ name: 'Clerk', slug: 'clerk' }])
       .returning()
     await db.insert(toolCategories).values({
-      toolId: tool?.id ?? '',
+      toolId: authTool?.id ?? '',
       categoryId: authCategory?.id ?? '',
       isPrimary: true,
     })
-    const llm = (
-      await db
-        .insert(llms)
-        .values({ name: 'GPT-4o', slug: 'gpt-4o', provider: 'OpenAI', modelId: 'openai/gpt-4o' })
-        .returning()
-    )[0]
-    const prompt = (
-      await db
-        .insert(prompts)
-        .values({ title: 'Prompt', slug: 'prompt', level: 'vibe-coder' })
-        .returning()
-    )[0]
-    const run = (await db.insert(runs).values({ status: 'completed' }).returning())[0]
-    const runResult = (
-      await db
-        .insert(runResults)
-        .values({
-          runId: run?.id ?? '',
-          promptId: prompt?.id ?? '',
-          llmId: llm?.id ?? '',
-          parseStatus: 'success',
-        })
-        .returning()
-    )[0]
-    const [authRecommendation, dbRecommendation] = await db
-      .insert(recommendations)
-      .values([
-        {
-          runResultId: runResult?.id ?? '',
-          toolId: tool?.id ?? '',
-          categoryId: authCategory?.id ?? '',
-        },
-        {
-          runResultId: runResult?.id ?? '',
-          toolId: tool?.id ?? '',
-          categoryId: dbCategory?.id ?? '',
-        },
-      ])
+    const [dbTool] = await db
+      .insert(tools)
+      .values([{ name: 'Supabase', slug: 'supabase' }])
       .returning()
+    await db.insert(toolCategories).values({
+      toolId: dbTool?.id ?? '',
+      categoryId: dbCategory?.id ?? '',
+      isPrimary: true,
+    })
 
-    return { tool, authRecommendation, dbRecommendation }
+    return { authTool, dbTool }
   }
 
   it('lists comments by target', async () => {
@@ -184,7 +150,7 @@ describe('commentRouter', () => {
 
   it('enforces conflict-of-interest exclusions on create', async () => {
     const db = getTestDb()
-    const { authRecommendation, dbRecommendation } = await seedRecommendationTarget()
+    const { authTool, dbTool } = await seedToolTarget()
 
     const criticUser = await seedUser({ role: 'critic' })
     await db.insert(criticProfiles).values({
@@ -198,8 +164,8 @@ describe('commentRouter', () => {
     const caller = createTestCaller(criticUser.authUser)
     await expect(
       caller.comment.create({
-        targetType: 'recommendation',
-        targetId: authRecommendation?.id ?? '',
+        targetType: 'tool',
+        targetId: authTool?.id ?? '',
         content: 'Should fail',
       }),
     ).rejects.toMatchObject({
@@ -207,8 +173,8 @@ describe('commentRouter', () => {
     } satisfies Partial<TRPCError>)
 
     const allowed = await caller.comment.create({
-      targetType: 'recommendation',
-      targetId: dbRecommendation?.id ?? '',
+      targetType: 'tool',
+      targetId: dbTool?.id ?? '',
       content: 'Allowed',
     })
     if (!allowed) {
@@ -219,7 +185,7 @@ describe('commentRouter', () => {
 
   it('blocks unverified critics from creating comments', async () => {
     const db = getTestDb()
-    const { dbRecommendation } = await seedRecommendationTarget()
+    const { dbTool } = await seedToolTarget()
 
     const criticUser = await seedUser({ role: 'critic' })
     await db.insert(criticProfiles).values({
@@ -232,8 +198,8 @@ describe('commentRouter', () => {
     const caller = createTestCaller(criticUser.authUser)
     await expect(
       caller.comment.create({
-        targetType: 'recommendation',
-        targetId: dbRecommendation?.id ?? '',
+        targetType: 'tool',
+        targetId: dbTool?.id ?? '',
         content: 'Should fail',
       }),
     ).rejects.toMatchObject({
@@ -243,7 +209,7 @@ describe('commentRouter', () => {
 
   it('allows critics to update/delete own comments only', async () => {
     const db = getTestDb()
-    const target = await seedRecommendationTarget()
+    const { dbTool } = await seedToolTarget()
     const criticOneUser = await seedUser({ role: 'critic' })
     const criticTwoUser = await seedUser({ role: 'critic' })
 
@@ -264,8 +230,8 @@ describe('commentRouter', () => {
         .insert(comments)
         .values({
           criticId: criticOne?.id ?? '',
-          targetType: 'recommendation',
-          targetId: target.dbRecommendation?.id ?? '',
+          targetType: 'tool',
+          targetId: dbTool?.id ?? '',
           content: 'Mine',
         })
         .returning()
@@ -275,8 +241,8 @@ describe('commentRouter', () => {
         .insert(comments)
         .values({
           criticId: criticTwo?.id ?? '',
-          targetType: 'recommendation',
-          targetId: target.dbRecommendation?.id ?? '',
+          targetType: 'tool',
+          targetId: dbTool?.id ?? '',
           content: 'Not mine',
         })
         .returning()
@@ -385,7 +351,7 @@ describe('commentRouter', () => {
 
   it('allows admin to delete any comment', async () => {
     const db = getTestDb()
-    const target = await seedRecommendationTarget()
+    const { dbTool } = await seedToolTarget()
     const criticUser = await seedUser({ role: 'critic' })
     const adminUser = await seedUser({ role: 'admin' })
 
@@ -404,8 +370,8 @@ describe('commentRouter', () => {
         .insert(comments)
         .values({
           criticId: critic?.id ?? '',
-          targetType: 'recommendation',
-          targetId: target.dbRecommendation?.id ?? '',
+          targetType: 'tool',
+          targetId: dbTool?.id ?? '',
           content: 'Admin can remove',
         })
         .returning()
