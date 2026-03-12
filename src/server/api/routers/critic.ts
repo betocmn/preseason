@@ -5,15 +5,7 @@ import { slugify } from '~/lib/slug'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import {
-  comments,
-  criticProfiles,
-  matches,
-  prompts,
-  recommendations,
-  tools,
-  userProfiles,
-} from '~/server/db/schema'
+import { comments, criticProfiles, prompts, tools, userProfiles } from '~/server/db/schema'
 
 const updateOwnInput = z
   .object({
@@ -166,37 +158,21 @@ export const criticRouter = createTRPCRouter({
       },
     })
 
-    const matchIds = new Set<string>()
     const toolIds = new Set<string>()
-    const recommendationIds = new Set<string>()
     const promptIds = new Set<string>()
 
     for (const critic of critics) {
       for (const comment of critic.comments) {
-        if (comment.targetType === 'match') matchIds.add(comment.targetId)
         if (comment.targetType === 'tool') toolIds.add(comment.targetId)
-        if (comment.targetType === 'recommendation') recommendationIds.add(comment.targetId)
         if (comment.targetType === 'prompt') promptIds.add(comment.targetId)
       }
     }
 
-    const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
-      matchIds.size > 0
-        ? ctx.db.query.matches.findMany({
-            where: inArray(matches.id, [...matchIds]),
-            with: { category: { with: { categoryGroup: true } } },
-          })
-        : [],
+    const [toolTargets, promptTargets] = await Promise.all([
       toolIds.size > 0
         ? ctx.db.query.tools.findMany({
             where: inArray(tools.id, [...toolIds]),
             columns: { id: true, name: true, slug: true },
-          })
-        : [],
-      recommendationIds.size > 0
-        ? ctx.db.query.recommendations.findMany({
-            where: inArray(recommendations.id, [...recommendationIds]),
-            with: { category: { with: { categoryGroup: true } } },
           })
         : [],
       promptIds.size > 0
@@ -207,9 +183,7 @@ export const criticRouter = createTRPCRouter({
         : [],
     ])
 
-    const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
     const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
-    const recMap = new Map(recTargets.map((r) => [r.id, r]))
     const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
     return critics.map((critic) => ({
@@ -223,23 +197,11 @@ export const criticRouter = createTRPCRouter({
           let label = ''
           let href = ''
 
-          if (comment.targetType === 'match') {
-            const match = matchMap.get(comment.targetId)
-            if (!match) return null
-            label = match.category?.name ?? 'Match'
-            href = `/matches/${match.slug}`
-          } else if (comment.targetType === 'tool') {
+          if (comment.targetType === 'tool') {
             const tool = toolMap.get(comment.targetId)
             if (!tool) return null
             label = tool.name
             href = `/tools/${tool.slug}`
-          } else if (comment.targetType === 'recommendation') {
-            const rec = recMap.get(comment.targetId)
-            if (!rec) return null
-            const groupSlug = rec.category?.categoryGroup?.slug
-            const subSlug = rec.category?.slug
-            label = rec.category?.name ?? 'Recommendation'
-            href = groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#'
           } else if (comment.targetType === 'prompt') {
             const prompt = promptMap.get(comment.targetId)
             if (!prompt) return null
@@ -277,35 +239,19 @@ export const criticRouter = createTRPCRouter({
         })
       }
 
-      const matchIds = new Set<string>()
       const toolIds = new Set<string>()
-      const recommendationIds = new Set<string>()
       const promptIds = new Set<string>()
 
       for (const comment of critic.comments) {
-        if (comment.targetType === 'match') matchIds.add(comment.targetId)
         if (comment.targetType === 'tool') toolIds.add(comment.targetId)
-        if (comment.targetType === 'recommendation') recommendationIds.add(comment.targetId)
         if (comment.targetType === 'prompt') promptIds.add(comment.targetId)
       }
 
-      const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
-        matchIds.size > 0
-          ? ctx.db.query.matches.findMany({
-              where: inArray(matches.id, [...matchIds]),
-              with: { category: { with: { categoryGroup: true } } },
-            })
-          : [],
+      const [toolTargets, promptTargets] = await Promise.all([
         toolIds.size > 0
           ? ctx.db.query.tools.findMany({
               where: inArray(tools.id, [...toolIds]),
               columns: { id: true, name: true, slug: true },
-            })
-          : [],
-        recommendationIds.size > 0
-          ? ctx.db.query.recommendations.findMany({
-              where: inArray(recommendations.id, [...recommendationIds]),
-              with: { category: { with: { categoryGroup: true } } },
             })
           : [],
         promptIds.size > 0
@@ -316,9 +262,7 @@ export const criticRouter = createTRPCRouter({
           : [],
       ])
 
-      const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
       const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
-      const recMap = new Map(recTargets.map((r) => [r.id, r]))
       const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
       return {
@@ -332,23 +276,11 @@ export const criticRouter = createTRPCRouter({
             let label = ''
             let href = ''
 
-            if (comment.targetType === 'match') {
-              const match = matchMap.get(comment.targetId)
-              if (!match) return null
-              label = match.category?.name ?? 'Match'
-              href = `/matches/${match.slug}`
-            } else if (comment.targetType === 'tool') {
+            if (comment.targetType === 'tool') {
               const tool = toolMap.get(comment.targetId)
               if (!tool) return null
               label = tool.name
               href = `/tools/${tool.slug}`
-            } else if (comment.targetType === 'recommendation') {
-              const rec = recMap.get(comment.targetId)
-              if (!rec) return null
-              const groupSlug = rec.category?.categoryGroup?.slug
-              const subSlug = rec.category?.slug
-              label = rec.category?.name ?? 'Recommendation'
-              href = groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#'
             } else if (comment.targetType === 'prompt') {
               const prompt = promptMap.get(comment.targetId)
               if (!prompt) return null
@@ -386,35 +318,19 @@ export const criticRouter = createTRPCRouter({
         })
       }
 
-      const matchIds = new Set<string>()
       const toolIds = new Set<string>()
-      const recommendationIds = new Set<string>()
       const promptIds = new Set<string>()
 
       for (const comment of critic.comments) {
-        if (comment.targetType === 'match') matchIds.add(comment.targetId)
         if (comment.targetType === 'tool') toolIds.add(comment.targetId)
-        if (comment.targetType === 'recommendation') recommendationIds.add(comment.targetId)
         if (comment.targetType === 'prompt') promptIds.add(comment.targetId)
       }
 
-      const [matchTargets, toolTargets, recTargets, promptTargets] = await Promise.all([
-        matchIds.size > 0
-          ? ctx.db.query.matches.findMany({
-              where: inArray(matches.id, [...matchIds]),
-              with: { category: { with: { categoryGroup: true } } },
-            })
-          : [],
+      const [toolTargets, promptTargets] = await Promise.all([
         toolIds.size > 0
           ? ctx.db.query.tools.findMany({
               where: inArray(tools.id, [...toolIds]),
               columns: { id: true, name: true, slug: true },
-            })
-          : [],
-        recommendationIds.size > 0
-          ? ctx.db.query.recommendations.findMany({
-              where: inArray(recommendations.id, [...recommendationIds]),
-              with: { category: { with: { categoryGroup: true } } },
             })
           : [],
         promptIds.size > 0
@@ -425,9 +341,7 @@ export const criticRouter = createTRPCRouter({
           : [],
       ])
 
-      const matchMap = new Map(matchTargets.map((m) => [m.id, m]))
       const toolMap = new Map(toolTargets.map((t) => [t.id, t]))
-      const recMap = new Map(recTargets.map((r) => [r.id, r]))
       const promptMap = new Map(promptTargets.map((p) => [p.id, p]))
 
       return {
@@ -441,23 +355,11 @@ export const criticRouter = createTRPCRouter({
             let label = ''
             let href = ''
 
-            if (comment.targetType === 'match') {
-              const match = matchMap.get(comment.targetId)
-              if (!match) return null
-              label = match.category?.name ?? 'Match'
-              href = `/matches/${match.slug}`
-            } else if (comment.targetType === 'tool') {
+            if (comment.targetType === 'tool') {
               const tool = toolMap.get(comment.targetId)
               if (!tool) return null
               label = tool.name
               href = `/tools/${tool.slug}`
-            } else if (comment.targetType === 'recommendation') {
-              const rec = recMap.get(comment.targetId)
-              if (!rec) return null
-              const groupSlug = rec.category?.categoryGroup?.slug
-              const subSlug = rec.category?.slug
-              label = rec.category?.name ?? 'Recommendation'
-              href = groupSlug && subSlug ? `/rankings/${groupSlug}/${subSlug}` : '#'
             } else if (comment.targetType === 'prompt') {
               const prompt = promptMap.get(comment.targetId)
               if (!prompt) return null

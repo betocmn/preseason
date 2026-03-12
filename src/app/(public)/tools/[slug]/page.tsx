@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { CategoryPill } from '~/components/public/category-pill'
 import { CommentList } from '~/components/public/comment-list'
-import { MatchCard } from '~/components/public/match-card'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -47,14 +46,7 @@ export default async function ToolDetailPage({ params }: Props) {
     }
   })()
 
-  const [stats, activeMatches, comments] = await Promise.all([
-    caller.recommendation.getStats({ days: 30 }),
-    caller.match.listActive(),
-    caller.comment.listByTarget({ targetType: 'tool', targetId: tool.id }),
-  ])
-
-  const toolStats = stats.items.filter((item) => item.tool.id === tool.id)
-  const toolMatches = activeMatches.filter((m) => m.toolA.id === tool.id || m.toolB.id === tool.id)
+  const comments = await caller.comment.listByTarget({ targetType: 'tool', targetId: tool.id })
 
   const toolCategories = tool.toolCategories?.map((tc) => tc.category) ?? []
 
@@ -100,64 +92,6 @@ export default async function ToolDetailPage({ params }: Props) {
           </Button>
         )}
       </div>
-
-      {/* Stats */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-base">Recommendation Stats (30 days)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {toolStats.length > 0 ? (
-            <div className="space-y-3">
-              {toolStats.map((stat) => (
-                <div key={stat.category.id} className="flex items-center justify-between">
-                  <CategoryPill
-                    name={stat.category.name}
-                    slug={stat.category.slug}
-                    groupSlug={stat.category.groupSlug}
-                  />
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium">
-                      {(stat.rate * 100).toFixed(1)}% rate
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {stat.recommendationCount} recs
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No recommendation data for this tool yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Active Matches */}
-      {toolMatches.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold">Live Matches</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {toolMatches.map((match) => (
-              <MatchCard
-                key={match.id}
-                slug={match.slug}
-                status={match.status}
-                toolA={match.toolA}
-                toolB={match.toolB}
-                category={match.category}
-                toolAScore={match.toolAScore}
-                toolBScore={match.toolBScore}
-                winnerToolId={match.winnerToolId}
-                periodStart={match.periodStart}
-                periodEnd={match.periodEnd}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Comments */}
       <Card>

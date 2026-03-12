@@ -168,8 +168,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
         if (ranking.items.length < 2) continue
 
-        const top1 = ranking.items[0]!
-        const top2 = ranking.items[1]!
+        const [top1, top2] = ranking.items
+        if (!top1 || !top2) continue
 
         const result = headToHeadFromDecisions(
           catDecisions,

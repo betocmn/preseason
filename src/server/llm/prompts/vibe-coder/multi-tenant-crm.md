@@ -1,1 +1,0 @@
-Build a multi-tenant CRM with contact management and email integration. Include deal pipelines, task management, activity logging, email templates, team workspaces, reporting dashboards, and API integrations.

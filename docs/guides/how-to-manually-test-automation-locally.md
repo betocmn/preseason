@@ -2,25 +2,23 @@
 
 ## Overview
 
-This guide walks through manually testing the production automation pipeline on your local machine:
+This guide covers the benchmark automation flow that replaced the legacy
+exploration pipeline.
 
-1. Trigger a run (`/api/cron/run`)
-2. Verify `run -> run_result -> recommendation` data flow
-3. Trigger settlement/generation (`/api/cron/settle`)
+The local verification path is:
 
-Use this when validating automation changes end-to-end against your local database.
+1. Start the app and seeded database.
+2. Trigger `/api/cron/benchmark-run`.
+3. Inspect benchmark run, case result, and case decision data.
+4. Review QC and, if needed, publish from the admin UI.
 
 ## Prerequisites
 
 - Local Supabase is running
-- `pnpm install` has been run
-- `.env.local` includes:
-  - `OPENROUTER_API_KEY`
-  - `CRON_SECRET`
-  - `DATABASE_URL`
-- Prompts and LLMs exist and are active (seed data provides this)
+- `.env.local` includes `DATABASE_URL`, `OPENROUTER_API_KEY`, and `CRON_SECRET`
+- The seeded data contains at least one active benchmark season
 
-## Start local services
+## Start Local Services
 
 ```bash
 supabase start
@@ -31,172 +29,150 @@ pnpm run dev
 
 App URL: `http://localhost:3000`
 
-## Important note about manual runs
-
-`tRPC run.triggerManual` currently creates a `pending` run record, but does not execute the automation runner itself. For full pipeline testing, call the cron endpoint directly.
-
-## 1) Trigger automation run locally
-
-In a new terminal:
+## 1) Trigger the Benchmark Runner
 
 ```bash
 export CRON_SECRET="your-local-cron-secret"
 
 curl -s \
   -H "Authorization: Bearer $CRON_SECRET" \
-  http://localhost:3000/api/cron/run
+  http://localhost:3000/api/cron/benchmark-run
 ```
 
 Expected response shape:
 
 - `ok: true`
 - `summary.runId`
-- `summary.totalPairs`
-- `summary.succeededPairs`
-- `summary.failedPairs`
-- `summary.recommendationCount`
+- `summary.status`
+- `summary.totalCases`
+- `summary.completedCases`
+- `summary.failedCases`
+- `summary.invalidOutputCases`
+- `summary.unresolvedToolCount`
+- `summary.qc`
 
-If all pairs fail, check:
+Note:
 
-- `OPENROUTER_API_KEY` validity
-- network access to OpenRouter
-- `summary.errors` and `preseason_run.error_log`
+- `completed` means the run finished execution and passed QC.
+- `qc_failed` means the run finished execution but did not clear QC.
+- The cron route does not publish runs automatically.
 
-## 2) Verify run data in the database
+## 2) Inspect Benchmark Runs
 
-Open Supabase Studio (`http://localhost:58823`) and run these SQL checks.
-
-### Latest runs
+Open Supabase Studio and run:
 
 ```sql
 select
   id,
+  season_id,
+  scheduled_for,
   status,
   trigger,
-  prompt_count,
-  llm_count,
+  expected_case_count,
+  completed_case_count,
+  failed_case_count,
+  qc_status,
   created_at,
   started_at,
   completed_at
-from preseason_run
+from preseason_benchmark_run
 order by created_at desc
 limit 5;
 ```
 
-### Latest run results
+What to confirm:
+
+- Re-running the cron for the same day reuses the same run record.
+- `status` is `completed` or `qc_failed` after execution settles.
+- Counts roughly match the active season case matrix.
+
+## 3) Inspect Case Results
 
 ```sql
 select
-  rr.run_id,
-  rr.prompt_id,
-  rr.llm_id,
-  rr.parse_status,
-  rr.response_time_ms,
-  left(coalesce(rr.raw_response, ''), 160) as raw_response_preview,
-  rr.created_at
-from preseason_run_result rr
-order by rr.created_at desc
+  run_id,
+  case_id,
+  status,
+  requested_model_id,
+  returned_model_id,
+  provider,
+  latency_ms,
+  total_tokens,
+  parser_version,
+  left(coalesce(error_message, ''), 120) as error_preview
+from preseason_benchmark_case_result
+order by created_at desc
 limit 20;
 ```
 
-### Recommendations created from run results
+What to confirm:
+
+- Completed cases have `status = 'completed'`.
+- Invalid structured output shows up as `status = 'invalid_output'`.
+- Provider-returned model IDs match expectations unless drift is being tested.
+
+## 4) Inspect Case Decisions and Tool Candidates
 
 ```sql
 select
-  r.run_result_id,
-  t.name as tool,
-  c.slug as category,
-  r.confidence,
-  r.rank,
-  left(coalesce(r.reasoning, ''), 120) as reasoning_preview,
-  r.created_at
-from preseason_recommendation r
-join preseason_tool t on t.id = r.tool_id
-join preseason_category c on c.id = r.category_id
-order by r.created_at desc
+  d.case_result_id,
+  c.slug as category_slug,
+  d.decision_type,
+  t.slug as tool_slug,
+  d.raw_tool_name,
+  d.resolution_status
+from preseason_benchmark_case_decision d
+join preseason_category c on c.id = d.category_id
+left join preseason_tool t on t.id = d.tool_id
+order by d.case_result_id desc
 limit 30;
 ```
 
-What to confirm:
-
-- The latest run is `completed` when at least one pair succeeded.
-- `run_result` rows exist for prompt x llm combinations.
-- `parse_status` is `success` for parsed rows.
-- `recommendation` rows exist and link to valid tools/categories.
-
-## 3) Trigger settlement + match generation
-
-```bash
-curl -s \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  http://localhost:3000/api/cron/settle
-```
-
-Expected response shape:
-
-- `ok: true`
-- `settled.settledCount`
-- `generated.createdCount`
-
-Notes:
-
-- `settledCount` is non-zero only when active matches are past `periodEnd`.
-- `createdCount` is non-zero only when tool pairs in the same category meet threshold and have no active match.
-
-## 4) Verify matches
-
 ```sql
 select
-  id,
-  category_id,
-  tool_a_id,
-  tool_b_id,
+  raw_name,
+  normalized_name,
   status,
-  period_start,
-  period_end,
-  tool_a_score,
-  tool_b_score,
-  winner_tool_id,
-  settled_at
-from preseason_match
-order by started_at desc nulls last
+  seen_count,
+  first_seen_at,
+  last_seen_at
+from preseason_tool_candidate
+order by last_seen_at desc
 limit 20;
 ```
 
 What to confirm:
 
-- Settled matches have scores and `settled_at` set.
-- Tie settlements have `winner_tool_id = null`.
-- New generated matches are `active` and have period windows.
+- Each completed case produces exactly one decision per eligible category.
+- Unknown tool names land in `preseason_tool_candidate`.
+- `resolution_status = 'unresolved_tool'` rows stay out of rankings until
+  reviewed.
 
-## 5) Quick regression test commands
+## 5) Review QC and Publish
 
-For local automation changes, run:
+If a run clears QC, open the admin UI at:
+
+- `/admin/benchmark/runs/<runId>`
+
+Use the publish action there. If the run is `qc_failed`, inspect the QC summary
+and case-result failures before retrying failed cases or changing the season
+panel.
+
+## 6) Regression Commands
 
 ```bash
 pnpm run check
 pnpm run test
+pnpm run build
 ```
 
-Focused automation suite:
+Focused benchmark suite:
 
 ```bash
 pnpm exec vitest run \
-  src/server/llm/service/providers.test.ts \
-  src/server/llm/automation/parser.test.ts \
-  src/server/llm/automation/runner.test.ts \
-  src/server/llm/automation/match-settler.test.ts
+  src/server/llm/benchmark/parser.test.ts \
+  src/server/llm/benchmark/runner.test.ts \
+  src/server/llm/benchmark/scoring.test.ts \
+  src/server/api/routers/benchmark-admin.test.ts \
+  src/server/api/routers/benchmark-public.test.ts
 ```
-
-## Troubleshooting
-
-- `401 Unauthorized` from cron routes:
-  - Missing or incorrect `Authorization: Bearer <CRON_SECRET>` header
-  - `CRON_SECRET` mismatch between shell and app env
-- `CRON_SECRET is not configured`:
-  - Missing `CRON_SECRET` in `.env.local`
-- Run status stuck at `failed`:
-  - Check run summary errors and `preseason_run.error_log`
-- Zero recommendations:
-  - Responses may be unparsable for current prompt/model output
-  - Inspect `raw_response` and parser behavior

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { subcategories, toolCategories, tools } from '~/server/db/schema'
+import { subcategories, toolAliases, toolCategories, tools } from '~/server/db/schema'
 
 const logoPathSchema = z
   .string()
@@ -12,6 +12,20 @@ const logoPathSchema = z
   .refine((value) => value.startsWith('/'), {
     message: 'Logo path must start with "/"',
   })
+
+function normalizeAlias(alias: string): string {
+  return alias.toLowerCase().trim()
+}
+
+function deduplicateAliases(aliases: string[]): string[] {
+  const seen = new Set<string>()
+  return aliases.filter((alias) => {
+    const normalized = normalizeAlias(alias)
+    if (seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
+}
 
 const createToolInput = z.object({
   name: z.string().min(1).max(255),
@@ -86,6 +100,9 @@ async function getToolWithCategories(db: Database, toolId: string) {
             },
           },
         },
+      },
+      toolAliases: {
+        columns: { alias: true },
       },
     },
   })
@@ -225,11 +242,19 @@ export const toolRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const pattern = `%${input.query}%`
+
+      const aliasToolIds = await ctx.db
+        .select({ toolId: toolAliases.toolId })
+        .from(toolAliases)
+        .where(ilike(toolAliases.alias, pattern))
+
+      const aliasIds = aliasToolIds.map((r) => r.toolId)
+
       return ctx.db.query.tools.findMany({
         where: or(
           ilike(tools.name, pattern),
           ilike(tools.slug, pattern),
-          sql`${tools.aliases}::text ILIKE ${pattern}`,
+          aliasIds.length > 0 ? inArray(tools.id, aliasIds) : undefined,
         ),
         orderBy: [asc(tools.name)],
         limit: input.limit,
@@ -295,37 +320,52 @@ export const toolRouter = createTRPCRouter({
     const categoryIds = [...new Set(input.categoryIds ?? [])]
     await validateCategoryIds(ctx.db, categoryIds)
 
-    const inserted = await ctx.db
-      .insert(tools)
-      .values({
-        name: input.name,
-        slug: input.slug,
-        description: input.description,
-        website: input.website,
-        logoUrl: input.logoUrl,
-        isVerified: input.isVerified ?? false,
-        providerUserId: input.providerUserId ?? null,
-        aliases: input.aliases,
-      })
-      .returning()
+    const tool = await ctx.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(tools)
+        .values({
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          website: input.website,
+          logoUrl: input.logoUrl,
+          isVerified: input.isVerified ?? false,
+          providerUserId: input.providerUserId ?? null,
+        })
+        .returning()
 
-    const tool = inserted[0]
-    if (!tool) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create tool',
-      })
-    }
+      const row = inserted[0]
+      if (!row) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create tool',
+        })
+      }
 
-    if (categoryIds.length > 0) {
-      await ctx.db.insert(toolCategories).values(
-        categoryIds.map((categoryId, index) => ({
-          toolId: tool.id,
-          categoryId,
-          isPrimary: index === 0,
-        })),
-      )
-    }
+      if (categoryIds.length > 0) {
+        await tx.insert(toolCategories).values(
+          categoryIds.map((categoryId, index) => ({
+            toolId: row.id,
+            categoryId,
+            isPrimary: index === 0,
+          })),
+        )
+      }
+
+      if (input.aliases && input.aliases.length > 0) {
+        const uniqueAliases = deduplicateAliases(input.aliases)
+        await tx.insert(toolAliases).values(
+          uniqueAliases.map((alias) => ({
+            toolId: row.id,
+            alias,
+            normalizedAlias: normalizeAlias(alias),
+            source: 'admin',
+          })),
+        )
+      }
+
+      return row
+    })
 
     return getToolWithCategories(ctx.db, tool.id)
   }),
@@ -348,23 +388,41 @@ export const toolRouter = createTRPCRouter({
       await validateCategoryIds(ctx.db, categoryIds)
     }
 
-    const { id, categoryIds: _categoryIds, ...rest } = input
-    if (Object.keys(rest).length > 0) {
-      await ctx.db.update(tools).set(rest).where(eq(tools.id, id))
-    }
+    const { id, categoryIds: _categoryIds, aliases, ...rest } = input
 
-    if (categoryIds) {
-      await ctx.db.delete(toolCategories).where(eq(toolCategories.toolId, id))
-      if (categoryIds.length > 0) {
-        await ctx.db.insert(toolCategories).values(
-          categoryIds.map((categoryId, index) => ({
-            toolId: id,
-            categoryId,
-            isPrimary: index === 0,
-          })),
-        )
+    await ctx.db.transaction(async (tx) => {
+      if (Object.keys(rest).length > 0) {
+        await tx.update(tools).set(rest).where(eq(tools.id, id))
       }
-    }
+
+      if (aliases !== undefined) {
+        await tx.delete(toolAliases).where(eq(toolAliases.toolId, id))
+        if (aliases && aliases.length > 0) {
+          const uniqueAliases = deduplicateAliases(aliases)
+          await tx.insert(toolAliases).values(
+            uniqueAliases.map((alias) => ({
+              toolId: id,
+              alias,
+              normalizedAlias: normalizeAlias(alias),
+              source: 'admin',
+            })),
+          )
+        }
+      }
+
+      if (categoryIds) {
+        await tx.delete(toolCategories).where(eq(toolCategories.toolId, id))
+        if (categoryIds.length > 0) {
+          await tx.insert(toolCategories).values(
+            categoryIds.map((categoryId, index) => ({
+              toolId: id,
+              categoryId,
+              isPrimary: index === 0,
+            })),
+          )
+        }
+      }
+    })
 
     const updated = await getToolWithCategories(ctx.db, id)
     if (!updated) {

@@ -904,7 +904,7 @@ candidates, and publishing runs.
 
 ---
 
-## PR 7: Public pages switchover and documentation
+## PR 7: Public pages switchover and documentation ✅ DONE
 
 **Goal:** Wire public-facing pages to benchmark data. Update all documentation.
 Label exploration vs benchmark clearly.
@@ -999,18 +999,18 @@ PR 5: Scoring + weighted ranks   ─── new routers with window types + thres
   │                                   (can build while shadow data accumulates)
 PR 6: Admin controls             ─── admin-only, no public impact ✅ DONE
   │                                   (can build while shadow data accumulates)
-PR 7: Public switchover + docs   ─── only after launch bar is met
+PR 7: Public switchover + docs   ─── only after launch bar is met ✅ DONE
   │
-PR 8: Legacy cleanup             ─── remove old pipeline code, tables, files
+PR 8: Legacy cleanup             ─── remove old pipeline code, tables, files ✅ DONE
 ```
 
 PRs 1-4 must land first to start shadow accumulation. PRs 5-6 can be built in
-parallel while data accumulates. PR 7 is gated on the launch bar. PR 8 follows
-immediately since nothing is deployed.
+parallel while data accumulates. PR 7 was gated on the launch bar. PR 8
+followed immediately since nothing was deployed.
 
 ---
 
-## PR 8: Legacy cleanup
+## PR 8: Legacy cleanup ✅ DONE
 
 **Goal:** Remove all exploration-era code, tables, and files that are superseded
 by the benchmark pipeline. Since nothing is deployed to production yet, there is

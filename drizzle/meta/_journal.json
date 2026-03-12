@@ -64,6 +64,13 @@
       "when": 1773119800000,
       "tag": "0008_immutable_season_id",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773285148224,
+      "tag": "0009_glossy_wonder_man",
+      "breakpoints": true
     }
   ]
 }

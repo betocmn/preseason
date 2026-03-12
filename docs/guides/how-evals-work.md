@@ -2,75 +2,54 @@
 
 ## Overview
 
-Evals use [Promptfoo](https://promptfoo.dev) as an **ad-hoc development tool** to test prompt quality and LLM response quality before deploying changes. Evals are NOT part of the production cron pipeline.
+Promptfoo is now an optional, external development tool. The repository no
+longer ships prompt markdown files or a checked-in `promptfooconfig.yaml`.
 
-## Two separate pipelines
+If you want to run Promptfoo locally, export the DB-backed prompt corpus first
+and wire that export into your own Promptfoo config.
 
-| | Production Cron | Promptfoo Evals |
+## Production vs. Promptfoo
+
+| | Production benchmark | Local Promptfoo evals |
 |---|---|---|
-| **When** | Daily automated runs | Ad-hoc, from your terminal |
-| **Purpose** | Generate tool recommendations for the site | QA prompts and LLM responses during development |
-| **Data** | Stored in DB (`run_result`, `recommendation`) | Stored locally (`promptfoo-results.json`) |
-| **Triggered by** | Cron / manual API call | `npx promptfoo eval` |
+| Purpose | Generate authoritative benchmark data | QA prompts and model behavior during development |
+| Source prompts | `preseason_prompt` + frozen prompt versions | JSON export from `pnpm run evals:export` |
+| Trigger | `/api/cron/benchmark-run` or admin workflows | Your terminal |
+| Stored data | `benchmark_run`, `benchmark_case_result`, `benchmark_case_decision` | Local files only |
 
-The production cron calls LLMs, parses responses, and extracts tool recommendations. It does NOT evaluate response quality -- if parsing succeeds, the recommendation is valid.
+## Exporting Prompts
 
-Promptfoo evals are for you (the developer) to validate that prompts produce useful, parseable responses before shipping them.
-
-## Running evals
+Export the active prompt corpus:
 
 ```bash
-# Run all evals (requires OPENROUTER_API_KEY in .env.local)
-npx promptfoo eval --config src/server/llm/evals/promptfooconfig.yaml
-
-# View results in browser
-npx promptfoo view
+pnpm run evals:export -- --output .context/promptfoo/prompts.json
 ```
 
-## Config location
+Export all prompts, including inactive ones:
 
-The Promptfoo config lives at `src/server/llm/evals/promptfooconfig.yaml`.
-
-## What gets evaluated
-
-The config sends each of the 15 prompt files to each of the 8 LLM providers (120 combinations) and checks:
-
-### Assertions
-
-1. **Valid JSON** -- Response should be parseable JSON (or contain JSON in a code block)
-2. **Tool recommendations** -- Response should mention recognizable tool names (Supabase, Stripe, Vercel, etc.)
-3. **Category coverage** -- Response should reference at least 2 tool categories (auth, database, hosting, etc.)
-4. **Minimum length** -- Response should be substantial (500+ chars for full score)
-
-## Providers
-
-All 8 LLMs from the `preseason_llm` table, called via OpenRouter:
-
-- Claude 3.5 Sonnet, Claude 3 Opus (Anthropic)
-- GPT-4o, GPT-4o Mini (OpenAI)
-- Gemini 1.5 Pro (Google)
-- Llama 3.1 70B (Meta)
-- Mistral Large (Mistral AI)
-- DeepSeek V2.5 (DeepSeek)
-
-## When to run evals
-
-- After adding or editing a prompt file
-- After adding a new LLM provider
-- After changing the system prompt or response format
-- Before merging prompt-related PRs
-
-## Output
-
-Results are written to `promptfoo-results.json` (gitignored). Use `npx promptfoo view` to open an interactive dashboard showing pass/fail per prompt per LLM.
-
-## File structure
-
+```bash
+pnpm run evals:export -- --all --output .context/promptfoo/prompts-all.json
 ```
-src/server/llm/
-  evals/
-    promptfooconfig.yaml    <-- config with providers, prompts, and assertions
-  prompts/
-    vibe-coder/*.md         <-- prompt files referenced by the config
-  service/                  <-- future OpenRouter client (not evals-related)
-```
+
+The export requires a working `DATABASE_URL` in `.env.local`.
+
+## Export Shape
+
+Each exported prompt includes:
+
+- `rawPrompt` - the plain `content_md` body from `preseason_prompt`
+- `benchmarkPrompt` - the full prompt after `buildBenchmarkPrompt(...)` adds the
+  strict appendix contract
+- `slug`, `level`, `title`, `expectedCategories`, and `isActive`
+
+Use `benchmarkPrompt` when you want Promptfoo to mirror production benchmark
+behavior as closely as possible.
+
+## What the Repo No Longer Provides
+
+- No checked-in prompt markdown directory
+- No checked-in Promptfoo config file
+- No production dependency on Promptfoo
+
+That cleanup is intentional: the benchmark system is DB-backed, and Promptfoo is
+now downstream of the app rather than the source of truth.
