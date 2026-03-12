@@ -236,7 +236,8 @@ async function getWeightConfigsByRunIds(
   return map
 }
 
-type DecisionRow = {
+export type DecisionRow = {
+  categoryId: string
   decisionType: 'tool' | 'none' | 'invalid'
   toolId: string | null
   runId: string
@@ -276,6 +277,7 @@ async function queryDecisions(
 
   const rows = await db
     .select({
+      categoryId: benchmarkCaseDecisions.categoryId,
       decisionType: benchmarkCaseDecisions.decisionType,
       toolId: benchmarkCaseDecisions.toolId,
       runId: benchmarkCaseResults.runId,
@@ -307,6 +309,254 @@ async function queryDecisions(
     .where(and(...conditions))
 
   return rows as DecisionRow[]
+}
+
+// ---------------------------------------------------------------------------
+// Batch-friendly helpers
+// ---------------------------------------------------------------------------
+
+export type ScoringContext = {
+  runIds: string[]
+  weightConfigs: Map<string, WeightConfig>
+}
+
+export async function prepareScoringContext(
+  db: DatabaseClient,
+  seasonId: string,
+  windowType: WindowType,
+  anchorDate: string,
+): Promise<ScoringContext> {
+  const publishedRunIds = await getPublishedRunIds(db, seasonId, anchorDate)
+  const runIds = sliceRunIdsForWindow(publishedRunIds, windowType)
+  const weightConfigs =
+    runIds.length > 0 ? await getWeightConfigsByRunIds(db, runIds) : new Map<string, WeightConfig>()
+  return { runIds, weightConfigs }
+}
+
+export async function fetchDecisions(
+  db: DatabaseClient,
+  runIds: string[],
+  categoryIds: string[],
+  filters?: { promptTier?: PromptTier; modelTier?: ModelTier },
+): Promise<DecisionRow[]> {
+  return queryDecisions(db, runIds, categoryIds, filters ?? {})
+}
+
+/**
+ * Compute a category ranking from pre-fetched decisions.
+ * Skips trend computation (trend is set to 0 for all items).
+ */
+export function rankFromDecisions(
+  decisions: DecisionRow[],
+  weightConfigs: Map<string, WeightConfig>,
+  resultCategoryId: string,
+  windowType: WindowType,
+  anchorDate: string,
+): CategoryRankingResult {
+  const defaultWeight: WeightConfig = { frontierWeight: 1, midWeight: 1, smallWeight: 1 }
+  const allModels = new Set<string>()
+  const allPrompts = new Set<string>()
+  let totalEligible = 0
+  let totalWeightedEligible = 0
+
+  type ToolAgg = {
+    toolId: string
+    toolName: string
+    toolSlug: string
+    toolLogoUrl: string | null
+    rawSupport: number
+    weightedSupport: number
+    models: Set<string>
+    prompts: Set<string>
+  }
+  const toolAggs = new Map<string, ToolAgg>()
+
+  for (const d of decisions) {
+    const wc = weightConfigs.get(d.runId) ?? defaultWeight
+    const weight = getWeightForTier(wc, d.modelTier)
+    allModels.add(d.modelSnapshotId)
+    allPrompts.add(d.promptVersionId)
+    totalEligible++
+    totalWeightedEligible += weight
+
+    if (d.decisionType === 'tool' && d.toolId) {
+      let agg = toolAggs.get(d.toolId)
+      if (!agg) {
+        agg = {
+          toolId: d.toolId,
+          toolName: d.toolName ?? 'Unknown',
+          toolSlug: d.toolSlug ?? 'unknown',
+          toolLogoUrl: d.toolLogoUrl,
+          rawSupport: 0,
+          weightedSupport: 0,
+          models: new Set(),
+          prompts: new Set(),
+        }
+        toolAggs.set(d.toolId, agg)
+      }
+      agg.rawSupport++
+      agg.weightedSupport += weight
+      agg.models.add(d.modelSnapshotId)
+      agg.prompts.add(d.promptVersionId)
+    }
+  }
+
+  const totalDistinctModels = allModels.size
+  const totalDistinctPrompts = allPrompts.size
+  const meetsThreshold =
+    totalEligible >= 100 && totalDistinctModels >= 3 && totalDistinctPrompts >= 3
+
+  const items: ToolRankingEntry[] = Array.from(toolAggs.values()).map((agg) => {
+    const weightedSupportRate =
+      totalWeightedEligible > 0 ? agg.weightedSupport / totalWeightedEligible : 0
+    const rawSupportRate = totalEligible > 0 ? agg.rawSupport / totalEligible : 0
+    const ci = wilsonInterval(agg.rawSupport, totalEligible)
+    return {
+      toolId: agg.toolId,
+      toolName: agg.toolName,
+      toolSlug: agg.toolSlug,
+      toolLogoUrl: agg.toolLogoUrl,
+      weightedSupport: agg.weightedSupport,
+      weightedEligible: totalWeightedEligible,
+      weightedSupportRate,
+      rawSupportCount: agg.rawSupport,
+      rawEligibleCount: totalEligible,
+      rawSupportRate,
+      modelCoverage: totalDistinctModels > 0 ? agg.models.size / totalDistinctModels : 0,
+      promptCoverage: totalDistinctPrompts > 0 ? agg.prompts.size / totalDistinctPrompts : 0,
+      ciLow: ci.low,
+      ciHigh: ci.high,
+      trend: 0,
+    }
+  })
+
+  items.sort(
+    (a, b) =>
+      b.weightedSupportRate - a.weightedSupportRate ||
+      b.ciLow - a.ciLow ||
+      b.rawSupportCount - a.rawSupportCount,
+  )
+
+  return {
+    categoryId: resultCategoryId,
+    windowType,
+    anchorDate,
+    items,
+    totalEligibleDecisions: totalEligible,
+    totalDistinctModels,
+    totalDistinctPrompts,
+    meetsPublicationThreshold: meetsThreshold,
+  }
+}
+
+/**
+ * Compute a head-to-head result from pre-fetched decisions.
+ */
+export function headToHeadFromDecisions(
+  decisions: DecisionRow[],
+  weightConfigs: Map<string, WeightConfig>,
+  toolAId: string,
+  toolBId: string,
+  categoryId: string,
+): HeadToHeadResult {
+  const empty: HeadToHeadResult = {
+    toolAId,
+    toolBId,
+    categoryId,
+    aWins: 0,
+    bWins: 0,
+    abstains: 0,
+    otherToolCount: 0,
+    decisiveCaseCount: 0,
+    aWinRate: 0,
+    bWinRate: 0,
+    ciLow: 0,
+    ciHigh: 0,
+    weightedAWins: 0,
+    weightedBWins: 0,
+    weightedAWinRate: 0,
+    modelBreakdown: [],
+    promptBreakdown: [],
+    meetsPublicationThreshold: false,
+  }
+
+  if (toolAId === toolBId) return empty
+  if (decisions.length === 0) return empty
+
+  const defaultWeight: WeightConfig = { frontierWeight: 1, midWeight: 1, smallWeight: 1 }
+  const h2hFilters = { toolAId, toolBId }
+
+  let aWins = 0
+  let bWins = 0
+  let abstains = 0
+  let otherToolCount = 0
+  let weightedAWins = 0
+  let weightedBWins = 0
+  const modelBreakdownMap = new Map<string, HeadToHeadBreakdownEntry>()
+  const promptBreakdownMap = new Map<string, HeadToHeadBreakdownEntry>()
+
+  for (const d of decisions) {
+    const wc = weightConfigs.get(d.runId) ?? defaultWeight
+    const weight = getWeightForTier(wc, d.modelTier)
+    const outcome = classifyHeadToHeadDecision(d, h2hFilters)
+
+    if (outcome === 'a') {
+      aWins++
+      weightedAWins += weight
+    } else if (outcome === 'b') {
+      bWins++
+      weightedBWins += weight
+    } else if (outcome === 'none') {
+      abstains++
+    } else {
+      otherToolCount++
+    }
+
+    applyBreakdownOutcome(
+      getBreakdownEntry(modelBreakdownMap, {
+        id: d.modelSnapshotId,
+        label: d.modelName,
+        tier: d.modelTier,
+      }),
+      outcome,
+    )
+    applyBreakdownOutcome(
+      getBreakdownEntry(promptBreakdownMap, {
+        id: d.promptVersionId,
+        label: d.promptSlug,
+        tier: d.promptTier,
+      }),
+      outcome,
+    )
+  }
+
+  const decisiveCaseCount = aWins + bWins
+  const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
+  const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
+  const ci = wilsonInterval(aWins, decisiveCaseCount)
+  const weightedDecisive = weightedAWins + weightedBWins
+  const weightedAWinRate = weightedDecisive > 0 ? weightedAWins / weightedDecisive : 0
+
+  return {
+    toolAId,
+    toolBId,
+    categoryId,
+    aWins,
+    bWins,
+    abstains,
+    otherToolCount,
+    decisiveCaseCount,
+    aWinRate,
+    bWinRate,
+    ciLow: ci.low,
+    ciHigh: ci.high,
+    weightedAWins,
+    weightedBWins,
+    weightedAWinRate,
+    modelBreakdown: finalizeBreakdown(modelBreakdownMap),
+    promptBreakdown: finalizeBreakdown(promptBreakdownMap),
+    meetsPublicationThreshold: decisiveCaseCount >= 30,
+  }
 }
 
 // ---------------------------------------------------------------------------
