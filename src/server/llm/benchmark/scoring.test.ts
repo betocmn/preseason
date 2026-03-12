@@ -33,6 +33,21 @@ function first<T>(rows: T[]): T {
   return row
 }
 
+function at<T>(rows: T[], index: number): T {
+  const row = rows[index]
+  if (row === undefined) {
+    throw new Error(`Expected an item at index ${index}`)
+  }
+  return row
+}
+
+function requireValue<T>(value: T | undefined, message: string): T {
+  if (value === undefined) {
+    throw new Error(message)
+  }
+  return value
+}
+
 // ---------------------------------------------------------------------------
 // Unit tests (no DB)
 // ---------------------------------------------------------------------------
@@ -202,7 +217,7 @@ async function seedScoringFixture(db: TestDb) {
   const tiers: Array<'frontier' | 'mid' | 'small'> = ['frontier', 'mid', 'small']
   const modelSnapshots = []
   for (let i = 0; i < llmRows.length; i++) {
-    const llm = llmRows[i]!
+    const llm = at(llmRows, i)
     const ms = first(
       await db
         .insert(benchmarkModelSnapshots)
@@ -210,7 +225,7 @@ async function seedScoringFixture(db: TestDb) {
           llmId: llm.id,
           name: llm.name,
           provider: llm.provider,
-          tier: tiers[i]!,
+          tier: at(tiers, i),
           requestedModelId: llm.modelId,
           temperature: 0.2,
           snapshotKey: `${llm.modelId}:0.2:default:default:default`,
@@ -247,7 +262,7 @@ async function seedScoringFixture(db: TestDb) {
           slug: p.slug,
           level: 'vibe-coder',
           version: 1,
-          tier: promptTiers[i]!,
+          tier: at(promptTiers, i),
           contentMd: `# Prompt ${i + 1}`,
           contentHash: `hash-${i}-${Date.now()}-${Math.random()}`,
           promptContractVersion: '1.0',
@@ -285,9 +300,9 @@ async function seedScoringFixture(db: TestDb) {
     group,
     authCat,
     dbCat,
-    clerk: clerk!,
-    supabase: supabase!,
-    drizzleTool: drizzleTool!,
+    clerk: requireValue(clerk, 'Expected seeded Clerk tool'),
+    supabase: requireValue(supabase, 'Expected seeded Supabase tool'),
+    drizzleTool: requireValue(drizzleTool, 'Expected seeded Drizzle tool'),
     protocol,
     season,
     weightConfig,
@@ -351,7 +366,7 @@ async function seedPublishedRun(
 
   // Insert decisions
   for (const d of decisions) {
-    const cr = caseResults[d.caseIndex]!
+    const cr = at(caseResults, d.caseIndex)
     await db.insert(benchmarkCaseDecisions).values({
       caseResultId: cr.id,
       categoryId: d.categoryId,
@@ -420,10 +435,10 @@ describe('computeCategoryRanking', () => {
     })
 
     expect(result.items).toHaveLength(2)
-    expect(result.items[0]!.toolSlug).toBe('clerk')
-    expect(result.items[0]!.rawSupportCount).toBe(6)
-    expect(result.items[1]!.toolSlug).toBe('supabase')
-    expect(result.items[1]!.rawSupportCount).toBe(3)
+    expect(at(result.items, 0).toolSlug).toBe('clerk')
+    expect(at(result.items, 0).rawSupportCount).toBe(6)
+    expect(at(result.items, 1).toolSlug).toBe('supabase')
+    expect(at(result.items, 1).rawSupportCount).toBe(3)
     expect(result.totalEligibleDecisions).toBe(9)
   })
 
@@ -449,7 +464,7 @@ describe('computeCategoryRanking', () => {
     })
 
     expect(result.items).toHaveLength(1)
-    const item = result.items[0]!
+    const item = at(result.items, 0)
     expect(item.weightedSupportRate).toBeCloseTo(item.rawSupportRate, 10)
   })
 
@@ -491,7 +506,7 @@ describe('computeCategoryRanking', () => {
     // Cases are ordered: prompt0-model0, prompt0-model1, prompt0-model2, ...
     // Model snapshots: [0]=frontier, [1]=mid, [2]=small
     for (let i = 0; i < fixture.caseRows.length; i++) {
-      const c = fixture.caseRows[i]!
+      const c = at(fixture.caseRows, i)
       const cr = first(
         await db
           .insert(benchmarkCaseResults)
@@ -533,7 +548,10 @@ describe('computeCategoryRanking', () => {
     // Clerk weighted rate = 6.0 / 10.5 ≈ 0.571
     // Clerk raw rate = 3/9 ≈ 0.333
     expect(result.items).toHaveLength(2)
-    const clerkItem = result.items.find((i) => i.toolSlug === 'clerk')!
+    const clerkItem = requireValue(
+      result.items.find((item) => item.toolSlug === 'clerk'),
+      'Expected Clerk item in ranking results',
+    )
     expect(clerkItem.weightedSupportRate).not.toBeCloseTo(clerkItem.rawSupportRate, 1)
     expect(clerkItem.weightedSupportRate).toBeCloseTo(6.0 / 10.5, 2)
     expect(clerkItem.rawSupportRate).toBeCloseTo(3 / 9, 2)
@@ -617,9 +635,9 @@ describe('computeCategoryRanking', () => {
 
     expect(result.totalEligibleDecisions).toBe(9)
     expect(result.items).toHaveLength(1)
-    expect(result.items[0]!.rawSupportCount).toBe(6)
-    expect(result.items[0]!.rawEligibleCount).toBe(9)
-    expect(result.items[0]!.rawSupportRate).toBeCloseTo(6 / 9, 5)
+    expect(at(result.items, 0).rawSupportCount).toBe(6)
+    expect(at(result.items, 0).rawEligibleCount).toBe(9)
+    expect(at(result.items, 0).rawSupportRate).toBeCloseTo(6 / 9, 5)
   })
 
   it('computes Wilson CI', async () => {
@@ -643,7 +661,7 @@ describe('computeCategoryRanking', () => {
       anchorDate: '2026-03-10',
     })
 
-    const item = result.items[0]!
+    const item = at(result.items, 0)
     expect(item.ciLow).toBeGreaterThan(0)
     expect(item.ciLow).toBeLessThan(item.rawSupportRate)
     expect(item.ciHigh).toBeGreaterThan(item.rawSupportRate)
@@ -672,7 +690,10 @@ describe('computeCategoryRanking', () => {
       anchorDate: '2026-03-10',
     })
 
-    const clerkItem = result.items.find((i) => i.toolSlug === 'clerk')!
+    const clerkItem = requireValue(
+      result.items.find((item) => item.toolSlug === 'clerk'),
+      'Expected Clerk item in ranking results',
+    )
     // Clerk: picked by 1 model out of 3
     expect(clerkItem.modelCoverage).toBeCloseTo(1 / 3, 5)
     // Clerk: picked across all 3 prompts (one per prompt via frontier model)
@@ -722,7 +743,10 @@ describe('computeCategoryRanking', () => {
     // Current window: latest 7 published runs, with Clerk only in 3/9 decisions per run.
     // Previous window: preceding 7 published runs, with Clerk in all 9/9 decisions per run.
     // Clerk trend = 3/9 - 9/9 = -0.667
-    const clerkItem = result.items.find((i) => i.toolSlug === 'clerk')!
+    const clerkItem = requireValue(
+      result.items.find((item) => item.toolSlug === 'clerk'),
+      'Expected Clerk item in ranking results',
+    )
     expect(clerkItem.trend).toBeLessThan(0)
   })
 

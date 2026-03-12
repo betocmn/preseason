@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { EmptyState } from '~/components/public/empty-state'
 import { PromptFilters } from '~/components/public/prompt-filters'
-import { ToolBadge } from '~/components/public/tool-badge'
+
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { promptLevelEnum } from '~/server/db/schema'
@@ -92,19 +92,6 @@ export default async function PromptsPage({ searchParams }: Props) {
                         <Badge key={cat} variant="secondary" className="text-xs">
                           {cat}
                         </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {prompt.topTools.length > 0 && (
-                    <div className="relative z-20 mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
-                      {prompt.topTools.slice(0, 4).map(({ tool }) => (
-                        <ToolBadge
-                          key={tool.id}
-                          name={tool.name}
-                          slug={tool.slug}
-                          logoUrl={tool.logoUrl}
-                          size="sm"
-                        />
                       ))}
                     </div>
                   )}

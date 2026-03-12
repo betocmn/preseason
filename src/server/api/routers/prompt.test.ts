@@ -41,7 +41,7 @@ describe('promptRouter', () => {
     expect(prompts[0]?.title).toBe('Active Prompt')
   })
 
-  it('returns prompt content in getBySlug when markdown file exists', async () => {
+  it('returns prompt by slug with null content when no contentMd stored', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
 
@@ -59,7 +59,7 @@ describe('promptRouter', () => {
       level: 'vibe-coder',
     })
     expect(prompt.slug).toBe('real-estate-website')
-    expect(prompt.content).toContain('Create')
+    expect(prompt.content).toBeNull()
   })
 
   it('lists prompt variants by slug across levels', async () => {
