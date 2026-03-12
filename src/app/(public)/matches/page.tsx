@@ -1,63 +1,50 @@
 import type { Metadata } from 'next'
-import { Suspense } from 'react'
-import { MatchFilters } from '~/components/public/match-filters'
+import Link from 'next/link'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
-import { api } from '~/trpc/server'
+import { Badge } from '~/components/ui/badge'
 
 export const metadata: Metadata = {
-  title: 'Live Matches',
-  description: 'Head-to-head tool battles based on LLM recommendations.',
+  title: 'Head-to-Head',
+  description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
   openGraph: {
-    title: 'Live Matches',
-    description: 'Head-to-head tool battles based on LLM recommendations.',
+    title: 'Head-to-Head',
+    description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Live Matches',
-    description: 'Head-to-head tool battles based on LLM recommendations.',
+    title: 'Head-to-Head',
+    description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
   },
 }
 
 type Props = {
-  searchParams: Promise<{ category?: string; sub?: string; tool?: string }>
+  searchParams: Promise<{ category?: string }>
 }
 
 export default async function MatchesPage({ searchParams }: Props) {
-  const { category, sub, tool } = await searchParams
-  const caller = await api()
-
-  const [categoryGroups, toolNames] = await Promise.all([
-    caller.category.listGroups(),
-    caller.tool.listNames(),
-  ])
-
-  const groups = categoryGroups.map((g) => ({
-    slug: g.slug,
-    name: g.name,
-    subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
-  }))
+  const { category } = await searchParams
 
   return (
     <div className="container py-8">
-      <h1 className="mb-6 text-xl font-bold tracking-tight">Live Matches</h1>
-
-      <Suspense fallback={null}>
-        <MatchFilters
-          groups={groups}
-          tools={toolNames}
-          currentGroup={category}
-          currentSub={sub}
-          currentTool={tool}
-        />
-      </Suspense>
-
-      <div className="mt-6">
-        <MatchesPageContent
-          initialGroupSlug={sub ? undefined : category}
-          initialCategorySlug={sub}
-          initialToolSlug={tool}
-        />
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-xl font-bold tracking-tight">Head-to-Head</h1>
+        <Badge variant="secondary" className="text-xs">
+          Benchmark
+        </Badge>
+        <Link
+          href="/methodology"
+          className="ml-auto text-sm text-muted-foreground hover:text-foreground"
+        >
+          Methodology
+        </Link>
       </div>
+
+      <p className="mb-6 text-sm text-muted-foreground">
+        Auto-generated matchups between the top tools in each category, based on benchmark case
+        decisions.
+      </p>
+
+      <MatchesPageContent initialCategorySlug={category} />
     </div>
   )
 }
