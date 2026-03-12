@@ -38,7 +38,7 @@ function weightedRandomPick<T>(items: T[], weights: number[]): T {
   const total = weights.reduce((a, b) => a + b, 0)
   let r = Math.random() * total
   for (let i = 0; i < items.length; i++) {
-    r -= weights[i]!
+    r -= weights[i] ?? 0
     if (r <= 0) return items[i] as T
   }
   return items[items.length - 1] as T
@@ -51,7 +51,7 @@ function daysAgo(days: number): Date {
 }
 
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]!
+  return date.toISOString().split('T')[0] ?? ''
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -170,6 +170,7 @@ async function seedBenchmarkData() {
       promptContractVersion: '1.0',
     })
     .returning()
+  if (!protocol) throw new Error('Failed to insert protocol')
   console.log('  Protocol ready')
 
   // 2. Weight config
@@ -186,6 +187,7 @@ async function seedBenchmarkData() {
       isActive: true,
     })
     .returning()
+  if (!weightConfig) throw new Error('Failed to insert weight config')
   console.log('  Weight config ready')
 
   // 3. Season
@@ -193,13 +195,14 @@ async function seedBenchmarkData() {
   const [season] = await db
     .insert(schema.benchmarkSeasons)
     .values({
-      protocolId: protocol!.id,
+      protocolId: protocol.id,
       slug: 'season-1',
       name: 'Season 1',
       status: 'active',
       publishedAt: daysAgo(30),
     })
     .returning()
+  if (!season) throw new Error('Failed to insert season')
   console.log('  Season ready')
 
   // 4. Prompt versions
@@ -234,9 +237,10 @@ async function seedBenchmarkData() {
         isActive: true,
       })
       .returning()
+    if (!pv) throw new Error('Failed to insert prompt version')
 
     promptVersions.push({
-      id: pv!.id,
+      id: pv.id,
       promptId: prompt.id,
       slug: prompt.slug,
       categoryIds,
@@ -253,10 +257,10 @@ async function seedBenchmarkData() {
   }> = []
 
   for (const pv of promptVersions) {
-    for (let i = 0; i < pv.categoryIds.length; i++) {
+    for (const [i, catId] of pv.categoryIds.entries()) {
       pvcRows.push({
         promptVersionId: pv.id,
-        categoryId: pv.categoryIds[i]!,
+        categoryId: catId,
         displayOrder: i,
       })
     }
@@ -290,8 +294,9 @@ async function seedBenchmarkData() {
         isDeterministic: false,
       })
       .returning()
+    if (!ms) throw new Error('Failed to insert model snapshot')
 
-    modelSnapshots.push({ id: ms!.id, llmId: llm.id, tier })
+    modelSnapshots.push({ id: ms.id, llmId: llm.id, tier })
   }
   console.log(`  ${modelSnapshots.length} model snapshots ready`)
 
@@ -299,10 +304,10 @@ async function seedBenchmarkData() {
   console.log('Creating season junctions...')
   await db
     .insert(schema.benchmarkSeasonPrompts)
-    .values(promptVersions.map((pv) => ({ seasonId: season!.id, promptVersionId: pv.id })))
+    .values(promptVersions.map((pv) => ({ seasonId: season.id, promptVersionId: pv.id })))
   await db
     .insert(schema.benchmarkSeasonModels)
-    .values(modelSnapshots.map((ms) => ({ seasonId: season!.id, modelSnapshotId: ms.id })))
+    .values(modelSnapshots.map((ms) => ({ seasonId: season.id, modelSnapshotId: ms.id })))
   console.log(
     `  ${promptVersions.length} season-prompt, ${modelSnapshots.length} season-model junctions ready`,
   )
@@ -319,7 +324,7 @@ async function seedBenchmarkData() {
   for (const pv of promptVersions) {
     for (const ms of modelSnapshots) {
       caseRows.push({
-        seasonId: season!.id,
+        seasonId: season.id,
         promptVersionId: pv.id,
         modelSnapshotId: ms.id,
         isActive: true,
@@ -372,11 +377,11 @@ async function seedBenchmarkData() {
     completedAt.setUTCHours(2, 30, 0, 0)
 
     runRows.push({
-      seasonId: season!.id,
+      seasonId: season.id,
       scheduledFor: formatDate(date),
       trigger: 'cron',
       status: 'published',
-      weightConfigId: weightConfig!.id,
+      weightConfigId: weightConfig.id,
       startedAt,
       completedAt,
       expectedCaseCount: insertedCases.length,
@@ -413,7 +418,7 @@ async function seedBenchmarkData() {
       const promptTokens = randomInt(800, 1500)
       const completionTokens = randomInt(300, 800)
       resultBatch.push({
-        seasonId: season!.id,
+        seasonId: season.id,
         runId: run.id,
         caseId: caseRow.id,
         status: 'completed',

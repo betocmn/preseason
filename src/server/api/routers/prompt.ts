@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { requireRole } from '~/server/api/helpers/auth'
+import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
   benchmarkCaseDecisions,
