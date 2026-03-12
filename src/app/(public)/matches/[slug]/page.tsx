@@ -43,6 +43,7 @@ function parseMatchSlug(slug: string) {
   const toolASlug = rest.slice(0, vsIndex)
   const toolBSlug = rest.slice(vsIndex + 4)
   if (!categorySlug || !toolASlug || !toolBSlug) return null
+  if (toolASlug === toolBSlug) return null
 
   return { categorySlug, toolASlug, toolBSlug }
 }
