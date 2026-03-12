@@ -55,7 +55,7 @@ type Tool = {
   website: string | null
   logoUrl: string | null
   isVerified: boolean
-  aliases: string[] | null
+  toolAliases: { alias: string }[]
   toolCategories: { categoryId: string }[]
 }
 
@@ -80,7 +80,7 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
       description: tool?.description ?? '',
       website: tool?.website ?? '',
       logoUrl: tool?.logoUrl ?? '',
-      aliases: tool?.aliases?.join(', ') ?? '',
+      aliases: tool?.toolAliases.map((a) => a.alias).join(', ') ?? '',
       isVerified: tool?.isVerified ?? false,
       subcategoryIds: tool?.toolCategories.map((tc) => tc.categoryId) ?? [],
     },

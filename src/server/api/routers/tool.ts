@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { subcategories, toolCategories, tools } from '~/server/db/schema'
+import { subcategories, toolAliases, toolCategories, tools } from '~/server/db/schema'
 
 const logoPathSchema = z
   .string()
@@ -12,6 +12,10 @@ const logoPathSchema = z
   .refine((value) => value.startsWith('/'), {
     message: 'Logo path must start with "/"',
   })
+
+function normalizeAlias(alias: string): string {
+  return alias.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+}
 
 const createToolInput = z.object({
   name: z.string().min(1).max(255),
@@ -86,6 +90,9 @@ async function getToolWithCategories(db: Database, toolId: string) {
             },
           },
         },
+      },
+      toolAliases: {
+        columns: { alias: true },
       },
     },
   })
@@ -225,11 +232,19 @@ export const toolRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const pattern = `%${input.query}%`
+
+      const aliasToolIds = await ctx.db
+        .select({ toolId: toolAliases.toolId })
+        .from(toolAliases)
+        .where(ilike(toolAliases.alias, pattern))
+
+      const aliasIds = aliasToolIds.map((r) => r.toolId)
+
       return ctx.db.query.tools.findMany({
         where: or(
           ilike(tools.name, pattern),
           ilike(tools.slug, pattern),
-          sql`${tools.aliases}::text ILIKE ${pattern}`,
+          aliasIds.length > 0 ? inArray(tools.id, aliasIds) : undefined,
         ),
         orderBy: [asc(tools.name)],
         limit: input.limit,
@@ -305,7 +320,6 @@ export const toolRouter = createTRPCRouter({
         logoUrl: input.logoUrl,
         isVerified: input.isVerified ?? false,
         providerUserId: input.providerUserId ?? null,
-        aliases: input.aliases,
       })
       .returning()
 
@@ -323,6 +337,17 @@ export const toolRouter = createTRPCRouter({
           toolId: tool.id,
           categoryId,
           isPrimary: index === 0,
+        })),
+      )
+    }
+
+    if (input.aliases && input.aliases.length > 0) {
+      await ctx.db.insert(toolAliases).values(
+        input.aliases.map((alias) => ({
+          toolId: tool.id,
+          alias,
+          normalizedAlias: normalizeAlias(alias),
+          source: 'admin',
         })),
       )
     }
@@ -348,9 +373,23 @@ export const toolRouter = createTRPCRouter({
       await validateCategoryIds(ctx.db, categoryIds)
     }
 
-    const { id, categoryIds: _categoryIds, ...rest } = input
+    const { id, categoryIds: _categoryIds, aliases, ...rest } = input
     if (Object.keys(rest).length > 0) {
       await ctx.db.update(tools).set(rest).where(eq(tools.id, id))
+    }
+
+    if (aliases !== undefined) {
+      await ctx.db.delete(toolAliases).where(eq(toolAliases.toolId, id))
+      if (aliases && aliases.length > 0) {
+        await ctx.db.insert(toolAliases).values(
+          aliases.map((alias) => ({
+            toolId: id,
+            alias,
+            normalizedAlias: normalizeAlias(alias),
+            source: 'admin',
+          })),
+        )
+      }
     }
 
     if (categoryIds) {
