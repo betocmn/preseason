@@ -27,10 +27,7 @@ export const createTable = pgTableCreator((name) => `preseason_${name}`)
 // ============================================================================
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'provider', 'critic', 'user'])
-export const commentTargetEnum = pgEnum('comment_target', [
-  'tool',
-  'prompt',
-])
+export const commentTargetEnum = pgEnum('comment_target', ['tool', 'prompt'])
 export const promptLevelEnum = pgEnum('prompt_level', [
   'software-dev-beginner',
   'software-dev-experienced',
