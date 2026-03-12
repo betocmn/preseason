@@ -1,1 +1,0 @@
-Create a documentation site with search, versioning, and dark mode. Include MDX content, API reference generation, code syntax highlighting, navigation sidebar, version selector, and full-text search.

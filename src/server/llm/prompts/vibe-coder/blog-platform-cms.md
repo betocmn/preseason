@@ -1,1 +1,0 @@
-Create a blog platform with a CMS, comments, and email newsletter. Include rich text editing, category/tag management, SEO optimization, social sharing, and subscriber management with automated email digests.
