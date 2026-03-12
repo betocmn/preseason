@@ -385,37 +385,40 @@ export const toolRouter = createTRPCRouter({
     }
 
     const { id, categoryIds: _categoryIds, aliases, ...rest } = input
-    if (Object.keys(rest).length > 0) {
-      await ctx.db.update(tools).set(rest).where(eq(tools.id, id))
-    }
 
-    if (aliases !== undefined) {
-      await ctx.db.delete(toolAliases).where(eq(toolAliases.toolId, id))
-      if (aliases && aliases.length > 0) {
-        const uniqueAliases = deduplicateAliases(aliases)
-        await ctx.db.insert(toolAliases).values(
-          uniqueAliases.map((alias) => ({
-            toolId: id,
-            alias,
-            normalizedAlias: normalizeAlias(alias),
-            source: 'admin',
-          })),
-        )
+    await ctx.db.transaction(async (tx) => {
+      if (Object.keys(rest).length > 0) {
+        await tx.update(tools).set(rest).where(eq(tools.id, id))
       }
-    }
 
-    if (categoryIds) {
-      await ctx.db.delete(toolCategories).where(eq(toolCategories.toolId, id))
-      if (categoryIds.length > 0) {
-        await ctx.db.insert(toolCategories).values(
-          categoryIds.map((categoryId, index) => ({
-            toolId: id,
-            categoryId,
-            isPrimary: index === 0,
-          })),
-        )
+      if (aliases !== undefined) {
+        await tx.delete(toolAliases).where(eq(toolAliases.toolId, id))
+        if (aliases && aliases.length > 0) {
+          const uniqueAliases = deduplicateAliases(aliases)
+          await tx.insert(toolAliases).values(
+            uniqueAliases.map((alias) => ({
+              toolId: id,
+              alias,
+              normalizedAlias: normalizeAlias(alias),
+              source: 'admin',
+            })),
+          )
+        }
       }
-    }
+
+      if (categoryIds) {
+        await tx.delete(toolCategories).where(eq(toolCategories.toolId, id))
+        if (categoryIds.length > 0) {
+          await tx.insert(toolCategories).values(
+            categoryIds.map((categoryId, index) => ({
+              toolId: id,
+              categoryId,
+              isPrimary: index === 0,
+            })),
+          )
+        }
+      }
+    })
 
     const updated = await getToolWithCategories(ctx.db, id)
     if (!updated) {
