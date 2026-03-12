@@ -14,7 +14,10 @@ const logoPathSchema = z
   })
 
 function normalizeAlias(alias: string): string {
-  return alias.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  return alias
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
 }
 
 const createToolInput = z.object({

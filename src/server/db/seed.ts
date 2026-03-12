@@ -1326,7 +1326,9 @@ async function seedTools() {
   await db.insert(schema.tools).values(toolValues).onConflictDoNothing()
 
   // Seed tool_aliases from TOOLS aliases arrays
-  const allTools = await db.select({ id: schema.tools.id, slug: schema.tools.slug }).from(schema.tools)
+  const allTools = await db
+    .select({ id: schema.tools.id, slug: schema.tools.slug })
+    .from(schema.tools)
   const toolSlugToId = new Map(allTools.map((t) => [t.slug, t.id]))
 
   const aliasValues = TOOLS.flatMap((t) => {
@@ -1335,7 +1337,10 @@ async function seedTools() {
     return t.aliases.map((alias) => ({
       toolId,
       alias,
-      normalizedAlias: alias.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      normalizedAlias: alias
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-'),
       source: 'seed',
     }))
   })
