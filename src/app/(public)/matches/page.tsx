@@ -3,16 +3,16 @@ import Link from 'next/link'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
 
 export const metadata: Metadata = {
-  title: 'Head-to-Head',
-  description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
+  title: 'Matches',
+  description: 'Benchmark match-ups between top tools based on LLM recommendations.',
   openGraph: {
-    title: 'Head-to-Head',
-    description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
+    title: 'Matches',
+    description: 'Benchmark match-ups between top tools based on LLM recommendations.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Head-to-Head',
-    description: 'Benchmark head-to-head tool comparisons based on LLM recommendations.',
+    title: 'Matches',
+    description: 'Benchmark match-ups between top tools based on LLM recommendations.',
   },
 }
 
