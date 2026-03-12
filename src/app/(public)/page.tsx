@@ -45,12 +45,7 @@ export default async function HomePage() {
         {/* Featured Matchups */}
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold">Head-to-Head</h2>
-              <Badge variant="secondary" className="text-xs">
-                Benchmark
-              </Badge>
-            </div>
+            <h2 className="text-base font-semibold">Head-to-Head</h2>
             <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
               View all
             </Link>

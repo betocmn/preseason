@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
-import { Badge } from '~/components/ui/badge'
 
 export const metadata: Metadata = {
   title: 'Head-to-Head',
@@ -27,10 +26,7 @@ export default async function MatchesPage({ searchParams }: Props) {
   return (
     <div className="container py-8">
       <div className="mb-6 flex items-center gap-3">
-        <h1 className="text-xl font-bold tracking-tight">Head-to-Head</h1>
-        <Badge variant="secondary" className="text-xs">
-          Benchmark
-        </Badge>
+        <h1 className="text-xl font-bold tracking-tight">Matches</h1>
         <Link
           href="/methodology"
           className="ml-auto text-sm text-muted-foreground hover:text-foreground"

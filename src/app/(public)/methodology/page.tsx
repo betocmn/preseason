@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { Badge } from '~/components/ui/badge'
 
 export const metadata: Metadata = {
   title: 'Methodology',
@@ -34,11 +33,8 @@ function P({ children }: { children: React.ReactNode }) {
 export default function MethodologyPage() {
   return (
     <div className="container max-w-3xl py-12">
-      <div className="mb-8 flex items-center gap-3">
+      <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Methodology</h1>
-        <Badge variant="secondary" className="text-xs">
-          Benchmark
-        </Badge>
       </div>
 
       <div className="space-y-10">
