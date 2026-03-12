@@ -13,6 +13,7 @@
     "db:seed-test": "dotenv -e .env.local -- tsx src/server/db/seed-test-data.ts",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "dev": "next dev --turbo",
+    "evals:export": "dotenv -e .env.local -- tsx src/server/llm/evals/export-promptfoo.ts",
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
