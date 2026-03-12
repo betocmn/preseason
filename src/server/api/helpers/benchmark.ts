@@ -1,7 +1,7 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import type { db } from '~/server/db'
-import { benchmarkProtocols, benchmarkSeasons } from '~/server/db/schema'
+import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 
 type DatabaseClient = typeof db
 
@@ -19,6 +19,32 @@ export async function findLatestActiveBenchmarkSeasonId(database: DatabaseClient
     .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(and(eq(benchmarkSeasons.status, 'active'), eq(benchmarkProtocols.mode, 'benchmark')))
     .orderBy(desc(benchmarkSeasons.createdAt), desc(benchmarkSeasons.id))
+    .limit(1)
+
+  return rows[0]?.id ?? null
+}
+
+export async function findLatestPublishedBenchmarkSeasonId(
+  database: DatabaseClient,
+  anchorDate?: string,
+) {
+  const rows = await database
+    .select({ id: benchmarkSeasons.id })
+    .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
+    .where(
+      and(
+        eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
+        anchorDate ? lte(benchmarkRuns.scheduledFor, anchorDate) : undefined,
+      ),
+    )
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
     .limit(1)
 
   return rows[0]?.id ?? null

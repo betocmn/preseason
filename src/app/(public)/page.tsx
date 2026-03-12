@@ -1,16 +1,19 @@
 import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
-import { MatchCard } from '~/components/public/match-card'
+import { PercentageBar } from '~/components/public/percentage-bar'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
 export default async function HomePage() {
   const caller = await api()
 
-  const [promptsWithTools, activeMatches, recentComments] = await Promise.all([
+  const [promptsWithTools, featuredMatchups, recentComments] = await Promise.all([
     caller.prompt.listWithTopTools({ limit: 5 }),
-    caller.match.listActive(),
+    caller.benchmarkMatch.listFeatured({ limit: 6 }),
     caller.comment.listRecent({ limit: 5 }),
   ])
 
@@ -39,36 +42,74 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* Active Matches */}
+        {/* Featured Matchups */}
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Live Matches</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">Head-to-Head</h2>
+              <Badge variant="secondary" className="text-xs">
+                Benchmark
+              </Badge>
+            </div>
             <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
               View all
             </Link>
           </div>
-          {activeMatches.length > 0 ? (
+          {featuredMatchups.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {activeMatches.slice(0, 12).map((match) => (
-                <MatchCard
-                  key={match.id}
-                  slug={match.slug}
-                  status={match.status}
-                  toolA={match.toolA}
-                  toolB={match.toolB}
-                  category={match.category}
-                  toolAScore={match.toolAScore}
-                  toolBScore={match.toolBScore}
-                  winnerToolId={match.winnerToolId}
-                  periodStart={match.periodStart}
-                  periodEnd={match.periodEnd}
-                />
-              ))}
+              {featuredMatchups.map((m) => {
+                const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
+                return (
+                  <Card key={slug} className="transition-colors hover:bg-accent/50">
+                    <Link href={`/matches/${slug}`}>
+                      <CardContent className="p-4">
+                        <div className="mb-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {m.category.name}
+                          </Badge>
+                        </div>
+                        <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+                          <Avatar className="h-5 w-5 bg-muted">
+                            {m.toolA.logoUrl && (
+                              <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
+                            )}
+                            <AvatarFallback className="text-[10px]">
+                              {m.toolA.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {m.toolA.name}
+                          <span className="text-muted-foreground">vs</span>
+                          <Avatar className="h-5 w-5 bg-muted">
+                            {m.toolB.logoUrl && (
+                              <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
+                            )}
+                            <AvatarFallback className="text-[10px]">
+                              {m.toolB.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {m.toolB.name}
+                        </div>
+                        {m.result.decisiveCaseCount > 0 ? (
+                          <PercentageBar
+                            valueA={m.result.aWins}
+                            valueB={m.result.bWins}
+                            labelA={m.toolA.name}
+                            labelB={m.toolB.name}
+                            size="sm"
+                          />
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No decisive cases yet</p>
+                        )}
+                      </CardContent>
+                    </Link>
+                  </Card>
+                )
+              })}
             </div>
           ) : (
             <EmptyState
-              title="No live matches"
-              description="Matches pit tools head-to-head based on LLM recommendations. Check back after runs have been completed."
+              title="No benchmark matchups yet"
+              description="Head-to-head matchups are generated from benchmark data. Check back after benchmark runs complete."
             />
           )}
         </section>

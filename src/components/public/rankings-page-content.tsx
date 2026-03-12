@@ -7,62 +7,66 @@ import { api } from '~/trpc/react'
 type RankingsPageContentProps = {
   currentGroup?: string
   currentSub?: string
+  promptTier?: 'basic' | 'intermediate' | 'advanced'
+  modelTier?: 'frontier' | 'mid' | 'small'
 }
 
-export function RankingsPageContent({ currentGroup, currentSub }: RankingsPageContentProps) {
-  const overallQuery = api.ranking.overall.useQuery(
-    { days: 30, limit: 50 },
-    { enabled: !currentGroup && !currentSub },
-  )
-
-  const groupQuery = api.ranking.byCategorySlug.useQuery(
-    { categorySlug: currentGroup ?? '', days: 30 },
-    { enabled: !!currentGroup && !currentSub },
-  )
-
-  const subQuery = api.ranking.bySubcategorySlug.useQuery(
-    { subcategorySlug: currentSub ?? '', days: 30 },
-    { enabled: !!currentSub },
-  )
-
-  const isOverall = !currentGroup && !currentSub
+export function RankingsPageContent({
+  currentGroup,
+  currentSub,
+  promptTier,
+  modelTier,
+}: RankingsPageContentProps) {
+  const effectiveSub = currentSub
   const isGroup = !!currentGroup && !currentSub
 
-  const isLoading = isOverall
-    ? overallQuery.isLoading
-    : isGroup
-      ? groupQuery.isLoading
-      : subQuery.isLoading
+  const groupQuery = api.benchmarkRanking.byCategoryGroup.useQuery(
+    {
+      groupSlug: currentGroup ?? '',
+      promptTier,
+      modelTier,
+    },
+    { enabled: isGroup },
+  )
 
-  const items = isOverall
-    ? (overallQuery.data?.items ?? [])
-    : isGroup
-      ? (groupQuery.data?.items ?? [])
-      : (subQuery.data?.items ?? [])
+  const subQuery = api.benchmarkRanking.byCategory.useQuery(
+    {
+      categorySlug: effectiveSub ?? '',
+      promptTier,
+      modelTier,
+    },
+    { enabled: !!effectiveSub },
+  )
 
-  const heading = isOverall
-    ? 'Overall Rankings (30 days)'
-    : isGroup
-      ? `${groupQuery.data?.categoryGroup?.name ?? 'Category'} (30 days)`
-      : `${subQuery.data?.category?.name ?? 'Subcategory'} (30 days)`
+  const isLoading = isGroup ? groupQuery.isLoading : subQuery.isLoading
 
-  const emptyTitle = isOverall
-    ? 'No ranking data yet'
-    : isGroup
-      ? `No tools ranked in ${groupQuery.data?.categoryGroup?.name ?? 'this category'} yet`
-      : `No tools ranked in ${subQuery.data?.category?.name ?? 'this subcategory'} yet`
+  const ranking = isGroup ? groupQuery.data?.ranking : subQuery.data?.ranking
+
+  const heading = isGroup
+    ? (groupQuery.data?.categoryGroup?.name ?? 'Category')
+    : (subQuery.data?.category?.name ?? 'Category')
+
+  if (!currentGroup && !currentSub) {
+    return null
+  }
+  if (isLoading) return null
+
+  if (!ranking || ranking.items.length === 0) {
+    return (
+      <EmptyState
+        title={`No benchmark data for ${heading} yet`}
+        description="Rankings are computed from published benchmark runs. Check back after runs have completed."
+      />
+    )
+  }
 
   return (
     <div>
       <h2 className="mb-4 text-lg font-semibold">{heading}</h2>
-      {items.length > 0 ? (
-        <RankingTable items={items} showCategoryCoverage={isOverall} />
-      ) : isLoading ? null : (
-        <EmptyState
-          title={emptyTitle}
-          description="Rankings are computed from recommendation runs. Check back after runs have completed."
-        />
-      )}
+      <RankingTable
+        items={ranking.items}
+        meetsPublicationThreshold={ranking.meetsPublicationThreshold}
+      />
     </div>
   )
 }

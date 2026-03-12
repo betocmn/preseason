@@ -912,6 +912,71 @@ describe('computeHeadToHead', () => {
     expect(result.bWinRate).toBeCloseTo(3 / 8, 5)
   })
 
+  it('returns per-model and per-prompt breakdowns', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    await seedPublishedRun(db, fixture, '2026-03-10', [
+      {
+        caseIndex: 0,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+      {
+        caseIndex: 1,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.supabase.id,
+        rawToolName: 'Supabase',
+      },
+      {
+        caseIndex: 3,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+      {
+        caseIndex: 4,
+        categoryId: fixture.authCat.id,
+        decisionType: 'none',
+      },
+    ])
+
+    const result = await computeHeadToHead(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      toolAId: fixture.clerk.id,
+      toolBId: fixture.supabase.id,
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    const frontierModel = result.modelBreakdown.find(
+      (row) => row.label === fixture.modelSnapshots[0]?.name,
+    )
+    const midModel = result.modelBreakdown.find(
+      (row) => row.label === fixture.modelSnapshots[1]?.name,
+    )
+    const promptOne = result.promptBreakdown.find(
+      (row) => row.label === fixture.promptVersions[0]?.slug,
+    )
+    const promptTwo = result.promptBreakdown.find(
+      (row) => row.label === fixture.promptVersions[1]?.slug,
+    )
+
+    expect(frontierModel?.aWins).toBe(2)
+    expect(frontierModel?.decisiveCaseCount).toBe(2)
+    expect(midModel?.bWins).toBe(1)
+    expect(midModel?.abstains).toBe(1)
+    expect(promptOne?.aWins).toBe(1)
+    expect(promptOne?.bWins).toBe(1)
+    expect(promptTwo?.aWins).toBe(1)
+    expect(promptTwo?.abstains).toBe(1)
+  })
+
   it('marks below threshold when fewer than 30 decisive cases', async () => {
     const db = getTestDb()
     const fixture = await seedScoringFixture(db)
