@@ -6,7 +6,6 @@ import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-f
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
-import { Badge } from '~/components/ui/badge'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -58,9 +57,6 @@ export default async function CategoryGroupRankingPage({ params, searchParams }:
     <SidebarLayout groups={groups} section="rankings">
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-xl font-bold tracking-tight">Rankings</h1>
-        <Badge variant="secondary" className="text-xs">
-          Benchmark
-        </Badge>
         <Link
           href="/methodology"
           className="ml-auto text-sm text-muted-foreground hover:text-foreground"

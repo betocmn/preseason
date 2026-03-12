@@ -4,7 +4,6 @@ import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
-import { Badge } from '~/components/ui/badge'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -74,9 +73,6 @@ export default async function RankingsPage({ searchParams }: Props) {
     <div className="container py-8">
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-xl font-bold tracking-tight">Rankings</h1>
-        <Badge variant="secondary" className="text-xs">
-          Benchmark
-        </Badge>
         <Link
           href="/methodology"
           className="ml-auto text-sm text-muted-foreground hover:text-foreground"
