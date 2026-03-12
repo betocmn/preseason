@@ -46,92 +46,108 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
 
   if (prompts.length === 0) return null
 
-  const current = prompts[currentIndex]
-  if (!current) return null
-
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex < prompts.length - 1
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
-      <div className="group/prompt relative flex-1 rounded-t-lg p-5 transition-colors hover:bg-secondary/50">
-        {/* Two-column: prompt text left, recommendations right */}
-        <div className="relative z-0 grid gap-5 sm:grid-cols-2">
-          {/* Left: prompt content */}
-          <div className="min-w-0">
-            <div className="mb-2 flex items-center gap-2">
-              <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
-                {formatLevel(current.level)}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {currentIndex + 1} of {prompts.length}
-              </span>
-            </div>
-            <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
-              {current.title}
-            </h3>
-            {(() => {
-              const isPromptContent = !!current.content
-              const promptText = current.content ?? current.description
-              return (
-                promptText && (
-                  <p
-                    className={cn(
-                      'mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground',
-                      isPromptContent && 'italic',
-                    )}
-                  >
-                    {isPromptContent && <>&ldquo;</>}
-                    {promptText}
-                    {isPromptContent && <>&rdquo;</>}
-                  </p>
-                )
-              )
-            })()}
-          </div>
-
-          {/* Right: top tools */}
-          {current.topTools.length > 0 && (
-            <div className="space-y-2.5">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Top recommendations
-              </p>
-              {current.topTools.map(({ tool, rate }) => {
-                const pct = rate * 100
-
-                return (
-                  <div key={tool.id} className="flex items-center gap-3">
-                    <div className="relative z-20 w-28 shrink-0">
-                      <ToolBadge
-                        name={tool.name}
-                        slug={tool.slug}
-                        logoUrl={tool.logoUrl}
-                        size="sm"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-muted-foreground/30 transition-all"
-                          style={{ width: `${Math.max(pct, 3)}%` }}
-                        />
-                      </div>
-                      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                        {pct.toFixed(1)}%
-                      </span>
-                    </div>
+      {/* All slides stacked in a grid so the tallest sets the height */}
+      <div className="grid flex-1">
+        {prompts.map((prompt, i) => {
+          const isActive = i === currentIndex
+          return (
+            <div
+              key={prompt.id}
+              className={cn(
+                'group/prompt relative col-start-1 row-start-1 rounded-t-lg p-5 transition-colors',
+                isActive ? 'visible hover:bg-secondary/50' : 'invisible',
+              )}
+            >
+              {/* Two-column: prompt text left, recommendations right */}
+              <div className="relative z-0 grid gap-5 sm:grid-cols-2">
+                {/* Left: prompt content */}
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="text-[11px] font-normal text-muted-foreground"
+                    >
+                      {formatLevel(prompt.level)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {currentIndex + 1} of {prompts.length}
+                    </span>
                   </div>
-                )
-              })}
+                  <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
+                    {prompt.title}
+                  </h3>
+                  {(() => {
+                    const isPromptContent = !!prompt.content
+                    const promptText = prompt.content ?? prompt.description
+                    return (
+                      promptText && (
+                        <p
+                          className={cn(
+                            'mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground',
+                            isPromptContent && 'italic',
+                          )}
+                        >
+                          {isPromptContent && <>&ldquo;</>}
+                          {promptText}
+                          {isPromptContent && <>&rdquo;</>}
+                        </p>
+                      )
+                    )
+                  })()}
+                </div>
+
+                {/* Right: top tools */}
+                {prompt.topTools.length > 0 && (
+                  <div className="space-y-2.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Top recommendations
+                    </p>
+                    {prompt.topTools.map(({ tool, rate }) => {
+                      const pct = rate * 100
+
+                      return (
+                        <div key={tool.id} className="flex items-center gap-3">
+                          <div className="relative z-20 w-28 shrink-0">
+                            <ToolBadge
+                              name={tool.name}
+                              slug={tool.slug}
+                              logoUrl={tool.logoUrl}
+                              size="sm"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-muted-foreground/30 transition-all"
+                                style={{ width: `${Math.max(pct, 3)}%` }}
+                              />
+                            </div>
+                            <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                              {pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              {/* Card-level link overlay */}
+              {isActive && (
+                <Link
+                  href={`/prompts/${prompt.level}/${prompt.slug}`}
+                  className="absolute inset-0 z-10 rounded-t-lg"
+                  aria-label={prompt.title}
+                />
+              )}
             </div>
-          )}
-        </div>
-        {/* Card-level link overlay */}
-        <Link
-          href={`/prompts/${current.level}/${current.slug}`}
-          className="absolute inset-0 z-10 rounded-t-lg"
-          aria-label={current.title}
-        />
+          )
+        })}
       </div>
 
       {/* Navigation: arrows around dots */}
