@@ -14,10 +14,17 @@ const logoPathSchema = z
   })
 
 function normalizeAlias(alias: string): string {
-  return alias
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+  return alias.toLowerCase().trim()
+}
+
+function deduplicateAliases(aliases: string[]): string[] {
+  const seen = new Set<string>()
+  return aliases.filter((alias) => {
+    const normalized = normalizeAlias(alias)
+    if (seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
 }
 
 const createToolInput = z.object({
@@ -345,8 +352,9 @@ export const toolRouter = createTRPCRouter({
     }
 
     if (input.aliases && input.aliases.length > 0) {
+      const uniqueAliases = deduplicateAliases(input.aliases)
       await ctx.db.insert(toolAliases).values(
-        input.aliases.map((alias) => ({
+        uniqueAliases.map((alias) => ({
           toolId: tool.id,
           alias,
           normalizedAlias: normalizeAlias(alias),
@@ -384,8 +392,9 @@ export const toolRouter = createTRPCRouter({
     if (aliases !== undefined) {
       await ctx.db.delete(toolAliases).where(eq(toolAliases.toolId, id))
       if (aliases && aliases.length > 0) {
+        const uniqueAliases = deduplicateAliases(aliases)
         await ctx.db.insert(toolAliases).values(
-          aliases.map((alias) => ({
+          uniqueAliases.map((alias) => ({
             toolId: id,
             alias,
             normalizedAlias: normalizeAlias(alias),
