@@ -1,1 +1,0 @@
-Build a SaaS application with user authentication, subscription billing, and a dashboard. Include team management, role-based access control, usage analytics, and email notifications for billing events.
