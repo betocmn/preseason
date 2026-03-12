@@ -1316,16 +1316,34 @@ async function seedSubcategories() {
 
 async function seedTools() {
   console.log('Seeding tools...')
-  // Insert tools without aliases first, then with - onConflictDoNothing handles idempotency
   const toolValues = TOOLS.map((t) => ({
     name: t.name,
     slug: t.slug,
     description: t.description,
     website: t.website,
     logoUrl: t.logoUrl ?? null,
-    aliases: t.aliases ?? null,
   }))
   await db.insert(schema.tools).values(toolValues).onConflictDoNothing()
+
+  // Seed tool_aliases from TOOLS aliases arrays
+  const allTools = await db.select({ id: schema.tools.id, slug: schema.tools.slug }).from(schema.tools)
+  const toolSlugToId = new Map(allTools.map((t) => [t.slug, t.id]))
+
+  const aliasValues = TOOLS.flatMap((t) => {
+    const toolId = toolSlugToId.get(t.slug)
+    if (!toolId || !t.aliases) return []
+    return t.aliases.map((alias) => ({
+      toolId,
+      alias,
+      normalizedAlias: alias.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      source: 'seed',
+    }))
+  })
+
+  if (aliasValues.length > 0) {
+    await db.insert(schema.toolAliases).values(aliasValues).onConflictDoNothing()
+  }
+
   console.log(`  ${TOOLS.length} tools ready`)
 }
 
