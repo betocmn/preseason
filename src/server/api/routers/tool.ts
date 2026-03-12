@@ -320,48 +320,52 @@ export const toolRouter = createTRPCRouter({
     const categoryIds = [...new Set(input.categoryIds ?? [])]
     await validateCategoryIds(ctx.db, categoryIds)
 
-    const inserted = await ctx.db
-      .insert(tools)
-      .values({
-        name: input.name,
-        slug: input.slug,
-        description: input.description,
-        website: input.website,
-        logoUrl: input.logoUrl,
-        isVerified: input.isVerified ?? false,
-        providerUserId: input.providerUserId ?? null,
-      })
-      .returning()
+    const tool = await ctx.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(tools)
+        .values({
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          website: input.website,
+          logoUrl: input.logoUrl,
+          isVerified: input.isVerified ?? false,
+          providerUserId: input.providerUserId ?? null,
+        })
+        .returning()
 
-    const tool = inserted[0]
-    if (!tool) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create tool',
-      })
-    }
+      const row = inserted[0]
+      if (!row) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create tool',
+        })
+      }
 
-    if (categoryIds.length > 0) {
-      await ctx.db.insert(toolCategories).values(
-        categoryIds.map((categoryId, index) => ({
-          toolId: tool.id,
-          categoryId,
-          isPrimary: index === 0,
-        })),
-      )
-    }
+      if (categoryIds.length > 0) {
+        await tx.insert(toolCategories).values(
+          categoryIds.map((categoryId, index) => ({
+            toolId: row.id,
+            categoryId,
+            isPrimary: index === 0,
+          })),
+        )
+      }
 
-    if (input.aliases && input.aliases.length > 0) {
-      const uniqueAliases = deduplicateAliases(input.aliases)
-      await ctx.db.insert(toolAliases).values(
-        uniqueAliases.map((alias) => ({
-          toolId: tool.id,
-          alias,
-          normalizedAlias: normalizeAlias(alias),
-          source: 'admin',
-        })),
-      )
-    }
+      if (input.aliases && input.aliases.length > 0) {
+        const uniqueAliases = deduplicateAliases(input.aliases)
+        await tx.insert(toolAliases).values(
+          uniqueAliases.map((alias) => ({
+            toolId: row.id,
+            alias,
+            normalizedAlias: normalizeAlias(alias),
+            source: 'admin',
+          })),
+        )
+      }
+
+      return row
+    })
 
     return getToolWithCategories(ctx.db, tool.id)
   }),
