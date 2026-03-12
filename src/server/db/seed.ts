@@ -1337,10 +1337,7 @@ async function seedTools() {
     return t.aliases.map((alias) => ({
       toolId,
       alias,
-      normalizedAlias: alias
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-'),
+      normalizedAlias: alias.toLowerCase().trim(),
       source: 'seed',
     }))
   })
