@@ -11,6 +11,7 @@
  */
 
 import crypto from 'node:crypto'
+import { isNotNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
@@ -88,18 +89,30 @@ function classifyPromptTier(categoryCount: number): 'basic' | 'intermediate' | '
 
 async function cleanBenchmarkData() {
   console.log('Cleaning previous benchmark data...')
-  await db.delete(schema.benchmarkCaseDecisions)
-  await db.delete(schema.benchmarkCaseResults)
-  await db.delete(schema.benchmarkRuns)
-  await db.delete(schema.benchmarkCases)
-  await db.delete(schema.benchmarkSeasonModels)
-  await db.delete(schema.benchmarkSeasonPrompts)
-  await db.delete(schema.benchmarkPromptVersionCategories)
-  await db.delete(schema.benchmarkPromptVersions)
-  await db.delete(schema.benchmarkModelSnapshots)
-  await db.delete(schema.benchmarkSeasons)
-  await db.delete(schema.benchmarkProtocols)
-  await db.delete(schema.benchmarkModelWeightConfigs)
+  await db.delete(schema.benchmarkCaseDecisions).where(isNotNull(schema.benchmarkCaseDecisions.id))
+  await db.delete(schema.benchmarkCaseResults).where(isNotNull(schema.benchmarkCaseResults.id))
+  await db.delete(schema.benchmarkRuns).where(isNotNull(schema.benchmarkRuns.id))
+  await db.delete(schema.benchmarkCases).where(isNotNull(schema.benchmarkCases.id))
+  await db
+    .delete(schema.benchmarkSeasonModels)
+    .where(isNotNull(schema.benchmarkSeasonModels.seasonId))
+  await db
+    .delete(schema.benchmarkSeasonPrompts)
+    .where(isNotNull(schema.benchmarkSeasonPrompts.seasonId))
+  await db
+    .delete(schema.benchmarkPromptVersionCategories)
+    .where(isNotNull(schema.benchmarkPromptVersionCategories.promptVersionId))
+  await db
+    .delete(schema.benchmarkPromptVersions)
+    .where(isNotNull(schema.benchmarkPromptVersions.id))
+  await db
+    .delete(schema.benchmarkModelSnapshots)
+    .where(isNotNull(schema.benchmarkModelSnapshots.id))
+  await db.delete(schema.benchmarkSeasons).where(isNotNull(schema.benchmarkSeasons.id))
+  await db.delete(schema.benchmarkProtocols).where(isNotNull(schema.benchmarkProtocols.id))
+  await db
+    .delete(schema.benchmarkModelWeightConfigs)
+    .where(isNotNull(schema.benchmarkModelWeightConfigs.id))
   console.log('  Cleaned 12 benchmark tables')
 }
 
@@ -221,7 +234,10 @@ async function seedBenchmarkData() {
       .filter((id): id is string => id !== undefined)
 
     const tier = classifyPromptTier(categoryIds.length)
-    const contentHash = crypto.createHash('sha256').update(`${prompt.slug}-v1`).digest('hex')
+    const contentHash = crypto
+      .createHash('sha256')
+      .update(`${prompt.slug}-${prompt.level}-v1`)
+      .digest('hex')
 
     const [pv] = await db
       .insert(schema.benchmarkPromptVersions)
