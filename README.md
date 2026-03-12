@@ -1,12 +1,21 @@
 # Preseason
 
-Preseason tracks what tools and services LLMs recommend when given vibe-coding prompts. Think of it as a mix between an RL gym and a SaaS comparison site, with a Kalshi-inspired match/game UI.
+Preseason tracks what tools and services LLMs recommend for concrete web-app
+build scenarios. The public site exposes benchmark rankings, category pages,
+prompt detail pages, head-to-head matchups, and methodology notes backed by a
+frozen benchmark protocol.
 
 ## How the Product Works
 
-Every day (or on manual trigger), Preseason runs a batch of real-world build prompts against a set of LLMs through OpenRouter. Each response is parsed into structured recommendations like "for category X, recommend tool Y," then stored with model, prompt, confidence, and reasoning metadata. This creates a continuously updated dataset of what major models are actually recommending in practice.
+Each active benchmark season freezes a panel of prompt versions and model
+snapshots. The cron route at `/api/cron/benchmark-run` executes every prompt x
+model case for the active season, parses a strict benchmark appendix, stores
+case results and case decisions, and records QC outcomes.
 
-The app then turns that dataset into public rankings, feed views, and head-to-head tool matches by category. Rankings measure recommendation frequency and consistency across models, while matches track which tool is winning over a defined period. Admins control active prompts/models and can review unknown tools auto-discovered from model output before they become part of ongoing comparisons.
+Admins review unresolved tool candidates, manage seasons and weight configs, and
+publish runs that pass QC. Public rankings and matches read only from published
+benchmark data. There is no longer a public exploration feed or a separate
+legacy settlement pipeline.
 
 ## Setup Instructions
 
@@ -17,14 +26,14 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
 - [Tailwind CSS v4](https://tailwindcss.com)
 - [TypeScript](https://typescriptlang.org)
 - [Drizzle ORM](https://orm.drizzle.team/)
-- [Supabase](https://supabase.com) (Authentication & Database)
+- [Supabase](https://supabase.com) (authentication and database)
 - [OpenRouter](https://openrouter.ai) (LLM gateway)
 
 ### Prerequisites
 
 - **Node.js 22** (LTS)
 - **pnpm** (>= 10.x)
-- **Docker** - Required for local Supabase and tests (Testcontainers)
+- **Docker** for local Supabase and tests
 - [Supabase CLI](https://supabase.com/docs/guides/cli)
 
 ### Getting Started
@@ -36,8 +45,6 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
    ```
 
 2. **Start Supabase locally**
-
-   Make sure Docker is running, then:
 
    ```bash
    supabase start
@@ -57,8 +64,8 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
    | `NEXT_PUBLIC_SUPABASE_URL` | "API URL" from `supabase status` |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | "anon key" from `supabase status` |
    | `SUPABASE_SERVICE_ROLE_KEY` | "service_role key" from `supabase status` |
-   | `OPENROUTER_API_KEY` | Your [OpenRouter](https://openrouter.ai) API key |
-   | `CRON_SECRET` | Any secure random token for cron authentication |
+   | `OPENROUTER_API_KEY` | your [OpenRouter](https://openrouter.ai) API key |
+   | `CRON_SECRET` | any secure random token for cron authentication |
 
 4. **Set up the database**
 
@@ -74,12 +81,12 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
    pnpm run dev
    ```
 
-   The application will be available at: http://localhost:3000
+   The application will be available at `http://localhost:3000`.
 
 ## User Roles
 
-- `admin` - Full access to manage prompts, tools, LLMs, runs, matches, critics
-- `provider` - Tool company portal with recommendation analytics
+- `admin` - Manage benchmark seasons, runs, prompts, tools, critics, and tool candidates
+- `provider` - Tool company portal role
 - `critic` - Verified industry expert who can leave comments
 - `user` - Default role for public users
 
@@ -88,7 +95,7 @@ The app then turns that dataset into public rankings, feed views, and head-to-he
 ### Development
 
 ```bash
-pnpm run dev            # Start dev server (Next.js with Turbo)
+pnpm run dev            # Start dev server
 pnpm run build          # Production build
 pnpm run start          # Start production server
 pnpm run preview        # Build and start production server
@@ -99,8 +106,8 @@ pnpm run preview        # Build and start production server
 ```bash
 pnpm run db:generate    # Generate migration from schema changes
 pnpm run db:migrate     # Apply pending migrations
-pnpm run db:seed        # Seed auth users and user profiles
-pnpm run db:seed-test   # Seed test/demo data (matches, recommendations, etc.)
+pnpm run db:seed        # Seed benchmark data and app records
+pnpm run db:seed-test   # Seed benchmark demo data and commentary
 pnpm run db:studio      # Open Drizzle Studio
 ```
 
@@ -110,31 +117,32 @@ pnpm run db:studio      # Open Drizzle Studio
 
 ```bash
 pnpm run check          # Run lint + typecheck together
-pnpm run lint           # Check for lint issues
-pnpm run lint:fix       # Auto-fix lint issues
+pnpm run test           # Run the test suite once
+pnpm run build          # Verify production build
 pnpm run format         # Format all files with Biome
-pnpm run typecheck      # TypeScript type checking
+pnpm run evals:export   # Export DB-backed prompts for external Promptfoo usage
 ```
 
 ## Guides
 
+- [How Benchmarks Work](docs/guides/how-benchmarks-work.md)
 - [How Prompts Work](docs/guides/how-prompts-work.md)
-- [How Evals Work](docs/guides/how-evals-work.md)
 - [How Rankings Work](docs/guides/how-rankings-work.md)
-- [How LLM Service Works](docs/guides/how-llm-service-works.md)
 - [How Automation Works](docs/guides/how-automation-works.md)
+- [How Evals Work](docs/guides/how-evals-work.md)
+- [How LLM Service Works](docs/guides/how-llm-service-works.md)
 - [Recommendation Methodology](docs/guides/recommendation-methodology.md)
 - [How to Manually Test Automation Locally](docs/guides/how-to-manually-test-automation-locally.md)
 
 ## Testing
 
-Uses **Vitest** with Testcontainers for PostgreSQL (Docker required).
+Preseason uses **Vitest** with Testcontainers for PostgreSQL.
 
 ```bash
-pnpm run test           # Run all tests once
-pnpm run test:watch     # Run tests in watch mode
-pnpm run test:ui        # Open Vitest UI
-pnpm run test:coverage  # Run tests with coverage report
+pnpm run test
+pnpm run test:watch
+pnpm run test:ui
+pnpm run test:coverage
 ```
 
 ## Local Development URLs
@@ -143,4 +151,4 @@ pnpm run test:coverage  # Run tests with coverage report
 |---------|-----|
 | Next.js App | http://localhost:3000 |
 | Supabase Studio | http://localhost:58823 |
-| Inbucket (Test Emails) | http://localhost:58824 |
+| Inbucket (test emails) | http://localhost:58824 |

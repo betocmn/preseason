@@ -2,195 +2,96 @@
 
 ## Overview
 
-Automation is the daily pipeline that:
+Production automation is now the benchmark runner. There is one cron-facing
+entry point:
 
-1. Loads active prompts and LLMs
-2. Runs prompt x LLM combinations
-3. Parses responses into recommendations
-4. Settles finished matches
-5. Generates new matches from recommendation activity
+- `/api/cron/benchmark-run`
 
-This is separate from Promptfoo evals (development-only).
+The removed `/api/cron/run` and `/api/cron/settle` routes are gone along with
+the old exploration pipeline.
 
-## File structure
+## File Structure
 
-```
-src/server/llm/automation/
-  parser.ts               <-- parse raw LLM output into recommendation rows
-  runner.ts               <-- run orchestration pipeline
-  match-settler.ts        <-- settle expired active matches
-  match-generator.ts      <-- generate new active matches
-
-src/app/api/cron/
-  run/route.ts            <-- create run + execute runner
-  settle/route.ts         <-- settle + generate matches
-
-vercel.json               <-- cron schedules
+```text
+src/app/api/cron/benchmark-run/route.ts
+src/server/llm/benchmark/runner.ts
+src/server/llm/benchmark/parser.ts
+src/server/llm/benchmark/prompt-builder.ts
+src/server/llm/benchmark/tool-resolver.ts
+src/server/llm/benchmark/qc.ts
 ```
 
-## End-to-end flow
+## End-to-End Flow
 
-```
-Vercel Cron /api/cron/run
-  -> create pending run (active prompts + active llms)
-  -> runAutomation(runId)
-    -> run_result rows
-    -> recommendation rows
+1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
+2. The route loads the newest `active` benchmark season.
+3. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
+   `(season, date)` pair.
+4. The runner claims execution, or resumes/returns an in-flight run safely.
+5. Active benchmark cases are loaded from the frozen season panel.
+6. Each case builds a benchmark prompt from the frozen prompt version and its
+   eligible categories.
+7. The LLM service executes the case and stores a `benchmark_case_result`.
+8. The strict parser extracts one decision per eligible category and stores
+   `benchmark_case_decision` rows.
+9. Unknown tool names go to `tool_candidate` for manual review.
+10. QC is evaluated and the run finishes as `completed`, `failed`, or
+    `qc_failed`.
+11. Admins publish passing runs manually from the benchmark admin UI.
 
-Vercel Cron /api/cron/settle
-  -> settleExpiredMatches()
-  -> generateMatches()
-```
+## Runner Guarantees
 
-## Runner (`runAutomation`)
+### Idempotent by Date
 
-`src/server/llm/automation/runner.ts`
+Runs are unique on `(season_id, scheduled_for)`. Re-triggering the cron for the
+same date resumes the existing run instead of creating duplicates.
 
-### Inputs
+### Safe Reclaim of Stale Work
 
-- `runId`
-- Optional injected dependencies:
-  - `database`
-  - `llmService`
-  - `now()`
+`runBenchmark` can reclaim a stale `running` record if the worker stops
+heartbeating. The reclaim logic is tested so stale workers cannot write terminal
+results after another worker has taken over.
 
-### Pipeline behavior
+### Strict Parsing
 
-1. Load run by ID.
-2. Set run status to `running` and set `startedAt`.
-3. Load selected prompts (`run.promptIds`) and llms (`run.llmIds`).
-4. Build extraction system prompt from category slugs.
-5. For each prompt:
-   - Load markdown content via `getPromptContent(slug, level)`.
-   - Build generation system prompt from prompt `level`.
-6. For each prompt x llm pair:
-   - Call `llmService.complete(provider, ...)` with generation prompt.
-   - Upsert `run_result` for `(runId, promptId, llmId)`.
-   - Parse content via `parseRecommendations`.
-   - If parse returns no candidates, run one fallback extraction completion with strict JSON/category instructions.
-   - Replace existing recommendations for that run result and insert parsed rows.
-   - Mark `run_result.parseStatus = success`.
-7. On pair failures:
-   - Persist failed `run_result` with error text and `parseStatus = failed`.
-   - Continue remaining pairs.
-8. Complete run:
-   - `completed` if any pair succeeded.
-   - `failed` if all pairs failed or run had no prompt/llm selection.
+The benchmark parser only accepts the structured appendix contract. There is no
+heuristic fallback path in production.
 
-### Stored data
+### Manual Publication
 
-- `preseason_run`
-  - `status`, `startedAt`, `completedAt`, `errorLog`
-- `preseason_run_result`
-  - raw response/error text
-  - parse status
-  - response time
-- `preseason_recommendation`
-  - `toolId`, `categoryId`, `confidence`, `reasoning`, `rank`
+Completing a run does not publish it automatically. Publication is a separate
+admin action after QC review.
 
-## Parser (`parseRecommendations`)
+## Stored Data
 
-`src/server/llm/automation/parser.ts`
+### `benchmark_run`
 
-### Strategy
+- Run status and trigger
+- Scheduled date
+- Expected/completed/failed case counts
+- QC summary and error log
 
-1. Try structured JSON extraction first:
-   - direct JSON
-   - fenced markdown JSON
-   - nested object capture
-2. Fallback to prose/markdown heuristics:
-   - bullets (`- auth: Clerk`)
-   - numbered lists (`1. auth -> Clerk`)
-   - table rows
-   - simple prose patterns (`For auth, Clerk`)
+### `benchmark_case_result`
 
-### Normalization and mapping
+- Raw response and parsed appendix payload
+- Requested and returned model IDs
+- Token counts and latency
+- Parser version and error message
 
-- Category mapping by slug/name normalization to `preseason_category`.
-- Tool mapping in this order:
-  1. exact normalized match against tool names/slugs/aliases
-  2. fuzzy match (bigram similarity)
-  3. auto-create tool when unmatched
+### `benchmark_case_decision`
 
-Unknown tool auto-create behavior:
-
-- Inserts into `preseason_tool` with `isVerified = false`
-- Adds review description
-- Ensures unique slug
-- Creates `preseason_tool_category` link for matched category
-
-### Output shape
-
-Parser returns ordered, deduped items:
-
-- `toolId`
-- `categoryId`
-- `confidence`
-- `reasoning`
-- `rank`
-
-## Match settlement
-
-`src/server/llm/automation/match-settler.ts`
-
-- Finds active matches whose `periodEnd` is in the past.
-- Counts recommendations for `toolA` and `toolB` inside match date window.
-- Updates match:
-  - `status = settled`
-  - `settledAt`
-  - `toolAScore`, `toolBScore`
-  - `totalPrompts`
-  - `winnerToolId` (`null` on tie)
-
-## Match generation
-
-`src/server/llm/automation/match-generator.ts`
-
-- Aggregates recommendation counts per `(categoryId, toolId)`.
-- Keeps tools meeting `minimumRecommendations` (default `3`).
-- Creates pairwise active matches within category when no active match exists.
-- Uses rolling period defaults:
-  - `periodStart = today`
-  - `periodEnd = today + 6 days` (7-day window)
-
-## Cron endpoints
-
-### `/api/cron/run`
-
-`src/app/api/cron/run/route.ts`:
-
-- Requires `Authorization: Bearer <CRON_SECRET>`
-- Loads active prompt/llm IDs
-- Creates pending run with `trigger = cron`
-- Calls `runAutomation`
-- Returns summary JSON
-
-### `/api/cron/settle`
-
-`src/app/api/cron/settle/route.ts`:
-
-- Requires same bearer token
-- Executes:
-  - `settleExpiredMatches`
-  - `generateMatches`
-- Returns settlement + generation summary
-
-## Scheduling
-
-`vercel.json` defines:
-
-- `/api/cron/run` at `0 6 * * *`
-- `/api/cron/settle` at `0 8 * * *`
+- One category-level decision per eligible category
+- Chosen tool or `none` / `invalid`
+- Resolution status for unknown tool names
 
 ## Environment
 
-- `OPENROUTER_API_KEY` for LLM calls
-- `CRON_SECRET` for cron endpoint auth
+- `DATABASE_URL`
+- `OPENROUTER_API_KEY`
+- `CRON_SECRET`
 
-## Tests
+## Related Docs
 
-Automation coverage lives in colocated tests:
-
-- `src/server/llm/automation/parser.test.ts`
-- `src/server/llm/automation/runner.test.ts`
-- `src/server/llm/automation/match-settler.test.ts`
+- `docs/guides/how-benchmarks-work.md`
+- `docs/guides/how-rankings-work.md`
+- `docs/guides/how-to-manually-test-automation-locally.md`

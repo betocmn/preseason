@@ -2,94 +2,100 @@
 
 ## Overview
 
-Rankings measure how frequently LLMs recommend each tool, computed from the `preseason_recommendation` table. There are two ranking modes: **by category** (e.g. "top auth tools") and **overall** (across all categories). Both are public, read-only endpoints on the `rankingRouter`.
+Authoritative rankings are computed from benchmark case decisions, not from the
+removed exploration tables.
 
-## Data flow
+Public ranking reads now go through:
 
+- `benchmarkRanking.byCategory`
+- `benchmarkRanking.byCategoryGroup`
+
+Both routers resolve the latest published benchmark season by default and ignore
+exploration-mode seasons.
+
+## Data Flow
+
+```text
+Published benchmark runs
+  -> benchmark_case_result
+  -> benchmark_case_decision
+  -> scoring helpers
+  -> public rankings and matches
 ```
-Prompts → LLMs → Run Results → Recommendations → Rankings
-```
 
-Each cron/manual run sends prompts to LLMs. Each LLM response is parsed into individual tool recommendations, stored with a `toolId`, `categoryId`, and `runResultId`. Rankings aggregate these recommendations over a configurable time window.
+The atomic input is one category-level case decision for one prompt x model
+evaluation.
 
-## Time windows
+## Ranking Windows
 
-Both ranking endpoints accept a `days` parameter (1-365, default 30). This defines two windows:
+Rankings support four explicit windows:
 
-| Window | Range | Purpose |
-|--------|-------|---------|
-| Current | `now - days` to `now` | Active ranking data |
-| Previous | `now - 2*days` to `now - days` | Comparison period for trend |
+| Window | Meaning |
+|--------|---------|
+| `run_day` | The latest published run only |
+| `trailing_7d` | The last 7 published runs |
+| `trailing_28d` | The last 28 published runs |
+| `season_to_date` | Every published run in the selected season |
 
-The **trend** for each tool is `currentRate - previousRate`, showing whether a tool is being recommended more or less than the prior period.
+These are slices of published runs, not calendar-day lookbacks over raw rows.
 
-## Ranking by category (`ranking.byCategorySlug`)
+## Inputs
 
-Ranks tools within a single category (e.g. "auth", "database").
+### `benchmarkRanking.byCategory`
 
-### Input
+| Param | Type | Notes |
+|-------|------|-------|
+| `categorySlug` | string | Required subcategory slug such as `auth` |
+| `seasonId` | uuid | Optional; defaults to latest published benchmark season |
+| `windowType` | enum | Defaults to `trailing_28d` |
+| `anchorDate` | `YYYY-MM-DD` | Optional date for season resolution and window slicing |
+| `promptTier` | enum | Optional `basic`, `intermediate`, or `advanced` |
+| `modelTier` | enum | Optional `frontier`, `mid`, or `small` |
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `categorySlug` | string | required | Category to rank (e.g. `"auth"`) |
-| `days` | int | 30 | Time window in days |
-| `limit` | int | 50 | Max results |
+### `benchmarkRanking.byCategoryGroup`
 
-### Metrics
+Same filters, but `groupSlug` replaces `categorySlug` and the result aggregates
+across every subcategory in that group.
 
-- **recommendationRate** — `toolRecommendations / totalRecommendations` in the current window (0-1)
-- **consistencyScore** — fraction of distinct LLMs that recommended this tool: `llmsRecommendingTool / totalDistinctLlms` (0-1)
-- **trend** — `currentRate - previousRate` (positive = trending up)
+## Metrics
 
-### Sort order
+Each ranked item exposes:
 
-Tools are sorted by:
+- `weightedSupportRate` - weighted support using the run's weight config
+- `rawSupportRate` - unweighted support rate
+- `rawSupportCount` and `rawEligibleCount`
+- `modelCoverage` - fraction of distinct model snapshots recommending the tool
+- `promptCoverage` - fraction of distinct prompt versions recommending the tool
+- `ciLow` and `ciHigh` - Wilson 95% confidence interval on the raw rate
+- `trend` - change versus the previous non-overlapping published-run window
 
-1. `recommendationRate` (descending)
-2. `consistencyScore` (tiebreaker)
-3. `recommendationCount` (second tiebreaker)
+Items are sorted by:
 
-### Output
+1. `weightedSupportRate`
+2. `ciLow`
+3. `rawSupportCount`
 
-Returns the category metadata, the time window, and a ranked list of items with tool info + metrics. Returns empty items for unknown category slugs.
+## Publication Thresholds
 
-## Overall ranking (`ranking.overall`)
+A ranking is only considered benchmark-ready when it has:
 
-Ranks tools across all categories using a composite score.
+- At least 100 eligible decisions
+- At least 3 distinct model snapshots
+- At least 3 distinct prompt versions
 
-### Input
+The scoring result includes `meetsPublicationThreshold` so the UI can show an
+honest "Insufficient benchmark data" state instead of overclaiming thin data.
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `days` | int | 30 | Time window in days |
-| `limit` | int | 50 | Max results |
+## Category Groups vs. Subcategories
 
-### Metrics
+- Category rankings answer "Which tools lead within one subcategory?"
+- Category-group rankings answer "Which tools lead across all subcategories in a
+  group such as devtools?"
 
-Same as by-category, plus:
+There is no separate legacy "overall ranking" router anymore.
 
-- **categoryCoverage** — number of distinct categories in which the tool was recommended
-- **normalizedCoverage** — `categoryCoverage / totalDistinctCategories` (0-1)
-- **score** — weighted composite: `recommendationRate * 0.6 + consistencyScore * 0.3 + normalizedCoverage * 0.1`
+## Related Code
 
-### Sort order
-
-Tools are sorted by `score` descending, with `recommendationRate` as tiebreaker.
-
-### Output
-
-Returns the time window and a ranked list of items with tool info, all metrics, and the composite score.
-
-## Key tables involved
-
-| Table | Role |
-|-------|------|
-| `preseason_recommendation` | Source data — one row per tool recommendation |
-| `preseason_tool` | Tool metadata (name, slug) |
-| `preseason_category` | Category metadata (name, slug) |
-| `preseason_llm` | LLM metadata (used for consistency score) |
-| `preseason_run_result` | Links recommendations to LLMs via `llmId` |
-
-## Code location
-
-The ranking router lives at `src/server/api/routers/ranking.ts`.
+- `src/server/api/routers/benchmark-ranking.ts`
+- `src/server/llm/benchmark/scoring.ts`
+- `docs/guides/how-benchmarks-work.md`

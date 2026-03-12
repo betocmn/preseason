@@ -2,43 +2,47 @@
 
 ## Goal
 
-Capture realistic model behavior while still producing structured data for rankings and matches.
+Capture reproducible model behavior without pretending the rankings are an
+independent quality review of the tools themselves.
 
-## Core approach
+## Core Approach
 
-Preseason uses a two-stage pipeline:
+Preseason now uses a benchmark-only pipeline:
 
-1. **Generation stage (realism-first)**
-   - Send the original prompt text from `src/server/llm/prompts/<level>/`.
-   - Use a light, level-aware system prompt.
-   - Avoid forcing category lists or strict output structure in the first response.
+1. Freeze prompt versions and model snapshots into an active season.
+2. Run every prompt x model case for that season.
+3. Require a strict machine-readable appendix for every eligible category.
+4. Store category-level case decisions.
+5. Publish rankings and head-to-heads only from benchmark runs that clear QC.
 
-2. **Normalization stage (structure-on-demand)**
-   - Parse the raw response with `parseRecommendations`.
-   - If parsing returns no recommendations, run one fallback extraction completion with strict JSON and known categories.
-   - Parse fallback output and persist recommendations.
+## Parsing Rules
 
-This keeps first-pass behavior closer to real user interactions while preserving ingestion reliability.
+- The benchmark parser is strict.
+- There is no heuristic rescue path for malformed output.
+- A category decision is one of `tool`, `none`, or `invalid`.
+- Unknown tool names are held out of rankings until reviewed through the tool
+  candidate workflow.
 
-## Prompt levels
+This is stricter than the old exploration pipeline by design. The system prefers
+dropping low-integrity data over guessing what a model meant.
 
-Prompt levels are treated as separate populations:
+## What Rankings Mean
 
-- `vibe-coder`
-- `software-dev-beginner`
-- `software-dev-experienced`
+Rankings reflect what LLMs recommend for the current benchmark panel. They do
+not prove that a tool is objectively best.
 
-Rankings and feed queries should be filtered or segmented by level when comparing model behavior.
+Interpret every published result with the following scope in mind:
 
-## Follow-up turns
+- The prompt panel is currently focused on web application and SaaS scenarios.
+- Results are scoped to the active season's frozen prompt and model panel.
+- Unresolved tool names do not count until an admin reviews them.
+- Confidence intervals communicate statistical uncertainty, not product quality.
 
-Single-turn is default for cost and consistency. Follow-up turns are allowed when needed:
+## Season 1 Positioning
 
-- extraction fallback (already implemented)
-- future level-specific clarification turns (optional, must be explicit and deterministic)
+Season 1 uses uniform model weights and a web-app-heavy prompt corpus. That is a
+deliberate choice to keep the first public methodology simple, transparent, and
+hard to misread.
 
-## Guardrails
-
-- Only third-party tools are stored as recommendations.
-- Unknown tool names are auto-created as unverified entries for admin review.
-- `expectedCategories` is used as a validation signal, not as a hard generation constraint.
+For the full scoring, QC, and publication details, see
+`docs/guides/how-benchmarks-work.md`.
