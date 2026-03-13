@@ -44,16 +44,11 @@ export function RankingIndex({ groups }: RankingIndexProps) {
                 </Link>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
-                  Benchmark
+              {group.ranking && !group.ranking.meetsPublicationThreshold && (
+                <Badge variant="outline" className="text-xs">
+                  Insufficient data
                 </Badge>
-                {group.ranking && !group.ranking.meetsPublicationThreshold && (
-                  <Badge variant="outline" className="text-xs">
-                    Insufficient data
-                  </Badge>
-                )}
-              </div>
+              )}
             </CardHeader>
             <CardContent>
               {topItems.length > 0 ? (

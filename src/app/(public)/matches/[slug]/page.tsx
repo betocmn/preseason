@@ -152,9 +152,6 @@ export default async function MatchDetailPage({ params }: Props) {
       <div className="mb-8">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{category.name}</Badge>
-          <Badge variant="secondary" className="text-xs">
-            Benchmark
-          </Badge>
           <Link
             href="/methodology"
             className="ml-auto text-sm text-muted-foreground hover:text-foreground"

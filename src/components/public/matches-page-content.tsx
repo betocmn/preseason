@@ -45,12 +45,9 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
           <Card key={slug} className="transition-colors hover:bg-accent/50">
             <Link href={`/matches/${slug}`}>
               <CardContent className="p-4">
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-2">
                   <Badge variant="secondary" className="text-xs">
                     {m.category.name}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    Benchmark
                   </Badge>
                 </div>
 
