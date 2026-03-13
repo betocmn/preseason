@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
 import { PercentageBar } from '~/components/public/percentage-bar'
+import { PromptCarousel } from '~/components/public/prompt-carousel'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
@@ -10,7 +11,8 @@ import { api } from '~/trpc/server'
 export default async function HomePage() {
   const caller = await api()
 
-  const [featuredMatchups, recentComments] = await Promise.all([
+  const [promptsWithTools, featuredMatchups, recentComments] = await Promise.all([
+    caller.prompt.listWithTopTools({ limit: 5 }),
     caller.benchmarkMatch.listFeatured({ limit: 6 }),
     caller.comment.listRecent({ limit: 5 }),
   ])
@@ -18,8 +20,8 @@ export default async function HomePage() {
   return (
     <div className="container py-8">
       <div className="space-y-10">
-        {/* Hero */}
-        <section>
+        {/* Hero + Latest Prompts */}
+        <section className="grid items-stretch gap-10 lg:grid-cols-[2fr_3fr]">
           <div className="flex flex-col justify-center rounded-lg border bg-card px-6 py-8">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
@@ -29,17 +31,21 @@ export default async function HomePage() {
               vibe coding beginners to expert engineers.
             </p>
           </div>
+
+          {promptsWithTools.length > 0 ? (
+            <PromptCarousel prompts={promptsWithTools} />
+          ) : (
+            <EmptyState
+              title="No prompts yet"
+              description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
+            />
+          )}
         </section>
 
         {/* Featured Matchups */}
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold">Head-to-Head</h2>
-              <Badge variant="secondary" className="text-xs">
-                Benchmark
-              </Badge>
-            </div>
+            <h2 className="text-base font-semibold">Head-to-Head</h2>
             <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
               View all
             </Link>

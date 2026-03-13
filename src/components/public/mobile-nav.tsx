@@ -8,11 +8,10 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '~/components/ui/s
 import { cn } from '~/lib/utils'
 
 const navLinks = [
-  { href: '/matches', label: 'Head-to-Head' },
+  { href: '/matches', label: 'Matches' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/critics', label: 'Critics' },
   { href: '/prompts', label: 'Prompts' },
-  { href: '/methodology', label: 'Methodology' },
 ]
 
 export function MobileNav() {
