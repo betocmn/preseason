@@ -270,7 +270,7 @@ export function buildMatchPrompt(ctx: MatchPromptContext): string {
     '<preseason_match_json>',
     '{',
     '  "schema_version": "match-v2",',
-    '  "winner": "tool_a | tool_b | tie | abstain",',
+    '  "winner": "tool_a",',
     '  "comparison_summary": "<2-4 sentences>",',
     '  "tool_a": {',
     '    "pros": [{ "phrase": "<short phrase>", "evidence_sentence": "<sentence>" }],',

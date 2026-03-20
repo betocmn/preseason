@@ -217,7 +217,7 @@ export type ProcessorOptions = {
 
 Behavior:
 
-1. For `match_evaluation`, find evaluations that have no `source_state` row for `match-ingest-v1`, or where the existing `source_state` has `status = 'failed'`
+1. For `match_evaluation`, find evaluations where `status = 'completed'` and `appendix_json IS NOT NULL`, and that have no `source_state` row for `match-ingest-v1` (or where the existing `source_state` has `status = 'failed'`). Non-completed evaluations (failed, invalid_output, pending) must be excluded — they have no parsed appendix to ingest and would fail on every processor run
 2. Ingest mentions directly from `appendix_json`
 3. For `benchmark_case_decision`, find decisions with reasoning and no `source_state` row for the requested extractor version, or where the existing `source_state` has `status = 'failed'`
 4. Run the extractor, normalize phrases, and insert mention rows
