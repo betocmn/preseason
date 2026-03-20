@@ -94,7 +94,7 @@ export const associationSourceStateStatusEnum = pgEnum('association_source_state
 
 Constraints:
 
-- Unique on `(source_type, source_id, source_field, source_position, tool_id, normalized_phrase, extractor_version)`
+- Unique on `(source_type, source_id, source_field, source_position, tool_id, normalized_phrase, extractor_version)` with `NULLS NOT DISTINCT` — this is required because `benchmark_case_decision` mentions have `source_position = NULL`, and PostgreSQL treats NULL as distinct by default, which would allow duplicate rows on reprocessing. `NULLS NOT DISTINCT` (PostgreSQL 15+, supported by Supabase) treats NULLs as equal for uniqueness
 - `category_id` should be non-null for both supported source types
 
 Indexes:

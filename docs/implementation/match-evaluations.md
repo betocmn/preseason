@@ -115,6 +115,7 @@ Constraints:
 Constraints:
 
 - Unique on `(season_id, category_id, tool_a_id, tool_b_id)`
+- Unique on `(id, season_id, category_id, tool_a_id, tool_b_id)` — required as the FK target for config-backed batches (the `id` PK already guarantees uniqueness, so this is a lightweight addition)
 - Check: `tool_a_id < tool_b_id`
 - Application validation: both tools must belong to the selected category via `toolCategories`
 
@@ -145,7 +146,8 @@ Constraints:
 
 - Check: `tool_a_id < tool_b_id`
 - Unique index on `idempotency_key` where `idempotency_key is not null`
-- When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, and `tool_b_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id)` referencing the matching unique index on `matchConfigs`. This prevents config-backed batches from silently drifting away from the config's matchup definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
+- Unique on `(id, season_id)` — required as the FK target for evaluations (lightweight, since `id` is already the PK)
+- When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, and `tool_b_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id)`. This prevents config-backed batches from silently drifting away from the config's matchup definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
 **`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
 
@@ -190,7 +192,8 @@ Constraints:
 Constraints:
 
 - Unique on `(batch_id, model_snapshot_id, presentation_order)`
-- Composite FK on `(season_id, model_snapshot_id)` referencing `benchmarkSeasonModels(season_id, model_snapshot_id)` — this enforces that every evaluation uses a model that was frozen into the season's panel, matching the pattern used by `benchmarkCases` in the existing schema
+- Composite FK on `(batch_id, season_id)` referencing `matchBatches(id, season_id)` — ensures the evaluation's `season_id` always matches its owning batch, preventing cross-season corruption
+- Composite FK on `(season_id, model_snapshot_id)` referencing `benchmarkSeasonModels(season_id, model_snapshot_id)` — enforces that every evaluation uses a model frozen into the season's panel, matching the `benchmarkCases` pattern
 
 ### Relations
 
