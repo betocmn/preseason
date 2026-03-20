@@ -115,7 +115,7 @@ Constraints:
 
 Constraints:
 
-- Unique on `(season_id, category_id, tool_a_id, tool_b_id)`
+- Unique on `(season_id, category_id, tool_a_id, tool_b_id)` where `is_active = true` — partial unique index so that only one active config exists per matchup, but disabled configs do not block creating a replacement with a new `prompt_template_id`
 - Unique on `(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` — required as the FK target for config-backed batches (the `id` PK already guarantees uniqueness, so this is a lightweight addition)
 - Check: `tool_a_id < tool_b_id`
 - Application validation: both tools must belong to the selected category via `toolCategories`
@@ -342,9 +342,7 @@ disableConfig:
 createBatch:
   // Create a one-off or config-backed batch
   // Accept optional idempotencyKey
-
-runBatch:
-  // Execute a pending batch by id
+  // Does NOT execute the batch — only writes the pending row
 
 listBatches:
   // Paginated admin list
@@ -352,6 +350,28 @@ listBatches:
 getBatch:
   // Full batch details with evaluations
 ```
+
+Batch execution should **not** be exposed as a tRPC mutation. A single batch runs `2 × seasonModels` LLM calls (one per presentation order per model), which can easily exceed request/runtime limits or cause client disconnects. Instead, execution happens through a dedicated API route (see below).
+
+### `src/app/api/match-run/route.ts`
+
+Dedicated API route for executing match batches, following the same pattern as `src/app/api/cron/benchmark-run/route.ts`.
+
+```typescript
+// POST /api/match-run
+// Body: { batchId: string }
+// Auth: admin only (validate via Supabase session)
+//
+// 1. Validate batchId and admin session
+// 2. Claim the batch (set status = 'running')
+// 3. Call runMatchBatch(batchId)
+// 4. Return batch summary
+//
+// This runs server-side without tRPC request limits.
+// The admin UI calls this endpoint after creating a batch via tRPC.
+```
+
+This keeps batch creation (tRPC, instant) separate from batch execution (API route, long-running). The admin workflow is: create a batch via `match.createBatch`, then trigger execution via `POST /api/match-run`.
 
 ---
 
@@ -405,8 +425,9 @@ Order consistency should be computed in query code, not stored as the source of 
 6. Create `src/server/llm/match/batches.ts` for idempotent batch creation and execution claiming
 7. Create `src/server/llm/match/runner.ts` and tests
 8. Create `src/server/api/routers/match.ts` and tests
-9. Register the router in `src/server/api/root.ts`
-10. Add a separate future task for automated benchmark-run triggers once the manual workflow is stable
+9. Create `src/app/api/match-run/route.ts` for batch execution
+10. Register the router in `src/server/api/root.ts`
+11. Add a separate future task for automated benchmark-run triggers once the manual workflow is stable
 
 ---
 
