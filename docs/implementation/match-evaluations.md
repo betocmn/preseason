@@ -184,7 +184,8 @@ Constraints:
 | `max_tokens` | integer, nullable | |
 | `seed` | integer, nullable | |
 | `parser_version` | varchar(50), nullable | |
-| `prompt_hash` | varchar(64), nullable | |
+| `rendered_user_prompt` | text, nullable | Full rendered prompt sent to the model, including interpolated tool/category names — ensures reproducibility and auditability even after tool or category renames |
+| `prompt_hash` | varchar(64), nullable | Hash of `rendered_user_prompt` |
 | `system_prompt_snapshot` | text, nullable | |
 | `error_message` | text, nullable | |
 | `created_at` | timestamp w/ tz | |
