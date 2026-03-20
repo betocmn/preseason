@@ -115,8 +115,9 @@ Indexes:
 | `source_id` | uuid | |
 | `extractor_version` | varchar(50) | |
 | `status` | associationSourceStateStatusEnum | |
-| `processed_at` | timestamp w/ tz | |
-| `mention_count` | integer | |
+| `claimed_at` | timestamp w/ tz, nullable | Set when status transitions to `'running'` — used for stale detection |
+| `processed_at` | timestamp w/ tz, nullable | Set when status transitions to `'completed'` or `'failed'` |
+| `mention_count` | integer, nullable | Set on completion |
 | `error_message` | text, nullable | |
 
 Constraints:
@@ -220,9 +221,9 @@ export type ProcessorOptions = {
 
 Behavior:
 
-1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. For `match_evaluation`, eligible means `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`, with no `source_state` row for the extractor version or an existing `source_state` with `status = 'failed'`. For `benchmark_case_decision`, eligible means reasoning is present with no completed `source_state` for the extractor version. Upsert a `source_state` row with `status = 'running'` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
+1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. Eligible sources are those with no `source_state` row for the extractor version, or with `status = 'failed'`, or with `status = 'running'` where `claimed_at` is older than a configurable stale threshold (default: 10 minutes). For `match_evaluation`, additionally require `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`. For `benchmark_case_decision`, require reasoning is present. Upsert a `source_state` row with `status = 'running'` and `claimed_at = now()` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
 2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting
-3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count`) or `'failed'` (with `error_message`). Sources left in `'running'` after a crash are eligible for reclaim on the next processor run — treat `'running'` as retryable alongside `'failed'`
+3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count` and `processed_at`) or `'failed'` (with `error_message` and `processed_at`). Sources in `'running'` are only reclaimable after the stale threshold has passed, preventing concurrent workers from stealing active work
 
 Only `status = 'completed'` is terminal. Non-completed evaluations (failed, invalid_output, pending) are never selected. Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
 

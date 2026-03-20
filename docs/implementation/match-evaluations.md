@@ -116,7 +116,7 @@ Constraints:
 Constraints:
 
 - Unique on `(season_id, category_id, tool_a_id, tool_b_id)`
-- Unique on `(id, season_id, category_id, tool_a_id, tool_b_id)` — required as the FK target for config-backed batches (the `id` PK already guarantees uniqueness, so this is a lightweight addition)
+- Unique on `(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` — required as the FK target for config-backed batches (the `id` PK already guarantees uniqueness, so this is a lightweight addition)
 - Check: `tool_a_id < tool_b_id`
 - Application validation: both tools must belong to the selected category via `toolCategories`
 
@@ -148,7 +148,7 @@ Constraints:
 - Check: `tool_a_id < tool_b_id`
 - Unique index on `idempotency_key` where `idempotency_key is not null`
 - Unique on `(id, season_id)` — required as the FK target for evaluations (lightweight, since `id` is already the PK)
-- When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, and `tool_b_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id)`. This prevents config-backed batches from silently drifting away from the config's matchup definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
+- When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, `tool_b_id`, and `prompt_template_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)`. This prevents config-backed batches from drifting on any dimension — including prompt version — from the config's definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
 **`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
 
