@@ -108,6 +108,7 @@ Constraints:
 | `category_id` | uuid FK → subcategories | |
 | `tool_a_id` | uuid FK → tools | Canonical lower UUID |
 | `tool_b_id` | uuid FK → tools | Canonical higher UUID |
+| `prompt_template_id` | uuid FK → matchPromptTemplates | Pinned at config creation time — ensures all batches from this config use the same prompt contract, mirroring how `benchmarkSeasonPrompts` freezes prompt versions per season |
 | `is_active` | boolean, default true | |
 | `created_by` | uuid FK → userProfiles | |
 | `created_at` | timestamp w/ tz | |

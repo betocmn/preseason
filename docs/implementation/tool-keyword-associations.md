@@ -65,6 +65,7 @@ export const associationSourceFieldEnum = pgEnum('association_source_field', [
 ])
 
 export const associationSourceStateStatusEnum = pgEnum('association_source_state_status', [
+  'running',
   'completed',
   'failed',
 ])
@@ -84,6 +85,7 @@ export const associationSourceStateStatusEnum = pgEnum('association_source_state
 | `extractor_version` | varchar(50) | e.g. `"match-ingest-v1"` or `"decision-extract-v1"` |
 | `tool_id` | uuid FK → tools | |
 | `category_id` | uuid FK → subcategories | |
+| `season_id` | uuid FK → benchmarkSeasons | Both source types are season-scoped; denormalized here so rollup queries can filter by season without joining back through polymorphic source tables |
 | `benchmark_run_id` | uuid FK → benchmarkRuns, nullable | Useful for time slicing when available |
 | `model_snapshot_id` | uuid FK → benchmarkModelSnapshots, nullable | |
 | `phrase` | varchar(100) | Original extracted phrase |
@@ -99,7 +101,7 @@ Constraints:
 
 Indexes:
 
-- `(tool_id, category_id)`
+- `(season_id, tool_id, category_id)`
 - `(normalized_phrase)`
 - `(source_type, source_id)`
 - `(benchmark_run_id)`
@@ -134,7 +136,7 @@ If rollups are needed later, build them from `toolAssociationMentions`.
 
 ### Relations
 
-- `toolAssociationMentions` → tool, category, benchmarkRun, modelSnapshot
+- `toolAssociationMentions` → tool, category, season, benchmarkRun, modelSnapshot
 - `toolAssociationSourceStates` — standalone, keyed by source type, source id, and extractor version
 
 ---
@@ -154,6 +156,7 @@ export type ToolAssociationMentionInput = {
   extractorVersion: string
   toolId: string
   categoryId: string
+  seasonId: string
   benchmarkRunId?: string | null
   modelSnapshotId?: string | null
   phrase: string
@@ -217,15 +220,11 @@ export type ProcessorOptions = {
 
 Behavior:
 
-1. For `match_evaluation`, find evaluations where `status = 'completed'` and `appendix_json IS NOT NULL`, and that have no `source_state` row for `match-ingest-v1` (or where the existing `source_state` has `status = 'failed'`). Non-completed evaluations (failed, invalid_output, pending) must be excluded — they have no parsed appendix to ingest and would fail on every processor run
-2. Ingest mentions directly from `appendix_json`
-3. For `benchmark_case_decision`, find decisions with reasoning and no `source_state` row for the requested extractor version, or where the existing `source_state` has `status = 'failed'`
-4. Run the extractor, normalize phrases, and insert mention rows
-5. Upsert a `source_state` row for that `(source_type, source_id, extractor_version)` — on retry of a previously failed source, delete any partial mention rows from the failed attempt before reinserting, then update the `source_state` to `'completed'`
+1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. For `match_evaluation`, eligible means `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`, with no `source_state` row for the extractor version or an existing `source_state` with `status = 'failed'`. For `benchmark_case_decision`, eligible means reasoning is present with no completed `source_state` for the extractor version. Upsert a `source_state` row with `status = 'running'` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
+2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting
+3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count`) or `'failed'` (with `error_message`). Sources left in `'running'` after a crash are eligible for reclaim on the next processor run — treat `'running'` as retryable alongside `'failed'`
 
-Failed sources are always retryable under the same extractor version. The processor treats `status = 'failed'` as "not yet successfully processed" and will re-attempt extraction on the next run. Only `status = 'completed'` is terminal. This avoids transient LLM outages permanently blocking sources from being processed.
-
-Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
+Only `status = 'completed'` is terminal. Non-completed evaluations (failed, invalid_output, pending) are never selected. Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
 
 ### `src/server/api/routers/tool-association.ts`
 
