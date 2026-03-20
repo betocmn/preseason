@@ -34,10 +34,10 @@ Both systems share the same benchmark seasons and model snapshot infrastructure,
 The first version should not:
 
 - Trigger match evaluations inline from `src/app/api/cron/benchmark-run/route.ts`
-- Extend the public `benchmarkMatch.headToHead` tRPC response
+- Extend the existing public `benchmarkMatch.headToHead` tRPC response
 - Depend on benchmark cron success to finish direct match work
 
-Those can be added later once the prompt contract and storage shape are stable.
+Those can be added later once the prompt contract and storage shape are stable. This does not mean "no public match page". It means the first slice should stabilize the direct-evaluation data model before expanding the public read model.
 
 ---
 
@@ -421,6 +421,28 @@ Once the direct evaluation contract proves stable:
 
 - Add a background trigger for benchmark-linked configs
 - Keep automated batch creation idempotent
-- Optionally expose a small public summary alongside passive H2H results
+- Add a dedicated public match page read model for a category plus tool pair
+- Keep passive H2H stats and direct evaluation results together on that page
+- Include critic comments that target the matchup itself, not just the underlying tools
+
+### Public Match Page Follow-Up
+
+The follow-up public experience should likely be implemented as a dedicated match read path, not just by overloading `benchmarkMatch.headToHead`.
+
+Recommended scope for that follow-up:
+
+- A public match page for a canonical `category + toolA + toolB` pair
+- Passive benchmark H2H stats
+- Direct match evaluation summaries and historical batches for the same pair
+- Model and prompt breakdowns where useful
+- Critic comments attached to the match itself
+
+This follow-up will also require comment system changes:
+
+- Add `'match'` to `commentTargetEnum`
+- Update `src/server/api/routers/comment.ts` validation and persistence to support `targetType = 'match'`
+- Decide on the stable match identity used for comments and page queries
+
+The simplest public API shape is likely a dedicated public match query, such as `matchPublic.getBySlug`, rather than turning `benchmarkMatch.headToHead` into the page's one payload for everything.
 
 Do not move to automated triggering until duplicate prevention and observability are in place.
