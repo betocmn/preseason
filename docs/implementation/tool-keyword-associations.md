@@ -217,13 +217,15 @@ export type ProcessorOptions = {
 
 Behavior:
 
-1. For `match_evaluation`, find evaluations that have no `source_state` row for `match-ingest-v1`
+1. For `match_evaluation`, find evaluations that have no `source_state` row for `match-ingest-v1`, or where the existing `source_state` has `status = 'failed'`
 2. Ingest mentions directly from `appendix_json`
-3. For `benchmark_case_decision`, find decisions with reasoning and no `source_state` row for the requested extractor version
+3. For `benchmark_case_decision`, find decisions with reasoning and no `source_state` row for the requested extractor version, or where the existing `source_state` has `status = 'failed'`
 4. Run the extractor, normalize phrases, and insert mention rows
-5. Insert a `source_state` row for that `(source_type, source_id, extractor_version)`
+5. Upsert a `source_state` row for that `(source_type, source_id, extractor_version)` — on retry of a previously failed source, delete any partial mention rows from the failed attempt before reinserting, then update the `source_state` to `'completed'`
 
-Because processing is versioned, the same source can be reprocessed later with a new extractor version without deleting old data.
+Failed sources are always retryable under the same extractor version. The processor treats `status = 'failed'` as "not yet successfully processed" and will re-attempt extraction on the next run. Only `status = 'completed'` is terminal. This avoids transient LLM outages permanently blocking sources from being processed.
+
+Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
 
 ### `src/server/api/routers/tool-association.ts`
 

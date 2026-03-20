@@ -145,6 +145,7 @@ Constraints:
 
 - Check: `tool_a_id < tool_b_id`
 - Unique index on `idempotency_key` where `idempotency_key is not null`
+- When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, and `tool_b_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id)` referencing the matching unique index on `matchConfigs`. This prevents config-backed batches from silently drifting away from the config's matchup definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
 **`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
 
@@ -152,6 +153,7 @@ Constraints:
 |--------|------|-------|
 | `id` | uuid PK | |
 | `batch_id` | uuid FK → matchBatches, onDelete cascade | |
+| `season_id` | uuid FK → benchmarkSeasons | Denormalized from batch for composite FK |
 | `model_snapshot_id` | uuid FK → benchmarkModelSnapshots | Must come from the season's frozen model set |
 | `presentation_order` | matchPresentationOrderEnum | `'a_first'` or `'b_first'` |
 | `status` | matchEvaluationStatusEnum | |
@@ -188,6 +190,7 @@ Constraints:
 Constraints:
 
 - Unique on `(batch_id, model_snapshot_id, presentation_order)`
+- Composite FK on `(season_id, model_snapshot_id)` referencing `benchmarkSeasonModels(season_id, model_snapshot_id)` — this enforces that every evaluation uses a model that was frozen into the season's panel, matching the pattern used by `benchmarkCases` in the existing schema
 
 ### Relations
 
