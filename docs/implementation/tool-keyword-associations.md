@@ -86,8 +86,8 @@ export const associationSourceStateStatusEnum = pgEnum('association_source_state
 | `tool_id` | uuid FK → tools | |
 | `category_id` | uuid FK → subcategories | |
 | `season_id` | uuid FK → benchmarkSeasons | Both source types are season-scoped; denormalized here so rollup queries can filter by season without joining back through polymorphic source tables |
-| `benchmark_run_id` | uuid FK → benchmarkRuns, nullable | Useful for time slicing when available |
-| `model_snapshot_id` | uuid FK → benchmarkModelSnapshots, nullable | |
+| `benchmark_run_id` | uuid FK → benchmarkRuns, nullable | Useful for time slicing when available; constrained with `season_id` so a mention cannot point at a run from a different season |
+| `model_snapshot_id` | uuid FK → benchmarkModelSnapshots, nullable | Constrained with `season_id` so a mention cannot point at a model outside the season's frozen model set |
 | `phrase` | varchar(100) | Original extracted phrase |
 | `normalized_phrase` | varchar(100) | Lowercase, trimmed canonical form |
 | `sentiment_score` | real | -1.0 to 1.0 |
@@ -98,6 +98,8 @@ Constraints:
 
 - Unique on `(source_type, source_id, source_field, source_position, tool_id, normalized_phrase, extractor_version)` with `NULLS NOT DISTINCT` — this is required because `benchmark_case_decision` mentions have `source_position = NULL`, and PostgreSQL treats NULL as distinct by default, which would allow duplicate rows on reprocessing. `NULLS NOT DISTINCT` (PostgreSQL 15+, supported by Supabase) treats NULLs as equal for uniqueness
 - `category_id` should be non-null for both supported source types
+- Composite FK on `(benchmark_run_id, season_id)` referencing `benchmarkRuns(id, season_id)` — prevents denormalized run and season values from drifting across seasons. Add a lightweight unique index on `benchmarkRuns(id, season_id)` (similar to `matchBatches(id, season_id)` in `match-evaluations.md`) so PostgreSQL can enforce this FK
+- Composite FK on `(season_id, model_snapshot_id)` referencing `benchmarkSeasonModels(season_id, model_snapshot_id)` — enforces that any non-null model snapshot belongs to the same season
 
 Indexes:
 
