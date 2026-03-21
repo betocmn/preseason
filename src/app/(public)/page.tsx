@@ -44,11 +44,16 @@ export default async function HomePage() {
 
         {/* Featured Matchups */}
         <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Active Matches</h2>
-            <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
-              View all
-            </Link>
+          <div className="mb-4">
+            <h2 className="text-base font-semibold">
+              Active Matches
+              <Link
+                href="/matches"
+                className="ml-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+              >
+                &rarr;
+              </Link>
+            </h2>
           </div>
           {featuredMatchups.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -112,11 +117,16 @@ export default async function HomePage() {
         {/* Verified Critics */}
         {recentComments.items.length > 0 && (
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Latest Verified Critics</h2>
-              <Link href="/critics" className="text-sm text-muted-foreground hover:text-foreground">
-                View all
-              </Link>
+            <div className="mb-4">
+              <h2 className="text-base font-semibold">
+                Latest Verified Critics
+                <Link
+                  href="/critics"
+                  className="ml-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                >
+                  &rarr;
+                </Link>
+              </h2>
             </div>
             <CommentaryFeed comments={recentComments.items} />
           </section>
