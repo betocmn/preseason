@@ -43,7 +43,9 @@ export async function freezePromptVersion(
   }
 
   const contentMd = prompt.contentMd
-  const contentHash = createHash('sha256').update(contentMd).digest('hex')
+  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'beginner'
+  const systemPromptSnapshot = buildGenerationSystemPrompt(level)
+  const contentHash = createHash('sha256').update(`${contentMd}:${level}`).digest('hex')
 
   const existing = await database.query.benchmarkPromptVersions.findFirst({
     where: eq(benchmarkPromptVersions.contentHash, contentHash),
@@ -53,9 +55,6 @@ export async function freezePromptVersion(
       },
     },
   })
-
-  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'beginner'
-  const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
   if (existing) {
     const existingCategoryIds = existing.categories.map((category) => category.categoryId)

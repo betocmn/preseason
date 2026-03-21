@@ -234,7 +234,7 @@ export const promptRouter = createTRPCRouter({
         .select({
           pvId: benchmarkPromptVersions.id,
           promptId: benchmarkPromptVersions.promptId,
-          slug: prompts.slug,
+          slug: benchmarkPromptVersions.slug,
           level: benchmarkPromptVersions.level,
           contentMd: benchmarkPromptVersions.contentMd,
           promptTitle: prompts.title,
@@ -256,7 +256,7 @@ export const promptRouter = createTRPCRouter({
         .groupBy(
           benchmarkPromptVersions.id,
           benchmarkPromptVersions.promptId,
-          prompts.slug,
+          benchmarkPromptVersions.slug,
           benchmarkPromptVersions.level,
           benchmarkPromptVersions.contentMd,
           prompts.title,

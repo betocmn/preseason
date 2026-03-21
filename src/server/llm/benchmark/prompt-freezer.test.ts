@@ -82,7 +82,7 @@ describe('freezePromptVersion', () => {
     const version = await freezePromptVersion(db, prompt.id, { categoryIds })
 
     const expectedHash = createHash('sha256')
-      .update(prompt.contentMd ?? '')
+      .update(`${prompt.contentMd ?? ''}:${prompt.level}`)
       .digest('hex')
     expect(version.contentHash).toBe(expectedHash)
     expect(version.version).toBe(1)
@@ -199,18 +199,19 @@ describe('freezePromptVersion', () => {
     expect(versions).toHaveLength(0)
   })
 
-  it('should reject refreezing when prompt level has changed', async () => {
+  it('should create a new version when prompt level has changed', async () => {
     const db = getTestDb()
     const prompt = await seedPromptWithContent(db)
     const categoryIds = await seedCategories(db, 2)
 
-    await freezePromptVersion(db, prompt.id, { categoryIds })
+    const v1 = await freezePromptVersion(db, prompt.id, { categoryIds })
 
     await db.update(prompts).set({ level: 'advanced' }).where(eq(prompts.id, prompt.id))
 
-    await expect(freezePromptVersion(db, prompt.id, { categoryIds })).rejects.toThrow(
-      'different benchmark metadata',
-    )
+    const v2 = await freezePromptVersion(db, prompt.id, { categoryIds })
+    expect(v2.id).not.toBe(v1.id)
+    expect(v2.level).toBe('advanced')
+    expect(v2.version).toBe(2)
   })
 
   it('should throw when prompt has no contentMd', async () => {
