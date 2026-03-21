@@ -328,7 +328,8 @@ Create and claim batches safely.
 Key exports:
 
 - `createMatchBatch(input)` — canonicalizes tool order, validates category membership, snapshots the current season model panel into pending evaluation rows, and writes an idempotent batch
-- `runMatchBatch(batchId)` — executes a claimed batch's pending or retryable pre-materialized evaluation rows
+- `claimMatchBatchExecution(batchId)` — atomically claims or reclaims a stale batch and returns the specific `claimToken` the worker must use for all later writes
+- `runMatchBatch(batchId, claimToken)` — executes a claimed batch's pending or retryable pre-materialized evaluation rows for that exact ownership token
 - `buildBenchmarkRunIdempotencyKey(runId, configId, promptTemplateId)` — helper for future automated triggers
 
 This helper is the main guard against duplicate benchmark-linked batches.
@@ -336,12 +337,15 @@ This helper is the main guard against duplicate benchmark-linked batches.
 Batch creation rules:
 
 - When a batch is created, snapshot the current season model panel by inserting one pending `matchEvaluations` row per `(model_snapshot_id, presentation_order)` pair for the batch
+- If the season has zero frozen model snapshots, reject batch creation with an operator-facing error instead of creating an empty batch
 - Set `total_evaluations` from those inserted rows and leave execution-time selection to the materialized rows, not the live `benchmarkSeasonModels` table
 - Retries must reuse the same frozen evaluation rows for that batch so the `idempotency_key` always maps to one reproducible model panel, preserving already-completed rows and retrying only `failed` / `invalid_output` / `pending` slots
+- If `idempotency_key` matches an existing batch, return that batch only when all immutable batch dimensions match the new request (`season_id`, `category_id`, `tool_a_id`, `tool_b_id`, `prompt_template_id`, `trigger_mode`, and any benchmark linkage such as `benchmark_run_id` / `config_id`); otherwise reject the request as an idempotency-key conflict
 
 Execution ownership and reclaim rules:
 
 - Claim by atomically updating from `pending`/`failed` (or from stale `running`) to `running`, setting `started_at`, fresh `claim_token`, and `last_heartbeat_at = now()`
+- The `claim_token` returned by that claim step must be threaded into `runMatchBatch(batchId, claimToken)` and reused for the full lifetime of that worker; the runner must not re-read a newer token from the batch row
 - Treat `running` as stale when `last_heartbeat_at` is older than a configurable threshold (default: 10 minutes), allowing safe reclaim after worker crashes
 - While executing, heartbeat-update `last_heartbeat_at` on an interval (for example, every 60 seconds) using `where id = ? and claim_token = ?`
 - Before every `matchEvaluations` mutation, open a short transaction that locks and verifies the owning batch row with the same `id`, `status = 'running'`, and `claim_token`. If that ownership check fails, stop processing and return the latest stored batch state instead of writing stale results
@@ -366,6 +370,8 @@ disableConfig:
 createBatch:
   // Create a one-off or config-backed batch
   // Accept optional idempotencyKey
+  // Reject idempotencyKey reuse when immutable batch dimensions differ
+  // Reject creation when the season has no frozen models
   // Materialize pending evaluation rows for the current season model panel
   // Does NOT execute the batch — only writes the pending batch + evaluation rows
 
@@ -388,8 +394,8 @@ Dedicated API route for executing match batches, following the same pattern as `
 // Auth: admin only (validate via Supabase session)
 //
 // 1. Validate batchId and admin session
-// 2. Claim or reclaim stale batch execution (set status = 'running', set claimToken + heartbeat)
-// 3. Call runMatchBatch(batchId)
+// 2. Claim or reclaim stale batch execution and capture the returned claimToken
+// 3. Call runMatchBatch(batchId, claimToken)
 // 4. Return batch summary
 //
 // This runs server-side without tRPC request limits.
@@ -472,6 +478,8 @@ Order consistency should be computed in query code, not stored as the source of 
 10. Manual test: create a batch, change the season's model panel before execution, then run the batch and verify only the originally materialized evaluation rows execute
 11. Manual test: force one evaluation into `invalid_output` and verify `invalid_output_evaluations` increments and the batch finalizes as `failed`, not `completed`
 12. Manual test: simulate ownership loss while one model response is in flight and verify the stale worker cannot update `matchEvaluations` after another worker reclaims the batch
+13. Manual test: reuse an `idempotencyKey` with different batch dimensions and verify `createBatch` rejects the request instead of returning the wrong existing batch
+14. Manual test: attempt to create a batch for a season with no frozen models and verify `createBatch` returns an operator-facing error instead of creating a zero-evaluation batch
 
 ---
 
