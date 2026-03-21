@@ -22,7 +22,7 @@ export default async function HomePage() {
     <div className="container py-8">
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
-        <section className="grid items-stretch gap-4 lg:grid-cols-2">
+        <section className="grid items-stretch gap-4 lg:grid-cols-[2fr_3fr]">
           <div className="flex flex-col justify-center rounded-lg border bg-card px-6 py-8">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
