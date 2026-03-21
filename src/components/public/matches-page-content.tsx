@@ -52,7 +52,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
                 </div>
 
                 <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                  <Avatar className="h-5 w-5 bg-muted-foreground/15">
+                  <Avatar className="h-5 w-5 bg-muted-foreground/25">
                     {m.toolA.logoUrl && <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />}
                     <AvatarFallback className="text-[10px]">
                       {m.toolA.name.slice(0, 2).toUpperCase()}
@@ -60,7 +60,7 @@ export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentPr
                   </Avatar>
                   {m.toolA.name}
                   <span className="text-muted-foreground">vs</span>
-                  <Avatar className="h-5 w-5 bg-muted-foreground/15">
+                  <Avatar className="h-5 w-5 bg-muted-foreground/25">
                     {m.toolB.logoUrl && <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />}
                     <AvatarFallback className="text-[10px]">
                       {m.toolB.name.slice(0, 2).toUpperCase()}
