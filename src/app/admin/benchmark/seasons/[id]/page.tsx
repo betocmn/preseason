@@ -85,7 +85,7 @@ export default async function SeasonDetailPage({ params }: PageProps) {
                     </TableCell>
                     <TableCell>v{sp.promptVersion.version}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{sp.promptVersion.tier}</Badge>
+                      <Badge variant="outline">{sp.promptVersion.level}</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">

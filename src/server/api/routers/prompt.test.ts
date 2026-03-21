@@ -83,10 +83,7 @@ describe('promptRouter', () => {
     const variants = await caller.prompt.listBySlug({ slug: 'job-board' })
 
     expect(variants).toHaveLength(2)
-    expect(variants.map((variant) => variant.level).sort()).toEqual([
-      'advanced',
-      'beginner',
-    ])
+    expect(variants.map((variant) => variant.level).sort()).toEqual(['advanced', 'beginner'])
   })
 
   it('supports admin update and toggleActive', async () => {

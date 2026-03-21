@@ -18,8 +18,8 @@ import {
   buildToolResolutionIndex,
   resolveToolWithCandidateQueue,
 } from '~/server/llm/benchmark/tool-resolver'
-import { LlmService } from '~/server/llm/service'
 import type { PromptLevel } from '~/server/llm/prompts'
+import { LlmService } from '~/server/llm/service'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
@@ -654,9 +654,7 @@ async function executeRun(
         )
         const systemPrompt =
           promptVersion.systemPromptSnapshot ??
-          buildGenerationSystemPrompt(
-            promptVersion.level as PromptLevel,
-          )
+          buildGenerationSystemPrompt(promptVersion.level as PromptLevel)
 
         const completion = await llmService.complete(modelSnapshot.provider, {
           model: modelSnapshot.requestedModelId,

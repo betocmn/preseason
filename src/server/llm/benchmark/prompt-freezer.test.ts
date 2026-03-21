@@ -206,10 +206,7 @@ describe('freezePromptVersion', () => {
 
     await freezePromptVersion(db, prompt.id, { categoryIds })
 
-    await db
-      .update(prompts)
-      .set({ level: 'advanced' })
-      .where(eq(prompts.id, prompt.id))
+    await db.update(prompts).set({ level: 'advanced' }).where(eq(prompts.id, prompt.id))
 
     await expect(freezePromptVersion(db, prompt.id, { categoryIds })).rejects.toThrow(
       'different benchmark metadata',

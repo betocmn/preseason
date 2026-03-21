@@ -8,7 +8,6 @@ import {
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories, tools } from '~/server/db/schema'
-import { promptLevelSchema } from '~/server/llm/prompts'
 import {
   computeHeadToHead,
   type DecisionRow,
@@ -17,6 +16,7 @@ import {
   prepareScoringContext,
   rankFromDecisions,
 } from '~/server/llm/benchmark/scoring'
+import { promptLevelSchema } from '~/server/llm/prompts'
 
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure

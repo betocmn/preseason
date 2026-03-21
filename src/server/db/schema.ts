@@ -28,11 +28,7 @@ export const createTable = pgTableCreator((name) => `preseason_${name}`)
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'provider', 'critic', 'user'])
 export const commentTargetEnum = pgEnum('comment_target', ['tool', 'prompt'])
-export const promptLevelEnum = pgEnum('prompt_level', [
-  'beginner',
-  'intermediate',
-  'advanced',
-])
+export const promptLevelEnum = pgEnum('prompt_level', ['beginner', 'intermediate', 'advanced'])
 
 // Benchmark enums
 export const benchmarkModeEnum = pgEnum('benchmark_mode', ['exploration', 'benchmark'])
