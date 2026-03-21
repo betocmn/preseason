@@ -29,8 +29,8 @@ export function Navbar() {
           <Image
             src="/preseason-brand/preseason-logo.svg"
             alt="Preseason"
-            width={140}
-            height={32}
+            width={112}
+            height={26}
             priority
           />
         </Link>
