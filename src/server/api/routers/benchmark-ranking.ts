@@ -9,13 +9,14 @@ import {
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories } from '~/server/db/schema'
 import { computeCategoryGroupRanking, computeCategoryRanking } from '~/server/llm/benchmark/scoring'
+import { promptLevelSchema } from '~/server/llm/prompts'
 
 const windowTypeSchema = z
   .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
   .default('trailing_28d')
 
 const tierFiltersSchema = z.object({
-  promptTier: z.enum(['basic', 'intermediate', 'advanced']).optional(),
+  promptLevel: promptLevelSchema.optional(),
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
 })
 
@@ -69,7 +70,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         seasonId,
         windowType: input.windowType,
         anchorDate,
-        promptTier: input.promptTier,
+        promptLevel: input.promptLevel,
         modelTier: input.modelTier,
       })
 
@@ -116,7 +117,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         seasonId,
         windowType: input.windowType,
         anchorDate,
-        promptTier: input.promptTier,
+        promptLevel: input.promptLevel,
         modelTier: input.modelTier,
       })
 

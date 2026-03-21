@@ -599,7 +599,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
             id: benchmarkCase.promptVersion.id,
             title: benchmarkCase.promptVersion.prompt?.title ?? benchmarkCase.promptVersion.slug,
             version: benchmarkCase.promptVersion.version,
-            tier: benchmarkCase.promptVersion.tier,
+            level: benchmarkCase.promptVersion.level,
           },
           modelSnapshot: {
             id: benchmarkCase.modelSnapshot.id,

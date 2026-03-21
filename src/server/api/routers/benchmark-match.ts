@@ -8,6 +8,7 @@ import {
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories, tools } from '~/server/db/schema'
+import { promptLevelSchema } from '~/server/llm/prompts'
 import {
   computeHeadToHead,
   type DecisionRow,
@@ -30,7 +31,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
             .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
             .default('trailing_28d'),
           anchorDate: anchorDateSchema.optional(),
-          promptTier: z.enum(['basic', 'intermediate', 'advanced']).optional(),
+          promptLevel: promptLevelSchema.optional(),
           modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
         })
         .refine((input) => input.toolASlug !== input.toolBSlug, {
@@ -86,7 +87,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         toolBId: toolB.id,
         windowType: input.windowType,
         anchorDate,
-        promptTier: input.promptTier,
+        promptLevel: input.promptLevel,
         modelTier: input.modelTier,
       })
 
