@@ -23,14 +23,14 @@ describe('promptRouter', () => {
     await adminCaller.prompt.create({
       title: 'Active Prompt',
       slug: 'real-estate-website',
-      level: 'vibe-coder',
+      level: 'beginner',
       description: 'active',
       isActive: true,
     })
     await adminCaller.prompt.create({
       title: 'Inactive Prompt',
       slug: 'blog-platform-cms',
-      level: 'vibe-coder',
+      level: 'beginner',
       description: 'inactive',
       isActive: false,
     })
@@ -48,7 +48,7 @@ describe('promptRouter', () => {
     await adminCaller.prompt.create({
       title: 'Real Estate Prompt',
       slug: 'real-estate-website',
-      level: 'vibe-coder',
+      level: 'beginner',
       description: 'test',
       isActive: true,
     })
@@ -56,7 +56,7 @@ describe('promptRouter', () => {
     const caller = createTestCaller(null)
     const prompt = await caller.prompt.getBySlug({
       slug: 'real-estate-website',
-      level: 'vibe-coder',
+      level: 'beginner',
     })
     expect(prompt.slug).toBe('real-estate-website')
     expect(prompt.content).toBeNull()
@@ -69,13 +69,13 @@ describe('promptRouter', () => {
     await adminCaller.prompt.create({
       title: 'Vibe Variant',
       slug: 'job-board',
-      level: 'vibe-coder',
+      level: 'beginner',
       isActive: true,
     })
     await adminCaller.prompt.create({
       title: 'Experienced Variant',
       slug: 'job-board',
-      level: 'software-dev-experienced',
+      level: 'advanced',
       isActive: true,
     })
 
@@ -84,8 +84,8 @@ describe('promptRouter', () => {
 
     expect(variants).toHaveLength(2)
     expect(variants.map((variant) => variant.level).sort()).toEqual([
-      'software-dev-experienced',
-      'vibe-coder',
+      'advanced',
+      'beginner',
     ])
   })
 
@@ -96,7 +96,7 @@ describe('promptRouter', () => {
     const created = await caller.prompt.create({
       title: 'SaaS Prompt',
       slug: 'saas-application',
-      level: 'vibe-coder',
+      level: 'beginner',
       description: 'original',
       isActive: true,
     })
@@ -124,7 +124,7 @@ describe('promptRouter', () => {
       caller.prompt.create({
         title: 'Blocked Prompt',
         slug: 'blocked-prompt',
-        level: 'vibe-coder',
+        level: 'beginner',
         isActive: true,
       }),
     ).rejects.toMatchObject({

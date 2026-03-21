@@ -1028,7 +1028,7 @@ const PROMPTS = [
   {
     title: 'Real Estate Website',
     slug: 'real-estate-website',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'A real estate listing site with admin panel and property management',
     contentMd:
       'Create a real estate website with an admin area for uploading listings. Include property search with filters, image galleries, agent profiles, and a contact form. The site should have user authentication for saved searches and favorites.',
@@ -1045,7 +1045,7 @@ const PROMPTS = [
   {
     title: 'SaaS Application',
     slug: 'saas-application',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Full-featured SaaS starter with auth, billing, and team management',
     contentMd:
       'Build a SaaS application with user authentication, subscription billing, and a dashboard. Include team management, role-based access control, usage analytics, and email notifications for billing events.',
@@ -1063,7 +1063,7 @@ const PROMPTS = [
   {
     title: 'Blog Platform with CMS',
     slug: 'blog-platform-cms',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Blogging platform with content management and newsletter',
     contentMd:
       'Create a blog platform with a CMS, comments, and email newsletter. Include rich text editing, category/tag management, SEO optimization, social sharing, and subscriber management with automated email digests.',
@@ -1072,7 +1072,7 @@ const PROMPTS = [
   {
     title: 'E-commerce Store',
     slug: 'ecommerce-store',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Online store with catalog, cart, payments, and order management',
     contentMd:
       'Build an e-commerce store with product catalog, shopping cart, and payment processing. Include inventory management, order tracking, customer reviews, discount codes, and email order confirmations.',
@@ -1090,7 +1090,7 @@ const PROMPTS = [
   {
     title: 'Project Management Tool',
     slug: 'project-management-tool',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Kanban-style project management with real-time updates',
     contentMd:
       'Create a project management tool like Trello with real-time collaboration. Include boards, lists, cards, drag-and-drop, team workspaces, file attachments, activity logs, and due date notifications.',
@@ -1108,7 +1108,7 @@ const PROMPTS = [
   {
     title: 'Social Media Platform',
     slug: 'social-media-platform',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Social network with feed, messaging, and media sharing',
     contentMd:
       'Build a social media platform with user profiles, posts, likes, and comments. Include a news feed algorithm, image/video uploads, follow system, direct messaging, and push notifications.',
@@ -1126,7 +1126,7 @@ const PROMPTS = [
   {
     title: 'Job Board',
     slug: 'job-board',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Job listing site with company profiles and application management',
     contentMd:
       'Create a job board where companies post positions and applicants apply. Include company profiles, resume uploads, application tracking, email notifications, search with filters, and saved job listings.',
@@ -1135,7 +1135,7 @@ const PROMPTS = [
   {
     title: 'Restaurant Reservation System',
     slug: 'restaurant-reservation-system',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Reservation booking system with calendar and notifications',
     contentMd:
       'Build a restaurant reservation system with email confirmations. Include table management, availability calendar, waitlist, customer profiles, review system, and automated reminder emails.',
@@ -1144,7 +1144,7 @@ const PROMPTS = [
   {
     title: 'Online Learning Platform',
     slug: 'online-learning-platform',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'E-learning platform with courses, quizzes, and progress tracking',
     contentMd:
       'Create an online learning platform with courses, quizzes, and certificates. Include video hosting, progress tracking, discussion forums, instructor dashboards, payment for premium courses, and completion certificates.',
@@ -1153,7 +1153,7 @@ const PROMPTS = [
   {
     title: 'Multi-tenant CRM',
     slug: 'multi-tenant-crm',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Customer relationship management with multi-tenancy and email',
     contentMd:
       'Build a multi-tenant CRM with contact management and email integration. Include deal pipelines, task management, activity logging, email templates, team workspaces, reporting dashboards, and API integrations.',
@@ -1162,7 +1162,7 @@ const PROMPTS = [
   {
     title: 'Weather Dashboard',
     slug: 'weather-dashboard',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Weather app with API integration and data visualization',
     contentMd:
       'Create a weather dashboard that pulls data from external APIs. Include current conditions, forecasts, interactive maps, location search, saved locations, weather alerts, and historical data charts.',
@@ -1171,7 +1171,7 @@ const PROMPTS = [
   {
     title: 'Chat Application',
     slug: 'chat-application',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Real-time messaging app with file sharing and group chats',
     contentMd:
       'Build a chat application with real-time messaging and file sharing. Include group chats, direct messages, typing indicators, read receipts, message search, emoji reactions, and push notifications.',
@@ -1188,7 +1188,7 @@ const PROMPTS = [
   {
     title: 'Fitness Tracking App',
     slug: 'fitness-tracking-app',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Workout tracker with progress visualization and social features',
     contentMd:
       'Create a fitness tracking app with workout logging and progress charts. Include exercise library, custom workout plans, body measurements, goal setting, social challenges, and integration with wearable devices.',
@@ -1205,7 +1205,7 @@ const PROMPTS = [
   {
     title: 'URL Shortener',
     slug: 'url-shortener',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Link shortener with click analytics and custom URLs',
     contentMd:
       'Build a URL shortener with analytics tracking. Include custom short URLs, click analytics with geographic data, link expiration, QR code generation, API access, and a dashboard showing link performance.',
@@ -1214,7 +1214,7 @@ const PROMPTS = [
   {
     title: 'Documentation Site',
     slug: 'documentation-site',
-    level: 'vibe-coder' as const,
+    level: 'beginner' as const,
     description: 'Technical documentation site with versioning and search',
     contentMd:
       'Create a documentation site with search, versioning, and dark mode. Include MDX content, API reference generation, code syntax highlighting, navigation sidebar, version selector, and full-text search.',

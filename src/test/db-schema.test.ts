@@ -390,7 +390,7 @@ describe('Database Schema', () => {
       expect(result[0]?.expectedCategories).toEqual(['auth', 'payments', 'database'])
     })
 
-    it('should default level to vibe-coder', async () => {
+    it('should default level to beginner', async () => {
       const db = getTestDb()
       await db.insert(prompts).values({
         title: 'Test Prompt',
@@ -398,7 +398,7 @@ describe('Database Schema', () => {
       })
 
       const result = await db.select().from(prompts)
-      expect(result[0]?.level).toBe('vibe-coder')
+      expect(result[0]?.level).toBe('beginner')
     })
 
     it('should allow same slug with different levels', async () => {
@@ -406,12 +406,12 @@ describe('Database Schema', () => {
       await db.insert(prompts).values({
         title: 'Real Estate Website',
         slug: 'real-estate-website',
-        level: 'vibe-coder',
+        level: 'beginner',
       })
       await db.insert(prompts).values({
         title: 'Real Estate Website',
         slug: 'real-estate-website',
-        level: 'software-dev-beginner',
+        level: 'intermediate',
       })
 
       const result = await db.select().from(prompts)
@@ -423,13 +423,13 @@ describe('Database Schema', () => {
       await db.insert(prompts).values({
         title: 'Test',
         slug: 'test',
-        level: 'vibe-coder',
+        level: 'beginner',
       })
       await expect(
         db.insert(prompts).values({
           title: 'Test Duplicate',
           slug: 'test',
-          level: 'vibe-coder',
+          level: 'beginner',
         }),
       ).rejects.toThrow()
     })

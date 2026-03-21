@@ -147,7 +147,7 @@ async function seedFullPanel(db: TestDb) {
       .values({
         title: 'Build a todo app',
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         contentMd: '# Todo app',
       })
       .returning(),
@@ -183,7 +183,7 @@ async function seedFullPanel(db: TestDb) {
               .values({
                 title: `Prompt ${i + 1}`,
                 slug: `prompt-${i + 1}`,
-                level: 'vibe-coder',
+                level: 'beginner',
                 contentMd: `# Prompt ${i + 1}`,
               })
               .returning(),
@@ -195,9 +195,8 @@ async function seedFullPanel(db: TestDb) {
         .values({
           promptId: p.id,
           slug: p.slug,
-          level: 'vibe-coder',
+          level: 'beginner',
           version: 1,
-          tier: 'basic',
           contentMd: p.contentMd ?? `# ${p.title}`,
           contentHash: `hash-${i}-${Date.now()}`,
           promptContractVersion: '1.0',

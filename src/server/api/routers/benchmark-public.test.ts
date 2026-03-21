@@ -198,7 +198,7 @@ async function seedBenchmarkPublicFixture() {
       .values({
         title: 'Build a SaaS app',
         slug: 'build-a-saas-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         contentMd: '# Build a SaaS app',
       })
       .returning(),
@@ -209,9 +209,8 @@ async function seedBenchmarkPublicFixture() {
       .values({
         promptId: prompt.id,
         slug: prompt.slug,
-        level: 'vibe-coder',
+        level: 'beginner',
         version: 1,
-        tier: 'advanced',
         contentMd: prompt.contentMd ?? '# Build a SaaS app',
         contentHash: 'benchmark-public-fixture',
         promptContractVersion: '1.0',
@@ -368,13 +367,13 @@ describe('benchmark public routers', () => {
         {
           title: 'Build auth flows',
           slug: 'build-auth-flows',
-          level: 'vibe-coder',
+          level: 'beginner',
           contentMd: '# Auth prompt',
         },
         {
           title: 'Build database flows',
           slug: 'build-database-flows',
-          level: 'vibe-coder',
+          level: 'beginner',
           contentMd: '# Database prompt',
         },
       ])
@@ -388,9 +387,8 @@ describe('benchmark public routers', () => {
         {
           promptId: promptA.id,
           slug: promptA.slug,
-          level: 'vibe-coder',
+          level: 'beginner',
           version: 1,
-          tier: 'advanced',
           contentMd: promptA.contentMd ?? '# Auth prompt',
           contentHash: 'group-auth',
           promptContractVersion: '1.0',
@@ -399,9 +397,8 @@ describe('benchmark public routers', () => {
         {
           promptId: promptB.id,
           slug: promptB.slug,
-          level: 'vibe-coder',
+          level: 'beginner',
           version: 1,
-          tier: 'basic',
           contentMd: promptB.contentMd ?? '# Database prompt',
           contentHash: 'group-database',
           promptContractVersion: '1.0',
