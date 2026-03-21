@@ -5,6 +5,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
@@ -21,7 +22,7 @@ export default async function HomePage() {
     <div className="container py-8">
       <div className="space-y-10">
         {/* Hero + Latest Prompts */}
-        <section className="grid items-stretch gap-10 lg:grid-cols-[2fr_3fr]">
+        <section className="grid items-stretch gap-4 lg:grid-cols-[2fr_3fr]">
           <div className="flex flex-col justify-center rounded-lg border bg-card px-6 py-8">
             <h1 className="text-4xl font-bold tracking-tight lg:text-5xl">
               What <span className="italic">agents</span> want
@@ -44,63 +45,69 @@ export default async function HomePage() {
 
         {/* Featured Matchups */}
         <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Head-to-Head</h2>
-            <Link href="/matches" className="text-sm text-muted-foreground hover:text-foreground">
-              View all
-            </Link>
+          <div className="mb-4">
+            <h2 className="text-base font-semibold">Active Matches</h2>
           </div>
           {featuredMatchups.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {featuredMatchups.map((m) => {
-                const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
-                return (
-                  <Card key={slug} className="transition-colors hover:bg-accent/50">
-                    <Link href={`/matches/${slug}`}>
-                      <CardContent className="p-4">
-                        <div className="mb-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {m.category.name}
-                          </Badge>
-                        </div>
-                        <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                          <Avatar className="h-5 w-5 bg-muted">
-                            {m.toolA.logoUrl && (
-                              <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
-                            )}
-                            <AvatarFallback className="text-[10px]">
-                              {m.toolA.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {m.toolA.name}
-                          <span className="text-muted-foreground">vs</span>
-                          <Avatar className="h-5 w-5 bg-muted">
-                            {m.toolB.logoUrl && (
-                              <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
-                            )}
-                            <AvatarFallback className="text-[10px]">
-                              {m.toolB.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {m.toolB.name}
-                        </div>
-                        {m.result.decisiveCaseCount > 0 ? (
-                          <PercentageBar
-                            valueA={m.result.aWins}
-                            valueB={m.result.bWins}
-                            labelA={m.toolA.name}
-                            labelB={m.toolB.name}
-                            size="sm"
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No decisive cases yet</p>
-                        )}
-                      </CardContent>
-                    </Link>
-                  </Card>
-                )
-              })}
-            </div>
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredMatchups.map((m) => {
+                  const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
+                  return (
+                    <Card key={slug} className="transition-colors hover:bg-accent/50">
+                      <Link href={`/matches/${slug}`}>
+                        <CardContent className="p-4">
+                          <div className="mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {m.category.name}
+                            </Badge>
+                          </div>
+                          <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
+                              {m.toolA.logoUrl && (
+                                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
+                              )}
+                              <AvatarFallback className="text-[10px]">
+                                {m.toolA.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {m.toolA.name}
+                            <span className="text-muted-foreground">vs</span>
+                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
+                              {m.toolB.logoUrl && (
+                                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
+                              )}
+                              <AvatarFallback className="text-[10px]">
+                                {m.toolB.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {m.toolB.name}
+                          </div>
+                          {m.result.decisiveCaseCount > 0 ? (
+                            <PercentageBar
+                              valueA={m.result.aWins}
+                              valueB={m.result.bWins}
+                              labelA={m.toolA.name}
+                              labelB={m.toolB.name}
+                              size="sm"
+                            />
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No decisive cases yet</p>
+                          )}
+                        </CardContent>
+                      </Link>
+                    </Card>
+                  )
+                })}
+              </div>
+              <div className="mt-3 text-center">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/matches" className="text-xs text-muted-foreground">
+                    View all matches &rarr;
+                  </Link>
+                </Button>
+              </div>
+            </>
           ) : (
             <EmptyState
               title="No benchmark matchups yet"
@@ -112,13 +119,17 @@ export default async function HomePage() {
         {/* Verified Critics */}
         {recentComments.items.length > 0 && (
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Verified Critics</h2>
-              <Link href="/critics" className="text-sm text-muted-foreground hover:text-foreground">
-                View all
-              </Link>
+            <div className="mb-4">
+              <h2 className="text-base font-semibold">Latest Verified Critics</h2>
             </div>
             <CommentaryFeed comments={recentComments.items} />
+            <div className="mt-3 text-center">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/critics" className="text-xs text-muted-foreground">
+                  View all critics &rarr;
+                </Link>
+              </Button>
+            </div>
           </section>
         )}
       </div>
