@@ -55,8 +55,8 @@ export default async function ToolDetailPage({ params }: Props) {
       {/* Header */}
       <div className="mb-8">
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <Avatar className="h-8 w-8 bg-muted">
-            {tool.logoUrl && <AvatarImage src={tool.logoUrl} alt={tool.name} className="p-0.5" />}
+          <Avatar className="h-8 w-8 bg-muted-foreground/15">
+            {tool.logoUrl && <AvatarImage src={tool.logoUrl} alt={tool.name} />}
             <AvatarFallback className="text-xs">
               {tool.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>

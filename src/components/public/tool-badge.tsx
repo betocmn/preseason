@@ -23,8 +23,8 @@ export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolB
         className,
       )}
     >
-      <Avatar className={cn(avatarSize, 'bg-muted')}>
-        {logoUrl && <AvatarImage src={logoUrl} alt={name} className="p-0.5" />}
+      <Avatar className={cn(avatarSize, 'bg-muted-foreground/15')}>
+        {logoUrl && <AvatarImage src={logoUrl} alt={name} />}
         <AvatarFallback className="text-[10px]">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
       </Avatar>
       {name}
