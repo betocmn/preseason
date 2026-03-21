@@ -11,14 +11,6 @@ import type { PromptLevel } from '~/server/llm/prompts'
 import { isPromptLevel } from '~/server/llm/prompts'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
-type PromptTier = 'basic' | 'intermediate' | 'advanced'
-
-export function classifyPromptTier(categoryCount: number): PromptTier {
-  if (categoryCount <= 3) return 'basic'
-  if (categoryCount <= 6) return 'intermediate'
-  return 'advanced'
-}
-
 function hasSameCategoryOrder(left: string[], right: string[]) {
   if (left.length !== right.length) {
     return false
@@ -31,7 +23,6 @@ export async function freezePromptVersion(
   database: PostgresJsDatabase<typeof schema>,
   promptId: string,
   options: {
-    tierOverride?: PromptTier
     categoryIds: string[]
   },
 ) {
@@ -53,7 +44,6 @@ export async function freezePromptVersion(
 
   const contentMd = prompt.contentMd
   const contentHash = createHash('sha256').update(contentMd).digest('hex')
-  const tier = options.tierOverride ?? classifyPromptTier(options.categoryIds.length)
 
   const existing = await database.query.benchmarkPromptVersions.findFirst({
     where: eq(benchmarkPromptVersions.contentHash, contentHash),
@@ -64,18 +54,17 @@ export async function freezePromptVersion(
     },
   })
 
-  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'vibe-coder'
+  const level: PromptLevel = isPromptLevel(prompt.level) ? prompt.level : 'beginner'
   const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
   if (existing) {
     const existingCategoryIds = existing.categories.map((category) => category.categoryId)
     const samePrompt = existing.promptId === promptId
-    const sameTier = existing.tier === tier
     const sameCategories = hasSameCategoryOrder(existingCategoryIds, options.categoryIds)
     const sameLevel = existing.level === prompt.level
     const sameSnapshot = existing.systemPromptSnapshot === systemPromptSnapshot
 
-    if (samePrompt && sameTier && sameCategories && sameLevel && sameSnapshot) {
+    if (samePrompt && sameCategories && sameLevel && sameSnapshot) {
       return existing
     }
 
@@ -105,7 +94,6 @@ export async function freezePromptVersion(
         slug: prompt.slug,
         level: prompt.level,
         version: nextVersion,
-        tier,
         contentMd,
         contentHash,
         systemPromptSnapshot,
