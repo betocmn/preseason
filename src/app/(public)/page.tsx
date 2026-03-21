@@ -101,7 +101,7 @@ export default async function HomePage() {
                 })}
               </div>
               <div className="mt-3 text-center">
-                <Button variant="ghost" size="sm" asChild>
+                <Button variant="outline" size="sm" asChild>
                   <Link href="/matches" className="text-xs text-muted-foreground">
                     View all matches &rarr;
                   </Link>
@@ -124,7 +124,7 @@ export default async function HomePage() {
             </div>
             <CommentaryFeed comments={recentComments.items} />
             <div className="mt-3 text-center">
-              <Button variant="ghost" size="sm" asChild>
+              <Button variant="outline" size="sm" asChild>
                 <Link href="/critics" className="text-xs text-muted-foreground">
                   View all critics &rarr;
                 </Link>
