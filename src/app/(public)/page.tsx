@@ -65,7 +65,7 @@ export default async function HomePage() {
                           <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
                             <Avatar className="h-5 w-5 bg-muted">
                               {m.toolA.logoUrl && (
-                                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
+                                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} className="p-0.5" />
                               )}
                               <AvatarFallback className="text-[10px]">
                                 {m.toolA.name.slice(0, 2).toUpperCase()}
@@ -75,7 +75,7 @@ export default async function HomePage() {
                             <span className="text-muted-foreground">vs</span>
                             <Avatar className="h-5 w-5 bg-muted">
                               {m.toolB.logoUrl && (
-                                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
+                                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} className="p-0.5" />
                               )}
                               <AvatarFallback className="text-[10px]">
                                 {m.toolB.name.slice(0, 2).toUpperCase()}
