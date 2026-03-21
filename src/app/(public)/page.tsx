@@ -45,67 +45,69 @@ export default async function HomePage() {
         {/* Featured Matchups */}
         <section>
           <div className="mb-4">
-            <h2 className="text-base font-semibold">
-              Active Matches
-              <Link
-                href="/matches"
-                className="ml-2 text-xs font-normal text-muted-foreground hover:text-foreground"
-              >
-                &rarr;
-              </Link>
-            </h2>
+            <h2 className="text-base font-semibold">Active Matches</h2>
           </div>
           {featuredMatchups.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {featuredMatchups.map((m) => {
-                const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
-                return (
-                  <Card key={slug} className="transition-colors hover:bg-accent/50">
-                    <Link href={`/matches/${slug}`}>
-                      <CardContent className="p-4">
-                        <div className="mb-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {m.category.name}
-                          </Badge>
-                        </div>
-                        <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                          <Avatar className="h-5 w-5 bg-muted">
-                            {m.toolA.logoUrl && (
-                              <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
-                            )}
-                            <AvatarFallback className="text-[10px]">
-                              {m.toolA.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {m.toolA.name}
-                          <span className="text-muted-foreground">vs</span>
-                          <Avatar className="h-5 w-5 bg-muted">
-                            {m.toolB.logoUrl && (
-                              <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
-                            )}
-                            <AvatarFallback className="text-[10px]">
-                              {m.toolB.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {m.toolB.name}
-                        </div>
-                        {m.result.decisiveCaseCount > 0 ? (
-                          <PercentageBar
-                            valueA={m.result.aWins}
-                            valueB={m.result.bWins}
-                            labelA={m.toolA.name}
-                            labelB={m.toolB.name}
-                            size="sm"
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No decisive cases yet</p>
-                        )}
-                      </CardContent>
-                    </Link>
-                  </Card>
-                )
-              })}
-            </div>
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredMatchups.map((m) => {
+                  const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
+                  return (
+                    <Card key={slug} className="transition-colors hover:bg-accent/50">
+                      <Link href={`/matches/${slug}`}>
+                        <CardContent className="p-4">
+                          <div className="mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {m.category.name}
+                            </Badge>
+                          </div>
+                          <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+                            <Avatar className="h-5 w-5 bg-muted">
+                              {m.toolA.logoUrl && (
+                                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
+                              )}
+                              <AvatarFallback className="text-[10px]">
+                                {m.toolA.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {m.toolA.name}
+                            <span className="text-muted-foreground">vs</span>
+                            <Avatar className="h-5 w-5 bg-muted">
+                              {m.toolB.logoUrl && (
+                                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
+                              )}
+                              <AvatarFallback className="text-[10px]">
+                                {m.toolB.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {m.toolB.name}
+                          </div>
+                          {m.result.decisiveCaseCount > 0 ? (
+                            <PercentageBar
+                              valueA={m.result.aWins}
+                              valueB={m.result.bWins}
+                              labelA={m.toolA.name}
+                              labelB={m.toolB.name}
+                              size="sm"
+                            />
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No decisive cases yet</p>
+                          )}
+                        </CardContent>
+                      </Link>
+                    </Card>
+                  )
+                })}
+              </div>
+              <div className="mt-3 text-center">
+                <Link
+                  href="/matches"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  View all matches &rarr;
+                </Link>
+              </div>
+            </>
           ) : (
             <EmptyState
               title="No benchmark matchups yet"
@@ -118,17 +120,17 @@ export default async function HomePage() {
         {recentComments.items.length > 0 && (
           <section>
             <div className="mb-4">
-              <h2 className="text-base font-semibold">
-                Latest Verified Critics
-                <Link
-                  href="/critics"
-                  className="ml-2 text-xs font-normal text-muted-foreground hover:text-foreground"
-                >
-                  &rarr;
-                </Link>
-              </h2>
+              <h2 className="text-base font-semibold">Latest Verified Critics</h2>
             </div>
             <CommentaryFeed comments={recentComments.items} />
+            <div className="mt-3 text-center">
+              <Link
+                href="/critics"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                View all critics &rarr;
+              </Link>
+            </div>
           </section>
         )}
       </div>
