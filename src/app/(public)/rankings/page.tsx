@@ -24,13 +24,13 @@ type Props = {
   searchParams: Promise<{
     category?: string
     sub?: string
-    promptTier?: string
+    promptLevel?: string
     modelTier?: string
   }>
 }
 
 export default async function RankingsPage({ searchParams }: Props) {
-  const { category, sub, promptTier, modelTier } = await searchParams
+  const { category, sub, promptLevel, modelTier } = await searchParams
   const caller = await api()
   const categoryGroups = await caller.category.listGroups()
 
@@ -40,8 +40,8 @@ export default async function RankingsPage({ searchParams }: Props) {
     subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
   }))
 
-  const validPromptTier = (['basic', 'intermediate', 'advanced'] as const).find(
-    (t) => t === promptTier,
+  const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
+    (t) => t === promptLevel,
   )
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
   const showIndex = !category && !sub
@@ -50,7 +50,7 @@ export default async function RankingsPage({ searchParams }: Props) {
         groups.map(async (group) => {
           const data = await caller.benchmarkRanking.byCategoryGroup({
             groupSlug: group.slug,
-            promptTier: validPromptTier,
+            promptLevel: validPromptLevel,
             modelTier: validModelTier,
           })
 
@@ -86,7 +86,7 @@ export default async function RankingsPage({ searchParams }: Props) {
           groups={groups}
           currentGroup={category}
           currentSub={sub}
-          currentPromptTier={validPromptTier}
+          currentPromptLevel={validPromptLevel}
           currentModelTier={validModelTier}
         />
       </Suspense>
@@ -98,7 +98,7 @@ export default async function RankingsPage({ searchParams }: Props) {
           <RankingsPageContent
             currentGroup={category}
             currentSub={sub}
-            promptTier={validPromptTier}
+            promptLevel={validPromptLevel}
             modelTier={validModelTier}
           />
         )}
