@@ -118,6 +118,7 @@ Indexes:
 | `extractor_version` | varchar(50) | |
 | `status` | associationSourceStateStatusEnum | |
 | `claimed_at` | timestamp w/ tz, nullable | Set when status transitions to `'running'` — used for stale detection |
+| `claim_token` | uuid, nullable | Random token set when a worker claims a source; ownership-sensitive heartbeat/finalize updates must include this token |
 | `processed_at` | timestamp w/ tz, nullable | Set when status transitions to `'completed'` or `'failed'` |
 | `mention_count` | integer, nullable | Set on completion |
 | `error_message` | text, nullable | |
@@ -125,6 +126,7 @@ Indexes:
 Constraints:
 
 - Unique on `(source_type, source_id, extractor_version)`
+- Check: when `status = 'running'`, both `claimed_at` and `claim_token` must be non-null
 
 ### Why No Aggregate Table In V1
 
@@ -223,9 +225,9 @@ export type ProcessorOptions = {
 
 Behavior:
 
-1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. Eligible sources are those with no `source_state` row for the extractor version, or with `status = 'failed'`, or with `status = 'running'` where `claimed_at` is older than a configurable stale threshold (default: 10 minutes). For `match_evaluation`, additionally require `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`. For `benchmark_case_decision`, require `decision_type = 'tool'` AND `tool_id IS NOT NULL` AND reasoning is present — decisions with `decision_type = 'none'` have no tool to attribute associations to, and including them would either fail inserts (non-null `tool_id` required on mentions) or create meaningless associations. Upsert a `source_state` row with `status = 'running'` and `claimed_at = now()` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
-2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting
-3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count` and `processed_at`) or `'failed'` (with `error_message` and `processed_at`). Sources in `'running'` are only reclaimable after the stale threshold has passed, preventing concurrent workers from stealing active work
+1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. Eligible sources are those with no `source_state` row for the extractor version, or with `status = 'failed'`, or with `status = 'running'` where `claimed_at` is older than a configurable stale threshold (default: 10 minutes). For `match_evaluation`, additionally require `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`. For `benchmark_case_decision`, require `decision_type = 'tool'` AND `tool_id IS NOT NULL` AND reasoning is present — decisions with `decision_type = 'none'` have no tool to attribute associations to, and including them would either fail inserts (non-null `tool_id` required on mentions) or create meaningless associations. Generate a claim token for the worker and upsert a `source_state` row with `status = 'running'`, `claimed_at = now()`, and that `claim_token` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
+2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting. While the batch is running, refresh `claimed_at` on an interval (for example, every 60 seconds) for rows still owned by this worker (`status = 'running'` and matching `claim_token`) so long LLM backfills are not reclaimed mid-flight
+3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count` and `processed_at`) or `'failed'` (with `error_message` and `processed_at`) using `where source_type = ? and source_id = ? and extractor_version = ? and claim_token = ?`, then clear `claim_token`. Sources in `'running'` are reclaimable only when `claimed_at` is stale, preventing concurrent workers from stealing active work
 
 Only `status = 'completed'` is terminal. Non-completed evaluations (failed, invalid_output, pending) are never selected. Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
 

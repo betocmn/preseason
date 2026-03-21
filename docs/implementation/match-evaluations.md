@@ -139,6 +139,8 @@ Constraints:
 | `completed_evaluations` | integer, default 0 | |
 | `failed_evaluations` | integer, default 0 | |
 | `started_at` | timestamp w/ tz, nullable | |
+| `claim_token` | uuid, nullable | Random token set when a worker claims execution; ownership-sensitive updates must include this token in the `where` clause |
+| `last_heartbeat_at` | timestamp w/ tz, nullable | Updated periodically while `status = 'running'`; used for stale-run reclaim |
 | `completed_at` | timestamp w/ tz, nullable | |
 | `triggered_by` | uuid FK → userProfiles, nullable | null for automated future triggers |
 | `created_at` | timestamp w/ tz | |
@@ -148,6 +150,8 @@ Constraints:
 - Check: `tool_a_id < tool_b_id`
 - Unique index on `idempotency_key` where `idempotency_key is not null`
 - Unique on `(id, season_id)` — required as the FK target for evaluations (lightweight, since `id` is already the PK)
+- Check: when `status = 'running'`, both `claim_token` and `last_heartbeat_at` must be non-null
+- Index on `(status, last_heartbeat_at)` to make stale-run reclaim queries efficient
 - When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, `tool_b_id`, and `prompt_template_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)`. This prevents config-backed batches from drifting on any dimension — including prompt version — from the config's definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
 **`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
@@ -323,6 +327,13 @@ Key exports:
 
 This helper is the main guard against duplicate benchmark-linked batches.
 
+Execution ownership and reclaim rules:
+
+- Claim by atomically updating from `pending`/`failed` (or from stale `running`) to `running`, setting `started_at`, fresh `claim_token`, and `last_heartbeat_at = now()`
+- Treat `running` as stale when `last_heartbeat_at` is older than a configurable threshold (default: 10 minutes), allowing safe reclaim after worker crashes
+- While executing, heartbeat-update `last_heartbeat_at` on an interval (for example, every 60 seconds) using `where id = ? and claim_token = ?`
+- Finalization updates (`completed`, `failed`, counters, `completed_at`) must also use `where id = ? and claim_token = ?`; if zero rows are affected, treat ownership as lost and return the latest stored batch state instead of writing stale results
+
 ### `src/server/api/routers/match.ts`
 
 Admin-only router for configuration and execution.
@@ -363,7 +374,7 @@ Dedicated API route for executing match batches, following the same pattern as `
 // Auth: admin only (validate via Supabase session)
 //
 // 1. Validate batchId and admin session
-// 2. Claim the batch (set status = 'running')
+// 2. Claim or reclaim stale batch execution (set status = 'running', set claimToken + heartbeat)
 // 3. Call runMatchBatch(batchId)
 // 4. Return batch summary
 //
@@ -441,6 +452,7 @@ Order consistency should be computed in query code, not stored as the source of 
 6. Manual test: create the same batch twice with the same `idempotencyKey` and verify the existing batch is returned
 7. Manual test: inspect one evaluation and confirm `appendix_json`, `natural_response`, and execution metadata are stored
 8. Manual test: verify both tools in the matchup belong to the selected category before batch creation succeeds
+9. Manual test: start a batch run, kill the worker mid-run, wait past the stale threshold, then rerun and verify the stale batch is reclaimed and completed without manual DB edits
 
 ---
 
@@ -469,7 +481,9 @@ Recommended scope for that follow-up:
 This follow-up will also require comment system changes:
 
 - Add `'match'` to `commentTargetEnum`
-- Update `src/server/api/routers/comment.ts` validation and persistence to support `targetType = 'match'`
+- Update `src/server/api/routers/comment.ts` target validation and create/listByTarget handling to support `targetType = 'match'`
+- Extend `displayableTargetWhere` in `comment.listRecent` so match-targeted comments are included in public recent-comment reads
+- Extend `comment.listRecent` target loading and context rendering branches so match comments render label/sublabel/href instead of being dropped
 - Decide on the stable match identity used for comments and page queries
 
 The simplest public API shape is likely a dedicated public match query, such as `matchPublic.getBySlug`, rather than turning `benchmarkMatch.headToHead` into the page's one payload for everything.
