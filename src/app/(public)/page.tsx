@@ -63,7 +63,7 @@ export default async function HomePage() {
                             </Badge>
                           </div>
                           <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                            <Avatar className="h-5 w-5 bg-muted-foreground/25">
+                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-1 ring-muted-foreground/25">
                               {m.toolA.logoUrl && (
                                 <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} />
                               )}
@@ -73,7 +73,7 @@ export default async function HomePage() {
                             </Avatar>
                             {m.toolA.name}
                             <span className="text-muted-foreground">vs</span>
-                            <Avatar className="h-5 w-5 bg-muted-foreground/25">
+                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-1 ring-muted-foreground/25">
                               {m.toolB.logoUrl && (
                                 <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} />
                               )}
