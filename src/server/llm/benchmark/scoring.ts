@@ -11,6 +11,7 @@ import {
   benchmarkRuns,
   tools,
 } from '~/server/db/schema'
+import type { PromptLevel } from '~/server/llm/prompts'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
 
@@ -19,7 +20,6 @@ type DatabaseClient = PostgresJsDatabase<typeof schema>
 // ---------------------------------------------------------------------------
 
 export type WindowType = 'run_day' | 'trailing_7d' | 'trailing_28d' | 'season_to_date'
-export type PromptTier = 'basic' | 'intermediate' | 'advanced'
 export type ModelTier = 'frontier' | 'mid' | 'small'
 
 export type ScoringFilters = {
@@ -27,7 +27,7 @@ export type ScoringFilters = {
   seasonId: string
   windowType: WindowType
   anchorDate: string // YYYY-MM-DD
-  promptTier?: PromptTier
+  promptLevel?: PromptLevel
   modelTier?: ModelTier
 }
 
@@ -67,7 +67,7 @@ export type HeadToHeadFilters = {
   toolBId: string
   windowType: WindowType
   anchorDate: string
-  promptTier?: PromptTier
+  promptLevel?: PromptLevel
   modelTier?: ModelTier
 }
 
@@ -75,7 +75,7 @@ type RankingFilters = {
   seasonId: string
   windowType: WindowType
   anchorDate: string
-  promptTier?: PromptTier
+  promptLevel?: PromptLevel
   modelTier?: ModelTier
 }
 
@@ -103,7 +103,7 @@ export type HeadToHeadResult = {
 export type HeadToHeadBreakdownEntry = {
   id: string
   label: string
-  tier: PromptTier | ModelTier
+  tier: PromptLevel | ModelTier
   aWins: number
   bWins: number
   abstains: number
@@ -246,7 +246,7 @@ export type DecisionRow = {
   modelTier: 'frontier' | 'mid' | 'small'
   promptVersionId: string
   promptSlug: string
-  promptTier: 'basic' | 'intermediate' | 'advanced'
+  promptLevel: PromptLevel
   toolName: string | null
   toolSlug: string | null
   toolLogoUrl: string | null
@@ -256,7 +256,7 @@ async function queryDecisions(
   db: DatabaseClient,
   runIds: string[],
   categoryIds: string[],
-  filters: { promptTier?: PromptTier; modelTier?: ModelTier },
+  filters: { promptLevel?: PromptLevel; modelTier?: ModelTier },
 ): Promise<DecisionRow[]> {
   if (runIds.length === 0 || categoryIds.length === 0) return []
 
@@ -268,8 +268,8 @@ async function queryDecisions(
     sql`${benchmarkCaseDecisions.decisionType} != 'invalid'`,
   ]
 
-  if (filters.promptTier) {
-    conditions.push(eq(benchmarkPromptVersions.tier, filters.promptTier))
+  if (filters.promptLevel) {
+    conditions.push(eq(benchmarkPromptVersions.level, filters.promptLevel))
   }
   if (filters.modelTier) {
     conditions.push(eq(benchmarkModelSnapshots.tier, filters.modelTier))
@@ -286,7 +286,7 @@ async function queryDecisions(
       modelTier: benchmarkModelSnapshots.tier,
       promptVersionId: benchmarkCases.promptVersionId,
       promptSlug: benchmarkPromptVersions.slug,
-      promptTier: benchmarkPromptVersions.tier,
+      promptLevel: benchmarkPromptVersions.level,
       toolName: tools.name,
       toolSlug: tools.slug,
       toolLogoUrl: tools.logoUrl,
@@ -337,7 +337,7 @@ export async function fetchDecisions(
   db: DatabaseClient,
   runIds: string[],
   categoryIds: string[],
-  filters?: { promptTier?: PromptTier; modelTier?: ModelTier },
+  filters?: { promptLevel?: PromptLevel; modelTier?: ModelTier },
 ): Promise<DecisionRow[]> {
   return queryDecisions(db, runIds, categoryIds, filters ?? {})
 }
@@ -524,7 +524,7 @@ export function headToHeadFromDecisions(
       getBreakdownEntry(promptBreakdownMap, {
         id: d.promptVersionId,
         label: d.promptSlug,
-        tier: d.promptTier,
+        tier: d.promptLevel,
       }),
       outcome,
     )
@@ -573,7 +573,7 @@ export async function computeCategoryRanking(
     seasonId: filters.seasonId,
     windowType: filters.windowType,
     anchorDate: filters.anchorDate,
-    promptTier: filters.promptTier,
+    promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
   })
 }
@@ -591,7 +591,7 @@ export async function computeCategoryGroupRanking(
     seasonId: filters.seasonId,
     windowType: filters.windowType,
     anchorDate: filters.anchorDate,
-    promptTier: filters.promptTier,
+    promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
   })
 }
@@ -621,7 +621,7 @@ async function computeRankingForCategoryIds(
 
   const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
   const decisions = await queryDecisions(db, runIds, filters.categoryIds, {
-    promptTier: filters.promptTier,
+    promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
   })
 
@@ -689,7 +689,7 @@ async function computeRankingForCategoryIds(
   if (previousRunIds.length > 0) {
     const prevWeights = await getWeightConfigsByRunIds(db, previousRunIds)
     const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryIds, {
-      promptTier: filters.promptTier,
+      promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
     })
 
@@ -805,7 +805,7 @@ export async function computeHeadToHead(
 
   const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
   const decisions = await queryDecisions(db, runIds, [filters.categoryId], {
-    promptTier: filters.promptTier,
+    promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
   })
 
@@ -849,7 +849,7 @@ export async function computeHeadToHead(
       getBreakdownEntry(promptBreakdown, {
         id: d.promptVersionId,
         label: d.promptSlug,
-        tier: d.promptTier,
+        tier: d.promptLevel,
       }),
       outcome,
     )
