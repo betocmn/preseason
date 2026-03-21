@@ -1045,7 +1045,7 @@ const PROMPTS = [
   {
     title: 'SaaS Application',
     slug: 'saas-application',
-    level: 'beginner' as const,
+    level: 'intermediate' as const,
     description: 'Full-featured SaaS starter with auth, billing, and team management',
     contentMd:
       'Build a SaaS application with user authentication, subscription billing, and a dashboard. Include team management, role-based access control, usage analytics, and email notifications for billing events.',
@@ -1072,7 +1072,7 @@ const PROMPTS = [
   {
     title: 'E-commerce Store',
     slug: 'ecommerce-store',
-    level: 'beginner' as const,
+    level: 'intermediate' as const,
     description: 'Online store with catalog, cart, payments, and order management',
     contentMd:
       'Build an e-commerce store with product catalog, shopping cart, and payment processing. Include inventory management, order tracking, customer reviews, discount codes, and email order confirmations.',
@@ -1090,7 +1090,7 @@ const PROMPTS = [
   {
     title: 'Project Management Tool',
     slug: 'project-management-tool',
-    level: 'beginner' as const,
+    level: 'intermediate' as const,
     description: 'Kanban-style project management with real-time updates',
     contentMd:
       'Create a project management tool like Trello with real-time collaboration. Include boards, lists, cards, drag-and-drop, team workspaces, file attachments, activity logs, and due date notifications.',
@@ -1108,7 +1108,7 @@ const PROMPTS = [
   {
     title: 'Social Media Platform',
     slug: 'social-media-platform',
-    level: 'beginner' as const,
+    level: 'advanced' as const,
     description: 'Social network with feed, messaging, and media sharing',
     contentMd:
       'Build a social media platform with user profiles, posts, likes, and comments. Include a news feed algorithm, image/video uploads, follow system, direct messaging, and push notifications.',
@@ -1144,7 +1144,7 @@ const PROMPTS = [
   {
     title: 'Online Learning Platform',
     slug: 'online-learning-platform',
-    level: 'beginner' as const,
+    level: 'intermediate' as const,
     description: 'E-learning platform with courses, quizzes, and progress tracking',
     contentMd:
       'Create an online learning platform with courses, quizzes, and certificates. Include video hosting, progress tracking, discussion forums, instructor dashboards, payment for premium courses, and completion certificates.',
@@ -1153,7 +1153,7 @@ const PROMPTS = [
   {
     title: 'Multi-tenant CRM',
     slug: 'multi-tenant-crm',
-    level: 'beginner' as const,
+    level: 'advanced' as const,
     description: 'Customer relationship management with multi-tenancy and email',
     contentMd:
       'Build a multi-tenant CRM with contact management and email integration. Include deal pipelines, task management, activity logging, email templates, team workspaces, reporting dashboards, and API integrations.',
@@ -1171,7 +1171,7 @@ const PROMPTS = [
   {
     title: 'Chat Application',
     slug: 'chat-application',
-    level: 'beginner' as const,
+    level: 'intermediate' as const,
     description: 'Real-time messaging app with file sharing and group chats',
     contentMd:
       'Build a chat application with real-time messaging and file sharing. Include group chats, direct messages, typing indicators, read receipts, message search, emoji reactions, and push notifications.',
@@ -1188,7 +1188,7 @@ const PROMPTS = [
   {
     title: 'Fitness Tracking App',
     slug: 'fitness-tracking-app',
-    level: 'beginner' as const,
+    level: 'advanced' as const,
     description: 'Workout tracker with progress visualization and social features',
     contentMd:
       'Create a fitness tracking app with workout logging and progress charts. Include exercise library, custom workout plans, body measurements, goal setting, social challenges, and integration with wearable devices.',
