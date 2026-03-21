@@ -135,9 +135,10 @@ Constraints:
 | `trigger_mode` | matchTriggerModeEnum | `'manual'` or `'benchmark_run'` |
 | `idempotency_key` | varchar(255), nullable | Unique when present |
 | `status` | matchBatchStatusEnum | |
-| `total_evaluations` | integer, default 0 | |
+| `total_evaluations` | integer, default 0 | Frozen at batch creation from the materialized evaluation rows; typically `2 × season_model_count` |
 | `completed_evaluations` | integer, default 0 | |
-| `failed_evaluations` | integer, default 0 | |
+| `failed_evaluations` | integer, default 0 | Transport/runtime failures that did not produce parseable output |
+| `invalid_output_evaluations` | integer, default 0 | Parser failures or model-drift-invalidated outputs that produced no usable result |
 | `started_at` | timestamp w/ tz, nullable | |
 | `claim_token` | uuid, nullable | Random token set when a worker claims execution; ownership-sensitive updates must include this token in the `where` clause |
 | `last_heartbeat_at` | timestamp w/ tz, nullable | Updated periodically while `status = 'running'`; used for stale-run reclaim |
@@ -155,7 +156,7 @@ Constraints:
 - Composite FK on `(benchmark_run_id, season_id)` referencing `benchmarkRuns(id, season_id)` — prevents benchmark-linked batches from drifting across seasons. Add a lightweight unique index on `benchmarkRuns(id, season_id)` so PostgreSQL can enforce this FK
 - When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, `tool_b_id`, and `prompt_template_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)`. This prevents config-backed batches from drifting on any dimension — including prompt version — from the config's definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
-**`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
+**`preseason_match_evaluation`** — one frozen result slot per `(batch, model, presentation_order)`
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -164,7 +165,7 @@ Constraints:
 | `season_id` | uuid FK → benchmarkSeasons | Denormalized from batch for composite FK |
 | `model_snapshot_id` | uuid FK → benchmarkModelSnapshots | Must come from the season's frozen model set |
 | `presentation_order` | matchPresentationOrderEnum | `'a_first'` or `'b_first'` |
-| `status` | matchEvaluationStatusEnum | |
+| `status` | matchEvaluationStatusEnum | Materialized as `'pending'` at batch creation, then finalized by the runner |
 | `winner_decision` | matchWinnerDecisionEnum, nullable | |
 | `winner_id` | uuid FK → tools, nullable | null for tie or abstain |
 | `comparison_summary` | text, nullable | Short natural-language comparison summary |
@@ -310,12 +311,14 @@ Executes all evaluations for a single batch.
 
 Key requirements:
 
-- Load model snapshots from the season's frozen model set via `benchmarkSeasonModels`
-- Run each model twice with presentation order swapped
+- Load the materialized `matchEvaluations` rows for the batch and execute exactly those frozen `(model_snapshot_id, presentation_order)` slots
+- Do not re-read `benchmarkSeasonModels` at execution time; the batch's model panel is pinned when the batch is created
 - Apply the same model drift checks used by `src/server/llm/benchmark/runner.ts`
 - Store the same execution metadata shape already used for `benchmarkCaseResults`
 - Map `winner = 'tool_a'` back to canonical tool IDs based on `presentation_order`
 - Remap appendix `tool_a` and `tool_b` evidence blocks into canonical `tool_a_pros` / `tool_a_cons` / `tool_b_pros` / `tool_b_cons` before persisting, so stored evidence always matches canonical tool A/B regardless of prompt order
+- Update `completed_evaluations`, `failed_evaluations`, and `invalid_output_evaluations` from the evaluation rows, mirroring the benchmark runner's separate handling of invalid outputs
+- Finalize the batch as `'completed'` only when `completed_evaluations = total_evaluations`; if any evaluation row remains `failed` or `invalid_output` after execution, finalize the batch as `'failed'`
 
 ### `src/server/llm/match/batches.ts`
 
@@ -323,11 +326,17 @@ Create and claim batches safely.
 
 Key exports:
 
-- `createMatchBatch(input)` — canonicalizes tool order, validates category membership, writes an idempotent batch
-- `runMatchBatch(batchId)` — executes a claimed batch
+- `createMatchBatch(input)` — canonicalizes tool order, validates category membership, snapshots the current season model panel into pending evaluation rows, and writes an idempotent batch
+- `runMatchBatch(batchId)` — executes a claimed batch's pre-materialized evaluation rows
 - `buildBenchmarkRunIdempotencyKey(runId, configId, promptTemplateId)` — helper for future automated triggers
 
 This helper is the main guard against duplicate benchmark-linked batches.
+
+Batch creation rules:
+
+- When a batch is created, snapshot the current season model panel by inserting one pending `matchEvaluations` row per `(model_snapshot_id, presentation_order)` pair for the batch
+- Set `total_evaluations` from those inserted rows and leave execution-time selection to the materialized rows, not the live `benchmarkSeasonModels` table
+- Retries must reuse the same frozen evaluation rows for that batch so the `idempotency_key` always maps to one reproducible model panel
 
 Execution ownership and reclaim rules:
 
@@ -355,7 +364,8 @@ disableConfig:
 createBatch:
   // Create a one-off or config-backed batch
   // Accept optional idempotencyKey
-  // Does NOT execute the batch — only writes the pending row
+  // Materialize pending evaluation rows for the current season model panel
+  // Does NOT execute the batch — only writes the pending batch + evaluation rows
 
 listBatches:
   // Paginated admin list
@@ -457,6 +467,8 @@ Order consistency should be computed in query code, not stored as the source of 
 7. Manual test: inspect one evaluation and confirm `appendix_json`, `natural_response`, and execution metadata are stored
 8. Manual test: verify both tools in the matchup belong to the selected category before batch creation succeeds
 9. Manual test: start a batch run, kill the worker mid-run, wait past the stale threshold, then rerun and verify the stale batch is reclaimed and completed without manual DB edits
+10. Manual test: create a batch, change the season's model panel before execution, then run the batch and verify only the originally materialized evaluation rows execute
+11. Manual test: force one evaluation into `invalid_output` and verify `invalid_output_evaluations` increments and the batch finalizes as `failed`, not `completed`
 
 ---
 
