@@ -131,7 +131,7 @@ Constraints:
 | `tool_a_id` | uuid FK → tools | Canonical order |
 | `tool_b_id` | uuid FK → tools | Canonical order |
 | `prompt_template_id` | uuid FK → matchPromptTemplates | |
-| `benchmark_run_id` | uuid FK → benchmarkRuns, nullable | Set only for benchmark-linked batches |
+| `benchmark_run_id` | uuid FK → benchmarkRuns, nullable | Set only for benchmark-linked batches; constrained with `season_id` so a batch cannot point at a run from another season |
 | `trigger_mode` | matchTriggerModeEnum | `'manual'` or `'benchmark_run'` |
 | `idempotency_key` | varchar(255), nullable | Unique when present |
 | `status` | matchBatchStatusEnum | |
@@ -152,6 +152,7 @@ Constraints:
 - Unique on `(id, season_id)` — required as the FK target for evaluations (lightweight, since `id` is already the PK)
 - Check: when `status = 'running'`, both `claim_token` and `last_heartbeat_at` must be non-null
 - Index on `(status, last_heartbeat_at)` to make stale-run reclaim queries efficient
+- Composite FK on `(benchmark_run_id, season_id)` referencing `benchmarkRuns(id, season_id)` — prevents benchmark-linked batches from drifting across seasons. Add a lightweight unique index on `benchmarkRuns(id, season_id)` so PostgreSQL can enforce this FK
 - When `config_id` is not null, the batch's `season_id`, `category_id`, `tool_a_id`, `tool_b_id`, and `prompt_template_id` must match the referenced config. Enforce this with a composite FK: `(config_id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)` referencing the unique on `matchConfigs(id, season_id, category_id, tool_a_id, tool_b_id, prompt_template_id)`. This prevents config-backed batches from drifting on any dimension — including prompt version — from the config's definition. For one-off manual batches (`config_id IS NULL`), no composite FK applies
 
 **`preseason_match_evaluation`** — one result per `(batch, model, presentation_order)`
@@ -167,10 +168,10 @@ Constraints:
 | `winner_decision` | matchWinnerDecisionEnum, nullable | |
 | `winner_id` | uuid FK → tools, nullable | null for tie or abstain |
 | `comparison_summary` | text, nullable | Short natural-language comparison summary |
-| `tool_a_pros` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` |
-| `tool_a_cons` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` |
-| `tool_b_pros` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` |
-| `tool_b_cons` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` |
+| `tool_a_pros` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` for canonical tool A after presentation-order remap |
+| `tool_a_cons` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` for canonical tool A after presentation-order remap |
+| `tool_b_pros` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` for canonical tool B after presentation-order remap |
+| `tool_b_cons` | jsonb, nullable | Array of `{ phrase, evidence_sentence }` for canonical tool B after presentation-order remap |
 | `confidence` | real, nullable | 0-1 self-reported |
 | `natural_response` | text, nullable | Natural-language answer before the appendix |
 | `appendix_raw` | text, nullable | Raw JSON appendix |
@@ -314,6 +315,7 @@ Key requirements:
 - Apply the same model drift checks used by `src/server/llm/benchmark/runner.ts`
 - Store the same execution metadata shape already used for `benchmarkCaseResults`
 - Map `winner = 'tool_a'` back to canonical tool IDs based on `presentation_order`
+- Remap appendix `tool_a` and `tool_b` evidence blocks into canonical `tool_a_pros` / `tool_a_cons` / `tool_b_pros` / `tool_b_cons` before persisting, so stored evidence always matches canonical tool A/B regardless of prompt order
 
 ### `src/server/llm/match/batches.ts`
 
@@ -421,6 +423,8 @@ When mapping back to canonical tool IDs:
 
 - In `a_first`, `winner = 'tool_a'` means `winnerId = toolAId`
 - In `b_first`, `winner = 'tool_a'` means `winnerId = toolBId`
+- In `a_first`, appendix `tool_a.*` persists into canonical `tool_a_*`, and appendix `tool_b.*` persists into canonical `tool_b_*`
+- In `b_first`, appendix `tool_a.*` persists into canonical `tool_b_*`, and appendix `tool_b.*` persists into canonical `tool_a_*`
 
 Order consistency should be computed in query code, not stored as the source of truth.
 

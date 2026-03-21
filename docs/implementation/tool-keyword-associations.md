@@ -17,7 +17,7 @@ The goal of this feature is to generate later-analysis data that answers questio
 
 Do not store only mutable aggregate counts in v1. Store source-level mention rows first, then derive rollups later.
 
-- Match evaluations should be ingested directly from structured `appendix_json`
+- Match evaluations should be ingested from the canonical persisted evidence fields derived from structured match appendices
 - Benchmark decision reasoning can be backfilled separately with a cheap extraction model
 - Every extracted mention should keep source IDs, source field, evidence, and extractor version
 - Rollups should be query-derived or added later as a view or materialized view
@@ -29,12 +29,12 @@ This is the data model that best supports future analysis, reprocessing, and pro
 
 ### Primary Source: Direct Match Evaluations
 
-These are the best source of association data because they are already tool-scoped:
+These are the best source of association data because they are already tool-scoped after match ingestion normalizes prompt-order output into canonical tool columns:
 
-- `tool_a.pros`
-- `tool_a.cons`
-- `tool_b.pros`
-- `tool_b.cons`
+- `tool_a_pros`
+- `tool_a_cons`
+- `tool_b_pros`
+- `tool_b_cons`
 
 Each item includes both a short phrase and an evidence sentence, so no second LLM pass is needed for this source.
 
@@ -172,14 +172,14 @@ export type ToolAssociationMentionInput = {
 
 ### `src/server/tool-associations/match-ingest.ts`
 
-Reads structured match evaluation payloads and writes mention rows directly.
+Reads normalized structured match evaluation fields and writes mention rows directly.
 
 Key behavior:
 
-- Read from `matchEvaluations.appendixJson`
-- Ingest `tool_a.pros`, `tool_a.cons`, `tool_b.pros`, `tool_b.cons`
+- Read from persisted `matchEvaluations.toolAPros`, `toolACons`, `toolBPros`, and `toolBCons`
+- Treat those columns as already normalized to canonical tool A/B during match evaluation ingestion; `appendix_json` remains the raw audit artifact
 - Do not extract from `comparison_summary`
-- Map `tool_a_*` and `tool_b_*` back to canonical tool IDs based on the stored batch and presentation order
+- Map canonical `tool_a_*` and `tool_b_*` fields to the batch's canonical tool IDs directly
 - Write mentions with `extractorVersion = 'match-ingest-v1'`
 
 This path should not call an LLM.
@@ -226,8 +226,8 @@ export type ProcessorOptions = {
 Behavior:
 
 1. **Claim phase**: Select a batch of eligible sources using `FOR UPDATE SKIP LOCKED` to prevent concurrent workers from claiming the same rows. Eligible sources are those with no `source_state` row for the extractor version, or with `status = 'failed'`, or with `status = 'running'` where `claimed_at` is older than a configurable stale threshold (default: 10 minutes). For `match_evaluation`, additionally require `evaluation.status = 'completed'` and `appendix_json IS NOT NULL`. For `benchmark_case_decision`, require `decision_type = 'tool'` AND `tool_id IS NOT NULL` AND reasoning is present — decisions with `decision_type = 'none'` have no tool to attribute associations to, and including them would either fail inserts (non-null `tool_id` required on mentions) or create meaningless associations. Generate a claim token for the worker and upsert a `source_state` row with `status = 'running'`, `claimed_at = now()`, and that `claim_token` for each claimed source before releasing the lock. This mirrors the claim pattern in `src/server/llm/benchmark/runner.ts:206-255`
-2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting. While the batch is running, refresh `claimed_at` on an interval (for example, every 60 seconds) for rows still owned by this worker (`status = 'running'` and matching `claim_token`) so long LLM backfills are not reclaimed mid-flight
-3. **Finalize phase**: Update the `source_state` to `'completed'` (with `mention_count` and `processed_at`) or `'failed'` (with `error_message` and `processed_at`) using `where source_type = ? and source_id = ? and extractor_version = ? and claim_token = ?`, then clear `claim_token`. Sources in `'running'` are reclaimable only when `claimed_at` is stale, preventing concurrent workers from stealing active work
+2. **Process phase**: For each claimed source, run extraction (direct ingest for match evaluations, LLM call for benchmark decisions). On retry of a previously failed source, delete any partial mention rows from the prior attempt before reinserting, but only after opening a short transaction that re-selects the `source_state` row `FOR UPDATE` with the same `source_type`, `source_id`, `extractor_version`, and `claim_token`. If that row is missing, no longer `running`, or the token changed, treat ownership as lost and skip all mention-row mutations. While the batch is running, refresh `claimed_at` on an interval (for example, every 60 seconds) for rows still owned by this worker (`status = 'running'` and matching `claim_token`) so long LLM backfills are not reclaimed mid-flight
+3. **Finalize phase**: Inside that same ownership-verified transaction, insert the replacement mention rows and update the `source_state` to `'completed'` (with `mention_count` and `processed_at`) or `'failed'` (with `error_message` and `processed_at`) using `where source_type = ? and source_id = ? and extractor_version = ? and claim_token = ?`, then clear `claim_token`. Sources in `'running'` are reclaimable only when `claimed_at` is stale, preventing concurrent workers from stealing active work
 
 Only `status = 'completed'` is terminal. Non-completed evaluations (failed, invalid_output, pending) are never selected. Because processing is versioned, the same source can also be reprocessed with a new extractor version without deleting old data.
 
@@ -288,7 +288,7 @@ This is enough to support later analysis without locking the storage model into 
 
 For match evaluations:
 
-- Use only `tool_a.pros`, `tool_a.cons`, `tool_b.pros`, and `tool_b.cons`
+- Use only canonical `tool_a_pros`, `tool_a_cons`, `tool_b_pros`, and `tool_b_cons`
 - Do not attribute `comparison_summary` to the winning tool
 - Do not run a second extraction model over match data in v1
 
