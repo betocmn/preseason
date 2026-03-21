@@ -312,6 +312,7 @@ Executes all evaluations for a single batch.
 Key requirements:
 
 - Load the materialized `matchEvaluations` rows for the batch and execute exactly those frozen `(model_snapshot_id, presentation_order)` slots
+- Skip rows already in `status = 'completed'` on reclaim or manual rerun; only `pending`, `failed`, and `invalid_output` rows are eligible to execute again
 - Do not re-read `benchmarkSeasonModels` at execution time; the batch's model panel is pinned when the batch is created
 - Apply the same model drift checks used by `src/server/llm/benchmark/runner.ts`
 - Store the same execution metadata shape already used for `benchmarkCaseResults`
@@ -327,7 +328,7 @@ Create and claim batches safely.
 Key exports:
 
 - `createMatchBatch(input)` — canonicalizes tool order, validates category membership, snapshots the current season model panel into pending evaluation rows, and writes an idempotent batch
-- `runMatchBatch(batchId)` — executes a claimed batch's pre-materialized evaluation rows
+- `runMatchBatch(batchId)` — executes a claimed batch's pending or retryable pre-materialized evaluation rows
 - `buildBenchmarkRunIdempotencyKey(runId, configId, promptTemplateId)` — helper for future automated triggers
 
 This helper is the main guard against duplicate benchmark-linked batches.
@@ -336,13 +337,14 @@ Batch creation rules:
 
 - When a batch is created, snapshot the current season model panel by inserting one pending `matchEvaluations` row per `(model_snapshot_id, presentation_order)` pair for the batch
 - Set `total_evaluations` from those inserted rows and leave execution-time selection to the materialized rows, not the live `benchmarkSeasonModels` table
-- Retries must reuse the same frozen evaluation rows for that batch so the `idempotency_key` always maps to one reproducible model panel
+- Retries must reuse the same frozen evaluation rows for that batch so the `idempotency_key` always maps to one reproducible model panel, preserving already-completed rows and retrying only `failed` / `invalid_output` / `pending` slots
 
 Execution ownership and reclaim rules:
 
 - Claim by atomically updating from `pending`/`failed` (or from stale `running`) to `running`, setting `started_at`, fresh `claim_token`, and `last_heartbeat_at = now()`
 - Treat `running` as stale when `last_heartbeat_at` is older than a configurable threshold (default: 10 minutes), allowing safe reclaim after worker crashes
 - While executing, heartbeat-update `last_heartbeat_at` on an interval (for example, every 60 seconds) using `where id = ? and claim_token = ?`
+- Before every `matchEvaluations` mutation, open a short transaction that locks and verifies the owning batch row with the same `id`, `status = 'running'`, and `claim_token`. If that ownership check fails, stop processing and return the latest stored batch state instead of writing stale results
 - Finalization updates (`completed`, `failed`, counters, `completed_at`) must also use `where id = ? and claim_token = ?`; if zero rows are affected, treat ownership as lost and return the latest stored batch state instead of writing stale results
 
 ### `src/server/api/routers/match.ts`
@@ -466,9 +468,10 @@ Order consistency should be computed in query code, not stored as the source of 
 6. Manual test: create the same batch twice with the same `idempotencyKey` and verify the existing batch is returned
 7. Manual test: inspect one evaluation and confirm `appendix_json`, `natural_response`, and execution metadata are stored
 8. Manual test: verify both tools in the matchup belong to the selected category before batch creation succeeds
-9. Manual test: start a batch run, kill the worker mid-run, wait past the stale threshold, then rerun and verify the stale batch is reclaimed and completed without manual DB edits
+9. Manual test: start a batch run, let some evaluation rows complete, kill the worker mid-run, wait past the stale threshold, then rerun and verify the stale batch is reclaimed, completed rows are not re-executed, and only unfinished or retryable rows run again
 10. Manual test: create a batch, change the season's model panel before execution, then run the batch and verify only the originally materialized evaluation rows execute
 11. Manual test: force one evaluation into `invalid_output` and verify `invalid_output_evaluations` increments and the batch finalizes as `failed`, not `completed`
+12. Manual test: simulate ownership loss while one model response is in flight and verify the stale worker cannot update `matchEvaluations` after another worker reclaims the batch
 
 ---
 
