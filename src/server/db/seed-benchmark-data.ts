@@ -76,13 +76,6 @@ function classifyModelTier(name: string): 'frontier' | 'mid' | 'small' {
   return 'small'
 }
 
-// Prompt tier based on number of expected categories
-function classifyPromptTier(categoryCount: number): 'basic' | 'intermediate' | 'advanced' {
-  if (categoryCount <= 3) return 'basic'
-  if (categoryCount <= 6) return 'intermediate'
-  return 'advanced'
-}
-
 // ============================================================================
 // CLEANUP
 // ============================================================================
@@ -233,7 +226,6 @@ async function seedBenchmarkData() {
       .map((slug) => categorySlugToId.get(slug))
       .filter((id): id is string => id !== undefined)
 
-    const tier = classifyPromptTier(categoryIds.length)
     const contentHash = crypto
       .createHash('sha256')
       .update(`${prompt.slug}-${prompt.level}-v1`)
@@ -246,7 +238,6 @@ async function seedBenchmarkData() {
         slug: prompt.slug,
         level: prompt.level,
         version: 1,
-        tier,
         contentMd: prompt.contentMd ?? prompt.description ?? `Prompt: ${prompt.title}`,
         contentHash,
         promptContractVersion: '1.0',
