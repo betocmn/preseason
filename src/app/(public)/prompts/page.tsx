@@ -6,6 +6,7 @@ import { PromptFilters } from '~/components/public/prompt-filters'
 
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
+import { formatPromptLevel } from '~/lib/prompt-levels'
 import { promptLevelEnum } from '~/server/db/schema'
 import { api } from '~/trpc/server'
 
@@ -21,13 +22,6 @@ export const metadata: Metadata = {
     title: 'Prompts',
     description: 'Browse vibe-coding prompts used to generate tool recommendations.',
   },
-}
-
-function formatLevel(level: string): string {
-  return level
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
 }
 
 type Props = {
@@ -78,7 +72,7 @@ export default async function PromptsPage({ searchParams }: Props) {
               <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
                 <CardContent className="p-4">
                   <Badge variant="outline" className="mb-2 text-[11px] font-normal">
-                    {formatLevel(prompt.level)}
+                    {formatPromptLevel(prompt.level)}
                   </Badge>
                   <h3 className="font-medium">{prompt.title}</h3>
                   {prompt.description && (

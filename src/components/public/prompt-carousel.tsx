@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { formatPromptLevel } from '~/lib/prompt-levels'
 import { cn } from '~/lib/utils'
 
 type PromptWithTools = {
@@ -24,13 +25,6 @@ type PromptWithTools = {
 
 type PromptCarouselProps = {
   prompts: PromptWithTools[]
-}
-
-function formatLevel(level: string): string {
-  return level
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
 }
 
 export function PromptCarousel({ prompts }: PromptCarouselProps) {
@@ -72,7 +66,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                       variant="outline"
                       className="text-[11px] font-normal text-muted-foreground"
                     >
-                      {formatLevel(prompt.level)}
+                      {formatPromptLevel(prompt.level)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {currentIndex + 1} of {prompts.length}
