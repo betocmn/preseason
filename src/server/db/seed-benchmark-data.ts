@@ -14,6 +14,8 @@ import crypto from 'node:crypto'
 import { isNotNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { isPromptLevel } from '~/server/llm/prompts'
+import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 import * as schema from './schema'
 
@@ -226,10 +228,10 @@ async function seedBenchmarkData() {
       .map((slug) => categorySlugToId.get(slug))
       .filter((id): id is string => id !== undefined)
 
-    const contentHash = crypto
-      .createHash('sha256')
-      .update(`${prompt.slug}-${prompt.level}-v1`)
-      .digest('hex')
+    const contentMd = prompt.contentMd ?? prompt.description ?? `Prompt: ${prompt.title}`
+    const level = isPromptLevel(prompt.level) ? prompt.level : 'beginner'
+    const contentHash = crypto.createHash('sha256').update(`${contentMd}:${level}`).digest('hex')
+    const systemPromptSnapshot = buildGenerationSystemPrompt(level)
 
     const [pv] = await db
       .insert(schema.benchmarkPromptVersions)
@@ -238,8 +240,9 @@ async function seedBenchmarkData() {
         slug: prompt.slug,
         level: prompt.level,
         version: 1,
-        contentMd: prompt.contentMd ?? prompt.description ?? `Prompt: ${prompt.title}`,
+        contentMd,
         contentHash,
+        systemPromptSnapshot,
         promptContractVersion: '1.0',
         isActive: true,
       })
