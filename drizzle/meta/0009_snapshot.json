@@ -145,8 +145,12 @@
           "name": "preseason_benchmark_case_decision_case_result_id_preseason_benchmark_case_result_id_fk",
           "tableFrom": "preseason_benchmark_case_decision",
           "tableTo": "preseason_benchmark_case_result",
-          "columnsFrom": ["case_result_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "case_result_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -154,8 +158,12 @@
           "name": "preseason_benchmark_case_decision_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_benchmark_case_decision",
           "tableTo": "preseason_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -163,8 +171,12 @@
           "name": "preseason_benchmark_case_decision_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_benchmark_case_decision",
           "tableTo": "preseason_tool",
-          "columnsFrom": ["tool_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -421,8 +433,12 @@
           "name": "preseason_benchmark_case_result_season_id_preseason_benchmark_season_id_fk",
           "tableFrom": "preseason_benchmark_case_result",
           "tableTo": "preseason_benchmark_season",
-          "columnsFrom": ["season_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -430,8 +446,12 @@
           "name": "preseason_benchmark_case_result_run_id_preseason_benchmark_run_id_fk",
           "tableFrom": "preseason_benchmark_case_result",
           "tableTo": "preseason_benchmark_run",
-          "columnsFrom": ["run_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -439,8 +459,12 @@
           "name": "preseason_benchmark_case_result_case_id_preseason_benchmark_case_id_fk",
           "tableFrom": "preseason_benchmark_case_result",
           "tableTo": "preseason_benchmark_case",
-          "columnsFrom": ["case_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "case_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -522,8 +546,12 @@
           "name": "preseason_benchmark_case_season_id_preseason_benchmark_season_id_fk",
           "tableFrom": "preseason_benchmark_case",
           "tableTo": "preseason_benchmark_season",
-          "columnsFrom": ["season_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -531,8 +559,12 @@
           "name": "preseason_benchmark_case_prompt_version_id_preseason_benchmark_prompt_version_id_fk",
           "tableFrom": "preseason_benchmark_case",
           "tableTo": "preseason_benchmark_prompt_version",
-          "columnsFrom": ["prompt_version_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "prompt_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -540,8 +572,12 @@
           "name": "preseason_benchmark_case_model_snapshot_id_preseason_benchmark_model_snapshot_id_fk",
           "tableFrom": "preseason_benchmark_case",
           "tableTo": "preseason_benchmark_model_snapshot",
-          "columnsFrom": ["model_snapshot_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "model_snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -549,8 +585,14 @@
           "name": "benchmark_case_season_prompt_fk",
           "tableFrom": "preseason_benchmark_case",
           "tableTo": "preseason_benchmark_season_prompt",
-          "columnsFrom": ["season_id", "prompt_version_id"],
-          "columnsTo": ["season_id", "prompt_version_id"],
+          "columnsFrom": [
+            "season_id",
+            "prompt_version_id"
+          ],
+          "columnsTo": [
+            "season_id",
+            "prompt_version_id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -558,8 +600,14 @@
           "name": "benchmark_case_season_model_fk",
           "tableFrom": "preseason_benchmark_case",
           "tableTo": "preseason_benchmark_season_model",
-          "columnsFrom": ["season_id", "model_snapshot_id"],
-          "columnsTo": ["season_id", "model_snapshot_id"],
+          "columnsFrom": [
+            "season_id",
+            "model_snapshot_id"
+          ],
+          "columnsTo": [
+            "season_id",
+            "model_snapshot_id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -690,8 +738,12 @@
           "name": "preseason_benchmark_model_snapshot_llm_id_preseason_llm_id_fk",
           "tableFrom": "preseason_benchmark_model_snapshot",
           "tableTo": "preseason_llm",
-          "columnsFrom": ["llm_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "llm_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -701,7 +753,9 @@
         "preseason_benchmark_model_snapshot_snapshot_key_unique": {
           "name": "preseason_benchmark_model_snapshot_snapshot_key_unique",
           "nullsNotDistinct": false,
-          "columns": ["snapshot_key"]
+          "columns": [
+            "snapshot_key"
+          ]
         }
       },
       "policies": {},
@@ -811,7 +865,9 @@
         "preseason_benchmark_model_weight_config_slug_unique": {
           "name": "preseason_benchmark_model_weight_config_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -877,8 +933,12 @@
           "name": "preseason_benchmark_prompt_version_category_prompt_version_id_preseason_benchmark_prompt_version_id_fk",
           "tableFrom": "preseason_benchmark_prompt_version_category",
           "tableTo": "preseason_benchmark_prompt_version",
-          "columnsFrom": ["prompt_version_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "prompt_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -886,8 +946,12 @@
           "name": "preseason_benchmark_prompt_version_category_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_benchmark_prompt_version_category",
           "tableTo": "preseason_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1023,8 +1087,12 @@
           "name": "preseason_benchmark_prompt_version_prompt_id_preseason_prompt_id_fk",
           "tableFrom": "preseason_benchmark_prompt_version",
           "tableTo": "preseason_prompt",
-          "columnsFrom": ["prompt_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "prompt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1034,7 +1102,9 @@
         "preseason_benchmark_prompt_version_content_hash_unique": {
           "name": "preseason_benchmark_prompt_version_content_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["content_hash"]
+          "columns": [
+            "content_hash"
+          ]
         }
       },
       "policies": {},
@@ -1131,7 +1201,9 @@
         "preseason_benchmark_protocol_slug_unique": {
           "name": "preseason_benchmark_protocol_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -1286,8 +1358,12 @@
           "name": "preseason_benchmark_run_season_id_preseason_benchmark_season_id_fk",
           "tableFrom": "preseason_benchmark_run",
           "tableTo": "preseason_benchmark_season",
-          "columnsFrom": ["season_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1295,8 +1371,12 @@
           "name": "preseason_benchmark_run_weight_config_id_preseason_benchmark_model_weight_config_id_fk",
           "tableFrom": "preseason_benchmark_run",
           "tableTo": "preseason_benchmark_model_weight_config",
-          "columnsFrom": ["weight_config_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "weight_config_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1359,8 +1439,12 @@
           "name": "preseason_benchmark_season_model_season_id_preseason_benchmark_season_id_fk",
           "tableFrom": "preseason_benchmark_season_model",
           "tableTo": "preseason_benchmark_season",
-          "columnsFrom": ["season_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1368,8 +1452,12 @@
           "name": "preseason_benchmark_season_model_model_snapshot_id_preseason_benchmark_model_snapshot_id_fk",
           "tableFrom": "preseason_benchmark_season_model",
           "tableTo": "preseason_benchmark_model_snapshot",
-          "columnsFrom": ["model_snapshot_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "model_snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1432,8 +1520,12 @@
           "name": "preseason_benchmark_season_prompt_season_id_preseason_benchmark_season_id_fk",
           "tableFrom": "preseason_benchmark_season_prompt",
           "tableTo": "preseason_benchmark_season",
-          "columnsFrom": ["season_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1441,8 +1533,12 @@
           "name": "preseason_benchmark_season_prompt_prompt_version_id_preseason_benchmark_prompt_version_id_fk",
           "tableFrom": "preseason_benchmark_season_prompt",
           "tableTo": "preseason_benchmark_prompt_version",
-          "columnsFrom": ["prompt_version_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "prompt_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1537,8 +1633,12 @@
           "name": "preseason_benchmark_season_protocol_id_preseason_benchmark_protocol_id_fk",
           "tableFrom": "preseason_benchmark_season",
           "tableTo": "preseason_benchmark_protocol",
-          "columnsFrom": ["protocol_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "protocol_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1548,7 +1648,9 @@
         "preseason_benchmark_season_slug_unique": {
           "name": "preseason_benchmark_season_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -1648,12 +1750,16 @@
         "preseason_category_group_name_unique": {
           "name": "preseason_category_group_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         },
         "preseason_category_group_slug_unique": {
           "name": "preseason_category_group_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -1759,8 +1865,12 @@
           "name": "preseason_comment_critic_id_preseason_critic_profile_id_fk",
           "tableFrom": "preseason_comment",
           "tableTo": "preseason_critic_profile",
-          "columnsFrom": ["critic_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "critic_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1881,8 +1991,12 @@
           "name": "preseason_critic_profile_user_id_preseason_user_profile_id_fk",
           "tableFrom": "preseason_critic_profile",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1890,8 +2004,12 @@
           "name": "critic_verified_by_user_fk",
           "tableFrom": "preseason_critic_profile",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": ["verified_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "verified_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1901,12 +2019,16 @@
         "preseason_critic_profile_slug_unique": {
           "name": "preseason_critic_profile_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         },
         "preseason_critic_profile_user_id_unique": {
           "name": "preseason_critic_profile_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["user_id"]
+          "columns": [
+            "user_id"
+          ]
         }
       },
       "policies": {},
@@ -2006,7 +2128,9 @@
         "preseason_llm_slug_unique": {
           "name": "preseason_llm_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -2240,8 +2364,12 @@
           "name": "preseason_category_category_group_id_preseason_category_group_id_fk",
           "tableFrom": "preseason_category",
           "tableTo": "preseason_category_group",
-          "columnsFrom": ["category_group_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_group_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2251,12 +2379,16 @@
         "preseason_category_name_unique": {
           "name": "preseason_category_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         },
         "preseason_category_slug_unique": {
           "name": "preseason_category_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -2327,8 +2459,12 @@
           "name": "preseason_tool_alias_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_tool_alias",
           "tableTo": "preseason_tool",
-          "columnsFrom": ["tool_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2338,7 +2474,9 @@
         "preseason_tool_alias_normalized_alias_unique": {
           "name": "preseason_tool_alias_normalized_alias_unique",
           "nullsNotDistinct": false,
-          "columns": ["normalized_alias"]
+          "columns": [
+            "normalized_alias"
+          ]
         }
       },
       "policies": {},
@@ -2436,8 +2574,12 @@
           "name": "preseason_tool_candidate_suggested_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_tool_candidate",
           "tableTo": "preseason_category",
-          "columnsFrom": ["suggested_category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "suggested_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2445,8 +2587,12 @@
           "name": "preseason_tool_candidate_approved_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_tool_candidate",
           "tableTo": "preseason_tool",
-          "columnsFrom": ["approved_tool_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "approved_tool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2456,7 +2602,9 @@
         "preseason_tool_candidate_normalized_name_unique": {
           "name": "preseason_tool_candidate_normalized_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["normalized_name"]
+          "columns": [
+            "normalized_name"
+          ]
         }
       },
       "policies": {},
@@ -2522,8 +2670,12 @@
           "name": "preseason_tool_category_tool_id_preseason_tool_id_fk",
           "tableFrom": "preseason_tool_category",
           "tableTo": "preseason_tool",
-          "columnsFrom": ["tool_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2531,8 +2683,12 @@
           "name": "preseason_tool_category_category_id_preseason_category_id_fk",
           "tableFrom": "preseason_tool_category",
           "tableTo": "preseason_category",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2647,8 +2803,12 @@
           "name": "preseason_tool_provider_user_id_preseason_user_profile_id_fk",
           "tableFrom": "preseason_tool",
           "tableTo": "preseason_user_profile",
-          "columnsFrom": ["provider_user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "provider_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2658,12 +2818,16 @@
         "preseason_tool_name_unique": {
           "name": "preseason_tool_name_unique",
           "nullsNotDistinct": false,
-          "columns": ["name"]
+          "columns": [
+            "name"
+          ]
         },
         "preseason_tool_slug_unique": {
           "name": "preseason_tool_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -2775,7 +2939,9 @@
         "preseason_user_profile_email_unique": {
           "name": "preseason_user_profile_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},
@@ -2787,62 +2953,115 @@
     "public.benchmark_mode": {
       "name": "benchmark_mode",
       "schema": "public",
-      "values": ["exploration", "benchmark"]
+      "values": [
+        "exploration",
+        "benchmark"
+      ]
     },
     "public.benchmark_window_type": {
       "name": "benchmark_window_type",
       "schema": "public",
-      "values": ["run_day", "trailing_7d", "trailing_28d", "season_to_date"]
+      "values": [
+        "run_day",
+        "trailing_7d",
+        "trailing_28d",
+        "season_to_date"
+      ]
     },
     "public.case_result_status": {
       "name": "case_result_status",
       "schema": "public",
-      "values": ["pending", "completed", "failed", "invalid_output"]
+      "values": [
+        "pending",
+        "completed",
+        "failed",
+        "invalid_output"
+      ]
     },
     "public.comment_target": {
       "name": "comment_target",
       "schema": "public",
-      "values": ["tool", "prompt"]
+      "values": [
+        "tool",
+        "prompt"
+      ]
     },
     "public.decision_type": {
       "name": "decision_type",
       "schema": "public",
-      "values": ["tool", "none", "invalid"]
+      "values": [
+        "tool",
+        "none",
+        "invalid"
+      ]
     },
     "public.model_tier": {
       "name": "model_tier",
       "schema": "public",
-      "values": ["frontier", "mid", "small"]
+      "values": [
+        "frontier",
+        "mid",
+        "small"
+      ]
     },
     "public.prompt_level": {
       "name": "prompt_level",
       "schema": "public",
-      "values": ["software-dev-beginner", "software-dev-experienced", "vibe-coder"]
+      "values": [
+        "software-dev-beginner",
+        "software-dev-experienced",
+        "vibe-coder"
+      ]
     },
     "public.prompt_tier": {
       "name": "prompt_tier",
       "schema": "public",
-      "values": ["basic", "intermediate", "advanced"]
+      "values": [
+        "basic",
+        "intermediate",
+        "advanced"
+      ]
     },
     "public.run_status_v2": {
       "name": "run_status_v2",
       "schema": "public",
-      "values": ["pending", "running", "completed", "failed", "qc_failed", "published"]
+      "values": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "qc_failed",
+        "published"
+      ]
     },
     "public.season_status": {
       "name": "season_status",
       "schema": "public",
-      "values": ["draft", "active", "completed", "archived"]
+      "values": [
+        "draft",
+        "active",
+        "completed",
+        "archived"
+      ]
     },
     "public.tool_candidate_status": {
       "name": "tool_candidate_status",
       "schema": "public",
-      "values": ["pending", "approved", "rejected"]
+      "values": [
+        "pending",
+        "approved",
+        "rejected"
+      ]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": ["admin", "provider", "critic", "user"]
+      "values": [
+        "admin",
+        "provider",
+        "critic",
+        "user"
+      ]
     }
   },
   "schemas": {},
