@@ -5,6 +5,7 @@ import { PercentageBar } from '~/components/public/percentage-bar'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
 import { api } from '~/trpc/server'
 
@@ -100,12 +101,11 @@ export default async function HomePage() {
                 })}
               </div>
               <div className="mt-3 text-center">
-                <Link
-                  href="/matches"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  View all matches &rarr;
-                </Link>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/matches" className="text-xs text-muted-foreground">
+                    View all matches &rarr;
+                  </Link>
+                </Button>
               </div>
             </>
           ) : (
@@ -124,12 +124,11 @@ export default async function HomePage() {
             </div>
             <CommentaryFeed comments={recentComments.items} />
             <div className="mt-3 text-center">
-              <Link
-                href="/critics"
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                View all critics &rarr;
-              </Link>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/critics" className="text-xs text-muted-foreground">
+                  View all critics &rarr;
+                </Link>
+              </Button>
             </div>
           </section>
         )}
