@@ -3,9 +3,9 @@ import type { PromptLevel } from '~/server/llm/prompts'
 const DEFAULT_CATEGORIES = 'auth, database, orm'
 
 const LEVEL_PERSONAS: Record<PromptLevel, string> = {
-  'software-dev-beginner': 'a beginner software developer',
-  'software-dev-experienced': 'an experienced software engineer',
-  'vibe-coder': 'a non-technical builder',
+  beginner: 'a non-technical builder',
+  intermediate: 'a beginner software developer',
+  advanced: 'an experienced software engineer',
 }
 
 export function buildGenerationSystemPrompt(level: PromptLevel) {

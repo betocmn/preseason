@@ -289,7 +289,7 @@ describe('commentRouter', () => {
       .values({
         title: 'Build a SaaS',
         slug: 'build-a-saas',
-        level: 'vibe-coder',
+        level: 'beginner',
         expectedCategories: ['auth', 'database'],
       })
       .returning()

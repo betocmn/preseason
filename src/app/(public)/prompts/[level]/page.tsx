@@ -12,7 +12,7 @@ export default async function PromptSlugRedirectPage({
   if (prompts.length === 0) notFound()
 
   // listBySlug returns results sorted by active status and level priority
-  // (active first, then vibe-coder, then experienced, then beginner)
+  // (active first, then beginner, then intermediate, then advanced)
   // so the first result is always the preferred canonical variant
   const preferred = prompts[0]
   if (!preferred) notFound()

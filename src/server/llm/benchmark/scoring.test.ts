@@ -235,21 +235,22 @@ async function seedScoringFixture(db: TestDb) {
     modelSnapshots.push(ms)
   }
 
-  // 3 prompts with different tiers
-  const promptTiers: Array<'basic' | 'intermediate' | 'advanced'> = [
-    'basic',
+  // 3 prompts with different levels
+  const promptLevels: Array<'beginner' | 'intermediate' | 'advanced'> = [
+    'beginner',
     'intermediate',
     'advanced',
   ]
   const promptVersions = []
   for (let i = 0; i < 3; i++) {
+    const levelValue = at(promptLevels, i)
     const p = first(
       await db
         .insert(prompts)
         .values({
           title: `Prompt ${i + 1}`,
           slug: `prompt-${i + 1}`,
-          level: 'vibe-coder',
+          level: levelValue,
           contentMd: `# Prompt ${i + 1}`,
         })
         .returning(),
@@ -260,9 +261,8 @@ async function seedScoringFixture(db: TestDb) {
         .values({
           promptId: p.id,
           slug: p.slug,
-          level: 'vibe-coder',
+          level: levelValue,
           version: 1,
-          tier: at(promptTiers, i),
           contentMd: `# Prompt ${i + 1}`,
           contentHash: `hash-${i}-${Date.now()}-${Math.random()}`,
           promptContractVersion: '1.0',
@@ -578,7 +578,7 @@ describe('computeCategoryRanking', () => {
       seasonId: fixture.season.id,
       windowType: 'trailing_28d',
       anchorDate: '2026-03-10',
-      promptTier: 'advanced',
+      promptLevel: 'advanced',
     })
 
     expect(result.totalEligibleDecisions).toBe(3)

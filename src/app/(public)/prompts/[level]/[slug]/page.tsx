@@ -6,6 +6,7 @@ import { CommentList } from '~/components/public/comment-list'
 import { EmptyState } from '~/components/public/empty-state'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { formatPromptLevel } from '~/lib/prompt-levels'
 import { isPromptLevel } from '~/server/llm/prompts'
 import { api } from '~/trpc/server'
 
@@ -60,7 +61,7 @@ export default async function PromptDetailPage({ params }: Props) {
           <h1 className="text-2xl font-bold">{prompt.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{prompt.level}</Badge>
+          <Badge variant="secondary">{formatPromptLevel(prompt.level)}</Badge>
           {prompt.isActive ? (
             <Badge variant="secondary" className="text-xs">
               <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-trend-up" />

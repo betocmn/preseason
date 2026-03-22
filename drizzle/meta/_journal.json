@@ -71,6 +71,13 @@
       "when": 1773285148224,
       "tag": "0009_glossy_wonder_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774095079209,
+      "tag": "0010_rich_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

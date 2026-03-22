@@ -145,7 +145,7 @@ export default async function RunDetailPage({ params }: PageProps) {
                     <TableCell>
                       <div className="font-medium">{caseRow.promptVersion.title}</div>
                       <div className="text-muted-foreground text-xs">
-                        v{caseRow.promptVersion.version} · {caseRow.promptVersion.tier}
+                        v{caseRow.promptVersion.version} · {caseRow.promptVersion.level}
                       </div>
                     </TableCell>
                     <TableCell>

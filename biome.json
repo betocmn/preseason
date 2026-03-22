@@ -34,6 +34,14 @@
     }
   },
   "files": {
-    "includes": ["**", "!!**/node_modules", "!!**/.next", "!!**/dist", "!!**/build", "!!**/.git"]
+    "includes": [
+      "**",
+      "!!**/node_modules",
+      "!!**/.next",
+      "!!**/dist",
+      "!!**/build",
+      "!!**/.git",
+      "!!**/drizzle"
+    ]
   }
 }

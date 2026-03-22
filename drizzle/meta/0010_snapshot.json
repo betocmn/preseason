@@ -1,6 +1,6 @@
 {
-  "id": "8a5a0d71-2efb-4f94-8601-6a3391a17e01",
-  "prevId": "fb65ddfd-3b89-47aa-b5d9-d0a4bdaecaca",
+  "id": "66482339-7cf8-427f-a6ec-7ca63e2a6c96",
+  "prevId": "8a5a0d71-2efb-4f94-8601-6a3391a17e01",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -997,14 +997,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
-        },
-        "tier": {
-          "name": "tier",
-          "type": "prompt_tier",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'basic'"
         },
         "content_md": {
           "name": "content_md",
@@ -2166,7 +2158,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'vibe-coder'"
+          "default": "'beginner'"
         },
         "description": {
           "name": "description",
@@ -3008,16 +3000,7 @@
       "name": "prompt_level",
       "schema": "public",
       "values": [
-        "software-dev-beginner",
-        "software-dev-experienced",
-        "vibe-coder"
-      ]
-    },
-    "public.prompt_tier": {
-      "name": "prompt_tier",
-      "schema": "public",
-      "values": [
-        "basic",
+        "beginner",
         "intermediate",
         "advanced"
       ]

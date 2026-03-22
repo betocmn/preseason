@@ -18,6 +18,7 @@ import {
   buildToolResolutionIndex,
   resolveToolWithCandidateQueue,
 } from '~/server/llm/benchmark/tool-resolver'
+import type { PromptLevel } from '~/server/llm/prompts'
 import { LlmService } from '~/server/llm/service'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
@@ -653,12 +654,7 @@ async function executeRun(
         )
         const systemPrompt =
           promptVersion.systemPromptSnapshot ??
-          buildGenerationSystemPrompt(
-            promptVersion.level as
-              | 'vibe-coder'
-              | 'software-dev-beginner'
-              | 'software-dev-experienced',
-          )
+          buildGenerationSystemPrompt(promptVersion.level as PromptLevel)
 
         const completion = await llmService.complete(modelSnapshot.provider, {
           model: modelSnapshot.requestedModelId,

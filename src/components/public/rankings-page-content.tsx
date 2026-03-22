@@ -7,14 +7,14 @@ import { api } from '~/trpc/react'
 type RankingsPageContentProps = {
   currentGroup?: string
   currentSub?: string
-  promptTier?: 'basic' | 'intermediate' | 'advanced'
+  promptLevel?: 'beginner' | 'intermediate' | 'advanced'
   modelTier?: 'frontier' | 'mid' | 'small'
 }
 
 export function RankingsPageContent({
   currentGroup,
   currentSub,
-  promptTier,
+  promptLevel,
   modelTier,
 }: RankingsPageContentProps) {
   const effectiveSub = currentSub
@@ -23,7 +23,7 @@ export function RankingsPageContent({
   const groupQuery = api.benchmarkRanking.byCategoryGroup.useQuery(
     {
       groupSlug: currentGroup ?? '',
-      promptTier,
+      promptLevel,
       modelTier,
     },
     { enabled: isGroup },
@@ -32,7 +32,7 @@ export function RankingsPageContent({
   const subQuery = api.benchmarkRanking.byCategory.useQuery(
     {
       categorySlug: effectiveSub ?? '',
-      promptTier,
+      promptLevel,
       modelTier,
     },
     { enabled: !!effectiveSub },
