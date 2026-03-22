@@ -89,7 +89,7 @@ async function seedPrompt(db: ReturnType<typeof getTestDb>) {
       .values({
         title: 'Build a todo app',
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
       })
       .returning(),
   )
@@ -120,9 +120,8 @@ async function seedPromptVersion(db: ReturnType<typeof getTestDb>, promptId: str
       .values({
         promptId,
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         version: 1,
-        tier: 'basic',
         contentMd: '# Build a todo app',
         contentHash: 'abc123def456',
         promptContractVersion: '1.0',
@@ -704,9 +703,8 @@ describe('Benchmark Schema', () => {
       await db.insert(benchmarkPromptVersions).values({
         promptId: prompt.id,
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         version: 1,
-        tier: 'basic',
         contentMd: '# Build a todo app',
         contentHash: 'same-hash',
         promptContractVersion: '1.0',
@@ -716,9 +714,8 @@ describe('Benchmark Schema', () => {
         db.insert(benchmarkPromptVersions).values({
           promptId: prompt.id,
           slug: 'build-todo-app',
-          level: 'vibe-coder',
+          level: 'beginner',
           version: 2,
-          tier: 'basic',
           contentMd: '# Build a todo app',
           contentHash: 'same-hash',
           promptContractVersion: '1.0',
@@ -733,9 +730,8 @@ describe('Benchmark Schema', () => {
       await db.insert(benchmarkPromptVersions).values({
         promptId: prompt.id,
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         version: 1,
-        tier: 'basic',
         contentMd: '# Build a todo app v1',
         contentHash: 'hash-v1',
         promptContractVersion: '1.0',
@@ -745,9 +741,8 @@ describe('Benchmark Schema', () => {
         db.insert(benchmarkPromptVersions).values({
           promptId: prompt.id,
           slug: 'build-todo-app',
-          level: 'vibe-coder',
+          level: 'beginner',
           version: 1,
-          tier: 'basic',
           contentMd: '# Build a todo app v1 modified',
           contentHash: 'hash-v1-modified',
           promptContractVersion: '1.0',

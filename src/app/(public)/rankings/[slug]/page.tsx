@@ -10,7 +10,7 @@ import { api } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ promptTier?: string; modelTier?: string }>
+  searchParams: Promise<{ promptLevel?: string; modelTier?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -34,16 +34,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CategoryGroupRankingPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { promptTier, modelTier } = await searchParams
+  const { promptLevel, modelTier } = await searchParams
   const caller = await api()
-  const validPromptTier = (['basic', 'intermediate', 'advanced'] as const).find(
-    (tier) => tier === promptTier,
+  const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
+    (tier) => tier === promptLevel,
   )
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier)
   const [data, groups] = await Promise.all([
     caller.benchmarkRanking.byCategoryGroup({
       groupSlug: slug,
-      promptTier: validPromptTier,
+      promptLevel: validPromptLevel,
       modelTier: validModelTier,
     }),
     caller.category.listGroups(),
@@ -68,7 +68,7 @@ export default async function CategoryGroupRankingPage({ params, searchParams }:
         <BenchmarkRankingFilters
           groups={groups}
           currentGroup={slug}
-          currentPromptTier={validPromptTier}
+          currentPromptLevel={validPromptLevel}
           currentModelTier={validModelTier}
           basePath={`/rankings/${slug}`}
           showCategorySelect={false}

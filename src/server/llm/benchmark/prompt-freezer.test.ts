@@ -9,7 +9,7 @@ import {
   subcategories,
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import { classifyPromptTier, freezePromptVersion } from './prompt-freezer'
+import { freezePromptVersion } from './prompt-freezer'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -24,7 +24,7 @@ async function seedPromptWithContent(db: ReturnType<typeof getTestDb>) {
       .values({
         title: 'Build a todo app',
         slug: 'build-todo-app',
-        level: 'vibe-coder',
+        level: 'beginner',
         contentMd: 'Build a simple todo application with task management.',
       })
       .returning(),
@@ -61,25 +61,6 @@ async function seedCategories(db: ReturnType<typeof getTestDb>, count: number) {
   return ids
 }
 
-describe('classifyPromptTier', () => {
-  it('should classify 1-3 categories as basic', () => {
-    expect(classifyPromptTier(1)).toBe('basic')
-    expect(classifyPromptTier(2)).toBe('basic')
-    expect(classifyPromptTier(3)).toBe('basic')
-  })
-
-  it('should classify 4-6 categories as intermediate', () => {
-    expect(classifyPromptTier(4)).toBe('intermediate')
-    expect(classifyPromptTier(5)).toBe('intermediate')
-    expect(classifyPromptTier(6)).toBe('intermediate')
-  })
-
-  it('should classify 7+ categories as advanced', () => {
-    expect(classifyPromptTier(7)).toBe('advanced')
-    expect(classifyPromptTier(8)).toBe('advanced')
-  })
-})
-
 describe('freezePromptVersion', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -101,11 +82,10 @@ describe('freezePromptVersion', () => {
     const version = await freezePromptVersion(db, prompt.id, { categoryIds })
 
     const expectedHash = createHash('sha256')
-      .update(prompt.contentMd ?? '')
+      .update(`${prompt.contentMd ?? ''}:${prompt.level}`)
       .digest('hex')
     expect(version.contentHash).toBe(expectedHash)
     expect(version.version).toBe(1)
-    expect(version.tier).toBe('basic')
     expect(version.contentMd).toBe(prompt.contentMd)
     expect(version.slug).toBe(prompt.slug)
   })
@@ -134,21 +114,6 @@ describe('freezePromptVersion', () => {
     ).rejects.toThrow('different benchmark metadata')
   })
 
-  it('should reject refreezing identical content with a different tier override', async () => {
-    const db = getTestDb()
-    const prompt = await seedPromptWithContent(db)
-    const categoryIds = await seedCategories(db, 2)
-
-    await freezePromptVersion(db, prompt.id, { categoryIds })
-
-    await expect(
-      freezePromptVersion(db, prompt.id, {
-        categoryIds,
-        tierOverride: 'advanced',
-      }),
-    ).rejects.toThrow('different benchmark metadata')
-  })
-
   it('should reject identical content frozen for a different prompt', async () => {
     const db = getTestDb()
     const firstPrompt = await seedPromptWithContent(db)
@@ -158,7 +123,7 @@ describe('freezePromptVersion', () => {
         .values({
           title: 'Build another todo app',
           slug: 'build-another-todo-app',
-          level: 'vibe-coder',
+          level: 'beginner',
           contentMd: 'Build a simple todo application with task management.',
         })
         .returning(),
@@ -198,27 +163,6 @@ describe('freezePromptVersion', () => {
     expect(v2.version).toBe(2)
   })
 
-  it('should auto-classify tier based on category count', async () => {
-    const db = getTestDb()
-    const prompt = await seedPromptWithContent(db)
-    const categoryIds = await seedCategories(db, 5)
-
-    const version = await freezePromptVersion(db, prompt.id, { categoryIds })
-    expect(version.tier).toBe('intermediate')
-  })
-
-  it('should use tierOverride when provided', async () => {
-    const db = getTestDb()
-    const prompt = await seedPromptWithContent(db)
-    const categoryIds = await seedCategories(db, 2)
-
-    const version = await freezePromptVersion(db, prompt.id, {
-      categoryIds,
-      tierOverride: 'advanced',
-    })
-    expect(version.tier).toBe('advanced')
-  })
-
   it('should create prompt version category rows', async () => {
     const db = getTestDb()
     const prompt = await seedPromptWithContent(db)
@@ -255,21 +199,19 @@ describe('freezePromptVersion', () => {
     expect(versions).toHaveLength(0)
   })
 
-  it('should reject refreezing when prompt level has changed', async () => {
+  it('should create a new version when prompt level has changed', async () => {
     const db = getTestDb()
     const prompt = await seedPromptWithContent(db)
     const categoryIds = await seedCategories(db, 2)
 
-    await freezePromptVersion(db, prompt.id, { categoryIds })
+    const v1 = await freezePromptVersion(db, prompt.id, { categoryIds })
 
-    await db
-      .update(prompts)
-      .set({ level: 'software-dev-experienced' })
-      .where(eq(prompts.id, prompt.id))
+    await db.update(prompts).set({ level: 'advanced' }).where(eq(prompts.id, prompt.id))
 
-    await expect(freezePromptVersion(db, prompt.id, { categoryIds })).rejects.toThrow(
-      'different benchmark metadata',
-    )
+    const v2 = await freezePromptVersion(db, prompt.id, { categoryIds })
+    expect(v2.id).not.toBe(v1.id)
+    expect(v2.level).toBe('advanced')
+    expect(v2.version).toBe(2)
   })
 
   it('should throw when prompt has no contentMd', async () => {
@@ -280,7 +222,7 @@ describe('freezePromptVersion', () => {
         .values({
           title: 'No content prompt',
           slug: 'no-content',
-          level: 'vibe-coder',
+          level: 'beginner',
         })
         .returning(),
     )

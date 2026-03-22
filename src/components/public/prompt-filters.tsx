@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { formatPromptLevel } from '~/lib/prompt-levels'
 
 type CategoryGroup = {
   slug: string
@@ -25,13 +26,6 @@ type PromptFiltersProps = {
   currentLevel?: string
   currentGroup?: string
   currentSub?: string
-}
-
-function formatLevelLabel(level: string): string {
-  return level
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
 }
 
 export function PromptFilters({
@@ -89,7 +83,7 @@ export function PromptFilters({
             <SelectItem value="all">All Levels</SelectItem>
             {levels.map((level) => (
               <SelectItem key={level} value={level}>
-                {formatLevelLabel(level)}
+                {formatPromptLevel(level)}
               </SelectItem>
             ))}
           </SelectContent>

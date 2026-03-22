@@ -15,18 +15,12 @@ import {
   subcategories,
   tools,
 } from '~/server/db/schema'
-import { getPromptContent, type PromptLevel } from '~/server/llm/prompts'
-
-const promptLevelSchema = z.enum([
-  'software-dev-beginner',
-  'software-dev-experienced',
-  'vibe-coder',
-])
+import { getPromptContent, type PromptLevel, promptLevelSchema } from '~/server/llm/prompts'
 
 const createPromptInput = z.object({
   title: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
-  level: promptLevelSchema.default('vibe-coder'),
+  level: promptLevelSchema.default('beginner'),
   description: z.string().max(10000).optional(),
   expectedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
   isActive: z.boolean().default(true),
@@ -130,7 +124,7 @@ export const promptRouter = createTRPCRouter({
         .orderBy(
           desc(prompts.isActive),
           asc(
-            sql`CASE WHEN ${prompts.level} = 'vibe-coder' THEN 0 WHEN ${prompts.level} = 'software-dev-experienced' THEN 1 ELSE 2 END`,
+            sql`CASE WHEN ${prompts.level} = 'beginner' THEN 0 WHEN ${prompts.level} = 'intermediate' THEN 1 ELSE 2 END`,
           ),
         )
     }),
@@ -139,7 +133,7 @@ export const promptRouter = createTRPCRouter({
     .input(
       z.object({
         slug: z.string().min(1).max(255),
-        level: promptLevelSchema.default('vibe-coder'),
+        level: promptLevelSchema.default('beginner'),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -240,9 +234,8 @@ export const promptRouter = createTRPCRouter({
         .select({
           pvId: benchmarkPromptVersions.id,
           promptId: benchmarkPromptVersions.promptId,
-          slug: prompts.slug,
-          level: prompts.level,
-          tier: benchmarkPromptVersions.tier,
+          slug: benchmarkPromptVersions.slug,
+          level: benchmarkPromptVersions.level,
           contentMd: benchmarkPromptVersions.contentMd,
           promptTitle: prompts.title,
           promptDescription: prompts.description,
@@ -263,9 +256,8 @@ export const promptRouter = createTRPCRouter({
         .groupBy(
           benchmarkPromptVersions.id,
           benchmarkPromptVersions.promptId,
-          prompts.slug,
-          prompts.level,
-          benchmarkPromptVersions.tier,
+          benchmarkPromptVersions.slug,
+          benchmarkPromptVersions.level,
           benchmarkPromptVersions.contentMd,
           prompts.title,
           prompts.description,

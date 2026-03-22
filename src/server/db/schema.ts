@@ -28,11 +28,7 @@ export const createTable = pgTableCreator((name) => `preseason_${name}`)
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'provider', 'critic', 'user'])
 export const commentTargetEnum = pgEnum('comment_target', ['tool', 'prompt'])
-export const promptLevelEnum = pgEnum('prompt_level', [
-  'software-dev-beginner',
-  'software-dev-experienced',
-  'vibe-coder',
-])
+export const promptLevelEnum = pgEnum('prompt_level', ['beginner', 'intermediate', 'advanced'])
 
 // Benchmark enums
 export const benchmarkModeEnum = pgEnum('benchmark_mode', ['exploration', 'benchmark'])
@@ -62,7 +58,6 @@ export const toolCandidateStatusEnum = pgEnum('tool_candidate_status', [
   'approved',
   'rejected',
 ])
-export const promptTierEnum = pgEnum('prompt_tier', ['basic', 'intermediate', 'advanced'])
 export const modelTierEnum = pgEnum('model_tier', ['frontier', 'mid', 'small'])
 export const benchmarkWindowTypeEnum = pgEnum('benchmark_window_type', [
   'run_day',
@@ -225,7 +220,7 @@ export const prompts = createTable(
     id: d.uuid().primaryKey().defaultRandom().notNull(),
     title: d.varchar({ length: 255 }).notNull(),
     slug: d.varchar({ length: 255 }).notNull(),
-    level: promptLevelEnum().notNull().default('vibe-coder'),
+    level: promptLevelEnum().notNull().default('beginner'),
     description: d.text(),
     expectedCategories: d.text('expected_categories').array(),
     contentMd: d.text('content_md'),
@@ -360,7 +355,6 @@ export const benchmarkPromptVersions = createTable(
     slug: d.varchar({ length: 255 }).notNull(),
     level: promptLevelEnum().notNull(),
     version: integer().notNull(),
-    tier: promptTierEnum().notNull().default('basic'),
     contentMd: d.text('content_md').notNull(),
     contentHash: d.varchar('content_hash', { length: 64 }).notNull().unique(),
     systemPromptSnapshot: d.text('system_prompt_snapshot'),

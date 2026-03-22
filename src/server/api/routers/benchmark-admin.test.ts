@@ -57,7 +57,7 @@ async function seedPromptAndCategory(adminCaller: ReturnType<typeof createTestCa
     .values({
       title: 'Build a SaaS',
       slug: 'build-a-saas',
-      level: 'vibe-coder',
+      level: 'beginner',
       description: 'Test prompt',
       expectedCategories: ['auth'],
       contentMd: '# Build a SaaS\n\nBuild a SaaS app with auth.',

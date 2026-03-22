@@ -22,7 +22,7 @@ type BenchmarkRankingFiltersProps = {
   groups: CategoryGroup[]
   currentGroup?: string
   currentSub?: string
-  currentPromptTier?: string
+  currentPromptLevel?: string
   currentModelTier?: string
   basePath?: string
   showCategorySelect?: boolean
@@ -32,7 +32,7 @@ export function BenchmarkRankingFilters({
   groups,
   currentGroup,
   currentSub,
-  currentPromptTier,
+  currentPromptLevel,
   currentModelTier,
   basePath = '/rankings',
   showCategorySelect = true,
@@ -115,21 +115,21 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <FlaskConical className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={currentPromptTier ?? 'all'}
+          value={currentPromptLevel ?? 'all'}
           onValueChange={(val) => {
-            navigate({ promptTier: val === 'all' ? undefined : val })
+            navigate({ promptLevel: val === 'all' ? undefined : val })
           }}
         >
           <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
-              {currentPromptTier
-                ? `${currentPromptTier.charAt(0).toUpperCase()}${currentPromptTier.slice(1)} Prompts`
-                : 'All Prompt Tiers'}
+              {currentPromptLevel
+                ? `${currentPromptLevel.charAt(0).toUpperCase()}${currentPromptLevel.slice(1)}`
+                : 'All Levels'}
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Prompt Tiers</SelectItem>
-            <SelectItem value="basic">Basic</SelectItem>
+            <SelectItem value="all">All Levels</SelectItem>
+            <SelectItem value="beginner">Beginner</SelectItem>
             <SelectItem value="intermediate">Intermediate</SelectItem>
             <SelectItem value="advanced">Advanced</SelectItem>
           </SelectContent>
