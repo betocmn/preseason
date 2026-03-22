@@ -108,9 +108,7 @@ describe('parseMatchResponse', () => {
       winner: 'tool_a',
       comparison_summary: 'Tool A uses { config } syntax which is cleaner.',
       tool_a: {
-        pros: [
-          { phrase: 'Clean syntax', evidence_sentence: 'Uses { brackets } in config files.' },
-        ],
+        pros: [{ phrase: 'Clean syntax', evidence_sentence: 'Uses { brackets } in config files.' }],
         cons: [],
       },
       tool_b: { pros: [], cons: [] },
