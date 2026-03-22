@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, count, eq, lt, or, sql } from 'drizzle-orm'
+import { and, count, eq, lt, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'

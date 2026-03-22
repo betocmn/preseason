@@ -5,6 +5,7 @@ import { categoryRouter } from '~/server/api/routers/category'
 import { commentRouter } from '~/server/api/routers/comment'
 import { criticRouter } from '~/server/api/routers/critic'
 import { llmRouter } from '~/server/api/routers/llm'
+import { matchRouter } from '~/server/api/routers/match'
 import { promptRouter } from '~/server/api/routers/prompt'
 import { toolRouter } from '~/server/api/routers/tool'
 import { userRouter } from '~/server/api/routers/user'
@@ -18,6 +19,7 @@ export const appRouter = createTRPCRouter({
   prompt: promptRouter,
   benchmarkRanking: benchmarkRankingRouter,
   benchmarkMatch: benchmarkMatchRouter,
+  match: matchRouter,
   critic: criticRouter,
   comment: commentRouter,
   user: userRouter,

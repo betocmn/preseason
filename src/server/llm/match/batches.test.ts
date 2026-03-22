@@ -1,7 +1,5 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import { seedUser } from '~/test/trpc'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -16,11 +14,13 @@ import {
   toolCategories,
   tools,
 } from '~/server/db/schema'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { seedUser } from '~/test/trpc'
 import { claimMatchBatchExecution, createMatchBatch } from './batches'
 
 function first<T>(arr: T[]): T {
   if (arr.length === 0) throw new Error('Expected at least one result')
-  return arr[0]!
+  return arr[0] as T
 }
 
 async function seedMatchFixture() {

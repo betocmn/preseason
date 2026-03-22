@@ -1,7 +1,5 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import { seedUser } from '~/test/trpc'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -9,7 +7,6 @@ import {
   benchmarkSeasons,
   categories,
   llms,
-  matchBatches,
   matchEvaluations,
   matchPromptTemplates,
   subcategories,
@@ -17,6 +14,8 @@ import {
   tools,
 } from '~/server/db/schema'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { seedUser } from '~/test/trpc'
 import { claimMatchBatchExecution, createMatchBatch } from './batches'
 import { runMatchBatch } from './runner'
 
@@ -34,7 +33,7 @@ function createMockLlmService(completeFn: MockCompleteFn) {
 
 function first<T>(arr: T[]): T {
   if (arr.length === 0) throw new Error('Expected at least one result')
-  return arr[0]!
+  return arr[0] as T
 }
 
 function buildValidMatchResponse() {
@@ -181,7 +180,8 @@ async function createAndClaimBatch(fixture: Awaited<ReturnType<typeof seedRunner
   })
 
   const claim = await claimMatchBatchExecution(db, batch.id)
-  return { batch: claim.batch, claimToken: claim.claimToken! }
+  if (!claim.claimToken) throw new Error('Expected claim token')
+  return { batch: claim.batch, claimToken: claim.claimToken }
 }
 
 describe('runMatchBatch', () => {
@@ -323,12 +323,14 @@ describe('runMatchBatch', () => {
 
     const [canonToolA, canonToolB] = [fixture.toolA.id, fixture.toolB.id].sort()
 
-    const aFirstEval = evals.find((e) => e.presentationOrder === 'a_first')!
+    const aFirstEval = evals.find((e) => e.presentationOrder === 'a_first')
+    if (!aFirstEval) throw new Error('Expected a_first evaluation')
     // In a_first, "tool_a" winner = canonical tool A
     expect(aFirstEval.winnerId).toBe(canonToolA)
     expect(aFirstEval.winnerDecision).toBe('tool_a')
 
-    const bFirstEval = evals.find((e) => e.presentationOrder === 'b_first')!
+    const bFirstEval = evals.find((e) => e.presentationOrder === 'b_first')
+    if (!bFirstEval) throw new Error('Expected b_first evaluation')
     // In b_first, LLM says "tool_a" wins (which is actually canonical tool B since we swapped)
     // So canonical winner should be tool B
     expect(bFirstEval.winnerId).toBe(canonToolB)
@@ -344,7 +346,7 @@ describe('runMatchBatch', () => {
     const evals = await db.query.matchEvaluations.findMany({
       where: eq(matchEvaluations.batchId, batch.id),
     })
-    const firstEval = evals[0]!
+    const firstEval = evals[0] as (typeof evals)[number]
     await db
       .update(matchEvaluations)
       .set({ status: 'completed', winnerDecision: 'tool_a' })
