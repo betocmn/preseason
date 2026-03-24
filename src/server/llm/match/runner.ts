@@ -235,7 +235,7 @@ export async function runMatchBatch(
     for (const evaluation of retryable) {
       // Abort early if heartbeat detected ownership loss or write failure
       if (heartbeat.failed()) {
-        throw new OwnershipLostError()
+        break
       }
 
       const { modelSnapshot } = evaluation
