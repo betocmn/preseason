@@ -14,6 +14,7 @@ import { checkModelDrift } from '~/server/llm/benchmark/model-drift'
 import { MATCH_PARSER_VERSION, parseMatchResponse } from '~/server/llm/match/parser'
 import { buildMatchPrompt } from '~/server/llm/match/prompt-builder'
 import type { MatchResponse } from '~/server/llm/match/schema'
+import { SUPPORTED_SCHEMA_VERSION } from '~/server/llm/match/schema'
 import { LlmService } from '~/server/llm/service'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
@@ -72,21 +73,35 @@ function startHeartbeat(
   intervalMs: number,
 ) {
   let inFlightHeartbeat = Promise.resolve()
+  let failed = false
+  let failureReason: string | undefined
 
   const timer = setInterval(() => {
+    if (failed) return
+
     inFlightHeartbeat = inFlightHeartbeat
       .catch(() => undefined)
       .then(async () => {
-        await database
+        const [updated] = await database
           .update(matchBatches)
           .set({ lastHeartbeatAt: now() })
           .where(getOwnershipClause(batchId, claimToken))
+          .returning({ id: matchBatches.id })
+        if (!updated) {
+          failed = true
+          failureReason = 'Batch ownership lost during heartbeat'
+        }
       })
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        failed = true
+        failureReason = error instanceof Error ? error.message : 'Heartbeat write failed'
+      })
   }, intervalMs)
   timer.unref?.()
 
   return {
+    failed: () => failed,
+    failureReason: () => failureReason,
     stop: async () => {
       clearInterval(timer)
       await inFlightHeartbeat
@@ -176,6 +191,13 @@ export async function runMatchBatch(
   })
   if (!template) throw new Error('Match prompt template not found')
 
+  // Validate schema version before running any evaluations
+  if (template.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
+    throw new Error(
+      `Unsupported template schema version "${template.schemaVersion}" — expected "${SUPPORTED_SCHEMA_VERSION}"`,
+    )
+  }
+
   // Load tool names
   const toolRows = await database
     .select({ id: tools.id, name: tools.name })
@@ -208,6 +230,11 @@ export async function runMatchBatch(
     )
 
     for (const evaluation of retryable) {
+      // Abort early if heartbeat detected ownership loss or write failure
+      if (heartbeat.failed()) {
+        throw new OwnershipLostError()
+      }
+
       const { modelSnapshot } = evaluation
 
       // Determine presentation order names

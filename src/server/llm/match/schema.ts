@@ -10,8 +10,10 @@ const toolAnalysisSchema = z.object({
   cons: z.array(evidenceItemSchema).max(8),
 })
 
+export const SUPPORTED_SCHEMA_VERSION = 'match-v2' as const
+
 export const matchResponseSchema = z.object({
-  schema_version: z.literal('match-v2'),
+  schema_version: z.literal(SUPPORTED_SCHEMA_VERSION),
   winner: z.enum(['tool_a', 'tool_b', 'tie', 'abstain']),
   comparison_summary: z.string().min(1),
   tool_a: toolAnalysisSchema,

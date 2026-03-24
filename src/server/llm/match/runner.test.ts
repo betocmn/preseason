@@ -7,6 +7,7 @@ import {
   benchmarkSeasons,
   categories,
   llms,
+  matchBatches,
   matchEvaluations,
   matchPromptTemplates,
   subcategories,
@@ -389,5 +390,63 @@ describe('runMatchBatch', () => {
     expect(summary.status).toBe('failed')
     expect(summary.completedEvaluations).toBe(1)
     expect(summary.failedEvaluations).toBe(1)
+  })
+
+  it('should fail fast when template schema version is unsupported', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    // Set an unsupported schema version on the template
+    await db
+      .update(matchPromptTemplates)
+      .set({ schemaVersion: 'match-v99' })
+      .where(eq(matchPromptTemplates.id, fixture.template.id))
+
+    const mockLlm = createMockLlmService(async (_provider, request) =>
+      mockCompletion(wrapResponse(buildValidMatchResponse()), request.model),
+    )
+
+    await expect(
+      runMatchBatch(batch.id, claimToken, {
+        database: db,
+        llmService: mockLlm,
+        heartbeatIntervalMs: 999_999,
+      }),
+    ).rejects.toThrow('Unsupported template schema version')
+
+    // No LLM calls should have been made
+    expect(mockLlm.complete).toHaveBeenCalledTimes(0)
+  })
+
+  it('should detect ownership loss via verifyOwnership when claim token changes', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    let callCount = 0
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        // Simulate another worker stealing ownership between LLM call and DB write
+        await db
+          .update(matchBatches)
+          .set({ claimToken: '00000000-0000-0000-0000-000000000099' })
+          .where(eq(matchBatches.id, batch.id))
+      }
+      return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    // verifyOwnership detects claim token mismatch, breaks loop, finalization
+    // also fails ownership check → ownership_lost
+    expect(summary.status).toBe('ownership_lost')
+    // Only one LLM call should have been made before ownership loss was detected
+    expect(callCount).toBe(1)
   })
 })
