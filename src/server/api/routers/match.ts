@@ -166,31 +166,29 @@ export const matchRouter = createTRPCRouter({
       return updated
     }),
 
-  createBatch: protectedProcedure
-    .input(createBatchInputSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requireRole(ctx.db, ctx.user.id, ['admin'])
+  createBatch: protectedProcedure.input(createBatchInputSchema).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
 
-      try {
-        return await createMatchBatch(ctx.db, {
-          ...input,
-          triggeredBy: ctx.user.id,
-        })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        if (message.includes('Idempotency key conflict')) {
-          throw new TRPCError({ code: 'CONFLICT', message })
-        }
-        if (
-          message.includes('Both tools must belong') ||
-          message.includes('Season has no frozen') ||
-          message.includes('benchmarkRunId')
-        ) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message })
-        }
-        throw error
+    try {
+      return await createMatchBatch(ctx.db, {
+        ...input,
+        triggeredBy: ctx.user.id,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      if (message.includes('Idempotency key conflict')) {
+        throw new TRPCError({ code: 'CONFLICT', message })
       }
-    }),
+      if (
+        message.includes('Both tools must belong') ||
+        message.includes('Season has no frozen') ||
+        message.includes('benchmarkRunId')
+      ) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message })
+      }
+      throw error
+    }
+  }),
 
   listBatches: protectedProcedure
     .input(
