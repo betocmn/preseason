@@ -35,6 +35,18 @@ export type ClaimResult = {
 
 const STALE_AFTER_MS = 10 * 60 * 1000
 
+type MatchBatchDimensions = Pick<
+  MatchBatchRecord,
+  | 'seasonId'
+  | 'categoryId'
+  | 'toolAId'
+  | 'toolBId'
+  | 'promptTemplateId'
+  | 'triggerMode'
+  | 'benchmarkRunId'
+  | 'configId'
+>
+
 function canonicalizeToolOrder(toolAId: string, toolBId: string): [string, string] {
   return toolAId < toolBId ? [toolAId, toolBId] : [toolBId, toolAId]
 }
@@ -69,94 +81,133 @@ async function getSeasonModelCount(database: DatabaseClient, seasonId: string): 
   return Number(result?.cnt ?? 0)
 }
 
+function assertIdempotentBatchMatches(
+  existing: MatchBatchRecord,
+  expected: MatchBatchDimensions,
+): MatchBatchRecord {
+  const dimensionsMismatch =
+    existing.seasonId !== expected.seasonId ||
+    existing.categoryId !== expected.categoryId ||
+    existing.toolAId !== expected.toolAId ||
+    existing.toolBId !== expected.toolBId ||
+    existing.promptTemplateId !== expected.promptTemplateId ||
+    existing.triggerMode !== expected.triggerMode ||
+    existing.benchmarkRunId !== expected.benchmarkRunId ||
+    existing.configId !== expected.configId
+
+  if (dimensionsMismatch) {
+    throw new Error('Idempotency key conflict: existing batch has different dimensions')
+  }
+
+  return existing
+}
+
+async function findExistingBatchByIdempotencyKey(
+  database: DatabaseClient,
+  idempotencyKey: string,
+  expected: MatchBatchDimensions,
+): Promise<MatchBatchRecord | null> {
+  const existing = await database.query.matchBatches.findFirst({
+    where: eq(matchBatches.idempotencyKey, idempotencyKey),
+  })
+
+  if (!existing) return null
+  return assertIdempotentBatchMatches(existing, expected)
+}
+
 export async function createMatchBatch(
   database: DatabaseClient = defaultDb,
   input: CreateMatchBatchInput,
 ): Promise<MatchBatchRecord> {
   const [toolAId, toolBId] = canonicalizeToolOrder(input.toolAId, input.toolBId)
-
-  await validateToolsInCategory(database, input.categoryId, toolAId, toolBId)
-
-  const modelCount = await getSeasonModelCount(database, input.seasonId)
-  if (modelCount === 0) {
-    throw new Error('Season has no frozen model snapshots — cannot create match batch')
+  const expectedDimensions: MatchBatchDimensions = {
+    seasonId: input.seasonId,
+    categoryId: input.categoryId,
+    toolAId,
+    toolBId,
+    promptTemplateId: input.promptTemplateId,
+    triggerMode: input.triggerMode,
+    benchmarkRunId: input.benchmarkRunId ?? null,
+    configId: input.configId ?? null,
   }
 
-  // Idempotency check
-  if (input.idempotencyKey) {
-    const existing = await database.query.matchBatches.findFirst({
-      where: eq(matchBatches.idempotencyKey, input.idempotencyKey),
-    })
+  try {
+    return await database.transaction(async (tx) => {
+      await validateToolsInCategory(tx, input.categoryId, toolAId, toolBId)
 
-    if (existing) {
-      const dimensionsMismatch =
-        existing.seasonId !== input.seasonId ||
-        existing.categoryId !== input.categoryId ||
-        existing.toolAId !== toolAId ||
-        existing.toolBId !== toolBId ||
-        existing.promptTemplateId !== input.promptTemplateId ||
-        existing.triggerMode !== input.triggerMode ||
-        existing.benchmarkRunId !== (input.benchmarkRunId ?? null) ||
-        existing.configId !== (input.configId ?? null)
-
-      if (dimensionsMismatch) {
-        throw new Error('Idempotency key conflict: existing batch has different dimensions')
+      const modelCount = await getSeasonModelCount(tx, input.seasonId)
+      if (modelCount === 0) {
+        throw new Error('Season has no frozen model snapshots — cannot create match batch')
       }
 
-      return existing
-    }
-  }
+      if (input.idempotencyKey) {
+        const existing = await findExistingBatchByIdempotencyKey(
+          tx,
+          input.idempotencyKey,
+          expectedDimensions,
+        )
+        if (existing) return existing
+      }
 
-  // Get season models for materialization
-  const seasonModels = await database.query.benchmarkSeasonModels.findMany({
-    where: eq(benchmarkSeasonModels.seasonId, input.seasonId),
-  })
+      const seasonModels = await tx.query.benchmarkSeasonModels.findMany({
+        where: eq(benchmarkSeasonModels.seasonId, input.seasonId),
+      })
+      const totalEvaluations = seasonModels.length * 2 // a_first + b_first per model
 
-  const totalEvaluations = seasonModels.length * 2 // a_first + b_first per model
+      const [batch] = await tx
+        .insert(matchBatches)
+        .values({
+          seasonId: input.seasonId,
+          configId: input.configId ?? null,
+          categoryId: input.categoryId,
+          toolAId,
+          toolBId,
+          promptTemplateId: input.promptTemplateId,
+          benchmarkRunId: input.benchmarkRunId ?? null,
+          triggerMode: input.triggerMode,
+          idempotencyKey: input.idempotencyKey ?? null,
+          totalEvaluations,
+          triggeredBy: input.triggeredBy ?? null,
+        })
+        .returning()
 
-  // Insert batch
-  const [batch] = await database
-    .insert(matchBatches)
-    .values({
-      seasonId: input.seasonId,
-      configId: input.configId ?? null,
-      categoryId: input.categoryId,
-      toolAId,
-      toolBId,
-      promptTemplateId: input.promptTemplateId,
-      benchmarkRunId: input.benchmarkRunId ?? null,
-      triggerMode: input.triggerMode,
-      idempotencyKey: input.idempotencyKey ?? null,
-      totalEvaluations,
-      triggeredBy: input.triggeredBy ?? null,
+      if (!batch) {
+        throw new Error('Failed to create match batch')
+      }
+
+      const evaluationRows = seasonModels.flatMap((sm) => [
+        {
+          batchId: batch.id,
+          seasonId: input.seasonId,
+          modelSnapshotId: sm.modelSnapshotId,
+          presentationOrder: 'a_first' as const,
+        },
+        {
+          batchId: batch.id,
+          seasonId: input.seasonId,
+          modelSnapshotId: sm.modelSnapshotId,
+          presentationOrder: 'b_first' as const,
+        },
+      ])
+
+      if (evaluationRows.length > 0) {
+        await tx.insert(matchEvaluations).values(evaluationRows)
+      }
+
+      return batch
     })
-    .returning()
+  } catch (error) {
+    if (!input.idempotencyKey) throw error
 
-  if (!batch) {
-    throw new Error('Failed to create match batch')
+    const existing = await findExistingBatchByIdempotencyKey(
+      database,
+      input.idempotencyKey,
+      expectedDimensions,
+    )
+    if (existing) return existing
+
+    throw error
   }
-
-  // Materialize evaluation rows
-  const evaluationRows = seasonModels.flatMap((sm) => [
-    {
-      batchId: batch.id,
-      seasonId: input.seasonId,
-      modelSnapshotId: sm.modelSnapshotId,
-      presentationOrder: 'a_first' as const,
-    },
-    {
-      batchId: batch.id,
-      seasonId: input.seasonId,
-      modelSnapshotId: sm.modelSnapshotId,
-      presentationOrder: 'b_first' as const,
-    },
-  ])
-
-  if (evaluationRows.length > 0) {
-    await database.insert(matchEvaluations).values(evaluationRows)
-  }
-
-  return batch
 }
 
 export async function claimMatchBatchExecution(
