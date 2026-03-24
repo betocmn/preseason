@@ -193,9 +193,12 @@ export async function runMatchBatch(
 
   // Validate schema version before running any evaluations
   if (template.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported template schema version "${template.schemaVersion}" — expected "${SUPPORTED_SCHEMA_VERSION}"`,
-    )
+    const errorMessage = `Unsupported template schema version "${template.schemaVersion}" — expected "${SUPPORTED_SCHEMA_VERSION}"`
+    await database
+      .update(matchBatches)
+      .set({ status: 'failed', completedAt: now() })
+      .where(getOwnershipClause(batchId, claimToken))
+    throw new Error(errorMessage)
   }
 
   // Load tool names

@@ -90,33 +90,36 @@ export const matchRouter = createTRPCRouter({
         })
       }
 
-      // Deactivate existing config for this matchup if any
-      await ctx.db
-        .update(matchConfigs)
-        .set({ isActive: false })
-        .where(
-          and(
-            eq(matchConfigs.seasonId, input.seasonId),
-            eq(matchConfigs.categoryId, input.categoryId),
-            eq(matchConfigs.toolAId, toolAId),
-            eq(matchConfigs.toolBId, toolBId),
-            eq(matchConfigs.isActive, true),
-          ),
-        )
+      // Deactivate existing config and insert new one atomically
+      const config = await ctx.db.transaction(async (tx) => {
+        await tx
+          .update(matchConfigs)
+          .set({ isActive: false })
+          .where(
+            and(
+              eq(matchConfigs.seasonId, input.seasonId),
+              eq(matchConfigs.categoryId, input.categoryId),
+              eq(matchConfigs.toolAId, toolAId),
+              eq(matchConfigs.toolBId, toolBId),
+              eq(matchConfigs.isActive, true),
+            ),
+          )
 
-      // Insert new config
-      const [config] = await ctx.db
-        .insert(matchConfigs)
-        .values({
-          seasonId: input.seasonId,
-          categoryId: input.categoryId,
-          toolAId,
-          toolBId,
-          promptTemplateId: input.promptTemplateId,
-          isActive: true,
-          createdBy: ctx.user.id,
-        })
-        .returning()
+        const [inserted] = await tx
+          .insert(matchConfigs)
+          .values({
+            seasonId: input.seasonId,
+            categoryId: input.categoryId,
+            toolAId,
+            toolBId,
+            promptTemplateId: input.promptTemplateId,
+            isActive: true,
+            createdBy: ctx.user.id,
+          })
+          .returning()
+
+        return inserted
+      })
 
       return config
     }),

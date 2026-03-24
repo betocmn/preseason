@@ -417,6 +417,13 @@ describe('runMatchBatch', () => {
 
     // No LLM calls should have been made
     expect(mockLlm.complete).toHaveBeenCalledTimes(0)
+
+    // Batch should be transitioned to failed, not left as running
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('failed')
+    expect(batchAfter?.completedAt).not.toBeNull()
   })
 
   it('should detect ownership loss via verifyOwnership when claim token changes', async () => {
