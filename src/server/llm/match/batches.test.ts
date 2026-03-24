@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -216,6 +217,39 @@ describe('createMatchBatch', () => {
         triggerMode: 'manual',
       }),
     ).rejects.toThrow('Season has no frozen model snapshots')
+  })
+
+  it('should require benchmarkRunId for benchmark_run batches', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    await expect(
+      createMatchBatch(db, {
+        seasonId: season.id,
+        categoryId: category.id,
+        toolAId: toolA.id,
+        toolBId: toolB.id,
+        promptTemplateId: template.id,
+        triggerMode: 'benchmark_run',
+      }),
+    ).rejects.toThrow('benchmarkRunId is required when triggerMode is benchmark_run')
+  })
+
+  it('should reject benchmarkRunId for manual batches', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    await expect(
+      createMatchBatch(db, {
+        seasonId: season.id,
+        categoryId: category.id,
+        toolAId: toolA.id,
+        toolBId: toolB.id,
+        promptTemplateId: template.id,
+        benchmarkRunId: crypto.randomUUID(),
+        triggerMode: 'manual',
+      }),
+    ).rejects.toThrow('benchmarkRunId must be omitted when triggerMode is manual')
   })
 
   it('should return existing batch on matching idempotency key', async () => {

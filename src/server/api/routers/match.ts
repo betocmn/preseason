@@ -16,6 +16,36 @@ function canonicalizeToolOrder(toolAId: string, toolBId: string): [string, strin
   return toolAId < toolBId ? [toolAId, toolBId] : [toolBId, toolAId]
 }
 
+const createBatchInputSchema = z
+  .object({
+    seasonId: z.string().uuid(),
+    categoryId: z.string().uuid(),
+    toolAId: z.string().uuid(),
+    toolBId: z.string().uuid(),
+    promptTemplateId: z.string().uuid(),
+    configId: z.string().uuid().optional(),
+    benchmarkRunId: z.string().uuid().optional(),
+    idempotencyKey: z.string().max(255).optional(),
+    triggerMode: z.enum(['manual', 'benchmark_run']).default('manual'),
+  })
+  .superRefine((input, ctx) => {
+    if (input.triggerMode === 'benchmark_run' && !input.benchmarkRunId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['benchmarkRunId'],
+        message: 'benchmarkRunId is required when triggerMode is benchmark_run',
+      })
+    }
+
+    if (input.triggerMode === 'manual' && input.benchmarkRunId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['benchmarkRunId'],
+        message: 'benchmarkRunId must be omitted when triggerMode is manual',
+      })
+    }
+  })
+
 export const matchRouter = createTRPCRouter({
   configureMatch: protectedProcedure
     .input(
@@ -137,18 +167,7 @@ export const matchRouter = createTRPCRouter({
     }),
 
   createBatch: protectedProcedure
-    .input(
-      z.object({
-        seasonId: z.string().uuid(),
-        categoryId: z.string().uuid(),
-        toolAId: z.string().uuid(),
-        toolBId: z.string().uuid(),
-        promptTemplateId: z.string().uuid(),
-        configId: z.string().uuid().optional(),
-        idempotencyKey: z.string().max(255).optional(),
-        triggerMode: z.enum(['manual', 'benchmark_run']).default('manual'),
-      }),
-    )
+    .input(createBatchInputSchema)
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
@@ -164,7 +183,8 @@ export const matchRouter = createTRPCRouter({
         }
         if (
           message.includes('Both tools must belong') ||
-          message.includes('Season has no frozen')
+          message.includes('Season has no frozen') ||
+          message.includes('benchmarkRunId')
         ) {
           throw new TRPCError({ code: 'BAD_REQUEST', message })
         }

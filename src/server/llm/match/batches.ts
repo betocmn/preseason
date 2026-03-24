@@ -81,6 +81,16 @@ async function getSeasonModelCount(database: DatabaseClient, seasonId: string): 
   return Number(result?.cnt ?? 0)
 }
 
+function validateTriggerModeInput(input: CreateMatchBatchInput) {
+  if (input.triggerMode === 'benchmark_run' && !input.benchmarkRunId) {
+    throw new Error('benchmarkRunId is required when triggerMode is benchmark_run')
+  }
+
+  if (input.triggerMode === 'manual' && input.benchmarkRunId) {
+    throw new Error('benchmarkRunId must be omitted when triggerMode is manual')
+  }
+}
+
 function assertIdempotentBatchMatches(
   existing: MatchBatchRecord,
   expected: MatchBatchDimensions,
@@ -119,6 +129,8 @@ export async function createMatchBatch(
   database: DatabaseClient = defaultDb,
   input: CreateMatchBatchInput,
 ): Promise<MatchBatchRecord> {
+  validateTriggerModeInput(input)
+
   const [toolAId, toolBId] = canonicalizeToolOrder(input.toolAId, input.toolBId)
   const expectedDimensions: MatchBatchDimensions = {
     seasonId: input.seasonId,
