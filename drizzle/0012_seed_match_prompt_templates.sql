@@ -1,4 +1,4 @@
-INSERT INTO preseason_match_prompt_template (id, slug, name, template_md, schema_version, system_prompt_snapshot, is_active, created_at)
+INSERT INTO preseason_match_prompt_template (id, slug, name, template_md, schema_version, system_prompt_snapshot, is_active, "createdAt")
 VALUES
 (
   gen_random_uuid(),
