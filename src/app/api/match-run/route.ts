@@ -5,6 +5,7 @@ import { claimMatchBatchExecution } from '~/server/llm/match/batches'
 import { runMatchBatch } from '~/server/llm/match/runner'
 
 export const dynamic = 'force-dynamic'
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function isAuthorized(request: Request, expectedToken: string | undefined) {
   if (!expectedToken) return false
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
 
     if (!batchId || typeof batchId !== 'string') {
       return NextResponse.json({ error: 'batchId is required' }, { status: 400 })
+    }
+
+    if (!UUID_PATTERN.test(batchId)) {
+      return NextResponse.json({ error: 'batchId must be a valid UUID' }, { status: 400 })
     }
 
     const { batch, claimToken, execute } = await claimMatchBatchExecution(db, batchId)
