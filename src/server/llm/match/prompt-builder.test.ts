@@ -31,6 +31,20 @@ describe('buildMatchPrompt', () => {
     expect(result).toContain('Clerk is compared to Auth0. Pick Clerk or Auth0.')
   })
 
+  it('should preserve dollar sequences in replacement values', () => {
+    const result = buildMatchPrompt({
+      templateMd: 'Compare {{TOOL_A}} vs {{TOOL_B}} for {{CATEGORY}}.',
+      toolAName: 'Alpha $&',
+      toolBName: 'Beta $$',
+      categoryName: "Cat $' $` $1",
+    })
+
+    expect(result).toContain("Compare Alpha $& vs Beta $$ for Cat $' $` $1.")
+    expect(result).not.toContain('{{TOOL_A}}')
+    expect(result).not.toContain('{{TOOL_B}}')
+    expect(result).not.toContain('{{CATEGORY}}')
+  })
+
   it('should include schema version in the example', () => {
     const result = buildMatchPrompt(baseContext)
     expect(result).toContain('"schema_version": "match-v2"')

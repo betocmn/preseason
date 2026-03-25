@@ -7,9 +7,9 @@ export type MatchPromptContext = {
 
 export function buildMatchPrompt(ctx: MatchPromptContext): string {
   const content = ctx.templateMd
-    .replace(/\{\{TOOL_A\}\}/g, ctx.toolAName)
-    .replace(/\{\{TOOL_B\}\}/g, ctx.toolBName)
-    .replace(/\{\{CATEGORY\}\}/g, ctx.categoryName)
+    .replace(/\{\{TOOL_A\}\}/g, () => ctx.toolAName)
+    .replace(/\{\{TOOL_B\}\}/g, () => ctx.toolBName)
+    .replace(/\{\{CATEGORY\}\}/g, () => ctx.categoryName)
 
   return [
     content,
