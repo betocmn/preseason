@@ -203,6 +203,7 @@ describe('matchRouter', () => {
       promptTemplateId: fixture.template.id,
     })
 
+    if (!config) throw new Error('Expected config to be created')
     expect(config.toolAId).toBe(toolA.id)
     expect(config.toolBId).toBe(toolB.id)
   })
