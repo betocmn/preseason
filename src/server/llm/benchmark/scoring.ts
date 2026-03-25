@@ -22,8 +22,6 @@ type DatabaseClient = PostgresJsDatabase<typeof schema>
 export type WindowType = 'run_day' | 'trailing_7d' | 'trailing_28d' | 'season_to_date'
 export type ModelTier = 'frontier' | 'mid' | 'small'
 type ModelSelectionFilters = {
-  modelCompany?: string
-  modelFamily?: string
   modelSnapshotId?: string
 }
 
@@ -264,8 +262,6 @@ async function queryDecisions(
   filters: {
     promptLevel?: PromptLevel
     modelTier?: ModelTier
-    modelCompany?: string
-    modelFamily?: string
     modelSnapshotId?: string
   },
 ): Promise<DecisionRow[]> {
@@ -287,13 +283,6 @@ async function queryDecisions(
   }
   if (filters.modelSnapshotId) {
     conditions.push(eq(benchmarkModelSnapshots.id, filters.modelSnapshotId))
-  } else {
-    if (filters.modelCompany) {
-      conditions.push(eq(benchmarkModelSnapshots.company, filters.modelCompany))
-    }
-    if (filters.modelFamily) {
-      conditions.push(eq(benchmarkModelSnapshots.modelFamily, filters.modelFamily))
-    }
   }
 
   const rows = await db
@@ -361,8 +350,6 @@ export async function fetchDecisions(
   filters?: {
     promptLevel?: PromptLevel
     modelTier?: ModelTier
-    modelCompany?: string
-    modelFamily?: string
     modelSnapshotId?: string
   },
 ): Promise<DecisionRow[]> {
@@ -602,8 +589,6 @@ export async function computeCategoryRanking(
     anchorDate: filters.anchorDate,
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
-    modelCompany: filters.modelCompany,
-    modelFamily: filters.modelFamily,
     modelSnapshotId: filters.modelSnapshotId,
   })
 }
@@ -623,8 +608,6 @@ export async function computeCategoryGroupRanking(
     anchorDate: filters.anchorDate,
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
-    modelCompany: filters.modelCompany,
-    modelFamily: filters.modelFamily,
     modelSnapshotId: filters.modelSnapshotId,
   })
 }
@@ -656,8 +639,6 @@ async function computeRankingForCategoryIds(
   const decisions = await queryDecisions(db, runIds, filters.categoryIds, {
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
-    modelCompany: filters.modelCompany,
-    modelFamily: filters.modelFamily,
     modelSnapshotId: filters.modelSnapshotId,
   })
 
@@ -727,8 +708,6 @@ async function computeRankingForCategoryIds(
     const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryIds, {
       promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
-      modelCompany: filters.modelCompany,
-      modelFamily: filters.modelFamily,
       modelSnapshotId: filters.modelSnapshotId,
     })
 
@@ -846,8 +825,6 @@ export async function computeHeadToHead(
   const decisions = await queryDecisions(db, runIds, [filters.categoryId], {
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
-    modelCompany: filters.modelCompany,
-    modelFamily: filters.modelFamily,
     modelSnapshotId: filters.modelSnapshotId,
   })
 

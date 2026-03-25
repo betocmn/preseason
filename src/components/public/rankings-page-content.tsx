@@ -9,8 +9,6 @@ type RankingsPageContentProps = {
   currentSub?: string
   promptLevel?: 'beginner' | 'intermediate' | 'advanced'
   modelTier?: 'frontier' | 'mid' | 'small'
-  modelCompany?: string
-  modelFamily?: string
   modelSnapshotId?: string
 }
 
@@ -19,8 +17,6 @@ export function RankingsPageContent({
   currentSub,
   promptLevel,
   modelTier,
-  modelCompany,
-  modelFamily,
   modelSnapshotId,
 }: RankingsPageContentProps) {
   const effectiveSub = currentSub
@@ -31,8 +27,6 @@ export function RankingsPageContent({
       groupSlug: currentGroup ?? '',
       promptLevel,
       modelTier,
-      modelCompany,
-      modelFamily,
       modelSnapshotId,
     },
     { enabled: isGroup },
@@ -43,8 +37,6 @@ export function RankingsPageContent({
       categorySlug: effectiveSub ?? '',
       promptLevel,
       modelTier,
-      modelCompany,
-      modelFamily,
       modelSnapshotId,
     },
     { enabled: !!effectiveSub },

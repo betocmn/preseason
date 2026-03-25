@@ -506,15 +506,16 @@ describe('benchmark public routers', () => {
     expect(modelFilters.companies.map((company) => company.name)).toEqual(['Anthropic', 'OpenAI'])
     expect(modelFilters.companies[0]?.families[0]?.name).toBe('Sonnet')
     expect(modelFilters.companies[0]?.families[0]?.models[0]?.id).toBe(modelSnapshotA.id)
+    expect(modelFilters.companies[0]?.families[0]?.models[0]?.version).toBe('4.6')
 
-    const companyFiltered = await caller.benchmarkRanking.byCategory({
+    const modelAFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
       windowType: 'trailing_7d',
       anchorDate: '2026-03-10',
-      modelCompany: 'Anthropic',
+      modelSnapshotId: modelSnapshotA.id,
     })
-    expect(companyFiltered.ranking?.totalEligibleDecisions).toBe(1)
-    expect(companyFiltered.ranking?.items[0]?.toolSlug).toBe('clerk')
+    expect(modelAFiltered.ranking?.totalEligibleDecisions).toBe(1)
+    expect(modelAFiltered.ranking?.items[0]?.toolSlug).toBe('clerk')
 
     const modelFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',

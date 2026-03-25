@@ -1,5 +1,6 @@
 export type ModelFilterModel = {
   id: string
+  version: string
   name: string
 }
 
@@ -13,59 +14,19 @@ export type ModelFilterCompany = {
   families: ModelFilterFamily[]
 }
 
-type ModelSelectionInput = {
-  modelCompany?: string
-  modelFamily?: string
-  modelSnapshotId?: string
-}
-
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export function normalizeModelSelection(
+export function normalizeModelSnapshotId(
   companies: ModelFilterCompany[],
-  input: ModelSelectionInput,
-): ModelSelectionInput {
-  const companyLookup = new Map(companies.map((company) => [company.name, company]))
+  modelSnapshotId?: string,
+) {
+  if (!modelSnapshotId || !UUID_REGEX.test(modelSnapshotId)) return undefined
 
-  const modelLookup = new Map(
+  const allModelIds = new Set(
     companies.flatMap((company) =>
-      company.families.flatMap((family) =>
-        family.models.map((model) => [
-          model.id,
-          {
-            company: company.name,
-            family: family.name,
-          },
-        ]),
-      ),
+      company.families.flatMap((family) => family.models.map((model) => model.id)),
     ),
   )
 
-  const modelSnapshotId =
-    input.modelSnapshotId && UUID_REGEX.test(input.modelSnapshotId)
-      ? input.modelSnapshotId
-      : undefined
-  const selectedModel = modelSnapshotId ? modelLookup.get(modelSnapshotId) : undefined
-
-  const modelCompany =
-    selectedModel?.company ??
-    (input.modelCompany && companyLookup.has(input.modelCompany) ? input.modelCompany : undefined)
-
-  const availableFamilies = modelCompany
-    ? (companyLookup.get(modelCompany)?.families.map((family) => family.name) ?? [])
-    : Array.from(
-        new Set(companies.flatMap((company) => company.families.map((family) => family.name))),
-      )
-
-  const modelFamily =
-    selectedModel?.family ??
-    (input.modelFamily && availableFamilies.includes(input.modelFamily)
-      ? input.modelFamily
-      : undefined)
-
-  return {
-    modelCompany,
-    modelFamily,
-    modelSnapshotId: selectedModel ? modelSnapshotId : undefined,
-  }
+  return allModelIds.has(modelSnapshotId) ? modelSnapshotId : undefined
 }

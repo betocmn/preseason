@@ -24,8 +24,6 @@ const windowTypeSchema = z
 const tierFiltersSchema = z.object({
   promptLevel: promptLevelSchema.optional(),
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
-  modelCompany: z.string().min(1).max(255).optional(),
-  modelFamily: z.string().min(1).max(100).optional(),
   modelSnapshotId: z.string().uuid().optional(),
 })
 
@@ -81,8 +79,6 @@ export const benchmarkRankingRouter = createTRPCRouter({
         anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
-        modelCompany: input.modelCompany,
-        modelFamily: input.modelFamily,
         modelSnapshotId: input.modelSnapshotId,
       })
 
@@ -131,8 +127,6 @@ export const benchmarkRankingRouter = createTRPCRouter({
         anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
-        modelCompany: input.modelCompany,
-        modelFamily: input.modelFamily,
         modelSnapshotId: input.modelSnapshotId,
       })
 
@@ -159,6 +153,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
           modelSnapshotId: benchmarkModelSnapshots.id,
           company: benchmarkModelSnapshots.company,
           modelFamily: benchmarkModelSnapshots.modelFamily,
+          modelVersion: benchmarkModelSnapshots.modelVersion,
           modelName: benchmarkModelSnapshots.name,
         })
         .from(benchmarkSeasonModels)
@@ -170,6 +165,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         .orderBy(
           asc(benchmarkModelSnapshots.company),
           asc(benchmarkModelSnapshots.modelFamily),
+          asc(benchmarkModelSnapshots.modelVersion),
           asc(benchmarkModelSnapshots.name),
         )
 
@@ -192,6 +188,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
 
         family.models.push({
           id: row.modelSnapshotId,
+          version: row.modelVersion,
           name: row.modelName,
         })
       }
