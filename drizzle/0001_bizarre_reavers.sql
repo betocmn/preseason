@@ -1,1 +1,0 @@
-ALTER TABLE "preseason_match" ALTER COLUMN "period_end" SET NOT NULL;

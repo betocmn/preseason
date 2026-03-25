@@ -605,7 +605,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
             id: benchmarkCase.modelSnapshot.id,
             name: benchmarkCase.modelSnapshot.name,
             tier: benchmarkCase.modelSnapshot.tier,
-            provider: benchmarkCase.modelSnapshot.provider,
+            company: benchmarkCase.modelSnapshot.company,
           },
           result: benchmarkCase.results[0]
             ? {

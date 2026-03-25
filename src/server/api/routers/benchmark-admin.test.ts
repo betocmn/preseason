@@ -71,6 +71,9 @@ async function seedPromptAndCategory(adminCaller: ReturnType<typeof createTestCa
       name: 'GPT-4o',
       slug: 'gpt-4o',
       provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: '4o',
       modelId: 'openai/gpt-4o',
       isActive: true,
     })

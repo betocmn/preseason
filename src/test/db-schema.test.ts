@@ -332,7 +332,10 @@ describe('Database Schema', () => {
       await db.insert(llms).values({
         name: 'Claude 3.5 Sonnet',
         slug: 'claude-3-5-sonnet',
-        provider: 'Anthropic',
+        provider: 'anthropic',
+        company: 'Anthropic',
+        modelFamily: 'Sonnet',
+        modelVersion: '3.5',
         modelId: 'anthropic/claude-3.5-sonnet',
       })
 
@@ -346,14 +349,20 @@ describe('Database Schema', () => {
       await db.insert(llms).values({
         name: 'GPT-4o',
         slug: 'gpt-4o',
-        provider: 'OpenAI',
+        provider: 'openai',
+        company: 'OpenAI',
+        modelFamily: 'GPT',
+        modelVersion: '4o',
         modelId: 'openai/gpt-4o',
       })
       await expect(
         db.insert(llms).values({
           name: 'GPT-4o Duplicate',
           slug: 'gpt-4o',
-          provider: 'OpenAI',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4o-2',
           modelId: 'openai/gpt-4o-2',
         }),
       ).rejects.toThrow()

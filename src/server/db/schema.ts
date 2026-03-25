@@ -11,6 +11,7 @@ import {
   pgTableCreator,
   real,
   text,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -225,6 +226,9 @@ export const llms = createTable(
     name: d.varchar({ length: 255 }).notNull(),
     slug: d.varchar({ length: 255 }).notNull().unique(),
     provider: d.varchar({ length: 100 }).notNull(),
+    company: d.varchar({ length: 255 }).notNull(),
+    modelFamily: d.varchar('model_family', { length: 100 }).notNull(),
+    modelVersion: d.varchar('model_version', { length: 100 }).notNull(),
     modelId: d.varchar('model_id', { length: 255 }).notNull(),
     isActive: d.boolean('is_active').notNull().default(true),
     createdAt: d
@@ -420,6 +424,9 @@ export const benchmarkModelSnapshots = createTable(
       .references(() => llms.id),
     name: d.varchar({ length: 255 }).notNull(),
     provider: d.varchar({ length: 100 }).notNull(),
+    company: d.varchar({ length: 255 }).notNull(),
+    modelFamily: d.varchar('model_family', { length: 100 }).notNull(),
+    modelVersion: d.varchar('model_version', { length: 100 }).notNull(),
     tier: modelTierEnum().notNull(),
     modelFamilyKey: d.varchar('model_family_key', { length: 100 }),
     requestedModelId: d.varchar('requested_model_id', { length: 255 }).notNull(),
@@ -475,7 +482,7 @@ export const benchmarkSeasonPrompts = createTable(
       .notNull()
       .references(() => benchmarkPromptVersions.id, { onDelete: 'cascade' }),
   }),
-  (t) => [uniqueIndex('benchmark_season_prompt_idx').on(t.seasonId, t.promptVersionId)],
+  (t) => [unique('benchmark_season_prompt_unique').on(t.seasonId, t.promptVersionId)],
 )
 
 export const benchmarkSeasonModels = createTable(
@@ -491,7 +498,7 @@ export const benchmarkSeasonModels = createTable(
       .notNull()
       .references(() => benchmarkModelSnapshots.id, { onDelete: 'cascade' }),
   }),
-  (t) => [uniqueIndex('benchmark_season_model_idx').on(t.seasonId, t.modelSnapshotId)],
+  (t) => [unique('benchmark_season_model_unique').on(t.seasonId, t.modelSnapshotId)],
 )
 
 export const benchmarkCases = createTable(
@@ -559,7 +566,7 @@ export const benchmarkRuns = createTable(
   (t) => [
     uniqueIndex('benchmark_run_season_date_idx').on(t.seasonId, t.scheduledFor),
     index('benchmark_run_season_status_idx').on(t.seasonId, t.status),
-    uniqueIndex('benchmark_run_id_season_idx').on(t.id, t.seasonId),
+    unique('benchmark_run_id_season_unique').on(t.id, t.seasonId),
   ],
 )
 
@@ -754,7 +761,7 @@ export const matchConfigs = createTable(
     uniqueIndex('match_config_active_matchup_idx')
       .on(t.seasonId, t.categoryId, t.toolAId, t.toolBId)
       .where(sql`is_active = true`),
-    uniqueIndex('match_config_composite_fk_idx').on(
+    unique('match_config_composite_fk_unique').on(
       t.id,
       t.seasonId,
       t.categoryId,
@@ -814,7 +821,7 @@ export const matchBatches = createTable(
     uniqueIndex('match_batch_idempotency_key_idx')
       .on(t.idempotencyKey)
       .where(sql`idempotency_key IS NOT NULL`),
-    uniqueIndex('match_batch_id_season_idx').on(t.id, t.seasonId),
+    unique('match_batch_id_season_unique').on(t.id, t.seasonId),
     check(
       'match_batch_running_requires_claim',
       sql`status != 'running' OR (claim_token IS NOT NULL AND last_heartbeat_at IS NOT NULL)`,

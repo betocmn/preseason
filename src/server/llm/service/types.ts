@@ -1,12 +1,6 @@
-export const PROVIDER_IDS = [
-  'anthropic',
-  'openai',
-  'google',
-  'meta',
-  'mistral',
-  'deepseek',
-] as const
+import { CATALOG_PROVIDER_IDS } from '~/server/llm/catalog'
 
+export const PROVIDER_IDS = CATALOG_PROVIDER_IDS
 export type ProviderId = (typeof PROVIDER_IDS)[number]
 
 export type InferenceParams = {
