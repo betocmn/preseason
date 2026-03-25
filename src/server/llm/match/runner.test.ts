@@ -125,7 +125,15 @@ async function seedRunnerFixture() {
   const llm = first(
     await db
       .insert(llms)
-      .values({ name: 'GPT-4o', slug: 'gpt-4o', provider: 'openai', modelId: 'gpt-4o' })
+      .values({
+        name: 'GPT-4o',
+        slug: 'gpt-4o',
+        provider: 'openai',
+        company: 'OpenAI',
+        modelFamily: 'GPT',
+        modelVersion: '4o',
+        modelId: 'gpt-4o',
+      })
       .returning(),
   )
 
@@ -136,6 +144,9 @@ async function seedRunnerFixture() {
         llmId: llm.id,
         name: 'GPT-4o',
         provider: 'openai',
+        company: 'OpenAI',
+        modelFamily: 'GPT',
+        modelVersion: '4o',
         tier: 'frontier',
         requestedModelId: 'gpt-4o',
         snapshotKey: 'gpt-4o::0.2::1::1200::null',

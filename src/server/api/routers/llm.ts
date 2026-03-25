@@ -4,11 +4,17 @@ import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import { llms } from '~/server/db/schema'
+import { CATALOG_PROVIDER_IDS } from '~/server/llm/catalog'
+
+const providerSchema = z.enum(CATALOG_PROVIDER_IDS)
 
 const createLlmInput = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
-  provider: z.string().min(1).max(100),
+  provider: providerSchema,
+  company: z.string().min(1).max(255),
+  modelFamily: z.string().min(1).max(100),
+  modelVersion: z.string().min(1).max(100),
   modelId: z.string().min(1).max(255),
   isActive: z.boolean().default(true),
 })
@@ -18,7 +24,10 @@ const updateLlmInput = z
     id: z.string().uuid(),
     name: z.string().min(1).max(255).optional(),
     slug: z.string().min(1).max(255).optional(),
-    provider: z.string().min(1).max(100).optional(),
+    provider: providerSchema.optional(),
+    company: z.string().min(1).max(255).optional(),
+    modelFamily: z.string().min(1).max(100).optional(),
+    modelVersion: z.string().min(1).max(100).optional(),
     modelId: z.string().min(1).max(255).optional(),
     isActive: z.boolean().optional(),
   })
@@ -27,6 +36,9 @@ const updateLlmInput = z
       input.name !== undefined ||
       input.slug !== undefined ||
       input.provider !== undefined ||
+      input.company !== undefined ||
+      input.modelFamily !== undefined ||
+      input.modelVersion !== undefined ||
       input.modelId !== undefined ||
       input.isActive !== undefined,
     {

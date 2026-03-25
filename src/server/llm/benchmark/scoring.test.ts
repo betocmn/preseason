@@ -203,14 +203,33 @@ async function seedScoringFixture(db: TestDb) {
   const llmRows = await db
     .insert(llms)
     .values([
-      { name: 'Claude Opus', slug: 'claude-opus', provider: 'anthropic', modelId: 'claude-3-opus' },
+      {
+        name: 'Claude Opus',
+        slug: 'claude-opus',
+        provider: 'anthropic',
+        company: 'Anthropic',
+        modelFamily: 'Opus',
+        modelVersion: '3',
+        modelId: 'claude-3-opus',
+      },
       {
         name: 'GPT-4o Mini',
         slug: 'gpt-4o-mini',
         provider: 'openai',
+        company: 'OpenAI',
+        modelFamily: 'GPT Mini',
+        modelVersion: '4o',
         modelId: 'openai/gpt-4o-mini',
       },
-      { name: 'Llama 70B', slug: 'llama-70b', provider: 'meta', modelId: 'meta/llama-3.1-70b' },
+      {
+        name: 'Llama 70B',
+        slug: 'llama-70b',
+        provider: 'meta',
+        company: 'Meta',
+        modelFamily: 'Llama',
+        modelVersion: '70B',
+        modelId: 'meta/llama-3.1-70b',
+      },
     ])
     .returning()
 
@@ -225,6 +244,9 @@ async function seedScoringFixture(db: TestDb) {
           llmId: llm.id,
           name: llm.name,
           provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
           tier: at(tiers, i),
           requestedModelId: llm.modelId,
           temperature: 0.2,
