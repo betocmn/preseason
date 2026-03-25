@@ -32,6 +32,10 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
 export async function cleanTestDatabase(): Promise<void> {
   const db = getTestDb()
   // Delete in reverse FK-dependency order
+  await db.delete(schema.matchEvaluations)
+  await db.delete(schema.matchBatches)
+  await db.delete(schema.matchConfigs)
+  await db.delete(schema.matchPromptTemplates)
   await db.delete(schema.benchmarkCaseDecisions)
   await db.delete(schema.benchmarkCaseResults)
   await db.delete(schema.benchmarkRuns)
