@@ -123,10 +123,12 @@ export function BenchmarkRankingFilters({
               {groups.map((group, i) => (
                 <SelectGroup key={group.slug}>
                   {i > 0 && <SelectSeparator />}
-                  <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
-                    {group.name}
-                  </SelectLabel>
-                  <SelectItem value={group.slug}>All {group.name}</SelectItem>
+                  <SelectItem
+                    value={group.slug}
+                    className="text-xs font-semibold tracking-wider text-[#7da1ff] dark:text-[#93b0ff]"
+                  >
+                    All {group.name}
+                  </SelectItem>
                   {group.subcategories.map((sub) => (
                     <SelectItem key={sub.slug} value={`${group.slug}:${sub.slug}`}>
                       <span className="pl-2">{sub.name}</span>
@@ -147,15 +149,15 @@ export function BenchmarkRankingFilters({
             navigate({ promptLevel: val === 'all' ? undefined : val })
           }}
         >
-          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+          <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
               {currentPromptLevel
                 ? `${currentPromptLevel.charAt(0).toUpperCase()}${currentPromptLevel.slice(1)}`
-                : 'All Levels'}
+                : 'All User Prompting Levels'}
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Levels</SelectItem>
+            <SelectItem value="all">All User Prompting Levels</SelectItem>
             <SelectItem value="beginner">Beginner</SelectItem>
             <SelectItem value="intermediate">Intermediate</SelectItem>
             <SelectItem value="advanced">Advanced</SelectItem>
@@ -198,7 +200,7 @@ export function BenchmarkRankingFilters({
           <SelectTrigger className="h-9 w-[260px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
               {selectedModel
-                ? `${selectedModel.company} / ${selectedModel.family} / ${selectedModel.version}`
+                ? `${selectedModel.family} - ${selectedModel.version}`
                 : 'All Model Versions'}
             </span>
           </SelectTrigger>
@@ -210,18 +212,13 @@ export function BenchmarkRankingFilters({
                 <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
                   {company.name}
                 </SelectLabel>
-                {company.families.map((family) => (
-                  <SelectGroup key={`${company.name}:${family.name}`}>
-                    <SelectLabel className="pl-10 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {family.name}
-                    </SelectLabel>
-                    {family.models.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        <span className="pl-4">{model.version}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
+                {company.families.flatMap((family) =>
+                  family.models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <span className="pl-2">{`${family.name} - ${model.version}`}</span>
+                    </SelectItem>
+                  )),
+                )}
               </SelectGroup>
             ))}
           </SelectContent>

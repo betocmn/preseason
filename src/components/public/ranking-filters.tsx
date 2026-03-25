@@ -7,7 +7,6 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectSeparator,
   SelectTrigger,
 } from '~/components/ui/select'
@@ -83,10 +82,12 @@ export function RankingFilters({ groups, currentGroup, currentSub }: RankingFilt
             {groups.map((group, i) => (
               <SelectGroup key={group.slug}>
                 {i > 0 && <SelectSeparator />}
-                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
-                  {group.name}
-                </SelectLabel>
-                <SelectItem value={group.slug}>All {group.name}</SelectItem>
+                <SelectItem
+                  value={group.slug}
+                  className="text-xs font-semibold tracking-wider text-[#7da1ff] dark:text-[#93b0ff]"
+                >
+                  All {group.name}
+                </SelectItem>
                 {group.subcategories.map((sub) => (
                   <SelectItem key={sub.slug} value={`${group.slug}:${sub.slug}`}>
                     <span className="pl-2">{sub.name}</span>
