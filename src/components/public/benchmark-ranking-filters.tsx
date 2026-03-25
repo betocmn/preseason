@@ -26,8 +26,6 @@ type BenchmarkRankingFiltersProps = {
   currentSub?: string
   currentPromptLevel?: string
   currentModelTier?: string
-  currentModelCompany?: string
-  currentModelFamily?: string
   currentModelSnapshotId?: string
   basePath?: string
   showCategorySelect?: boolean
@@ -40,41 +38,12 @@ export function BenchmarkRankingFilters({
   currentSub,
   currentPromptLevel,
   currentModelTier,
-  currentModelCompany,
-  currentModelFamily,
   currentModelSnapshotId,
   basePath = '/rankings',
   showCategorySelect = true,
 }: BenchmarkRankingFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const companyLookup = new Map(modelFilters.map((company) => [company.name, company]))
-  const normalizedCompany =
-    currentModelCompany && companyLookup.has(currentModelCompany) ? currentModelCompany : undefined
-  const selectedCompany = normalizedCompany ? companyLookup.get(normalizedCompany) : undefined
-
-  const allFamilies = Array.from(
-    new Set(modelFilters.flatMap((company) => company.families.map((family) => family.name))),
-  ).sort((a, b) => a.localeCompare(b))
-  const availableFamilies = selectedCompany
-    ? selectedCompany.families.map((family) => family.name)
-    : allFamilies
-  const normalizedFamily =
-    currentModelFamily && availableFamilies.includes(currentModelFamily)
-      ? currentModelFamily
-      : undefined
-
-  const availableModels = (selectedCompany ? [selectedCompany] : modelFilters).flatMap((company) =>
-    company.families
-      .filter((family) => !normalizedFamily || family.name === normalizedFamily)
-      .flatMap((family) =>
-        family.models.map((model) => ({
-          ...model,
-          company: company.name,
-          family: family.name,
-        })),
-      ),
-  )
 
   const modelLookup = new Map(
     modelFilters.flatMap((company) =>
@@ -90,11 +59,13 @@ export function BenchmarkRankingFilters({
       ),
     ),
   )
-  const availableModelIds = new Set(availableModels.map((model) => model.id))
   const normalizedModelSnapshotId =
-    currentModelSnapshotId && availableModelIds.has(currentModelSnapshotId)
+    currentModelSnapshotId && modelLookup.has(currentModelSnapshotId)
       ? currentModelSnapshotId
       : undefined
+  const selectedModel = normalizedModelSnapshotId
+    ? modelLookup.get(normalizedModelSnapshotId)
+    : undefined
 
   function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -219,120 +190,38 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={normalizedCompany ?? 'all'}
-          onValueChange={(val) => {
-            if (val === 'all') {
-              navigate({
-                modelCompany: undefined,
-                modelFamily: undefined,
-                modelSnapshotId: undefined,
-              })
-              return
-            }
-
-            navigate({
-              modelCompany: val,
-              modelFamily: undefined,
-              modelSnapshotId: undefined,
-            })
-          }}
-        >
-          <SelectTrigger className="h-9 w-[170px] border-border/60 bg-background/80 text-sm">
-            <span className="truncate">{normalizedCompany ?? 'All Companies'}</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Companies</SelectItem>
-            {modelFilters.map((company) => (
-              <SelectItem key={company.name} value={company.name}>
-                {company.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Bot className="h-4 w-4 text-muted-foreground" />
-        <Select
-          value={normalizedFamily ?? 'all'}
-          onValueChange={(val) => {
-            if (val === 'all') {
-              navigate({
-                modelFamily: undefined,
-                modelSnapshotId: undefined,
-              })
-              return
-            }
-
-            navigate({
-              modelFamily: val,
-              modelSnapshotId: undefined,
-            })
-          }}
-        >
-          <SelectTrigger className="h-9 w-[170px] border-border/60 bg-background/80 text-sm">
-            <span className="truncate">{normalizedFamily ?? 'All Families'}</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Families</SelectItem>
-            {availableFamilies.map((family) => (
-              <SelectItem key={family} value={family}>
-                {family}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Bot className="h-4 w-4 text-muted-foreground" />
-        <Select
           value={normalizedModelSnapshotId ?? 'all'}
           onValueChange={(val) => {
-            if (val === 'all') {
-              navigate({ modelSnapshotId: undefined })
-              return
-            }
-
-            const model = modelLookup.get(val)
-            if (!model) return
-            navigate({
-              modelCompany: model.company,
-              modelFamily: model.family,
-              modelSnapshotId: model.id,
-            })
+            navigate({ modelSnapshotId: val === 'all' ? undefined : val })
           }}
         >
           <SelectTrigger className="h-9 w-[260px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
-              {normalizedModelSnapshotId
-                ? (availableModels.find((model) => model.id === normalizedModelSnapshotId)?.name ??
-                  'All Models')
-                : 'All Models'}
+              {selectedModel
+                ? `${selectedModel.company} / ${selectedModel.family} / ${selectedModel.version}`
+                : 'All Model Versions'}
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Models</SelectItem>
-            {(selectedCompany ? [selectedCompany] : modelFilters).map((company, companyIndex) => (
+            <SelectItem value="all">All Model Versions</SelectItem>
+            {modelFilters.map((company, companyIndex) => (
               <SelectGroup key={company.name}>
                 {companyIndex > 0 && <SelectSeparator />}
                 <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
                   {company.name}
                 </SelectLabel>
-                {company.families
-                  .filter((family) => !normalizedFamily || family.name === normalizedFamily)
-                  .map((family) => (
-                    <SelectGroup key={`${company.name}:${family.name}`}>
-                      <SelectLabel className="pl-10 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {family.name}
-                      </SelectLabel>
-                      {family.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          <span className="pl-4">{model.name}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
+                {company.families.map((family) => (
+                  <SelectGroup key={`${company.name}:${family.name}`}>
+                    <SelectLabel className="pl-10 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {family.name}
+                    </SelectLabel>
+                    {family.models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <span className="pl-4">{model.version}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
               </SelectGroup>
             ))}
           </SelectContent>

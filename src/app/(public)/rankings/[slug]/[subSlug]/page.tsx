@@ -6,7 +6,7 @@ import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-f
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
-import { normalizeModelSelection } from '~/lib/model-filters'
+import { normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api } from '~/trpc/server'
 
 type Props = {
@@ -14,8 +14,6 @@ type Props = {
   searchParams: Promise<{
     promptLevel?: string
     modelTier?: string
-    modelCompany?: string
-    modelFamily?: string
     modelSnapshotId?: string
   }>
 }
@@ -41,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SubcategoryRankingPage({ params, searchParams }: Props) {
   const { slug, subSlug } = await params
-  const { promptLevel, modelTier, modelCompany, modelFamily, modelSnapshotId } = await searchParams
+  const { promptLevel, modelTier, modelSnapshotId } = await searchParams
   const caller = await api()
   const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
     (tier) => tier === promptLevel,
@@ -52,18 +50,12 @@ export default async function SubcategoryRankingPage({ params, searchParams }: P
     caller.benchmarkRanking.listModelFilters({}),
   ])
   const modelFilters = modelFiltersData.companies
-  const validModelSelection = normalizeModelSelection(modelFilters, {
-    modelCompany,
-    modelFamily,
-    modelSnapshotId,
-  })
+  const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
   const data = await caller.benchmarkRanking.byCategory({
     categorySlug: subSlug,
     promptLevel: validPromptLevel,
     modelTier: validModelTier,
-    modelCompany: validModelSelection.modelCompany,
-    modelFamily: validModelSelection.modelFamily,
-    modelSnapshotId: validModelSelection.modelSnapshotId,
+    modelSnapshotId: validModelSnapshotId,
   })
 
   if (!data.category) {
@@ -92,9 +84,7 @@ export default async function SubcategoryRankingPage({ params, searchParams }: P
           currentSub={subSlug}
           currentPromptLevel={validPromptLevel}
           currentModelTier={validModelTier}
-          currentModelCompany={validModelSelection.modelCompany}
-          currentModelFamily={validModelSelection.modelFamily}
-          currentModelSnapshotId={validModelSelection.modelSnapshotId}
+          currentModelSnapshotId={validModelSnapshotId}
           basePath={`/rankings/${slug}/${subSlug}`}
           showCategorySelect={false}
         />

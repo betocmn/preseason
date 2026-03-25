@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
-import { normalizeModelSelection } from '~/lib/model-filters'
+import { normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -27,15 +27,12 @@ type Props = {
     sub?: string
     promptLevel?: string
     modelTier?: string
-    modelCompany?: string
-    modelFamily?: string
     modelSnapshotId?: string
   }>
 }
 
 export default async function RankingsPage({ searchParams }: Props) {
-  const { category, sub, promptLevel, modelTier, modelCompany, modelFamily, modelSnapshotId } =
-    await searchParams
+  const { category, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
   const caller = await api()
   const [categoryGroups, modelFiltersData] = await Promise.all([
     caller.category.listGroups(),
@@ -53,11 +50,7 @@ export default async function RankingsPage({ searchParams }: Props) {
     (t) => t === promptLevel,
   )
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
-  const validModelSelection = normalizeModelSelection(modelFilters, {
-    modelCompany,
-    modelFamily,
-    modelSnapshotId,
-  })
+  const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
   const showIndex = !category && !sub
   const indexGroups = showIndex
     ? await Promise.all(
@@ -66,9 +59,7 @@ export default async function RankingsPage({ searchParams }: Props) {
             groupSlug: group.slug,
             promptLevel: validPromptLevel,
             modelTier: validModelTier,
-            modelCompany: validModelSelection.modelCompany,
-            modelFamily: validModelSelection.modelFamily,
-            modelSnapshotId: validModelSelection.modelSnapshotId,
+            modelSnapshotId: validModelSnapshotId,
           })
 
           return {
@@ -106,9 +97,7 @@ export default async function RankingsPage({ searchParams }: Props) {
           currentSub={sub}
           currentPromptLevel={validPromptLevel}
           currentModelTier={validModelTier}
-          currentModelCompany={validModelSelection.modelCompany}
-          currentModelFamily={validModelSelection.modelFamily}
-          currentModelSnapshotId={validModelSelection.modelSnapshotId}
+          currentModelSnapshotId={validModelSnapshotId}
         />
       </Suspense>
 
@@ -121,9 +110,7 @@ export default async function RankingsPage({ searchParams }: Props) {
             currentSub={sub}
             promptLevel={validPromptLevel}
             modelTier={validModelTier}
-            modelCompany={validModelSelection.modelCompany}
-            modelFamily={validModelSelection.modelFamily}
-            modelSnapshotId={validModelSelection.modelSnapshotId}
+            modelSnapshotId={validModelSnapshotId}
           />
         )}
       </div>
