@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, count, eq, lt, or } from 'drizzle-orm'
+import { and, count, eq, lte, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -289,7 +289,7 @@ export async function claimMatchBatchExecution(
           and(
             eq(matchBatches.id, batchId),
             eq(matchBatches.status, 'running'),
-            lt(matchBatches.lastHeartbeatAt, new Date(currentTime.getTime() - staleAfterMs)),
+            lte(matchBatches.lastHeartbeatAt, new Date(currentTime.getTime() - staleAfterMs)),
           ),
         )
         .returning()

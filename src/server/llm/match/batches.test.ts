@@ -404,6 +404,41 @@ describe('claimMatchBatchExecution', () => {
     expect(result.claimToken).toBeTruthy()
   })
 
+  it('should reclaim a running batch exactly at stale cutoff', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+    const staleAfterMs = 10 * 60 * 1000
+    const now = new Date('2026-01-01T00:10:00.000Z')
+    const boundaryTime = new Date(now.getTime() - staleAfterMs)
+
+    const batch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    await db
+      .update(matchBatches)
+      .set({
+        status: 'running',
+        claimToken: crypto.randomUUID(),
+        startedAt: boundaryTime,
+        lastHeartbeatAt: boundaryTime,
+      })
+      .where(eq(matchBatches.id, batch.id))
+
+    const result = await claimMatchBatchExecution(db, batch.id, {
+      staleAfterMs,
+      now: () => now,
+    })
+
+    expect(result.execute).toBe(true)
+    expect(result.claimToken).toBeTruthy()
+  })
+
   it('should not reclaim a fresh running batch', async () => {
     const db = getTestDb()
     const { season, category, toolA, toolB, template } = await seedMatchFixture()
