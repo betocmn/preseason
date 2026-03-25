@@ -4,8 +4,8 @@ import {
 } from '~/server/llm/service/openrouter-client'
 import type { CompletionRequest, CompletionResponse, ProviderId } from '~/server/llm/service/types'
 
-export abstract class BaseLlmProvider {
-  protected constructor(
+export class OpenRouterProvider {
+  constructor(
     private readonly provider: ProviderId,
     private readonly modelPrefix: string,
   ) {}
