@@ -51,10 +51,11 @@ export default function MethodologyPage() {
             which tool categories are relevant.
           </P>
           <P>
-            <strong className="text-foreground">Model panel:</strong> A provider-balanced set of AI
-            models spanning frontier, mid-tier, and smaller models. Each model is tested with
-            explicit, frozen inference parameters (temperature, top_p, max_tokens) to ensure
-            reproducibility.
+            <strong className="text-foreground">Model panel:</strong> A curated panel of 20 current
+            AI models with extra depth in coding-heavy families, including multiple OpenAI GPT and
+            Codex variants plus Anthropic Opus, Sonnet, and Haiku. Each model snapshot stores the
+            company, family, exact version, and explicit frozen inference parameters
+            (temperature, top_p, max_tokens) to ensure reproducibility.
           </P>
           <P>
             <strong className="text-foreground">Immutable snapshots:</strong> Both prompts and model
