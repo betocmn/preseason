@@ -183,6 +183,24 @@ describe('createMatchBatch', () => {
     expect(batch.toolBId).toBe(higher)
   })
 
+  it('should canonicalize tool order case-insensitively for uppercase UUID input', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const batch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolB.id.toUpperCase(),
+      toolBId: toolA.id.toUpperCase(),
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    const [lower, higher] = [toolA.id, toolB.id].sort()
+    expect(batch.toolAId).toBe(lower)
+    expect(batch.toolBId).toBe(higher)
+  })
+
   it('should reject when tools are not in the category', async () => {
     const db = getTestDb()
     const { season, category, toolC, toolA, template } = await seedMatchFixture()
