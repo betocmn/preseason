@@ -1,13 +1,19 @@
 import { TRPCError } from '@trpc/server'
 import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
+import type { ModelFilterCompany, ModelFilterFamily } from '~/lib/model-filters'
 import {
   anchorDateSchema,
   findBenchmarkSeasonId,
   findLatestPublishedBenchmarkSeasonId,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { categories, subcategories } from '~/server/db/schema'
+import {
+  benchmarkModelSnapshots,
+  benchmarkSeasonModels,
+  categories,
+  subcategories,
+} from '~/server/db/schema'
 import { computeCategoryGroupRanking, computeCategoryRanking } from '~/server/llm/benchmark/scoring'
 import { promptLevelSchema } from '~/server/llm/prompts'
 
@@ -18,6 +24,9 @@ const windowTypeSchema = z
 const tierFiltersSchema = z.object({
   promptLevel: promptLevelSchema.optional(),
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
+  modelCompany: z.string().min(1).max(255).optional(),
+  modelFamily: z.string().min(1).max(100).optional(),
+  modelSnapshotId: z.string().uuid().optional(),
 })
 
 async function resolveSeasonId(
@@ -72,6 +81,9 @@ export const benchmarkRankingRouter = createTRPCRouter({
         anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
+        modelCompany: input.modelCompany,
+        modelFamily: input.modelFamily,
+        modelSnapshotId: input.modelSnapshotId,
       })
 
       return { category, ranking }
@@ -119,8 +131,76 @@ export const benchmarkRankingRouter = createTRPCRouter({
         anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
+        modelCompany: input.modelCompany,
+        modelFamily: input.modelFamily,
+        modelSnapshotId: input.modelSnapshotId,
       })
 
       return { categoryGroup: group, ranking }
+    }),
+
+  listModelFilters: publicProcedure
+    .input(
+      z.object({
+        seasonId: z.string().uuid().optional(),
+        anchorDate: anchorDateSchema.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+
+      if (!seasonId) {
+        return { seasonId: null, companies: [] as ModelFilterCompany[] }
+      }
+
+      const rows = await ctx.db
+        .select({
+          modelSnapshotId: benchmarkModelSnapshots.id,
+          company: benchmarkModelSnapshots.company,
+          modelFamily: benchmarkModelSnapshots.modelFamily,
+          modelName: benchmarkModelSnapshots.name,
+        })
+        .from(benchmarkSeasonModels)
+        .innerJoin(
+          benchmarkModelSnapshots,
+          eq(benchmarkSeasonModels.modelSnapshotId, benchmarkModelSnapshots.id),
+        )
+        .where(eq(benchmarkSeasonModels.seasonId, seasonId))
+        .orderBy(
+          asc(benchmarkModelSnapshots.company),
+          asc(benchmarkModelSnapshots.modelFamily),
+          asc(benchmarkModelSnapshots.name),
+        )
+
+      const companyMap = new Map<
+        string,
+        { name: string; families: Map<string, ModelFilterFamily> }
+      >()
+      for (const row of rows) {
+        let company = companyMap.get(row.company)
+        if (!company) {
+          company = { name: row.company, families: new Map<string, ModelFilterFamily>() }
+          companyMap.set(row.company, company)
+        }
+
+        let family = company.families.get(row.modelFamily)
+        if (!family) {
+          family = { name: row.modelFamily, models: [] }
+          company.families.set(row.modelFamily, family)
+        }
+
+        family.models.push({
+          id: row.modelSnapshotId,
+          name: row.modelName,
+        })
+      }
+
+      const companies: ModelFilterCompany[] = Array.from(companyMap.values()).map((company) => ({
+        name: company.name,
+        families: Array.from(company.families.values()),
+      }))
+
+      return { seasonId, companies }
     }),
 })

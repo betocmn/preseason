@@ -21,6 +21,11 @@ type DatabaseClient = PostgresJsDatabase<typeof schema>
 
 export type WindowType = 'run_day' | 'trailing_7d' | 'trailing_28d' | 'season_to_date'
 export type ModelTier = 'frontier' | 'mid' | 'small'
+type ModelSelectionFilters = {
+  modelCompany?: string
+  modelFamily?: string
+  modelSnapshotId?: string
+}
 
 export type ScoringFilters = {
   categoryId: string
@@ -29,7 +34,7 @@ export type ScoringFilters = {
   anchorDate: string // YYYY-MM-DD
   promptLevel?: PromptLevel
   modelTier?: ModelTier
-}
+} & ModelSelectionFilters
 
 export type ToolRankingEntry = {
   toolId: string
@@ -69,7 +74,7 @@ export type HeadToHeadFilters = {
   anchorDate: string
   promptLevel?: PromptLevel
   modelTier?: ModelTier
-}
+} & ModelSelectionFilters
 
 type RankingFilters = {
   seasonId: string
@@ -77,7 +82,7 @@ type RankingFilters = {
   anchorDate: string
   promptLevel?: PromptLevel
   modelTier?: ModelTier
-}
+} & ModelSelectionFilters
 
 export type HeadToHeadResult = {
   toolAId: string
@@ -256,7 +261,13 @@ async function queryDecisions(
   db: DatabaseClient,
   runIds: string[],
   categoryIds: string[],
-  filters: { promptLevel?: PromptLevel; modelTier?: ModelTier },
+  filters: {
+    promptLevel?: PromptLevel
+    modelTier?: ModelTier
+    modelCompany?: string
+    modelFamily?: string
+    modelSnapshotId?: string
+  },
 ): Promise<DecisionRow[]> {
   if (runIds.length === 0 || categoryIds.length === 0) return []
 
@@ -273,6 +284,16 @@ async function queryDecisions(
   }
   if (filters.modelTier) {
     conditions.push(eq(benchmarkModelSnapshots.tier, filters.modelTier))
+  }
+  if (filters.modelSnapshotId) {
+    conditions.push(eq(benchmarkModelSnapshots.id, filters.modelSnapshotId))
+  } else {
+    if (filters.modelCompany) {
+      conditions.push(eq(benchmarkModelSnapshots.company, filters.modelCompany))
+    }
+    if (filters.modelFamily) {
+      conditions.push(eq(benchmarkModelSnapshots.modelFamily, filters.modelFamily))
+    }
   }
 
   const rows = await db
@@ -337,7 +358,13 @@ export async function fetchDecisions(
   db: DatabaseClient,
   runIds: string[],
   categoryIds: string[],
-  filters?: { promptLevel?: PromptLevel; modelTier?: ModelTier },
+  filters?: {
+    promptLevel?: PromptLevel
+    modelTier?: ModelTier
+    modelCompany?: string
+    modelFamily?: string
+    modelSnapshotId?: string
+  },
 ): Promise<DecisionRow[]> {
   return queryDecisions(db, runIds, categoryIds, filters ?? {})
 }
@@ -575,6 +602,9 @@ export async function computeCategoryRanking(
     anchorDate: filters.anchorDate,
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
+    modelCompany: filters.modelCompany,
+    modelFamily: filters.modelFamily,
+    modelSnapshotId: filters.modelSnapshotId,
   })
 }
 
@@ -593,6 +623,9 @@ export async function computeCategoryGroupRanking(
     anchorDate: filters.anchorDate,
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
+    modelCompany: filters.modelCompany,
+    modelFamily: filters.modelFamily,
+    modelSnapshotId: filters.modelSnapshotId,
   })
 }
 
@@ -623,6 +656,9 @@ async function computeRankingForCategoryIds(
   const decisions = await queryDecisions(db, runIds, filters.categoryIds, {
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
+    modelCompany: filters.modelCompany,
+    modelFamily: filters.modelFamily,
+    modelSnapshotId: filters.modelSnapshotId,
   })
 
   // Default weight config for runs without one
@@ -691,6 +727,9 @@ async function computeRankingForCategoryIds(
     const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryIds, {
       promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
+      modelCompany: filters.modelCompany,
+      modelFamily: filters.modelFamily,
+      modelSnapshotId: filters.modelSnapshotId,
     })
 
     let prevTotalWeighted = 0
@@ -807,6 +846,9 @@ export async function computeHeadToHead(
   const decisions = await queryDecisions(db, runIds, [filters.categoryId], {
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
+    modelCompany: filters.modelCompany,
+    modelFamily: filters.modelFamily,
+    modelSnapshotId: filters.modelSnapshotId,
   })
 
   const defaultWeight: WeightConfig = { frontierWeight: 1, midWeight: 1, smallWeight: 1 }
