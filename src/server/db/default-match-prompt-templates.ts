@@ -97,7 +97,7 @@ export async function ensureDefaultMatchPromptTemplates(sql: postgres.Sql): Prom
   for (const template of DEFAULT_MATCH_PROMPT_TEMPLATES) {
     const shouldActivateTemplate = template.isActive && !hasActiveTemplate
 
-    const insertedRows = await sql<{ id: string }[]>`
+    const seededRows = await sql<{ id: string; isActive: boolean }[]>`
       INSERT INTO public.preseason_match_prompt_template (
         slug,
         name,
@@ -116,11 +116,12 @@ export async function ensureDefaultMatchPromptTemplates(sql: postgres.Sql): Prom
         ${shouldActivateTemplate},
         now()
       )
-      ON CONFLICT (slug) DO NOTHING
-      RETURNING id
+      ON CONFLICT (slug) DO UPDATE
+      SET is_active = public.preseason_match_prompt_template.is_active OR EXCLUDED.is_active
+      RETURNING id, is_active AS "isActive"
     `
 
-    if (insertedRows.length > 0 && shouldActivateTemplate) {
+    if (seededRows[0]?.isActive) {
       hasActiveTemplate = true
     }
   }
