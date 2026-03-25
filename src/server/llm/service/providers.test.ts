@@ -7,12 +7,20 @@ vi.mock('~/server/llm/service/openrouter-client', () => ({
 }))
 
 import { LlmService, normalizeProviderId } from '~/server/llm/service'
-import { AnthropicProvider } from '~/server/llm/service/providers/anthropic'
-import { DeepSeekProvider } from '~/server/llm/service/providers/deepseek'
-import { GoogleProvider } from '~/server/llm/service/providers/google'
-import { MetaProvider } from '~/server/llm/service/providers/meta'
-import { MistralProvider } from '~/server/llm/service/providers/mistral'
-import { OpenAiProvider } from '~/server/llm/service/providers/openai'
+
+const providerCases = [
+  { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  { provider: 'openai', model: 'gpt-4o' },
+  { provider: 'google', model: 'gemini-1.5-pro' },
+  { provider: 'meta', model: 'llama-3.1-70b-instruct' },
+  { provider: 'mistral', model: 'mistral-large-latest' },
+  { provider: 'deepseek', model: 'deepseek-chat' },
+  { provider: 'zai', model: 'glm-5-turbo' },
+  { provider: 'minimax', model: 'minimax-m2.7' },
+  { provider: 'xiaomi', model: 'mimo-v2-pro' },
+  { provider: 'moonshotai', model: 'kimi-k2.5' },
+  { provider: 'qwen', model: 'qwen3-coder-next' },
+] as const
 
 describe('llm providers', () => {
   beforeEach(() => {
@@ -31,15 +39,8 @@ describe('llm providers', () => {
     })
   })
 
-  it.each([
-    { ProviderClass: AnthropicProvider, provider: 'anthropic', model: 'claude-3-5-sonnet' },
-    { ProviderClass: OpenAiProvider, provider: 'openai', model: 'gpt-4o' },
-    { ProviderClass: GoogleProvider, provider: 'google', model: 'gemini-1.5-pro' },
-    { ProviderClass: MetaProvider, provider: 'meta', model: 'llama-3.1-70b-instruct' },
-    { ProviderClass: MistralProvider, provider: 'mistral', model: 'mistral-large-latest' },
-    { ProviderClass: DeepSeekProvider, provider: 'deepseek', model: 'deepseek-chat' },
-  ])('prefixes model correctly for $provider', async ({ ProviderClass, provider, model }) => {
-    const providerInstance = new ProviderClass()
+  it.each(providerCases)('prefixes model correctly for $provider', async ({ provider, model }) => {
+    const providerInstance = new LlmService().getProvider(provider)
 
     const result = await providerInstance.complete({
       model,
@@ -54,7 +55,7 @@ describe('llm providers', () => {
   })
 
   it('does not double-prefix model ids that already include provider namespace', async () => {
-    const provider = new OpenAiProvider()
+    const provider = new LlmService().getProvider('openai')
 
     await provider.complete({
       model: 'openai/gpt-4o',
@@ -73,7 +74,7 @@ describe('llm providers', () => {
   })
 
   it('rejects model ids that use a different provider namespace', async () => {
-    const provider = new OpenAiProvider()
+    const provider = new LlmService().getProvider('openai')
 
     await expect(
       provider.complete({
@@ -118,11 +119,16 @@ describe('llm providers', () => {
     expect(normalizeProviderId('Meta Llama')).toBe('meta')
     expect(normalizeProviderId('Mistral AI')).toBe('mistral')
     expect(normalizeProviderId('DeepSeek')).toBe('deepseek')
+    expect(normalizeProviderId('Z.ai')).toBe('zai')
+    expect(normalizeProviderId('MiniMax')).toBe('minimax')
+    expect(normalizeProviderId('Xiaomi')).toBe('xiaomi')
+    expect(normalizeProviderId('MoonshotAI')).toBe('moonshotai')
+    expect(normalizeProviderId('Qwen')).toBe('qwen')
   })
 
   it('propagates client errors from provider completion', async () => {
     completeMock.mockRejectedValueOnce(new Error('rate limited'))
-    const provider = new AnthropicProvider()
+    const provider = new LlmService().getProvider('anthropic')
 
     await expect(
       provider.complete({
@@ -134,7 +140,7 @@ describe('llm providers', () => {
   })
 
   it('passes inference params to client when provided', async () => {
-    const provider = new AnthropicProvider()
+    const provider = new LlmService().getProvider('anthropic')
 
     await provider.complete({
       model: 'claude-3-5-sonnet',
@@ -155,7 +161,7 @@ describe('llm providers', () => {
   })
 
   it('omits inference params when not provided', async () => {
-    const provider = new AnthropicProvider()
+    const provider = new LlmService().getProvider('anthropic')
 
     await provider.complete({
       model: 'claude-3-5-sonnet',
@@ -171,7 +177,7 @@ describe('llm providers', () => {
   })
 
   it('response includes both requestedModel and returnedModel', async () => {
-    const provider = new OpenAiProvider()
+    const provider = new LlmService().getProvider('openai')
 
     const result = await provider.complete({
       model: 'gpt-4o',

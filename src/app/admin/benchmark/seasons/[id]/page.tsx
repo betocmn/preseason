@@ -117,7 +117,7 @@ export default async function SeasonDetailPage({ params }: PageProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Model</TableHead>
-                  <TableHead>Provider</TableHead>
+                  <TableHead>Company</TableHead>
                   <TableHead>Tier</TableHead>
                   <TableHead>Temperature</TableHead>
                   <TableHead>Model ID</TableHead>
@@ -127,7 +127,7 @@ export default async function SeasonDetailPage({ params }: PageProps) {
                 {season.seasonModels.map((sm) => (
                   <TableRow key={sm.id}>
                     <TableCell className="font-medium">{sm.modelSnapshot.name}</TableCell>
-                    <TableCell>{sm.modelSnapshot.provider}</TableCell>
+                    <TableCell>{sm.modelSnapshot.company}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{sm.modelSnapshot.tier}</Badge>
                     </TableCell>

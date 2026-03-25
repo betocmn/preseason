@@ -14,7 +14,15 @@ function first<T>(rows: T[]): T {
 
 async function seedLlm(
   db: ReturnType<typeof getTestDb>,
-  overrides: { name?: string; slug?: string; provider?: string; modelId?: string } = {},
+  overrides: {
+    name?: string
+    slug?: string
+    provider?: string
+    company?: string
+    modelFamily?: string
+    modelVersion?: string
+    modelId?: string
+  } = {},
 ) {
   return first(
     await db
@@ -23,6 +31,9 @@ async function seedLlm(
         name: overrides.name ?? 'Claude Opus',
         slug: overrides.slug ?? 'claude-opus',
         provider: overrides.provider ?? 'anthropic',
+        company: overrides.company ?? 'Anthropic',
+        modelFamily: overrides.modelFamily ?? 'Opus',
+        modelVersion: overrides.modelVersion ?? '3',
         modelId: overrides.modelId ?? 'claude-3-opus-20240229',
       })
       .returning(),
@@ -92,6 +103,9 @@ describe('getOrCreateModelSnapshot', () => {
     expect(snapshot.llmId).toBe(llm.id)
     expect(snapshot.name).toBe('Claude Opus')
     expect(snapshot.provider).toBe('anthropic')
+    expect(snapshot.company).toBe('Anthropic')
+    expect(snapshot.modelFamily).toBe('Opus')
+    expect(snapshot.modelVersion).toBe('3')
     expect(snapshot.tier).toBe('frontier')
     expect(snapshot.requestedModelId).toBe('claude-3-opus-20240229')
     expect(snapshot.modelFamilyKey).toBe('claude-3-opus')
@@ -169,6 +183,9 @@ describe('getOrCreateModelSnapshot', () => {
       name: 'GPT-4o',
       slug: 'gpt-4o',
       provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: '4o',
       modelId: 'openai/gpt-4o',
     })
 
@@ -192,6 +209,9 @@ describe('getOrCreateModelSnapshot', () => {
       name: 'GPT-4o',
       slug: 'gpt-4o',
       provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: '4o',
       modelId: 'openai/gpt-4o-2024-08-06',
     })
 
@@ -206,6 +226,9 @@ describe('getOrCreateModelSnapshot', () => {
       name: 'Claude Opus',
       slug: 'claude-opus',
       provider: 'anthropic',
+      company: 'Anthropic',
+      modelFamily: 'Opus',
+      modelVersion: '3',
       modelId: 'anthropic/claude-3-opus-20240229',
     })
 
@@ -214,6 +237,9 @@ describe('getOrCreateModelSnapshot', () => {
     })
 
     expect(snapshot.provider).toBe('anthropic')
+    expect(snapshot.company).toBe('Anthropic')
+    expect(snapshot.modelFamily).toBe('Opus')
+    expect(snapshot.modelVersion).toBe('3')
     expect(snapshot.requestedModelId).toBe('anthropic/claude-3-opus-20240229')
     expect(snapshot.modelFamilyKey).toBe('claude-3-opus')
   })

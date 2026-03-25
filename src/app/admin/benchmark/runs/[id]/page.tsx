@@ -151,7 +151,7 @@ export default async function RunDetailPage({ params }: PageProps) {
                     <TableCell>
                       <div className="font-medium">{caseRow.modelSnapshot.name}</div>
                       <div className="text-muted-foreground text-xs">
-                        {caseRow.modelSnapshot.provider} · {caseRow.modelSnapshot.tier}
+                        {caseRow.modelSnapshot.company} · {caseRow.modelSnapshot.tier}
                       </div>
                     </TableCell>
                     <TableCell>

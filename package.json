@@ -7,7 +7,7 @@
     "build": "next build",
     "check": "biome check . && tsc --noEmit",
     "db:generate": "dotenv -e .env.local -- drizzle-kit generate",
-    "db:migrate": "dotenv -e .env.local -- tsx src/server/db/pre-migrate.ts && dotenv -e .env.local -- drizzle-kit migrate",
+    "db:migrate": "dotenv -e .env.local -- tsx src/server/db/pre-migrate.ts && dotenv -e .env.local -- drizzle-kit migrate && dotenv -e .env.local -- tsx src/server/db/post-migrate.ts",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:seed": "dotenv -e .env.local -- tsx src/server/db/seed.ts",
     "db:seed-benchmark": "dotenv -e .env.local -- tsx src/server/db/seed-benchmark-data.ts",

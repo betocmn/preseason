@@ -7,9 +7,11 @@
  */
 
 import { createHash } from 'node:crypto'
-import { sql } from 'drizzle-orm'
+import { notInArray, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
+import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 
 import * as schema from './schema'
 
@@ -984,46 +986,16 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'vercel', categorySlug: 'ci-cd', isPrimary: false },
 ]
 
-const LLMS = [
-  {
-    name: 'Claude 3.5 Sonnet',
-    slug: 'claude-3-5-sonnet',
-    provider: 'Anthropic',
-    modelId: 'anthropic/claude-3.5-sonnet',
-  },
-  { name: 'GPT-4o', slug: 'gpt-4o', provider: 'OpenAI', modelId: 'openai/gpt-4o' },
-  {
-    name: 'Gemini 1.5 Pro',
-    slug: 'gemini-1-5-pro',
-    provider: 'Google',
-    modelId: 'google/gemini-pro-1.5',
-  },
-  {
-    name: 'Llama 3.1 70B',
-    slug: 'llama-3-1-70b',
-    provider: 'Meta',
-    modelId: 'meta-llama/llama-3.1-70b-instruct',
-  },
-  {
-    name: 'Claude 3 Opus',
-    slug: 'claude-3-opus',
-    provider: 'Anthropic',
-    modelId: 'anthropic/claude-3-opus',
-  },
-  { name: 'GPT-4o Mini', slug: 'gpt-4o-mini', provider: 'OpenAI', modelId: 'openai/gpt-4o-mini' },
-  {
-    name: 'Mistral Large',
-    slug: 'mistral-large',
-    provider: 'Mistral AI',
-    modelId: 'mistralai/mistral-large-latest',
-  },
-  {
-    name: 'DeepSeek V2.5',
-    slug: 'deepseek-v2-5',
-    provider: 'DeepSeek',
-    modelId: 'deepseek/deepseek-chat',
-  },
-]
+const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
+  name: entry.name,
+  slug: entry.slug,
+  provider: entry.provider,
+  company: entry.company,
+  modelFamily: entry.modelFamily,
+  modelVersion: entry.modelVersion,
+  modelId: entry.modelId,
+  isActive: true,
+}))
 
 const PROMPTS = [
   {
@@ -1380,7 +1352,34 @@ async function seedToolCategories() {
 
 async function seedLlms() {
   console.log('Seeding LLMs...')
-  await db.insert(schema.llms).values(LLMS).onConflictDoNothing()
+  for (const llm of LLMS) {
+    await db
+      .insert(schema.llms)
+      .values(llm)
+      .onConflictDoUpdate({
+        target: schema.llms.slug,
+        set: {
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          modelId: llm.modelId,
+          isActive: true,
+        },
+      })
+  }
+
+  await db
+    .update(schema.llms)
+    .set({ isActive: false })
+    .where(
+      notInArray(
+        schema.llms.slug,
+        LLMS.map((llm) => llm.slug),
+      ),
+    )
+
   console.log(`  ${LLMS.length} LLMs ready`)
 }
 
@@ -1413,17 +1412,6 @@ const CATEGORY_TOOL_PRIORITIES: Record<string, string[]> = {
   'ci-cd': ['github-actions', 'vercel-ci', 'circleci'],
   jobs: ['inngest', 'trigger-dev', 'bullmq', 'quirrel'],
   notifications: ['novu', 'onesignal'],
-}
-
-const MODEL_TIERS: Record<string, 'frontier' | 'mid' | 'small'> = {
-  'claude-3-5-sonnet': 'frontier',
-  'gpt-4o': 'frontier',
-  'gemini-1-5-pro': 'frontier',
-  'claude-3-opus': 'frontier',
-  'mistral-large': 'frontier',
-  'llama-3-1-70b': 'mid',
-  'deepseek-v2-5': 'mid',
-  'gpt-4o-mini': 'small',
 }
 
 const CRITIC_USERS = [
@@ -1655,9 +1643,13 @@ async function seedBenchmarkData() {
     llmId: llm.id,
     name: llm.name,
     provider: llm.provider,
-    tier: MODEL_TIERS[llm.slug] ?? ('mid' as const),
+    company: llm.company,
+    modelFamily: llm.modelFamily,
+    modelVersion: llm.modelVersion,
+    tier: classifyModelTier(llm.modelId),
+    modelFamilyKey: extractModelFamilyKey(llm.modelId),
     requestedModelId: llm.modelId,
-    snapshotKey: `${llm.slug}-seed-v1`,
+    snapshotKey: `${llm.slug}-seed-v2`,
     isDeterministic: false,
     temperature: 0.7,
     maxTokens: 4096,

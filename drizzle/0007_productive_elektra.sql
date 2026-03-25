@@ -1,2 +1,0 @@
-CREATE UNIQUE INDEX "benchmark_model_weight_config_one_active_idx" ON "preseason_benchmark_model_weight_config" USING btree ("is_active") WHERE is_active = true;--> statement-breakpoint
-ALTER TABLE "preseason_benchmark_case_decision" ADD CONSTRAINT "benchmark_decision_non_tool_no_tool_id" CHECK (decision_type = 'tool' OR tool_id IS NULL);

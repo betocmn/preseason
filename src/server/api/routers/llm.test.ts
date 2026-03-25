@@ -23,14 +23,20 @@ describe('llmRouter', () => {
     await adminCaller.llm.create({
       name: 'GPT-4o',
       slug: 'gpt-4o',
-      provider: 'OpenAI',
+      provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: '4o',
       modelId: 'openai/gpt-4o',
       isActive: true,
     })
     await adminCaller.llm.create({
       name: 'Inactive model',
       slug: 'inactive-model',
-      provider: 'OpenAI',
+      provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: 'inactive',
       modelId: 'openai/inactive',
       isActive: false,
     })
@@ -48,7 +54,10 @@ describe('llmRouter', () => {
     const created = await caller.llm.create({
       name: 'Claude 3.5 Sonnet',
       slug: 'claude-3-5-sonnet',
-      provider: 'Anthropic',
+      provider: 'anthropic',
+      company: 'Anthropic',
+      modelFamily: 'Sonnet',
+      modelVersion: '3.5',
       modelId: 'anthropic/claude-3.5-sonnet',
       isActive: true,
     })
@@ -56,9 +65,9 @@ describe('llmRouter', () => {
 
     const updated = await caller.llm.update({
       id: created?.id ?? '',
-      provider: 'OpenRouter',
+      modelVersion: '3.7',
     })
-    expect(updated.provider).toBe('OpenRouter')
+    expect(updated.modelVersion).toBe('3.7')
 
     const toggled = await caller.llm.toggleActive({
       id: created?.id ?? '',
@@ -78,7 +87,10 @@ describe('llmRouter', () => {
       caller.llm.create({
         name: 'Blocked',
         slug: 'blocked',
-        provider: 'X',
+        provider: 'openai',
+        company: 'OpenAI',
+        modelFamily: 'GPT',
+        modelVersion: 'blocked',
         modelId: 'x/blocked',
         isActive: true,
       }),
