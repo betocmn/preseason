@@ -245,6 +245,25 @@ describe('matchRouter', () => {
     expect(fetched.evaluations).toHaveLength(2)
   })
 
+  it('should map createBatch foreign key violations to BAD_REQUEST', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+
+    await expect(
+      caller.match.createBatch({
+        seasonId: fixture.season.id,
+        categoryId: fixture.category.id,
+        toolAId: fixture.toolA.id,
+        toolBId: fixture.toolB.id,
+        promptTemplateId: crypto.randomUUID(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'One or more referenced IDs were not found or are incompatible',
+    } satisfies Partial<TRPCError>)
+  })
+
   it('should reject benchmark_run batches without benchmarkRunId', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

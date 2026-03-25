@@ -20,6 +20,18 @@ function canonicalizeToolOrder(toolAId: string, toolBId: string): [string, strin
     : [normalizedToolBId, normalizedToolAId]
 }
 
+type DatabaseErrorLike = {
+  code?: string
+  message?: string
+}
+
+function isForeignKeyViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const dbError = error as DatabaseErrorLike
+  if (dbError.code === '23503') return true
+  return typeof dbError.message === 'string' && dbError.message.includes('foreign key constraint')
+}
+
 const createBatchInputSchema = z
   .object({
     seasonId: z.string().uuid(),
@@ -192,6 +204,12 @@ export const matchRouter = createTRPCRouter({
         message.includes('benchmarkRunId')
       ) {
         throw new TRPCError({ code: 'BAD_REQUEST', message })
+      }
+      if (isForeignKeyViolation(error)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'One or more referenced IDs were not found or are incompatible',
+        })
       }
       throw error
     }
