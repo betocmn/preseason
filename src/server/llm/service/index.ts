@@ -1,4 +1,4 @@
-import { PROVIDER_ALIAS_MAP, PROVIDER_REGISTRY, normalizeProviderToken } from '~/server/llm/catalog'
+import { normalizeProviderToken, PROVIDER_ALIAS_MAP, PROVIDER_REGISTRY } from '~/server/llm/catalog'
 import { OpenRouterProvider } from '~/server/llm/service/providers/base'
 import type { CompletionRequest, CompletionResponse, ProviderId } from '~/server/llm/service/types'
 
@@ -17,7 +17,9 @@ export class LlmService {
   private readonly providers: Record<ProviderId, OpenRouterProvider>
 
   constructor() {
-    this.providers = Object.values(PROVIDER_REGISTRY).reduce<Record<ProviderId, OpenRouterProvider>>(
+    this.providers = Object.values(PROVIDER_REGISTRY).reduce<
+      Record<ProviderId, OpenRouterProvider>
+    >(
       (acc, config) => {
         acc[config.id] = new OpenRouterProvider(config.id, config.namespace)
         return acc

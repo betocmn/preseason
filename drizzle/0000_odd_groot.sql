@@ -150,19 +150,22 @@ CREATE TABLE "preseason_benchmark_run" (
 	"qc_status" varchar(50),
 	"qc_summary_json" jsonb,
 	"error_log" text,
-	"createdAt" timestamp with time zone NOT NULL
+	"createdAt" timestamp with time zone NOT NULL,
+	CONSTRAINT "benchmark_run_id_season_unique" UNIQUE("id","season_id")
 );
 --> statement-breakpoint
 CREATE TABLE "preseason_benchmark_season_model" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"season_id" uuid NOT NULL,
-	"model_snapshot_id" uuid NOT NULL
+	"model_snapshot_id" uuid NOT NULL,
+	CONSTRAINT "benchmark_season_model_unique" UNIQUE("season_id","model_snapshot_id")
 );
 --> statement-breakpoint
 CREATE TABLE "preseason_benchmark_season_prompt" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"season_id" uuid NOT NULL,
-	"prompt_version_id" uuid NOT NULL
+	"prompt_version_id" uuid NOT NULL,
+	CONSTRAINT "benchmark_season_prompt_unique" UNIQUE("season_id","prompt_version_id")
 );
 --> statement-breakpoint
 CREATE TABLE "preseason_benchmark_season" (
@@ -255,6 +258,7 @@ CREATE TABLE "preseason_match_batch" (
 	"completed_at" timestamp with time zone,
 	"triggered_by" uuid,
 	"createdAt" timestamp with time zone NOT NULL,
+	CONSTRAINT "match_batch_id_season_unique" UNIQUE("id","season_id"),
 	CONSTRAINT "match_batch_tool_order_check" CHECK (tool_a_id < tool_b_id),
 	CONSTRAINT "match_batch_running_requires_claim" CHECK (status != 'running' OR (claim_token IS NOT NULL AND last_heartbeat_at IS NOT NULL))
 );
@@ -269,6 +273,7 @@ CREATE TABLE "preseason_match_config" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_by" uuid NOT NULL,
 	"createdAt" timestamp with time zone NOT NULL,
+	CONSTRAINT "match_config_composite_fk_unique" UNIQUE("id","season_id","category_id","tool_a_id","tool_b_id","prompt_template_id"),
 	CONSTRAINT "match_config_tool_order_check" CHECK (tool_a_id < tool_b_id)
 );
 --> statement-breakpoint
@@ -480,9 +485,6 @@ CREATE INDEX "benchmark_prompt_version_prompt_id_idx" ON "preseason_benchmark_pr
 CREATE INDEX "benchmark_protocol_slug_idx" ON "preseason_benchmark_protocol" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "benchmark_run_season_date_idx" ON "preseason_benchmark_run" USING btree ("season_id","scheduled_for");--> statement-breakpoint
 CREATE INDEX "benchmark_run_season_status_idx" ON "preseason_benchmark_run" USING btree ("season_id","status");--> statement-breakpoint
-CREATE UNIQUE INDEX "benchmark_run_id_season_idx" ON "preseason_benchmark_run" USING btree ("id","season_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "benchmark_season_model_idx" ON "preseason_benchmark_season_model" USING btree ("season_id","model_snapshot_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "benchmark_season_prompt_idx" ON "preseason_benchmark_season_prompt" USING btree ("season_id","prompt_version_id");--> statement-breakpoint
 CREATE INDEX "benchmark_season_slug_idx" ON "preseason_benchmark_season" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX "category_group_slug_idx" ON "preseason_category_group" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX "category_group_display_order_idx" ON "preseason_category_group" USING btree ("display_order");--> statement-breakpoint
@@ -493,10 +495,8 @@ CREATE INDEX "critic_profile_user_id_idx" ON "preseason_critic_profile" USING bt
 CREATE INDEX "llm_slug_idx" ON "preseason_llm" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX "llm_is_active_idx" ON "preseason_llm" USING btree ("is_active");--> statement-breakpoint
 CREATE UNIQUE INDEX "match_batch_idempotency_key_idx" ON "preseason_match_batch" USING btree ("idempotency_key") WHERE idempotency_key IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "match_batch_id_season_idx" ON "preseason_match_batch" USING btree ("id","season_id");--> statement-breakpoint
 CREATE INDEX "match_batch_status_heartbeat_idx" ON "preseason_match_batch" USING btree ("status","last_heartbeat_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "match_config_active_matchup_idx" ON "preseason_match_config" USING btree ("season_id","category_id","tool_a_id","tool_b_id") WHERE is_active = true;--> statement-breakpoint
-CREATE UNIQUE INDEX "match_config_composite_fk_idx" ON "preseason_match_config" USING btree ("id","season_id","category_id","tool_a_id","tool_b_id","prompt_template_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "match_evaluation_batch_model_order_idx" ON "preseason_match_evaluation" USING btree ("batch_id","model_snapshot_id","presentation_order");--> statement-breakpoint
 CREATE UNIQUE INDEX "match_prompt_template_one_active_idx" ON "preseason_match_prompt_template" USING btree ("is_active") WHERE is_active = true;--> statement-breakpoint
 CREATE UNIQUE INDEX "prompt_slug_level_idx" ON "preseason_prompt" USING btree ("slug","level");--> statement-breakpoint

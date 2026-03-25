@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
+import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 
 describe('classifyModelTier', () => {
-  it.each(CURATED_LLM_CATALOG)(
-    'returns the curated tier for $modelId',
-    ({ modelId, tier: expected }) => {
-      expect(classifyModelTier(modelId)).toBe(expected)
-    },
-  )
+  it.each(CURATED_LLM_CATALOG)('returns the curated tier for $modelId', ({
+    modelId,
+    tier: expected,
+  }) => {
+    expect(classifyModelTier(modelId)).toBe(expected)
+  })
 
   it.each([
     { modelId: 'claude-3-opus-20240229', expected: 'frontier' },

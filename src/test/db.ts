@@ -3,6 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
+import { applyMigrationInvariants } from '~/server/db/migration-invariants'
 import * as schema from '~/server/db/schema'
 
 type TestDatabase = PostgresJsDatabase<typeof schema> & { $client: postgres.Sql }
@@ -25,6 +26,7 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
   await migrate(testDb, {
     migrationsFolder: join(import.meta.dirname, '../../drizzle'),
   })
+  await applyMigrationInvariants(sql)
 
   return testDb
 }

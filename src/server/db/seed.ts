@@ -1373,7 +1373,12 @@ async function seedLlms() {
   await db
     .update(schema.llms)
     .set({ isActive: false })
-    .where(notInArray(schema.llms.slug, LLMS.map((llm) => llm.slug)))
+    .where(
+      notInArray(
+        schema.llms.slug,
+        LLMS.map((llm) => llm.slug),
+      ),
+    )
 
   console.log(`  ${LLMS.length} LLMs ready`)
 }

@@ -1,5 +1,5 @@
 {
-  "id": "5fd9ea01-0690-4ee0-bfa6-bae13ff8ed72",
+  "id": "d7d294bf-1be2-4a90-9ad3-86f31b08dc00",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1361,27 +1361,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "benchmark_run_id_season_idx": {
-          "name": "benchmark_run_id_season_idx",
-          "columns": [
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1413,7 +1392,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "benchmark_run_id_season_unique": {
+          "name": "benchmark_run_id_season_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "season_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1442,29 +1430,7 @@
           "notNull": true
         }
       },
-      "indexes": {
-        "benchmark_season_model_idx": {
-          "name": "benchmark_season_model_idx",
-          "columns": [
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "model_snapshot_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "preseason_benchmark_season_model_season_id_preseason_benchmark_season_id_fk": {
           "name": "preseason_benchmark_season_model_season_id_preseason_benchmark_season_id_fk",
@@ -1494,7 +1460,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "benchmark_season_model_unique": {
+          "name": "benchmark_season_model_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "season_id",
+            "model_snapshot_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1523,29 +1498,7 @@
           "notNull": true
         }
       },
-      "indexes": {
-        "benchmark_season_prompt_idx": {
-          "name": "benchmark_season_prompt_idx",
-          "columns": [
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "prompt_version_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "preseason_benchmark_season_prompt_season_id_preseason_benchmark_season_id_fk": {
           "name": "preseason_benchmark_season_prompt_season_id_preseason_benchmark_season_id_fk",
@@ -1575,7 +1528,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "benchmark_season_prompt_unique": {
+          "name": "benchmark_season_prompt_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "season_id",
+            "prompt_version_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2342,27 +2304,6 @@
           "method": "btree",
           "with": {}
         },
-        "match_batch_id_season_idx": {
-          "name": "match_batch_id_season_idx",
-          "columns": [
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "match_batch_status_heartbeat_idx": {
           "name": "match_batch_status_heartbeat_idx",
           "columns": [
@@ -2504,7 +2445,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "match_batch_id_season_unique": {
+          "name": "match_batch_id_season_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "season_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "match_batch_tool_order_check": {
@@ -2613,51 +2563,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "match_config_composite_fk_idx": {
-          "name": "match_config_composite_fk_idx",
-          "columns": [
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "category_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tool_a_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tool_b_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "prompt_template_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -2741,7 +2646,20 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "match_config_composite_fk_unique": {
+          "name": "match_config_composite_fk_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "season_id",
+            "category_id",
+            "tool_a_id",
+            "tool_b_id",
+            "prompt_template_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "match_config_tool_order_check": {
