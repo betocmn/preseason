@@ -163,6 +163,50 @@ describe('matchRouter', () => {
     expect(configs).toHaveLength(1)
   })
 
+  it('should configure a match with mixed-case UUID tool inputs', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const toolA = first(
+      await db
+        .insert(tools)
+        .values({
+          id: 'a0000000-0000-4000-8000-000000000001',
+          name: 'Case Tool A',
+          slug: 'case-tool-a',
+        })
+        .returning(),
+    )
+    const toolB = first(
+      await db
+        .insert(tools)
+        .values({
+          id: 'b0000000-0000-4000-8000-000000000002',
+          name: 'Case Tool B',
+          slug: 'case-tool-b',
+        })
+        .returning(),
+    )
+
+    await db.insert(toolCategories).values([
+      { toolId: toolA.id, categoryId: fixture.category.id },
+      { toolId: toolB.id, categoryId: fixture.category.id },
+    ])
+
+    const config = await caller.match.configureMatch({
+      seasonId: fixture.season.id,
+      categoryId: fixture.category.id,
+      toolAId: toolB.id.toUpperCase(),
+      toolBId: toolA.id,
+      promptTemplateId: fixture.template.id,
+    })
+
+    expect(config.toolAId).toBe(toolA.id)
+    expect(config.toolBId).toBe(toolB.id)
+  })
+
   it('should disable a config', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

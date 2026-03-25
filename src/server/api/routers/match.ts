@@ -13,7 +13,11 @@ import {
 import { createMatchBatch } from '~/server/llm/match/batches'
 
 function canonicalizeToolOrder(toolAId: string, toolBId: string): [string, string] {
-  return toolAId < toolBId ? [toolAId, toolBId] : [toolBId, toolAId]
+  const normalizedToolAId = toolAId.toLowerCase()
+  const normalizedToolBId = toolBId.toLowerCase()
+  return normalizedToolAId < normalizedToolBId
+    ? [normalizedToolAId, normalizedToolBId]
+    : [normalizedToolBId, normalizedToolAId]
 }
 
 const createBatchInputSchema = z
