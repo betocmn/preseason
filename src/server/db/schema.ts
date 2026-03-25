@@ -66,6 +66,28 @@ export const benchmarkWindowTypeEnum = pgEnum('benchmark_window_type', [
   'season_to_date',
 ])
 
+// Match evaluation enums
+export const matchBatchStatusEnum = pgEnum('match_batch_status', [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+])
+export const matchTriggerModeEnum = pgEnum('match_trigger_mode', ['manual', 'benchmark_run'])
+export const matchEvaluationStatusEnum = pgEnum('match_evaluation_status', [
+  'pending',
+  'completed',
+  'failed',
+  'invalid_output',
+])
+export const matchWinnerDecisionEnum = pgEnum('match_winner_decision', [
+  'tool_a',
+  'tool_b',
+  'tie',
+  'abstain',
+])
+export const matchPresentationOrderEnum = pgEnum('match_presentation_order', ['a_first', 'b_first'])
+
 // ============================================================================
 // USER & AUTH TABLES
 // ============================================================================
@@ -537,6 +559,7 @@ export const benchmarkRuns = createTable(
   (t) => [
     uniqueIndex('benchmark_run_season_date_idx').on(t.seasonId, t.scheduledFor),
     index('benchmark_run_season_status_idx').on(t.seasonId, t.status),
+    uniqueIndex('benchmark_run_id_season_idx').on(t.id, t.seasonId),
   ],
 )
 
@@ -667,6 +690,225 @@ export const toolCandidates = createTable(
     notes: d.text(),
   }),
   (t) => [index('tool_candidate_status_idx').on(t.status)],
+)
+
+// ============================================================================
+// MATCH EVALUATION TABLES
+// ============================================================================
+
+export const matchPromptTemplates = createTable(
+  'match_prompt_template',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    slug: d.varchar({ length: 100 }).notNull().unique(),
+    name: d.varchar({ length: 255 }).notNull(),
+    templateMd: d.text('template_md').notNull(),
+    schemaVersion: d.varchar('schema_version', { length: 50 }).notNull(),
+    systemPromptSnapshot: d.text('system_prompt_snapshot'),
+    isActive: boolean('is_active').notNull().default(false),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex('match_prompt_template_one_active_idx').on(t.isActive).where(sql`is_active = true`),
+  ],
+)
+
+export const matchConfigs = createTable(
+  'match_config',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    seasonId: d
+      .uuid('season_id')
+      .notNull()
+      .references(() => benchmarkSeasons.id),
+    categoryId: d
+      .uuid('category_id')
+      .notNull()
+      .references(() => subcategories.id),
+    toolAId: d
+      .uuid('tool_a_id')
+      .notNull()
+      .references(() => tools.id),
+    toolBId: d
+      .uuid('tool_b_id')
+      .notNull()
+      .references(() => tools.id),
+    promptTemplateId: d
+      .uuid('prompt_template_id')
+      .notNull()
+      .references(() => matchPromptTemplates.id),
+    isActive: boolean('is_active').notNull().default(true),
+    createdBy: d
+      .uuid('created_by')
+      .notNull()
+      .references(() => userProfiles.id),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex('match_config_active_matchup_idx')
+      .on(t.seasonId, t.categoryId, t.toolAId, t.toolBId)
+      .where(sql`is_active = true`),
+    uniqueIndex('match_config_composite_fk_idx').on(
+      t.id,
+      t.seasonId,
+      t.categoryId,
+      t.toolAId,
+      t.toolBId,
+      t.promptTemplateId,
+    ),
+    check('match_config_tool_order_check', sql`tool_a_id < tool_b_id`),
+  ],
+)
+
+export const matchBatches = createTable(
+  'match_batch',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    seasonId: d
+      .uuid('season_id')
+      .notNull()
+      .references(() => benchmarkSeasons.id),
+    configId: d.uuid('config_id'),
+    categoryId: d
+      .uuid('category_id')
+      .notNull()
+      .references(() => subcategories.id),
+    toolAId: d
+      .uuid('tool_a_id')
+      .notNull()
+      .references(() => tools.id),
+    toolBId: d
+      .uuid('tool_b_id')
+      .notNull()
+      .references(() => tools.id),
+    promptTemplateId: d
+      .uuid('prompt_template_id')
+      .notNull()
+      .references(() => matchPromptTemplates.id),
+    benchmarkRunId: d.uuid('benchmark_run_id'),
+    triggerMode: matchTriggerModeEnum('trigger_mode').notNull(),
+    idempotencyKey: d.varchar('idempotency_key', { length: 255 }),
+    status: matchBatchStatusEnum().notNull().default('pending'),
+    totalEvaluations: integer('total_evaluations').notNull().default(0),
+    completedEvaluations: integer('completed_evaluations').notNull().default(0),
+    failedEvaluations: integer('failed_evaluations').notNull().default(0),
+    invalidOutputEvaluations: integer('invalid_output_evaluations').notNull().default(0),
+    startedAt: d.timestamp('started_at', { withTimezone: true }),
+    claimToken: d.uuid('claim_token'),
+    lastHeartbeatAt: d.timestamp('last_heartbeat_at', { withTimezone: true }),
+    completedAt: d.timestamp('completed_at', { withTimezone: true }),
+    triggeredBy: d.uuid('triggered_by').references(() => userProfiles.id),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    check('match_batch_tool_order_check', sql`tool_a_id < tool_b_id`),
+    uniqueIndex('match_batch_idempotency_key_idx')
+      .on(t.idempotencyKey)
+      .where(sql`idempotency_key IS NOT NULL`),
+    uniqueIndex('match_batch_id_season_idx').on(t.id, t.seasonId),
+    check(
+      'match_batch_running_requires_claim',
+      sql`status != 'running' OR (claim_token IS NOT NULL AND last_heartbeat_at IS NOT NULL)`,
+    ),
+    index('match_batch_status_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
+    foreignKey({
+      columns: [t.benchmarkRunId, t.seasonId],
+      foreignColumns: [benchmarkRuns.id, benchmarkRuns.seasonId],
+      name: 'match_batch_benchmark_run_season_fk',
+    }),
+    foreignKey({
+      columns: [t.configId, t.seasonId, t.categoryId, t.toolAId, t.toolBId, t.promptTemplateId],
+      foreignColumns: [
+        matchConfigs.id,
+        matchConfigs.seasonId,
+        matchConfigs.categoryId,
+        matchConfigs.toolAId,
+        matchConfigs.toolBId,
+        matchConfigs.promptTemplateId,
+      ],
+      name: 'match_batch_config_composite_fk',
+    }),
+  ],
+)
+
+export const matchEvaluations = createTable(
+  'match_evaluation',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    batchId: d
+      .uuid('batch_id')
+      .notNull()
+      .references(() => matchBatches.id, { onDelete: 'cascade' }),
+    seasonId: d
+      .uuid('season_id')
+      .notNull()
+      .references(() => benchmarkSeasons.id),
+    modelSnapshotId: d
+      .uuid('model_snapshot_id')
+      .notNull()
+      .references(() => benchmarkModelSnapshots.id),
+    presentationOrder: matchPresentationOrderEnum('presentation_order').notNull(),
+    status: matchEvaluationStatusEnum().notNull().default('pending'),
+    winnerDecision: matchWinnerDecisionEnum('winner_decision'),
+    winnerId: d.uuid('winner_id').references(() => tools.id),
+    comparisonSummary: d.text('comparison_summary'),
+    toolAPros: jsonb('tool_a_pros'),
+    toolACons: jsonb('tool_a_cons'),
+    toolBPros: jsonb('tool_b_pros'),
+    toolBCons: jsonb('tool_b_cons'),
+    confidence: real(),
+    naturalResponse: d.text('natural_response'),
+    appendixRaw: d.text('appendix_raw'),
+    appendixJson: jsonb('appendix_json'),
+    rawResponse: d.text('raw_response'),
+    requestedModelId: d.varchar('requested_model_id', { length: 255 }),
+    returnedModelId: d.varchar('returned_model_id', { length: 255 }),
+    provider: d.varchar({ length: 100 }),
+    finishReason: d.varchar('finish_reason', { length: 50 }),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+    totalTokens: integer('total_tokens'),
+    latencyMs: integer('latency_ms'),
+    temperature: real(),
+    topP: real('top_p'),
+    maxTokens: integer('max_tokens'),
+    seed: integer(),
+    parserVersion: d.varchar('parser_version', { length: 50 }),
+    renderedUserPrompt: d.text('rendered_user_prompt'),
+    promptHash: d.varchar('prompt_hash', { length: 64 }),
+    systemPromptSnapshot: d.text('system_prompt_snapshot'),
+    errorMessage: d.text('error_message'),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex('match_evaluation_batch_model_order_idx').on(
+      t.batchId,
+      t.modelSnapshotId,
+      t.presentationOrder,
+    ),
+    foreignKey({
+      columns: [t.batchId, t.seasonId],
+      foreignColumns: [matchBatches.id, matchBatches.seasonId],
+      name: 'match_evaluation_batch_season_fk',
+    }),
+    foreignKey({
+      columns: [t.seasonId, t.modelSnapshotId],
+      foreignColumns: [benchmarkSeasonModels.seasonId, benchmarkSeasonModels.modelSnapshotId],
+      name: 'match_evaluation_season_model_fk',
+    }),
+  ],
 )
 
 // ============================================================================
@@ -906,5 +1148,100 @@ export const toolCandidateRelations = relations(toolCandidates, ({ one }) => ({
   approvedTool: one(tools, {
     fields: [toolCandidates.approvedToolId],
     references: [tools.id],
+  }),
+}))
+
+// ============================================================================
+// MATCH EVALUATION RELATIONS
+// ============================================================================
+
+export const matchPromptTemplateRelations = relations(matchPromptTemplates, ({ many }) => ({
+  batches: many(matchBatches),
+  configs: many(matchConfigs),
+}))
+
+export const matchConfigRelations = relations(matchConfigs, ({ one, many }) => ({
+  season: one(benchmarkSeasons, {
+    fields: [matchConfigs.seasonId],
+    references: [benchmarkSeasons.id],
+  }),
+  category: one(subcategories, {
+    fields: [matchConfigs.categoryId],
+    references: [subcategories.id],
+  }),
+  toolA: one(tools, {
+    fields: [matchConfigs.toolAId],
+    references: [tools.id],
+    relationName: 'matchConfigToolA',
+  }),
+  toolB: one(tools, {
+    fields: [matchConfigs.toolBId],
+    references: [tools.id],
+    relationName: 'matchConfigToolB',
+  }),
+  promptTemplate: one(matchPromptTemplates, {
+    fields: [matchConfigs.promptTemplateId],
+    references: [matchPromptTemplates.id],
+  }),
+  createdByUser: one(userProfiles, {
+    fields: [matchConfigs.createdBy],
+    references: [userProfiles.id],
+    relationName: 'matchConfigCreator',
+  }),
+  batches: many(matchBatches),
+}))
+
+export const matchBatchRelations = relations(matchBatches, ({ one, many }) => ({
+  season: one(benchmarkSeasons, {
+    fields: [matchBatches.seasonId],
+    references: [benchmarkSeasons.id],
+  }),
+  config: one(matchConfigs, {
+    fields: [matchBatches.configId],
+    references: [matchConfigs.id],
+  }),
+  category: one(subcategories, {
+    fields: [matchBatches.categoryId],
+    references: [subcategories.id],
+  }),
+  toolA: one(tools, {
+    fields: [matchBatches.toolAId],
+    references: [tools.id],
+    relationName: 'matchBatchToolA',
+  }),
+  toolB: one(tools, {
+    fields: [matchBatches.toolBId],
+    references: [tools.id],
+    relationName: 'matchBatchToolB',
+  }),
+  promptTemplate: one(matchPromptTemplates, {
+    fields: [matchBatches.promptTemplateId],
+    references: [matchPromptTemplates.id],
+  }),
+  benchmarkRun: one(benchmarkRuns, {
+    fields: [matchBatches.benchmarkRunId],
+    references: [benchmarkRuns.id],
+  }),
+  triggeredByUser: one(userProfiles, {
+    fields: [matchBatches.triggeredBy],
+    references: [userProfiles.id],
+    relationName: 'matchBatchTrigger',
+  }),
+  evaluations: many(matchEvaluations),
+}))
+
+export const matchEvaluationRelations = relations(matchEvaluations, ({ one }) => ({
+  batch: one(matchBatches, {
+    fields: [matchEvaluations.batchId],
+    references: [matchBatches.id],
+  }),
+  modelSnapshot: one(benchmarkModelSnapshots, {
+    fields: [matchEvaluations.modelSnapshotId],
+    references: [benchmarkModelSnapshots.id],
+  }),
+  winner: one(tools, {
+    fields: [matchEvaluations.winnerId],
+    references: [tools.id],
+    relationName: 'matchEvaluationWinner',
   }),
 }))
