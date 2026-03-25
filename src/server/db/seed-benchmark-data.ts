@@ -14,6 +14,7 @@ import crypto from 'node:crypto'
 import { isNotNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
 import { isPromptLevel } from '~/server/llm/prompts'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
@@ -63,19 +64,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size))
   }
   return chunks
-}
-
-// Model tier classification by name keyword
-function classifyModelTier(name: string): 'frontier' | 'mid' | 'small' {
-  const lower = name.toLowerCase()
-  if (lower.includes('opus') || lower.includes('gpt-4o') || lower.includes('gemini')) {
-    if (lower.includes('mini')) return 'mid'
-    return 'frontier'
-  }
-  if (lower.includes('sonnet') || lower.includes('mistral') || lower.includes('deepseek')) {
-    return 'mid'
-  }
-  return 'small'
 }
 
 // ============================================================================
@@ -287,7 +275,7 @@ async function seedBenchmarkData() {
     []
 
   for (const llm of allLlms) {
-    const tier = classifyModelTier(llm.name)
+    const tier = classifyModelTier(llm.modelId)
     const snapshotKey = `${llm.slug}-t0.7-seed-v1`
 
     const [ms] = await db
@@ -296,7 +284,11 @@ async function seedBenchmarkData() {
         llmId: llm.id,
         name: llm.name,
         provider: llm.provider,
+        company: llm.company,
+        modelFamily: llm.modelFamily,
+        modelVersion: llm.modelVersion,
         tier,
+        modelFamilyKey: extractModelFamilyKey(llm.modelId),
         requestedModelId: llm.modelId,
         snapshotKey,
         temperature: 0.7,

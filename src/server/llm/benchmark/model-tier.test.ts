@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
 
 describe('classifyModelTier', () => {
+  it.each(CURATED_LLM_CATALOG)(
+    'returns the curated tier for $modelId',
+    ({ modelId, tier: expected }) => {
+      expect(classifyModelTier(modelId)).toBe(expected)
+    },
+  )
+
   it.each([
     { modelId: 'claude-3-opus-20240229', expected: 'frontier' },
     { modelId: 'anthropic/claude-3-opus-20240229', expected: 'frontier' },
@@ -30,7 +38,7 @@ describe('classifyModelTier', () => {
     { modelId: 'meta-llama/llama-3.1-70b-instruct', expected: 'small' },
     { modelId: 'deepseek-chat', expected: 'small' },
     { modelId: 'deepseek/deepseek-v2.5', expected: 'small' },
-    { modelId: 'deepseek/deepseek-v3', expected: 'small' },
+    { modelId: 'google/gemini-2.5-flash', expected: 'small' },
   ])('classifies $modelId as small', ({ modelId, expected }) => {
     expect(classifyModelTier(modelId)).toBe(expected)
   })
