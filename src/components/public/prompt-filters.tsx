@@ -7,7 +7,6 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
@@ -76,11 +75,11 @@ export function PromptFilters({
           value={currentLevel ?? 'all'}
           onValueChange={(val) => navigate({ level: val === 'all' ? undefined : val })}
         >
-          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+          <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Levels</SelectItem>
+            <SelectItem value="all">All User Prompting Levels</SelectItem>
             {levels.map((level) => (
               <SelectItem key={level} value={level}>
                 {formatPromptLevel(level)}
@@ -113,10 +112,12 @@ export function PromptFilters({
             {groups.map((group, i) => (
               <SelectGroup key={group.slug}>
                 {i > 0 && <SelectSeparator />}
-                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
-                  {group.name}
-                </SelectLabel>
-                <SelectItem value={group.slug}>All {group.name}</SelectItem>
+                <SelectItem
+                  value={group.slug}
+                  className="text-xs font-semibold tracking-wider text-[#7da1ff] dark:text-[#93b0ff]"
+                >
+                  All {group.name}
+                </SelectItem>
                 {group.subcategories.map((sub) => (
                   <SelectItem key={sub.slug} value={`${group.slug}:${sub.slug}`}>
                     <span className="pl-2">{sub.name}</span>
