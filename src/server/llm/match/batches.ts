@@ -95,6 +95,11 @@ function validateTriggerModeInput(input: CreateMatchBatchInput) {
   }
 }
 
+function normalizeIdempotencyKey(idempotencyKey: string | null | undefined): string | null {
+  if (idempotencyKey == null) return null
+  return idempotencyKey.trim().length === 0 ? null : idempotencyKey
+}
+
 function assertIdempotentBatchMatches(
   existing: MatchBatchRecord,
   expected: MatchBatchDimensions,
@@ -134,6 +139,7 @@ export async function createMatchBatch(
   input: CreateMatchBatchInput,
 ): Promise<MatchBatchRecord> {
   validateTriggerModeInput(input)
+  const normalizedIdempotencyKey = normalizeIdempotencyKey(input.idempotencyKey)
 
   const [toolAId, toolBId] = canonicalizeToolOrder(input.toolAId, input.toolBId)
   const expectedDimensions: MatchBatchDimensions = {
@@ -156,10 +162,10 @@ export async function createMatchBatch(
         throw new Error('Season has no frozen model snapshots — cannot create match batch')
       }
 
-      if (input.idempotencyKey) {
+      if (normalizedIdempotencyKey) {
         const existing = await findExistingBatchByIdempotencyKey(
           tx,
-          input.idempotencyKey,
+          normalizedIdempotencyKey,
           expectedDimensions,
         )
         if (existing) return existing
@@ -181,7 +187,7 @@ export async function createMatchBatch(
           promptTemplateId: input.promptTemplateId,
           benchmarkRunId: input.benchmarkRunId ?? null,
           triggerMode: input.triggerMode,
-          idempotencyKey: input.idempotencyKey ?? null,
+          idempotencyKey: normalizedIdempotencyKey,
           totalEvaluations,
           triggeredBy: input.triggeredBy ?? null,
         })
@@ -213,11 +219,11 @@ export async function createMatchBatch(
       return batch
     })
   } catch (error) {
-    if (!input.idempotencyKey) throw error
+    if (!normalizedIdempotencyKey) throw error
 
     const existing = await findExistingBatchByIdempotencyKey(
       database,
-      input.idempotencyKey,
+      normalizedIdempotencyKey,
       expectedDimensions,
     )
     if (existing) return existing

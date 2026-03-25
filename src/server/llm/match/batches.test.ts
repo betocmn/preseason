@@ -290,6 +290,28 @@ describe('createMatchBatch', () => {
     expect(batch1.id).toBe(batch2.id)
   })
 
+  it('should treat blank idempotency keys as null', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const input = {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual' as const,
+      idempotencyKey: '',
+    }
+
+    const batch1 = await createMatchBatch(db, input)
+    const batch2 = await createMatchBatch(db, input)
+
+    expect(batch1.id).not.toBe(batch2.id)
+    expect(batch1.idempotencyKey).toBeNull()
+    expect(batch2.idempotencyKey).toBeNull()
+  })
+
   it('should reject idempotency key reuse with different dimensions', async () => {
     const db = getTestDb()
     const { season, category, toolA, toolB, template } = await seedMatchFixture()
