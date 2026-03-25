@@ -1,2 +1,0 @@
-ALTER TABLE "preseason_benchmark_case" ADD CONSTRAINT "benchmark_case_season_prompt_fk" FOREIGN KEY ("season_id","prompt_version_id") REFERENCES "public"."preseason_benchmark_season_prompt"("season_id","prompt_version_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "preseason_benchmark_case" ADD CONSTRAINT "benchmark_case_season_model_fk" FOREIGN KEY ("season_id","model_snapshot_id") REFERENCES "public"."preseason_benchmark_season_model"("season_id","model_snapshot_id") ON DELETE no action ON UPDATE no action;
