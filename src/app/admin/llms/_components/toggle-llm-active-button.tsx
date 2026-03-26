@@ -11,10 +11,7 @@ type ToggleLlmActiveButtonProps = {
   isActive: boolean
 }
 
-export function ToggleLlmActiveButton({
-  llmId,
-  isActive,
-}: ToggleLlmActiveButtonProps) {
+export function ToggleLlmActiveButton({ llmId, isActive }: ToggleLlmActiveButtonProps) {
   const router = useRouter()
   const toggleMutation = api.llm.toggleActive.useMutation({
     onSuccess: (data) => {
@@ -29,14 +26,10 @@ export function ToggleLlmActiveButton({
       variant="ghost"
       size="icon"
       title={isActive ? 'Deactivate' : 'Activate'}
-      onClick={() =>
-        toggleMutation.mutate({ id: llmId, isActive: !isActive })
-      }
+      onClick={() => toggleMutation.mutate({ id: llmId, isActive: !isActive })}
       disabled={toggleMutation.isPending}
     >
-      <Power
-        className={`h-4 w-4 ${isActive ? 'text-green-500' : 'text-muted-foreground'}`}
-      />
+      <Power className={`h-4 w-4 ${isActive ? 'text-green-500' : 'text-muted-foreground'}`} />
     </Button>
   )
 }

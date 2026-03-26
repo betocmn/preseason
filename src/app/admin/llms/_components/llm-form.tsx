@@ -215,10 +215,7 @@ export function LlmForm({ llm }: LlmFormProps) {
             <FormItem>
               <FormLabel>Model ID</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  placeholder="e.g. anthropic/claude-3.5-sonnet"
-                />
+                <Input {...field} placeholder="e.g. anthropic/claude-3.5-sonnet" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -231,10 +228,7 @@ export function LlmForm({ llm }: LlmFormProps) {
           render={({ field }) => (
             <FormItem className="flex flex-row items-center gap-3 space-y-0">
               <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
               <FormLabel className="font-normal">Active</FormLabel>
             </FormItem>
@@ -245,11 +239,7 @@ export function LlmForm({ llm }: LlmFormProps) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : isEditing ? 'Update LLM' : 'Create LLM'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/beto-admin/llms')}
-          >
+          <Button type="button" variant="outline" onClick={() => router.push('/beto-admin/llms')}>
             Cancel
           </Button>
         </div>

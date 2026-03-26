@@ -105,9 +105,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
         slug: values.slug,
         level: values.level,
         description: description || null,
-        expectedCategories: expectedCategories?.length
-          ? expectedCategories
-          : null,
+        expectedCategories: expectedCategories?.length ? expectedCategories : null,
         isActive: values.isActive,
       })
     } else {
@@ -116,9 +114,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
         slug: values.slug,
         level: values.level,
         description: description || undefined,
-        expectedCategories: expectedCategories?.length
-          ? expectedCategories
-          : undefined,
+        expectedCategories: expectedCategories?.length ? expectedCategories : undefined,
         isActive: values.isActive,
       })
     }
@@ -209,10 +205,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
             <FormItem>
               <FormLabel>Expected Categories</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  placeholder="hosting, database, auth, payments"
-                />
+                <Input {...field} placeholder="hosting, database, auth, payments" />
               </FormControl>
               <FormDescription>
                 Comma-separated subcategory slugs this prompt targets
@@ -228,10 +221,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
           render={({ field }) => (
             <FormItem className="flex flex-row items-center gap-3 space-y-0">
               <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
               <FormLabel className="font-normal">Active</FormLabel>
             </FormItem>
@@ -240,11 +230,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
 
         <div className="flex gap-3">
           <Button type="submit" disabled={isPending}>
-            {isPending
-              ? 'Saving...'
-              : isEditing
-                ? 'Update Prompt'
-                : 'Create Prompt'}
+            {isPending ? 'Saving...' : isEditing ? 'Update Prompt' : 'Create Prompt'}
           </Button>
           <Button
             type="button"

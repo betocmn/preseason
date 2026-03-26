@@ -23,9 +23,7 @@ export default async function LlmsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">LLMs</h1>
-          <p className="text-muted-foreground">
-            Manage LLMs used in benchmark seasons.
-          </p>
+          <p className="text-muted-foreground">Manage LLMs used in benchmark seasons.</p>
         </div>
         <Button asChild>
           <Link href="/beto-admin/llms/new">
@@ -51,9 +49,7 @@ export default async function LlmsPage() {
             {llms.map((llm) => (
               <TableRow key={llm.id}>
                 <TableCell className="font-medium">{llm.name}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {llm.slug}
-                </TableCell>
+                <TableCell className="text-muted-foreground">{llm.slug}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{llm.provider}</Badge>
                 </TableCell>
@@ -69,10 +65,7 @@ export default async function LlmsPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    <ToggleLlmActiveButton
-                      llmId={llm.id}
-                      isActive={llm.isActive}
-                    />
+                    <ToggleLlmActiveButton llmId={llm.id} isActive={llm.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
                       <Link href={`/beto-admin/llms/${llm.id}/edit`}>
                         <Pencil className="h-4 w-4" />
@@ -85,10 +78,7 @@ export default async function LlmsPage() {
             ))}
             {llms.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-8 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   No LLMs found
                 </TableCell>
               </TableRow>
