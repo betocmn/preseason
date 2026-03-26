@@ -99,7 +99,7 @@ describe('parseMatchResponse', () => {
   })
 
   it('should export MATCH_PARSER_VERSION', () => {
-    expect(MATCH_PARSER_VERSION).toBe('match-repair-v1')
+    expect(MATCH_PARSER_VERSION).toBe('match-repair-v2')
   })
 
   it('should handle JSON with nested braces in strings', () => {
@@ -175,5 +175,35 @@ describe('parseMatchResponse', () => {
     if (result.status !== 'ok') return
     expect(result.response.tool_a.pros[0]?.evidence_sentence).toBe('Tool A is easy to set up.')
     expect(result.response.tool_a.cons[0]?.evidence_sentence).toBe('Docs are limited.')
+  })
+
+  it('should fall back to a trailing fenced json appendix when tags are missing', () => {
+    const raw = [
+      'Here is the analysis.',
+      '',
+      '```json',
+      JSON.stringify({
+        schema_version: 'match-v2',
+        winner: 'tool_b',
+        comparison_summary: 'Tool B wins.',
+        tool_a: {
+          pros: [{ phrase: 'Fast', evidence_name: 'Tool A is fast enough.' }],
+          cons: [],
+        },
+        tool_b: {
+          pros: [{ phrase: 'Reliable', evidence_sentence: 'Tool B is more reliable.' }],
+          cons: [],
+        },
+        confidence: 0.72,
+      }),
+      '```',
+    ].join('\n')
+
+    const result = parseMatchResponse(raw)
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.naturalResponse).toBe('Here is the analysis.')
+    expect(result.response.tool_a.pros[0]?.evidence_sentence).toBe('Tool A is fast enough.')
   })
 })
