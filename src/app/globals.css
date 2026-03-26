@@ -21,7 +21,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 220 6% 94%;
     --input: 220 8% 89%;
-    --ring: 45 95% 55%;
+    --ring: 220 100% 67%;
     --radius: 0.5rem;
 
     --logo-filter: brightness(0);
@@ -63,7 +63,7 @@
     --destructive-foreground: 220 14% 96%;
     --border: 220 6% 15%;
     --input: 220 8% 20%;
-    --ring: 45 90% 50%;
+    --ring: 220 100% 67%;
 
     --logo-filter: brightness(0) invert(1);
 
