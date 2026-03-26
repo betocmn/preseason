@@ -27,20 +27,15 @@ export function Footer() {
       <div className="container py-8">
         {/* Top row: brand + nav links */}
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Image
-                src="/preseason-brand/preseason-logo.svg"
-                alt="Preseason"
-                width={120}
-                height={28}
-                style={{ filter: 'var(--logo-filter)' }}
-              />
-            </Link>
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              What tools do AI models actually recommend?
-            </span>
-          </div>
+          <Link href="/">
+            <Image
+              src="/preseason-brand/preseason-logo.svg"
+              alt="Preseason"
+              width={120}
+              height={28}
+              style={{ filter: 'var(--logo-filter)' }}
+            />
+          </Link>
 
           <nav className="flex flex-wrap gap-x-6 gap-y-2">
             {navLinks.map((link) => (
