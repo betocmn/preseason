@@ -22,6 +22,7 @@ const createPromptInput = z.object({
   slug: z.string().min(1).max(255),
   level: promptLevelSchema.default('beginner'),
   description: z.string().max(10000).optional(),
+  contentMd: z.string().max(100000).optional(),
   expectedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
   isActive: z.boolean().default(true),
 })
@@ -33,6 +34,7 @@ const updatePromptInput = z
     slug: z.string().min(1).max(255).optional(),
     level: promptLevelSchema.optional(),
     description: z.string().max(10000).nullable().optional(),
+    contentMd: z.string().max(100000).nullable().optional(),
     expectedCategories: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
     isActive: z.boolean().optional(),
   })
@@ -42,6 +44,7 @@ const updatePromptInput = z
       input.slug !== undefined ||
       input.level !== undefined ||
       input.description !== undefined ||
+      input.contentMd !== undefined ||
       input.expectedCategories !== undefined ||
       input.isActive !== undefined,
     {

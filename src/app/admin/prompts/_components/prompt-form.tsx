@@ -35,6 +35,7 @@ const formSchema = z.object({
   slug: z.string().min(1, 'Slug is required').max(255),
   level: z.enum(LEVELS),
   description: z.string().max(10000).optional(),
+  contentMd: z.string().trim().min(1, 'Prompt content is required').max(100000),
   expectedCategories: z.string().optional(),
   isActive: z.boolean(),
 })
@@ -47,6 +48,7 @@ type Prompt = {
   slug: string
   level: string
   description: string | null
+  contentMd: string | null
   expectedCategories: string[] | null
   isActive: boolean
 }
@@ -66,6 +68,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
       slug: prompt?.slug ?? '',
       level: (prompt?.level as FormValues['level']) ?? 'beginner',
       description: prompt?.description ?? '',
+      contentMd: prompt?.contentMd ?? '',
       expectedCategories: prompt?.expectedCategories?.join(', ') ?? '',
       isActive: prompt?.isActive ?? true,
     },
@@ -91,6 +94,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
 
   function onSubmit(values: FormValues) {
     const description = values.description?.trim() ?? ''
+    const contentMd = values.contentMd.trim()
     const expectedCategories = values.expectedCategories
       ? values.expectedCategories
           .split(',')
@@ -105,6 +109,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
         slug: values.slug,
         level: values.level,
         description: description || null,
+        contentMd,
         expectedCategories: expectedCategories?.length ? expectedCategories : null,
         isActive: values.isActive,
       })
@@ -114,6 +119,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
         slug: values.slug,
         level: values.level,
         description: description || undefined,
+        contentMd,
         expectedCategories: expectedCategories?.length ? expectedCategories : undefined,
         isActive: values.isActive,
       })
@@ -193,6 +199,27 @@ export function PromptForm({ prompt }: PromptFormProps) {
               <FormControl>
                 <Textarea {...field} rows={3} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="contentMd"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Prompt Content</FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  rows={12}
+                  placeholder="Describe the app or workflow the model should build..."
+                />
+              </FormControl>
+              <FormDescription>
+                This content is frozen into benchmark seasons and shown publicly.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
