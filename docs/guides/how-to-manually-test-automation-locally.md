@@ -14,18 +14,22 @@ pnpm run verify:background -- --label manual
 That command:
 
 - Creates an isolated archived `verification-smoke-*` season in the real DB
-- Invokes the benchmark cron route and match execution route with live
+- Invokes the benchmark cron route and match cron dispatcher route with live
   OpenRouter calls
 - Injects an ephemeral `CRON_SECRET` in-process if `.env.local` does not define
   one
 - Writes raw artifacts under `.context/background-smoke/`
+- Closes its imported DB connections before exit, so the command returns
+  cleanly after writing the artifact
 
 The local verification path is:
 
 1. Start the app and seeded database.
 2. Trigger `/api/cron/benchmark-run`.
-3. Inspect benchmark run, case result, and case decision data.
-4. Review QC and, if needed, publish from the admin UI.
+3. Create a match batch and trigger `/api/cron/match-run`, or let the smoke
+   harness do that for an isolated smoke season automatically.
+4. Inspect benchmark run, case result, match batch, and match evaluation data.
+5. Review QC and, if needed, publish from the admin UI.
 
 ## Prerequisites
 

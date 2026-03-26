@@ -2,11 +2,11 @@
 
 ## Scope
 
-This audit verified the two live background execution paths against the real
-local database and the real OpenRouter key:
+This audit verified the two cron-facing background execution paths against the
+real local database and the real OpenRouter key:
 
 - `GET /api/cron/benchmark-run`
-- `POST /api/match-run`
+- `GET /api/cron/match-run`
 
 Audit timing:
 
@@ -17,6 +17,8 @@ Raw artifacts:
 
 - Baseline: `.context/background-smoke/2026-03-26T00-27-08-750Z-baseline/artifact.json`
 - Post-fix: `.context/background-smoke/2026-03-26T00-35-04-521Z-post-fix/artifact.json`
+- Remaining-fixes: `.context/background-smoke/2026-03-26T01-11-48-743Z-remaining-fixes/artifact.json`
+- Final retest: `.context/background-smoke/2026-03-26T01-26-00-950Z-final-retest-v2/artifact.json`
 
 ## Fixture Matrix
 
@@ -108,11 +110,45 @@ What it does:
 
 ### 3. Fixed Deploy Cron Configuration
 
-`vercel.json` now schedules only the route that actually exists:
+`vercel.json` now schedules only implemented cron routes:
 
 - `/api/cron/benchmark-run`
+- `/api/cron/match-run`
 
 The stale `/api/cron/run` and `/api/cron/settle` entries were removed.
+
+### 4. Added a Repo-Managed Match Dispatcher
+
+`GET /api/cron/match-run` now:
+
+- Authenticates with `CRON_SECRET`
+- Claims the next dispatchable batch itself
+- Reclaims stale `running` batches safely
+- Runs one batch per cron invocation
+- Supports an optional `seasonId` query filter for isolated local smoke runs
+
+### 5. Hardened Match Parsing for Real Qwen Failures
+
+The match parser now tolerates the live failure modes observed from
+`qwen3-coder-next`:
+
+- Missing `]` before `"cons"` in analysis arrays
+- Common `evidence_sentence` key typos
+- A trailing fenced JSON appendix when the model omits
+  `<preseason_match_json>` tags
+
+### 6. Hardened Benchmark Parsing for Missing Confidence
+
+Benchmark appendix decisions now accept a missing per-category `confidence`
+field and coerce it to `null` instead of discarding the entire case. This
+matches the nullable `self_reported_confidence` column already used in
+`benchmark_case_decision`.
+
+### 7. Fixed Smoke Harness Shutdown
+
+The smoke harness now closes both its direct SQL client and the route-imported
+shared DB connection before exit, so `pnpm run verify:background` finishes
+cleanly instead of writing the artifact and hanging.
 
 ## Post-Fix Results
 
@@ -157,6 +193,49 @@ What still failed:
 This is now a genuine prompt/structured-output reliability issue, not a drift
 classification issue.
 
+## Retest After Remaining Fixes
+
+### Live Reruns
+
+After the dispatcher and parser hardening landed, the smoke harness was rerun
+multiple times against the live DB and OpenRouter:
+
+1. `remaining-fixes`
+   - Benchmark: `8/8` completed, `0` invalid
+   - Match: `8/8` completed, `0` invalid
+   - Revealed a harness shutdown leak after artifact write
+2. Additional reruns while fixing that leak surfaced two intermittent but
+   repairable contract gaps:
+   - Benchmark: one Qwen benchmark case omitted `confidence`
+   - Match: one Qwen match response emitted fenced JSON without
+     `<preseason_match_json>` tags
+3. `final-retest-v2`
+   - Benchmark: `8/8` completed, `0` invalid
+   - Match: `8/8` completed, `0` invalid
+   - Harness exited cleanly
+
+### Final Retest Results
+
+- Benchmark route HTTP status: `200`
+- Benchmark run status: `qc_failed`
+- Benchmark completed cases: `8/8`
+- Benchmark invalid-output cases: `0/8`
+- Benchmark unresolved-tool count: `12`
+- Match route HTTP status: `200`
+- Match batch status: `completed`
+- Match completed evaluations: `8/8`
+- Match invalid-output evaluations: `0/8`
+
+What the final rerun confirms:
+
+- The benchmark cron path is operational end to end across all four models.
+- The repo-managed match dispatcher is operational end to end across all four
+  models.
+- The Qwen-specific parser repairs are handling the real OpenRouter output
+  shapes seen in this repo.
+- Live smoke reruns remain noisy in latency, but no longer fail on the repaired
+  contract issues.
+
 ## Confirmed Bugs
 
 ### Fixed
@@ -165,28 +244,33 @@ classification issue.
    both benchmark and match persistence for Anthropic, OpenAI, and Qwen.
 2. `vercel.json` scheduled two deleted cron routes, which would have produced
    production 404s.
+3. The repo had no built-in match batch dispatcher or schedule. `GET
+   /api/cron/match-run` now discovers and executes pending work.
+4. Qwen match outputs with missing array closers, misspelled evidence keys, or
+   fenced JSON appendices no longer fail the whole batch.
+5. A missing benchmark decision confidence value no longer invalidates the
+   whole benchmark case.
+6. The smoke harness now exits cleanly after writing its artifact.
 
 ### Remaining
 
-1. `qwen3-coder-next` is not reliable enough for the strict match appendix
-   contract. It still produces invalid outputs in the real match batch flow.
-2. `/api/match-run` is executable, but the repo still has no built-in dispatcher
-   or schedule that discovers pending batches and submits `batchId`s.
-3. `.env.local` on this machine does not define `CRON_SECRET`. The new harness
+1. `.env.local` on this machine does not define `CRON_SECRET`. The new harness
    works around that locally, but real deployed cron execution still requires
    the environment variable to be set.
-4. The local `dotenv-cli` installation is broken on this machine because
+2. The local `dotenv-cli` installation is broken on this machine because
    `/opt/homebrew/bin/dotenv` points to a missing Python 3.11 interpreter.
    Existing `pnpm run db:*` scripts are affected here even though the new smoke
    harness is not.
+3. The smoke panel still fails production QC because it uses only `2` prompt
+   versions and still yields a high unresolved-tool rate from live outputs.
 
 ## Findings
 
 1. The benchmark cron path is operational after the drift fix: route auth,
    runner execution, OpenRouter transport, strict parser, and DB persistence all
    worked end to end on the smoke panel.
-2. The match execution path is operational for manual batch execution, but its
-   structured-output reliability is model dependent. Qwen is the current outlier.
+2. The match cron path is operational with repo-managed dispatch; it now claims
+   and executes pending work without an external batch-discovery layer.
 3. Tool resolution still leaves a meaningful number of unresolved tool names in
    a real run, so manual alias/candidate review remains part of the operating
    model.
@@ -194,7 +278,7 @@ classification issue.
 ## Recommended Next Steps
 
 1. Set `CRON_SECRET` in the real deployment environment before relying on cron.
-2. Decide whether to remove `qwen3-coder-next` from match batches or harden the
-   match prompt/parser contract for that model family.
-3. Add a dispatcher route or external scheduler for pending match batches if
-   match execution should become fully automated.
+2. Keep watching Qwen in production, but treat its current remaining issue as
+   latency variance rather than a known parser blocker on this smoke matrix.
+3. Improve tool alias coverage so the unresolved-tool QC rate drops below the
+   production threshold.

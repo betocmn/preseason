@@ -2,10 +2,10 @@
 
 ## Overview
 
-Production automation is now the benchmark runner. There is one cron-facing
-entry point:
+Production automation now has two cron-facing entry points:
 
 - `/api/cron/benchmark-run`
+- `/api/cron/match-run`
 
 The removed `/api/cron/run` and `/api/cron/settle` routes are gone along with
 the old exploration pipeline.
@@ -14,11 +14,15 @@ the old exploration pipeline.
 
 ```text
 src/app/api/cron/benchmark-run/route.ts
+src/app/api/cron/match-run/route.ts
 src/server/llm/benchmark/runner.ts
 src/server/llm/benchmark/parser.ts
 src/server/llm/benchmark/prompt-builder.ts
 src/server/llm/benchmark/tool-resolver.ts
 src/server/llm/benchmark/qc.ts
+src/server/llm/match/batches.ts
+src/server/llm/match/runner.ts
+src/server/llm/match/parser.ts
 ```
 
 ## End-to-End Flow
@@ -38,6 +42,17 @@ src/server/llm/benchmark/qc.ts
 10. QC is evaluated and the run finishes as `completed`, `failed`, or
     `qc_failed`.
 11. Admins publish passing runs manually from the benchmark admin UI.
+
+## Match Dispatch Flow
+
+1. Admin workflows create pending match batches.
+2. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
+3. `GET /api/cron/match-run` claims the next pending, failed, or stale running
+   batch.
+4. `runMatchBatch()` executes the batch against the frozen model snapshots for
+   that season.
+5. Parsed match evaluations are stored and the batch is marked `completed` or
+   `failed`.
 
 ## Runner Guarantees
 
