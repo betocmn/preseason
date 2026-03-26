@@ -43,8 +43,8 @@ export function DeleteLlmButton({ llmId, llmName }: DeleteLlmButtonProps) {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {llmName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this LLM and all associated data. This
-            action cannot be undone.
+            This will permanently delete this LLM and all associated data. This action cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

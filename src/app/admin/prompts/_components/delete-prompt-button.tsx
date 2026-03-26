@@ -22,10 +22,7 @@ type DeletePromptButtonProps = {
   promptTitle: string
 }
 
-export function DeletePromptButton({
-  promptId,
-  promptTitle,
-}: DeletePromptButtonProps) {
+export function DeletePromptButton({ promptId, promptTitle }: DeletePromptButtonProps) {
   const router = useRouter()
   const deleteMutation = api.prompt.delete.useMutation({
     onSuccess: () => {
@@ -46,8 +43,8 @@ export function DeletePromptButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {promptTitle}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this prompt and all associated data.
-            This action cannot be undone.
+            This will permanently delete this prompt and all associated data. This action cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

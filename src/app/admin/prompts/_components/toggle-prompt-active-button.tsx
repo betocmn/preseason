@@ -11,10 +11,7 @@ type TogglePromptActiveButtonProps = {
   isActive: boolean
 }
 
-export function TogglePromptActiveButton({
-  promptId,
-  isActive,
-}: TogglePromptActiveButtonProps) {
+export function TogglePromptActiveButton({ promptId, isActive }: TogglePromptActiveButtonProps) {
   const router = useRouter()
   const toggleMutation = api.prompt.toggleActive.useMutation({
     onSuccess: (data) => {
@@ -29,14 +26,10 @@ export function TogglePromptActiveButton({
       variant="ghost"
       size="icon"
       title={isActive ? 'Deactivate' : 'Activate'}
-      onClick={() =>
-        toggleMutation.mutate({ id: promptId, isActive: !isActive })
-      }
+      onClick={() => toggleMutation.mutate({ id: promptId, isActive: !isActive })}
       disabled={toggleMutation.isPending}
     >
-      <Power
-        className={`h-4 w-4 ${isActive ? 'text-green-500' : 'text-muted-foreground'}`}
-      />
+      <Power className={`h-4 w-4 ${isActive ? 'text-green-500' : 'text-muted-foreground'}`} />
     </Button>
   )
 }

@@ -23,9 +23,7 @@ export default async function PromptsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Prompts</h1>
-          <p className="text-muted-foreground">
-            Manage prompts used in benchmark seasons.
-          </p>
+          <p className="text-muted-foreground">Manage prompts used in benchmark seasons.</p>
         </div>
         <Button asChild>
           <Link href="/beto-admin/prompts/new">
@@ -51,9 +49,7 @@ export default async function PromptsPage() {
             {prompts.map((prompt) => (
               <TableRow key={prompt.id}>
                 <TableCell className="font-medium">{prompt.title}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {prompt.slug}
-                </TableCell>
+                <TableCell className="text-muted-foreground">{prompt.slug}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{prompt.level}</Badge>
                 </TableCell>
@@ -75,29 +71,20 @@ export default async function PromptsPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    <TogglePromptActiveButton
-                      promptId={prompt.id}
-                      isActive={prompt.isActive}
-                    />
+                    <TogglePromptActiveButton promptId={prompt.id} isActive={prompt.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
                       <Link href={`/beto-admin/prompts/${prompt.id}/edit`}>
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <DeletePromptButton
-                      promptId={prompt.id}
-                      promptTitle={prompt.title}
-                    />
+                    <DeletePromptButton promptId={prompt.id} promptTitle={prompt.title} />
                   </div>
                 </TableCell>
               </TableRow>
             ))}
             {prompts.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-8 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   No prompts found
                 </TableCell>
               </TableRow>
