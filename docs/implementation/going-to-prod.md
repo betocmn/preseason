@@ -18,9 +18,9 @@ As of March 26, 2026, these are the main blockers or caveats:
 1. The benchmark cron is still designed as a once-per-day full run.
    It must be converted to chunked execution before production, because the
    current active season is too large for one Vercel invocation.
-2. `pnpm run db:seed` is not production-safe as-is.
-   It creates `season-1` and a synthetic published benchmark run, so do not
-   run it blindly against the production database.
+2. ~~`pnpm run db:seed` is not production-safe as-is.~~ **Resolved.**
+   `db:seed` now only seeds reference data (categories, tools, LLMs, prompts).
+   Synthetic benchmark and critic data moved to `pnpm run db:seed-dev`.
 3. There is no admin UI for managing LLMs or prompts.
    The benchmark season freeze flow depends on active prompt rows and active LLM
    rows already existing in the database.
@@ -73,16 +73,9 @@ contain:
 
 Important:
 
-- The current repo does not provide a clean reference-data-only production seed
-- The current `db:seed` script also inserts synthetic benchmark season data and
-  a published run
-
-So before production, do one of these:
-
-1. Split the seed into a prod-safe reference-data seed and use that
-2. Load vetted reference data manually or through a one-off script
-
-Do not seed fake published benchmark data into production.
+- `pnpm run db:seed` now seeds only production-safe reference data
+- Synthetic benchmark/critic data lives in `pnpm run db:seed-dev` (do not run
+  this against production)
 
 ### Admin Access
 

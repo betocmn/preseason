@@ -72,7 +72,8 @@ legacy settlement pipeline.
    ```bash
    supabase db reset
    pnpm run db:migrate
-   pnpm run db:seed
+   pnpm run db:seed          # reference data (categories, tools, LLMs, prompts)
+   pnpm run db:seed-dev      # synthetic benchmark + critic data for local dev
    ```
 
 5. **Run the development server**
@@ -106,8 +107,10 @@ pnpm run preview        # Build and start production server
 ```bash
 pnpm run db:generate    # Generate migration from schema changes
 pnpm run db:migrate     # Apply pending migrations
-pnpm run db:seed        # Seed benchmark data and app records
-pnpm run db:seed-test   # Seed benchmark demo data and commentary
+pnpm run db:seed        # Seed reference data (categories, tools, LLMs, prompts)
+pnpm run db:seed-dev    # Seed synthetic benchmark + critic data (dev only)
+pnpm run db:seed-benchmark  # Seed large-scale benchmark data (28 days of runs)
+pnpm run db:seed-test   # Seed critic profiles and comments for UI review
 pnpm run db:studio      # Open Drizzle Studio
 ```
 
