@@ -22,6 +22,7 @@ const createPromptInput = z.object({
   slug: z.string().min(1).max(255),
   level: promptLevelSchema.default('beginner'),
   description: z.string().max(10000).optional(),
+  contentMd: z.string().max(100000).optional(),
   expectedCategories: z.array(z.string().min(1).max(100)).max(100).optional(),
   isActive: z.boolean().default(true),
 })
@@ -33,6 +34,7 @@ const updatePromptInput = z
     slug: z.string().min(1).max(255).optional(),
     level: promptLevelSchema.optional(),
     description: z.string().max(10000).nullable().optional(),
+    contentMd: z.string().max(100000).nullable().optional(),
     expectedCategories: z.array(z.string().min(1).max(100)).max(100).nullable().optional(),
     isActive: z.boolean().optional(),
   })
@@ -42,6 +44,7 @@ const updatePromptInput = z
       input.slug !== undefined ||
       input.level !== undefined ||
       input.description !== undefined ||
+      input.contentMd !== undefined ||
       input.expectedCategories !== undefined ||
       input.isActive !== undefined,
     {
@@ -51,6 +54,45 @@ const updatePromptInput = z
   )
 
 export const promptRouter = createTRPCRouter({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+    const items = await ctx.db
+      .select({
+        id: prompts.id,
+        title: prompts.title,
+        slug: prompts.slug,
+        level: prompts.level,
+        description: prompts.description,
+        expectedCategories: prompts.expectedCategories,
+        isActive: prompts.isActive,
+      })
+      .from(prompts)
+      .orderBy(asc(prompts.title))
+
+    const usedPrompts = await ctx.db
+      .selectDistinct({ promptId: benchmarkPromptVersions.promptId })
+      .from(benchmarkPromptVersions)
+    const usedPromptIds = new Set(usedPrompts.map((row) => row.promptId))
+
+    return items.map((item) => ({
+      ...item,
+      isUsed: usedPromptIds.has(item.id),
+    }))
+  }),
+
+  getById: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+      const prompt = await ctx.db.query.prompts.findFirst({
+        where: eq(prompts.id, input.id),
+      })
+      if (!prompt) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Prompt not found' })
+      }
+      return prompt
+    }),
+
   listActive: publicProcedure
     .input(
       z
@@ -177,6 +219,17 @@ export const promptRouter = createTRPCRouter({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const existingVersion = await ctx.db.query.benchmarkPromptVersions.findFirst({
+        where: eq(benchmarkPromptVersions.promptId, input.id),
+        columns: { id: true },
+      })
+      if (existingVersion) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Prompts that have already been used in benchmark seasons cannot be deleted',
+        })
+      }
 
       const deleted = await ctx.db.delete(prompts).where(eq(prompts.id, input.id)).returning()
       if (!deleted[0]) {

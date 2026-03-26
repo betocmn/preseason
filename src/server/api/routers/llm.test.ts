@@ -1,6 +1,7 @@
 import type { TRPCError } from '@trpc/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { cleanTestDatabase, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { benchmarkModelSnapshots } from '~/server/db/schema'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
 
 describe('llmRouter', () => {
@@ -103,6 +104,47 @@ describe('llmRouter', () => {
     const caller = createTestCaller(null)
     await expect(caller.llm.getBySlug({ slug: 'missing' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('marks used llms and rejects deleting them', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const db = getTestDb()
+
+    const created = await caller.llm.create({
+      name: 'GPT-4o',
+      slug: 'gpt-4o',
+      provider: 'openai',
+      company: 'OpenAI',
+      modelFamily: 'GPT',
+      modelVersion: '4o',
+      modelId: 'openai/gpt-4o',
+      isActive: true,
+    })
+    if (!created) {
+      throw new Error('Expected llm to be created')
+    }
+
+    await db.insert(benchmarkModelSnapshots).values({
+      llmId: created.id,
+      name: created.name,
+      provider: created.provider,
+      company: created.company,
+      modelFamily: created.modelFamily,
+      modelVersion: created.modelVersion,
+      tier: 'frontier',
+      requestedModelId: created.modelId,
+      snapshotKey: `snapshot-${crypto.randomUUID()}`,
+      isDeterministic: false,
+    })
+
+    const listed = await caller.llm.list()
+    expect(listed.find((llm) => llm.id === created.id)?.isUsed).toBe(true)
+
+    await expect(caller.llm.delete({ id: created.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'LLMs that have already been used in benchmark seasons cannot be deleted',
     } satisfies Partial<TRPCError>)
   })
 })
