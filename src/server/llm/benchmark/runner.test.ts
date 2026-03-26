@@ -89,6 +89,90 @@ function wait(ms: number) {
 
 type TestDb = ReturnType<typeof getTestDb>
 
+function createDelayedCaseSnapshotDb(
+  db: TestDb,
+  options: {
+    caseIdQueryStarted: ReturnType<typeof createDeferred>
+    allowCaseIdQuery: ReturnType<typeof createDeferred>
+  },
+) {
+  let shouldDelayCaseIdQuery = true
+
+  function wrapBuilder(builder: unknown, isCaseIdQuery: boolean, delayOnExecute: boolean): unknown {
+    if (
+      builder === null ||
+      builder === undefined ||
+      (typeof builder !== 'object' && typeof builder !== 'function')
+    ) {
+      return builder
+    }
+
+    return new Proxy(builder, {
+      get(target, prop, receiver) {
+        if (prop === 'then') {
+          const then = Reflect.get(target, prop, receiver)
+
+          if (typeof then !== 'function') {
+            return then
+          }
+
+          return (...args: unknown[]) => {
+            if (delayOnExecute) {
+              shouldDelayCaseIdQuery = false
+              options.caseIdQueryStarted.resolve()
+
+              return options.allowCaseIdQuery.promise.then(() => Reflect.apply(then, target, args))
+            }
+
+            return Reflect.apply(then, target, args)
+          }
+        }
+
+        const value = Reflect.get(target, prop, receiver)
+        if (typeof value !== 'function') {
+          return value
+        }
+
+        return (...args: unknown[]) => {
+          const result = Reflect.apply(value, target, args)
+          const nextDelayOnExecute =
+            delayOnExecute ||
+            (prop === 'from' &&
+              isCaseIdQuery &&
+              shouldDelayCaseIdQuery &&
+              args[0] === benchmarkCases)
+
+          return wrapBuilder(result, isCaseIdQuery, nextDelayOnExecute)
+        }
+      },
+    })
+  }
+
+  return new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop === 'select') {
+        return (...args: unknown[]) => {
+          const selection = args[0]
+          const isCaseIdQuery =
+            shouldDelayCaseIdQuery &&
+            args.length === 1 &&
+            selection !== null &&
+            typeof selection === 'object' &&
+            !Array.isArray(selection) &&
+            Object.keys(selection as Record<string, unknown>).length === 1 &&
+            (selection as { id?: unknown }).id === benchmarkCases.id
+
+          const builder = Reflect.apply(target.select, target, args)
+          return wrapBuilder(builder, isCaseIdQuery, false)
+        }
+      }
+
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as TestDb
+}
+
 async function seedFullPanel(db: TestDb) {
   const group = first(
     await db
@@ -332,6 +416,103 @@ describe('runBenchmark', () => {
     expect(allRuns).toHaveLength(1)
   })
 
+  it('should process only maxCases and keep the run resumable when work remains', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 4,
+    })
+
+    expect(summary.status).toBe('running')
+    expect(summary.processedThisInvocation).toBe(4)
+    expect(summary.completedCases).toBe(4)
+    expect(summary.remainingCases).toBe(11)
+    expect(summary.hasRemainingWork).toBe(true)
+    expect(llmService.complete).toHaveBeenCalledTimes(4)
+
+    const persistedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, summary.runId),
+    })
+    expect(persistedRun?.status).toBe('pending')
+    expect(persistedRun?.completedAt).toBeNull()
+  })
+
+  it('should resume the same run across chunked invocations without duplicate case results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const firstSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 8,
+    })
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 8,
+    })
+
+    expect(firstSummary.runId).toBe(secondSummary.runId)
+    expect(firstSummary.status).toBe('running')
+    expect(firstSummary.hasRemainingWork).toBe(true)
+    expect(secondSummary.status).toBe('completed')
+    expect(secondSummary.hasRemainingWork).toBe(false)
+    expect(secondSummary.remainingCases).toBe(0)
+    expect(secondSummary.completedCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+
+    const runResults = await db
+      .select({
+        id: benchmarkCaseResults.id,
+        caseId: benchmarkCaseResults.caseId,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, firstSummary.runId))
+
+    expect(runResults).toHaveLength(15)
+    expect(new Set(runResults.map((result) => result.caseId)).size).toBe(15)
+  })
+
+  it('should finalize as qc_failed on the final chunk when QC does not pass', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const firstSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 10,
+    })
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 10,
+    })
+
+    expect(firstSummary.status).toBe('running')
+    expect(firstSummary.invalidOutputCases).toBe(10)
+    expect(firstSummary.hasRemainingWork).toBe(true)
+    expect(secondSummary.status).toBe('qc_failed')
+    expect(secondSummary.invalidOutputCases).toBe(15)
+    expect(secondSummary.hasRemainingWork).toBe(false)
+    expect(secondSummary.remainingCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(20)
+  })
+
   it('should return the persisted summary for an already completed run', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
@@ -514,6 +695,7 @@ describe('runBenchmark', () => {
     const reclaimedRun = await db.query.benchmarkRuns.findFirst({
       where: eq(benchmarkRuns.id, run.id),
     })
+    expect(reclaimedRun?.startedAt?.toISOString()).toBe(reclaimTime.toISOString())
     expect(reclaimedRun?.qcSummaryJson).toEqual(
       expect.objectContaining({
         snapshotCaseIds: caseIds,
@@ -537,6 +719,83 @@ describe('runBenchmark', () => {
 
     expect(firstSummary.status).toBe('completed')
     expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
+  it('should stop a reclaimed worker from inheriting the new execution token before snapshot setup', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const caseIdQueryStarted = createDeferred()
+    const allowCaseIdQuery = createDeferred()
+    const staleWorkerDb = createDelayedCaseSnapshotDb(db, {
+      caseIdQueryStarted,
+      allowCaseIdQuery,
+    })
+
+    const staleWorkerService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const reclaimingWorkerFirstCallStarted = createDeferred()
+    const reclaimingWorkerFirstCallBlocked = createDeferred()
+
+    let reclaimingWorkerCallCount = 0
+    const reclaimingWorkerService = createMockLlmService(async (_provider, request) => {
+      reclaimingWorkerCallCount++
+      if (reclaimingWorkerCallCount === 1) {
+        reclaimingWorkerFirstCallStarted.resolve()
+        await reclaimingWorkerFirstCallBlocked.promise
+      }
+
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const staleStartTime = new Date('2026-03-10T00:00:00.000Z')
+    const reclaimTime = new Date('2026-03-10T01:00:00.000Z')
+
+    const staleRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: staleWorkerDb,
+      llmService: staleWorkerService,
+      now: () => staleStartTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await caseIdQueryStarted.promise
+
+    const reclaimedRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: reclaimingWorkerService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await reclaimingWorkerFirstCallStarted.promise
+
+    allowCaseIdQuery.resolve()
+    const staleSummary = await staleRunPromise
+
+    expect(staleWorkerService.complete).not.toHaveBeenCalled()
+    expect(staleSummary.status).toBe('running')
+
+    reclaimingWorkerFirstCallBlocked.resolve()
+    const reclaimedSummary = await reclaimedRunPromise
+
+    expect(staleSummary.runId).toBe(reclaimedSummary.runId)
+    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.completedCases).toBe(15)
+    expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
+
+    const persistedRun = await db.query.benchmarkRuns.findFirst({
+      where: and(
+        eq(benchmarkRuns.seasonId, season.id),
+        eq(benchmarkRuns.scheduledFor, '2026-03-10'),
+      ),
+    })
+
+    expect(persistedRun?.status).toBe('completed')
+    expect(persistedRun?.qcStatus).toBe('passed')
   })
 
   it('should ignore terminal updates from a stale worker after reclaim finalizes the run', async () => {
