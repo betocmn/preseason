@@ -5,6 +5,21 @@
 This guide covers the benchmark automation flow that replaced the legacy
 exploration pipeline.
 
+Recommended repeatable smoke path:
+
+```bash
+pnpm run verify:background -- --label manual
+```
+
+That command:
+
+- Creates an isolated archived `verification-smoke-*` season in the real DB
+- Invokes the benchmark cron route and match execution route with live
+  OpenRouter calls
+- Injects an ephemeral `CRON_SECRET` in-process if `.env.local` does not define
+  one
+- Writes raw artifacts under `.context/background-smoke/`
+
 The local verification path is:
 
 1. Start the app and seeded database.
@@ -15,7 +30,9 @@ The local verification path is:
 ## Prerequisites
 
 - Local Supabase is running
-- `.env.local` includes `DATABASE_URL`, `OPENROUTER_API_KEY`, and `CRON_SECRET`
+- `.env.local` includes `DATABASE_URL` and `OPENROUTER_API_KEY`
+- `CRON_SECRET` is required for direct HTTP route testing, but the smoke harness
+  above injects an ephemeral value if it is missing
 - The seeded data contains at least one active benchmark season
 
 ## Start Local Services
