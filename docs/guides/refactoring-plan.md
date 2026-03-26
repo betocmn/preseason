@@ -493,7 +493,7 @@ Scope:
 - Update:
   - `README.md`
   - `docs/guides/recommendation-methodology.md`
-  - `docs/guides/how-automation-works.md`
+  - `docs/guides/how-cron-benchmarks-work.md`
   - `docs/guides/how-rankings-work.md`
   - the in-app methodology page
 

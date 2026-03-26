@@ -24,7 +24,8 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:background": "node --env-file=.env.local --import tsx scripts/verify-background-smoke.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

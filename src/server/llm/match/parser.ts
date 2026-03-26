@@ -1,6 +1,6 @@
 import { type MatchResponse, validateMatchResponse } from '~/server/llm/match/schema'
 
-export const MATCH_PARSER_VERSION = 'match-strict-v1'
+export const MATCH_PARSER_VERSION = 'match-repair-v2'
 
 const OPEN_TAG = '<preseason_match_json>'
 const CLOSE_TAG = '</preseason_match_json>'
@@ -8,6 +8,17 @@ const CLOSE_TAG = '</preseason_match_json>'
 export type MatchParseResult =
   | { status: 'ok'; response: MatchResponse; rawAppendix: string; naturalResponse: string }
   | { status: 'invalid_output'; reason: string }
+
+const KEY_ALIASES = new Map<string, string>([
+  ['schemaversion', 'schema_version'],
+  ['comparisonsummary', 'comparison_summary'],
+  ['toola', 'tool_a'],
+  ['toolb', 'tool_b'],
+  ['evidencesentence', 'evidence_sentence'],
+  ['evidencename', 'evidence_sentence'],
+  ['eevidencesentence', 'evidence_sentence'],
+  ['evidenceevidencesentence', 'evidence_sentence'],
+])
 
 function findFirstNonWhitespaceIndex(rawContent: string, start: number) {
   let index = start
@@ -96,21 +107,121 @@ function findAppendixTagBlock(rawContent: string) {
   return null
 }
 
+function stripMarkdownCodeFence(rawAppendix: string) {
+  const trimmed = rawAppendix.trim()
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/u)
+  return fencedMatch?.[1]?.trim() ?? trimmed
+}
+
+function findLastJsonCodeFence(rawContent: string) {
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/gu
+  let match = fencePattern.exec(rawContent)
+  let lastMatch: {
+    rawAppendix: string
+    naturalResponse: string
+  } | null = null
+
+  while (match) {
+    const rawAppendix = match[1]?.trim()
+    if (rawAppendix && (rawAppendix.startsWith('{') || rawAppendix.startsWith('['))) {
+      lastMatch = {
+        rawAppendix,
+        naturalResponse: rawContent.slice(0, match.index).trim(),
+      }
+    }
+    match = fencePattern.exec(rawContent)
+  }
+
+  return lastMatch
+}
+
+function repairMissingAnalysisArrayClosures(rawAppendix: string) {
+  return rawAppendix.replace(/(\})(\s*,\s*"cons"\s*:)/gu, '$1]$2')
+}
+
+function canonicalizeKey(key: string) {
+  const normalized = key.toLowerCase().replace(/[^a-z0-9]/gu, '')
+  return KEY_ALIASES.get(normalized) ?? key
+}
+
+function normalizeMatchPayload(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeMatchPayload(item))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  const entries = Object.entries(value)
+  const normalizedObject: Record<string, unknown> = {}
+
+  for (const [key, entryValue] of entries) {
+    const canonicalKey = canonicalizeKey(key)
+    if (!(canonicalKey in normalizedObject)) {
+      normalizedObject[canonicalKey] = normalizeMatchPayload(entryValue)
+      continue
+    }
+
+    if (key === canonicalKey) {
+      normalizedObject[canonicalKey] = normalizeMatchPayload(entryValue)
+    }
+  }
+
+  return normalizedObject
+}
+
+function parseAppendixJson(rawAppendix: string) {
+  const stripped = stripMarkdownCodeFence(rawAppendix)
+  const candidates = [stripped, repairMissingAnalysisArrayClosures(stripped)]
+
+  let lastError: unknown
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      const normalizedPayload = normalizeMatchPayload(parsed)
+      const normalizedPayloadJson = JSON.stringify(normalizedPayload)
+      return {
+        parsed: normalizedPayload,
+        normalizedAppendix:
+          candidate === rawAppendix && JSON.stringify(parsed) === normalizedPayloadJson
+            ? rawAppendix
+            : normalizedPayloadJson,
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError
+}
+
 export function parseMatchResponse(rawContent: string): MatchParseResult {
   const tagBlock = findAppendixTagBlock(rawContent)
   const openIdx = tagBlock?.openIdx ?? -1
   const closeIdx = tagBlock?.closeIdx ?? -1
 
-  if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
+  const extractedAppendix =
+    openIdx !== -1 && closeIdx !== -1 && closeIdx > openIdx
+      ? {
+          rawAppendix: rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim(),
+          naturalResponse: rawContent.slice(0, openIdx).trim(),
+        }
+      : findLastJsonCodeFence(rawContent)
+
+  if (!extractedAppendix) {
     return { status: 'invalid_output', reason: 'Missing <preseason_match_json> tags' }
   }
 
-  const rawAppendix = rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim()
-  const naturalResponse = rawContent.slice(0, openIdx).trim()
+  const { rawAppendix, naturalResponse } = extractedAppendix
 
   let parsed: unknown
+  let normalizedAppendix = rawAppendix
   try {
-    parsed = JSON.parse(rawAppendix)
+    const parsedResult = parseAppendixJson(rawAppendix)
+    parsed = parsedResult.parsed
+    normalizedAppendix = parsedResult.normalizedAppendix
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error'
     return { status: 'invalid_output', reason: `Malformed JSON: ${message}` }
@@ -121,5 +232,10 @@ export function parseMatchResponse(rawContent: string): MatchParseResult {
     return { status: 'invalid_output', reason: validation.error }
   }
 
-  return { status: 'ok', response: validation.data, rawAppendix, naturalResponse }
+  return {
+    status: 'ok',
+    response: validation.data,
+    rawAppendix: normalizedAppendix,
+    naturalResponse,
+  }
 }

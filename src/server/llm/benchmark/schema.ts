@@ -6,7 +6,13 @@ const benchmarkCategoryDecisionSchema = z
     decision: z.enum(['tool', 'none']),
     tool: z.string().min(1).optional().nullable(),
     reasoning: z.string().min(1),
-    confidence: z.number().min(0).max(1),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .nullable()
+      .optional()
+      .transform((value) => value ?? null),
   })
   .refine(
     (d) => {

@@ -943,7 +943,7 @@ Label exploration vs benchmark clearly.
 - Document prompt-tier and model-tier filters
 - Explain why overall ranking is exploratory
 
-#### `docs/guides/how-automation-works.md`
+#### `docs/guides/how-cron-benchmarks-work.md`
 - Add benchmark runner section
 - Document idempotent run semantics
 - Document QC thresholds

@@ -1,21 +1,42 @@
-# How to Manually Test Automation Locally
+# How to Manually Test Cron Benchmarks Locally
 
 ## Overview
 
-This guide covers the benchmark automation flow that replaced the legacy
+This guide covers the cron benchmark flow that replaced the legacy
 exploration pipeline.
+
+Recommended repeatable smoke path:
+
+```bash
+pnpm run verify:background -- --label manual
+```
+
+That command:
+
+- Creates an isolated archived `verification-smoke-*` season in the real DB
+- Invokes the benchmark cron route and match cron dispatcher route with live
+  OpenRouter calls
+- Injects an ephemeral `CRON_SECRET` in-process if `.env.local` does not define
+  one
+- Writes raw artifacts under `.context/background-smoke/`
+- Closes its imported DB connections before exit, so the command returns
+  cleanly after writing the artifact
 
 The local verification path is:
 
 1. Start the app and seeded database.
 2. Trigger `/api/cron/benchmark-run`.
-3. Inspect benchmark run, case result, and case decision data.
-4. Review QC and, if needed, publish from the admin UI.
+3. Create a match batch and trigger `/api/cron/match-run`, or let the smoke
+   harness do that for an isolated smoke season automatically.
+4. Inspect benchmark run, case result, match batch, and match evaluation data.
+5. Review QC and, if needed, publish from the admin UI.
 
 ## Prerequisites
 
 - Local Supabase is running
-- `.env.local` includes `DATABASE_URL`, `OPENROUTER_API_KEY`, and `CRON_SECRET`
+- `.env.local` includes `DATABASE_URL` and `OPENROUTER_API_KEY`
+- `CRON_SECRET` is required for direct HTTP route testing, but the smoke harness
+  above injects an ephemeral value if it is missing
 - The seeded data contains at least one active benchmark season
 
 ## Start Local Services
