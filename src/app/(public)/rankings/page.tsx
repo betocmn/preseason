@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
+import { normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -26,24 +27,30 @@ type Props = {
     sub?: string
     promptLevel?: string
     modelTier?: string
+    modelSnapshotId?: string
   }>
 }
 
 export default async function RankingsPage({ searchParams }: Props) {
-  const { category, sub, promptLevel, modelTier } = await searchParams
+  const { category, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
   const caller = await api()
-  const categoryGroups = await caller.category.listGroups()
+  const [categoryGroups, modelFiltersData] = await Promise.all([
+    caller.category.listGroups(),
+    caller.benchmarkRanking.listModelFilters({}),
+  ])
 
   const groups = categoryGroups.map((g) => ({
     slug: g.slug,
     name: g.name,
     subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
   }))
+  const modelFilters = modelFiltersData.companies
 
   const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
     (t) => t === promptLevel,
   )
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
+  const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
   const showIndex = !category && !sub
   const indexGroups = showIndex
     ? await Promise.all(
@@ -52,6 +59,7 @@ export default async function RankingsPage({ searchParams }: Props) {
             groupSlug: group.slug,
             promptLevel: validPromptLevel,
             modelTier: validModelTier,
+            modelSnapshotId: validModelSnapshotId,
           })
 
           return {
@@ -84,10 +92,12 @@ export default async function RankingsPage({ searchParams }: Props) {
       <Suspense fallback={null}>
         <BenchmarkRankingFilters
           groups={groups}
+          modelFilters={modelFilters}
           currentGroup={category}
           currentSub={sub}
           currentPromptLevel={validPromptLevel}
           currentModelTier={validModelTier}
+          currentModelSnapshotId={validModelSnapshotId}
         />
       </Suspense>
 
@@ -100,6 +110,7 @@ export default async function RankingsPage({ searchParams }: Props) {
             currentSub={sub}
             promptLevel={validPromptLevel}
             modelTier={validModelTier}
+            modelSnapshotId={validModelSnapshotId}
           />
         )}
       </div>
