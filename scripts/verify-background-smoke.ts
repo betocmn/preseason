@@ -326,16 +326,13 @@ async function invokeBenchmarkRoute(cronSecret: string) {
   }
 }
 
-async function invokeMatchRoute(cronSecret: string, batchId: string) {
-  const { POST } = await import('../src/app/api/match-run/route')
-  const response = await POST(
-    new Request('http://localhost/api/match-run', {
-      method: 'POST',
+async function invokeMatchRoute(cronSecret: string, seasonId: string) {
+  const { GET } = await import('../src/app/api/cron/match-run/route')
+  const response = await GET(
+    new Request(`http://localhost/api/cron/match-run?seasonId=${seasonId}`, {
       headers: {
         authorization: `Bearer ${cronSecret}`,
-        'content-type': 'application/json',
       },
-      body: JSON.stringify({ batchId }),
     }),
   )
   return {
@@ -514,7 +511,7 @@ async function main() {
       triggeredBy: null,
     })
 
-    const matchRoute = await invokeMatchRoute(cronSecret, batch.id)
+    const matchRoute = await invokeMatchRoute(cronSecret, smokeSeason.id)
     const matchArtifacts = await collectMatchArtifacts(batch.id)
     artifact.match = {
       routeStatus: matchRoute.status,
