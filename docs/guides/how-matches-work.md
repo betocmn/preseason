@@ -188,12 +188,12 @@ If the season has 8 model snapshots, the batch creates 16 evaluations
 
 ### 2. Batch Claiming (Cron Trigger)
 
-A cron job calls `POST /api/match-run` to execute a pending batch:
+A cron job calls `GET /api/cron/match-run` to discover and execute the next
+pending batch:
 
 ```
-POST /api/match-run
+GET /api/cron/match-run
   Authorization: Bearer <CRON_SECRET>
-  Body: { "batchId": "uuid" }
 ```
 
 The claim mechanism provides concurrency safety:
@@ -243,18 +243,15 @@ After processing all evaluations:
 
 ## Cron Setup
 
-The match execution endpoint is designed to be called by an external cron
-scheduler (e.g., Vercel Cron, GitHub Actions, or a manual trigger):
+The match dispatcher route is designed to be called by repo-managed cron:
 
 ```bash
-# Execute a specific batch
-curl -X POST https://your-app.com/api/match-run \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"batchId": "550e8400-e29b-41d4-a716-446655440000"}'
+# Dispatch the next batch
+curl https://your-app.com/api/cron/match-run \
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-**Authentication**: The endpoint uses Bearer token auth against the
+**Authentication**: The route uses Bearer token auth against the
 `CRON_SECRET` environment variable. This is intentionally separate from
 Supabase session auth — cron jobs don't have user sessions.
 
@@ -278,10 +275,13 @@ Supabase session auth — cron jobs don't have user sessions.
 
 1. Admin creates batches via the tRPC API (or they are auto-triggered by
    benchmark runs)
-2. A scheduled job queries for pending batches and calls `/api/match-run`
-   for each one
-3. If a batch fails or a worker crashes, the next cron invocation reclaims
+2. Vercel Cron calls `/api/cron/match-run`
+3. The route claims the next pending or retryable batch itself
+4. If a batch fails or a worker crashes, the next cron invocation reclaims
    the stale batch and retries
+
+`POST /api/match-run` still exists for direct execution of a known `batchId`,
+but the deployed cron path is now `GET /api/cron/match-run`.
 
 ## Admin tRPC API
 
