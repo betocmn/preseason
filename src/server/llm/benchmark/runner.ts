@@ -1,5 +1,7 @@
-import { and, count, countDistinct, eq, inArray, isNull } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
+import { and, count, countDistinct, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { serverSettings } from '~/constants/server-settings'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
 import {
@@ -30,6 +32,7 @@ export type BenchmarkRunOptions = {
   now?: () => Date
   runStaleAfterMs?: number
   runHeartbeatIntervalMs?: number
+  maxCases?: number
 }
 
 export type BenchmarkRunSummaryStatus = 'completed' | 'failed' | 'qc_failed' | 'running'
@@ -37,26 +40,38 @@ export type BenchmarkRunSummaryStatus = 'completed' | 'failed' | 'qc_failed' | '
 export type BenchmarkRunSummary = {
   runId: string
   seasonId: string
+  scheduledFor: string
   status: BenchmarkRunSummaryStatus
   totalCases: number
   completedCases: number
   failedCases: number
   invalidOutputCases: number
   unresolvedToolCount: number
+  processedThisInvocation: number
+  remainingCases: number
+  hasRemainingWork: boolean
   qc: QcCheckResult
   errors: string[]
 }
 
 type BenchmarkRunRecord = Awaited<ReturnType<typeof createOrLoadRun>>
-type RunMetrics = Omit<BenchmarkRunSummary, 'runId' | 'seasonId' | 'status' | 'errors'>
+type RunMetrics = {
+  totalCases: number
+  completedCases: number
+  failedCases: number
+  invalidOutputCases: number
+  unresolvedToolCount: number
+  qc: QcCheckResult
+}
 // Resumable runs stash their frozen case ids here until a terminal QC payload replaces it.
 type RunCaseSnapshot = {
   snapshotCaseIds: string[]
   lastHeartbeatAt?: string
+  executionToken?: string
 }
 
-const RUN_STALE_AFTER_MS = 30 * 60 * 1000
-const RUN_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
+const RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
+const RUN_HEARTBEAT_INTERVAL_MS = serverSettings.benchmark.heartbeatIntervalMs
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
@@ -66,6 +81,23 @@ function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): Benchmark
   if (status === 'published') return 'completed'
   if (status === 'pending') return 'running'
   return status
+}
+
+function normalizeMaxCases(maxCases: number | undefined): number | null {
+  if (maxCases == null) {
+    return null
+  }
+
+  if (!Number.isInteger(maxCases) || maxCases <= 0) {
+    throw new Error('maxCases must be a positive integer')
+  }
+
+  return maxCases
+}
+
+function calculateRemainingCases(metrics: RunMetrics): number {
+  const processed = metrics.completedCases + metrics.failedCases + metrics.invalidOutputCases
+  return Math.max(metrics.totalCases - processed, 0)
 }
 
 function isRunStale(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
@@ -191,15 +223,21 @@ async function buildRunSummary(
   database: DatabaseClient,
   run: BenchmarkRunRecord,
   seasonId: string,
+  processedThisInvocation = 0,
 ): Promise<BenchmarkRunSummary> {
   const totalCases = await getRunTotalCases(database, seasonId, run.expectedCaseCount ?? null)
   const metrics = await calculateRunMetrics(database, run.id, totalCases)
+  const remainingCases = calculateRemainingCases(metrics)
 
   return {
     runId: run.id,
     seasonId,
+    scheduledFor: run.scheduledFor,
     status: normalizeSummaryStatus(run.status),
     ...metrics,
+    processedThisInvocation,
+    remainingCases,
+    hasRemainingWork: remainingCases > 0,
     errors: run.errorLog ? run.errorLog.split('\n').filter((line) => line.length > 0) : [],
   }
 }
@@ -239,13 +277,17 @@ async function claimRunExecution(
     }
 
     const claimedHeartbeatAt = currentTime.toISOString()
+    const executionToken = randomUUID()
     const [claimedRun] = await database
       .update(benchmarkRuns)
       .set({
         status: 'running',
         startedAt: currentTime,
         completedAt: null,
-        qcSummaryJson: buildRunCaseSummaryPatch(run, { lastHeartbeatAt: claimedHeartbeatAt }),
+        qcSummaryJson: buildRunCaseSummaryPatch(run, {
+          executionToken,
+          lastHeartbeatAt: claimedHeartbeatAt,
+        }),
       })
       .where(whereClause)
       .returning()
@@ -289,6 +331,16 @@ function getRunHeartbeatAt(run: BenchmarkRunRecord): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+function getRunExecutionToken(run: Pick<BenchmarkRunRecord, 'qcSummaryJson'>): string | null {
+  const qcSummary = run.qcSummaryJson
+  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
+    return null
+  }
+
+  const executionToken = (qcSummary as { executionToken?: unknown }).executionToken
+  return typeof executionToken === 'string' && executionToken.length > 0 ? executionToken : null
+}
+
 function getRunHeartbeatClaimClause(run: BenchmarkRunRecord) {
   if (
     run.qcSummaryJson &&
@@ -307,11 +359,18 @@ function getRunStartedAtClaimClause(run: Pick<BenchmarkRunRecord, 'startedAt'>) 
     : isNull(benchmarkRuns.startedAt)
 }
 
-function getRunExecutionOwnershipClause(run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>) {
+function getRunExecutionOwnershipClause(
+  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
+) {
+  const executionToken = getRunExecutionToken(run)
+
   return and(
     eq(benchmarkRuns.id, run.id),
     eq(benchmarkRuns.status, 'running'),
     getRunStartedAtClaimClause(run),
+    executionToken
+      ? sql`${benchmarkRuns.qcSummaryJson} ->> 'executionToken' = ${executionToken}`
+      : undefined,
   )
 }
 
@@ -324,7 +383,7 @@ class OwnershipLostError extends Error {
 
 async function verifyRunOwnershipForUpdate(
   tx: DatabaseClient,
-  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>,
+  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
 ): Promise<void> {
   const [owned] = await tx
     .select({ id: benchmarkRuns.id })
@@ -336,7 +395,7 @@ async function verifyRunOwnershipForUpdate(
 
 async function getRunSummaryIfOwnershipLost(
   database: DatabaseClient,
-  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt'>,
+  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
   seasonId: string,
 ): Promise<BenchmarkRunSummary | null> {
   const ownedRun = await database.query.benchmarkRuns.findFirst({
@@ -362,6 +421,10 @@ function buildRunCaseSummaryPatch(
   return { ...(base as Record<string, unknown>), ...update }
 }
 
+function buildRunCaseSummaryMergeSql(update: Partial<RunCaseSnapshot>) {
+  return sql`coalesce(${benchmarkRuns.qcSummaryJson}, '{}'::jsonb) || ${JSON.stringify(update)}::jsonb`
+}
+
 async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, seasonId: string) {
   const caseIds =
     getRunCaseSnapshot(run)?.snapshotCaseIds ??
@@ -374,27 +437,36 @@ async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, s
     ).map((row) => row.id)
 
   if (getRunCaseSnapshot(run) == null) {
-    const latestRun = await database.query.benchmarkRuns.findFirst({
-      where: eq(benchmarkRuns.id, run.id),
-    })
-
-    if (!latestRun) throw new Error('Benchmark run not found')
-
-    const nextQcSummary = buildRunCaseSummaryPatch(latestRun, { snapshotCaseIds: caseIds })
-
-    await database
+    const [ownedRun] = await database
       .update(benchmarkRuns)
       .set({
-        qcSummaryJson: nextQcSummary,
+        qcSummaryJson: buildRunCaseSummaryMergeSql({ snapshotCaseIds: caseIds }),
         expectedCaseCount: caseIds.length,
       })
-      .where(eq(benchmarkRuns.id, run.id))
-    run.qcSummaryJson = nextQcSummary
+      .where(getRunExecutionOwnershipClause(run))
+      .returning({
+        expectedCaseCount: benchmarkRuns.expectedCaseCount,
+        qcSummaryJson: benchmarkRuns.qcSummaryJson,
+      })
+
+    if (!ownedRun) {
+      throw new OwnershipLostError()
+    }
+
+    run.expectedCaseCount = ownedRun.expectedCaseCount
+    run.qcSummaryJson = ownedRun.qcSummaryJson
   } else if (run.expectedCaseCount == null) {
-    await database
+    const [ownedRun] = await database
       .update(benchmarkRuns)
       .set({ expectedCaseCount: caseIds.length })
-      .where(eq(benchmarkRuns.id, run.id))
+      .where(getRunExecutionOwnershipClause(run))
+      .returning({ expectedCaseCount: benchmarkRuns.expectedCaseCount })
+
+    if (!ownedRun) {
+      throw new OwnershipLostError()
+    }
+
+    run.expectedCaseCount = ownedRun.expectedCaseCount
   }
 
   if (caseIds.length === 0) {
@@ -494,6 +566,7 @@ export async function runBenchmark(
   const now = options.now ?? (() => new Date())
   const runStaleAfterMs = options.runStaleAfterMs ?? RUN_STALE_AFTER_MS
   const runHeartbeatIntervalMs = options.runHeartbeatIntervalMs ?? RUN_HEARTBEAT_INTERVAL_MS
+  const maxCases = normalizeMaxCases(options.maxCases)
 
   const initialRun = await createOrLoadRun(database, seasonId, scheduledFor)
   const currentTime = now()
@@ -509,7 +582,15 @@ export async function runBenchmark(
   }
 
   try {
-    return await executeRun(database, llmService, now, runHeartbeatIntervalMs, run, seasonId)
+    return await executeRun(
+      database,
+      llmService,
+      now,
+      runHeartbeatIntervalMs,
+      run,
+      seasonId,
+      maxCases,
+    )
   } catch (error) {
     const message = getErrorMessage(error)
     await database
@@ -531,6 +612,7 @@ async function executeRun(
   runHeartbeatIntervalMs: number,
   run: BenchmarkRunRecord,
   seasonId: string,
+  maxCases: number | null,
 ): Promise<BenchmarkRunSummary> {
   const heartbeat = startRunHeartbeat(database, run, now, runHeartbeatIntervalMs)
 
@@ -546,7 +628,16 @@ async function executeRun(
         .where(eq(benchmarkRuns.id, run.id))
     }
 
-    const allCases = await loadRunCases(database, run, seasonId)
+    let allCases: Awaited<ReturnType<typeof loadRunCases>>
+    try {
+      allCases = await loadRunCases(database, run, seasonId)
+    } catch (error) {
+      if (error instanceof OwnershipLostError) {
+        const latestRun = await findRunById(database, run.id)
+        return await buildRunSummary(database, latestRun, seasonId)
+      }
+      throw error
+    }
 
     if (allCases.length === 0) {
       const qc = evaluateQc({
@@ -581,12 +672,16 @@ async function executeRun(
       return {
         runId: run.id,
         seasonId,
+        scheduledFor: run.scheduledFor,
         status: 'qc_failed',
         totalCases: 0,
         completedCases: 0,
         failedCases: 0,
         invalidOutputCases: 0,
         unresolvedToolCount: 0,
+        processedThisInvocation: 0,
+        remainingCases: 0,
+        hasRemainingWork: false,
         qc,
         errors: [],
       }
@@ -609,25 +704,49 @@ async function executeRun(
     const retryableCaseIds = existingResults
       .filter((r) => r.status === 'failed' || r.status === 'invalid_output')
       .map((r) => r.caseId)
+    const retryableCaseIdSet = new Set(retryableCaseIds)
+    const untouchedCases = allCases.filter(
+      (benchmarkCase) =>
+        !completedCaseIds.has(benchmarkCase.id) && !retryableCaseIdSet.has(benchmarkCase.id),
+    )
+    const retryableCases = allCases.filter((benchmarkCase) =>
+      retryableCaseIdSet.has(benchmarkCase.id),
+    )
+    const pendingCases = [...untouchedCases, ...retryableCases]
+    const casesToProcess = maxCases == null ? pendingCases : pendingCases.slice(0, maxCases)
 
-    if (retryableCaseIds.length > 0) {
-      await database
-        .delete(benchmarkCaseResults)
-        .where(
-          and(
-            eq(benchmarkCaseResults.runId, run.id),
-            inArray(benchmarkCaseResults.caseId, retryableCaseIds),
-          ),
-        )
+    const retryableCaseIdsToRetry = casesToProcess
+      .filter((benchmarkCase) => retryableCaseIdSet.has(benchmarkCase.id))
+      .map((benchmarkCase) => benchmarkCase.id)
+
+    if (retryableCaseIdsToRetry.length > 0) {
+      try {
+        await database.transaction(async (tx) => {
+          await verifyRunOwnershipForUpdate(tx, run)
+          await tx
+            .delete(benchmarkCaseResults)
+            .where(
+              and(
+                eq(benchmarkCaseResults.runId, run.id),
+                inArray(benchmarkCaseResults.caseId, retryableCaseIdsToRetry),
+              ),
+            )
+        })
+      } catch (error) {
+        if (error instanceof OwnershipLostError) {
+          const latestRun = await findRunById(database, run.id)
+          return await buildRunSummary(database, latestRun, seasonId)
+        }
+        throw error
+      }
     }
-
-    const pendingCases = allCases.filter((c) => !completedCaseIds.has(c.id))
 
     const toolIndex = await buildToolResolutionIndex(database)
 
     const errors: string[] = []
+    let processedThisInvocation = 0
 
-    for (const benchmarkCase of pendingCases) {
+    for (const benchmarkCase of casesToProcess) {
       const summaryIfOwnershipLostBeforeCase = await getRunSummaryIfOwnershipLost(
         database,
         run,
@@ -700,6 +819,7 @@ async function executeRun(
           })
 
           if (!result) continue
+          processedThisInvocation += 1
           errors.push(
             `[case ${benchmarkCase.id}] Model drift: ${drift.requestedModel} → ${drift.returnedModel}`,
           )
@@ -793,6 +913,7 @@ async function executeRun(
           })
 
           if (!caseResult) continue
+          processedThisInvocation += 1
         } else {
           const caseResult = await database.transaction(async (tx) => {
             await verifyRunOwnershipForUpdate(tx, run)
@@ -828,6 +949,7 @@ async function executeRun(
           })
 
           if (!caseResult) continue
+          processedThisInvocation += 1
           errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
         }
       } catch (error) {
@@ -842,7 +964,7 @@ async function executeRun(
         try {
           await database.transaction(async (tx) => {
             await verifyRunOwnershipForUpdate(tx, run)
-            await tx
+            const [inserted] = await tx
               .insert(benchmarkCaseResults)
               .values({
                 seasonId,
@@ -853,6 +975,11 @@ async function executeRun(
                 parserVersion: PARSER_VERSION,
               })
               .onConflictDoNothing()
+              .returning({ id: benchmarkCaseResults.id })
+
+            if (inserted) {
+              processedThisInvocation += 1
+            }
           })
         } catch (writeError) {
           if (writeError instanceof OwnershipLostError) {
@@ -865,6 +992,40 @@ async function executeRun(
     }
 
     const metrics = await calculateRunMetrics(database, run.id, allCases.length)
+    const remainingCases = calculateRemainingCases(metrics)
+
+    if (remainingCases > 0) {
+      const [resumedRun] = await database
+        .update(benchmarkRuns)
+        .set({
+          status: 'pending',
+          completedAt: null,
+          completedCaseCount: metrics.completedCases,
+          failedCaseCount: metrics.failedCases,
+          qcStatus: null,
+          errorLog: errors.length > 0 ? errors.join('\n') : null,
+        })
+        .where(getRunExecutionOwnershipClause(run))
+        .returning({ id: benchmarkRuns.id })
+
+      if (!resumedRun) {
+        const latestRun = await findRunById(database, run.id)
+        return await buildRunSummary(database, latestRun, seasonId)
+      }
+
+      return {
+        runId: run.id,
+        seasonId,
+        scheduledFor: run.scheduledFor,
+        status: 'running',
+        ...metrics,
+        processedThisInvocation,
+        remainingCases,
+        hasRemainingWork: true,
+        errors,
+      }
+    }
+
     const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
 
     const [finalizedRun] = await database
@@ -889,8 +1050,12 @@ async function executeRun(
     return {
       runId: run.id,
       seasonId,
+      scheduledFor: run.scheduledFor,
       status: finalStatus,
       ...metrics,
+      processedThisInvocation,
+      remainingCases: 0,
+      hasRemainingWork: false,
       errors,
     }
   } finally {

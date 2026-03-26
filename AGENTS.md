@@ -25,6 +25,11 @@ Preseason — Tracks what tools LLMs recommend for vibe-coding prompts. See `CLA
 - English only — no i18n, plain strings in components
 - **Never** add AI attribution (e.g. `Co-Authored-By`) to git commit messages
 
+### Constants
+
+- Global non-frontend constants live in `src/constants/server-settings.ts`
+- Any non-frontend constant should be defined there (not inline in modules)
+
 ## Quick Reference
 
 | Task | Command |
