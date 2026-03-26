@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverSettings } from '~/constants/server-settings'
 import { env } from '~/env'
 import { resolveBenchmarkCronRunTarget } from '~/server/api/helpers/benchmark'
 import { db } from '~/server/db'
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
     const summary = await runBenchmark(runTarget.seasonId, runTarget.scheduledFor, {
       database: db,
-      maxCases: env.BENCHMARK_CASES_PER_CRON,
+      maxCases: serverSettings.benchmark.casesPerCronInvocation,
     })
 
     return NextResponse.json({ ok: true, summary })

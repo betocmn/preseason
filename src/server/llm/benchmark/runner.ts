@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, count, countDistinct, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { serverSettings } from '~/constants/server-settings'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
 import {
@@ -69,8 +70,8 @@ type RunCaseSnapshot = {
   executionToken?: string
 }
 
-const RUN_STALE_AFTER_MS = 15 * 60 * 1000
-const RUN_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
+const RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
+const RUN_HEARTBEAT_INTERVAL_MS = serverSettings.benchmark.heartbeatIntervalMs
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'

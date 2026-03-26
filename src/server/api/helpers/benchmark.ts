@@ -1,12 +1,13 @@
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import type { db } from '~/server/db'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 
 type DatabaseClient = typeof db
 type BenchmarkRunStatus = typeof benchmarkRuns.$inferSelect.status
 
-const BENCHMARK_RUN_STALE_AFTER_MS = 15 * 60 * 1000
+const BENCHMARK_RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
 const UNFINISHED_BENCHMARK_RUN_STATUSES: BenchmarkRunStatus[] = ['pending', 'failed', 'running']
 
 export const anchorDateSchema = z

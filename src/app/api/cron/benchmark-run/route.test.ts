@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const envMock = vi.hoisted(
   (): {
     CRON_SECRET: string | undefined
-    BENCHMARK_CASES_PER_CRON: number
   } => ({
     CRON_SECRET: 'test-secret',
-    BENCHMARK_CASES_PER_CRON: 8,
   }),
 )
+const serverSettingsMock = vi.hoisted(() => ({
+  benchmark: { casesPerCronInvocation: 8 },
+}))
 const dbMock = vi.hoisted(() => ({ __db: true }))
 const resolveBenchmarkCronRunTargetMock = vi.hoisted(() => vi.fn())
 const runBenchmarkMock = vi.hoisted(() => vi.fn())
@@ -19,6 +20,10 @@ vi.mock('~/env', () => ({
 
 vi.mock('~/server/db', () => ({
   db: dbMock,
+}))
+
+vi.mock('~/constants/server-settings', () => ({
+  serverSettings: serverSettingsMock,
 }))
 
 vi.mock('~/server/api/helpers/benchmark', () => ({
@@ -47,7 +52,7 @@ describe('GET /api/cron/benchmark-run', () => {
     resolveBenchmarkCronRunTargetMock.mockReset()
     runBenchmarkMock.mockReset()
     envMock.CRON_SECRET = 'test-secret'
-    envMock.BENCHMARK_CASES_PER_CRON = 8
+    serverSettingsMock.benchmark.casesPerCronInvocation = 8
   })
 
   it('returns 500 when CRON_SECRET is not configured', async () => {
@@ -90,7 +95,7 @@ describe('GET /api/cron/benchmark-run', () => {
       source: 'unfinished',
       runId: 'run-1',
     })
-    envMock.BENCHMARK_CASES_PER_CRON = 6
+    serverSettingsMock.benchmark.casesPerCronInvocation = 6
     runBenchmarkMock.mockResolvedValue({
       runId: 'run-1',
       seasonId: 'season-1',

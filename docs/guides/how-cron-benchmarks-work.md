@@ -63,8 +63,8 @@ src/server/llm/match/parser.ts
    `(season, date)` pair.
 5. The runner claims execution, or resumes/returns an in-flight run safely.
 6. Active benchmark cases are loaded from the frozen season panel.
-7. A single invocation processes only `BENCHMARK_CASES_PER_CRON` cases
-   (default `8`) and then yields.
+7. A single invocation processes only `serverSettings.benchmark.casesPerCronInvocation`
+   cases (default `8`) from `src/constants/server-settings.ts` and then yields.
 8. Each case builds a benchmark prompt from the frozen prompt version and its
    eligible categories.
 9. The LLM service executes the case and stores a `benchmark_case_result`.
@@ -139,7 +139,6 @@ admin action after QC review.
 - `DATABASE_URL`
 - `OPENROUTER_API_KEY`
 - `CRON_SECRET`
-- `BENCHMARK_CASES_PER_CRON` (default `8`)
 
 ## Related Docs
 
