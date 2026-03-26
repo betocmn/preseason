@@ -21,7 +21,8 @@ pnpm run dev          # Start Next.js dev server with Turbo
 ```bash
 pnpm run db:generate  # Generate migration from schema changes
 pnpm run db:migrate   # Apply pending migrations
-pnpm run db:seed      # Seed auth users and user profiles
+pnpm run db:seed      # Seed reference data (categories, tools, LLMs, prompts)
+pnpm run db:seed-dev  # Seed synthetic benchmark + critic data (dev only)
 pnpm run db:studio    # Open Drizzle Studio
 ```
 
@@ -32,7 +33,8 @@ pnpm run db:studio    # Open Drizzle Studio
 ```bash
 supabase db reset     # Reset Supabase database
 pnpm run db:migrate   # Apply Drizzle migrations
-pnpm run db:seed      # Seed auth users and user profiles
+pnpm run db:seed      # Seed reference data (prod-safe)
+pnpm run db:seed-dev  # Seed synthetic benchmark + critic data (dev only)
 ```
 
 ### Testing
