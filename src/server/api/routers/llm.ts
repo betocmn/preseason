@@ -3,7 +3,7 @@ import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
-import { llms } from '~/server/db/schema'
+import { benchmarkModelSnapshots, llms } from '~/server/db/schema'
 import { CATALOG_PROVIDER_IDS } from '~/server/llm/catalog'
 
 const providerSchema = z.enum(CATALOG_PROVIDER_IDS)
@@ -50,9 +50,30 @@ const updateLlmInput = z
 export const llmRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
     await requireRole(ctx.db, ctx.user.id, ['admin'])
-    return ctx.db.query.llms.findMany({
-      orderBy: [asc(llms.name)],
-    })
+    const items = await ctx.db
+      .select({
+        id: llms.id,
+        name: llms.name,
+        slug: llms.slug,
+        provider: llms.provider,
+        company: llms.company,
+        modelFamily: llms.modelFamily,
+        modelVersion: llms.modelVersion,
+        modelId: llms.modelId,
+        isActive: llms.isActive,
+      })
+      .from(llms)
+      .orderBy(asc(llms.name))
+
+    const usedLlms = await ctx.db
+      .selectDistinct({ llmId: benchmarkModelSnapshots.llmId })
+      .from(benchmarkModelSnapshots)
+    const usedLlmIds = new Set(usedLlms.map((row) => row.llmId))
+
+    return items.map((item) => ({
+      ...item,
+      isUsed: usedLlmIds.has(item.id),
+    }))
   }),
 
   getById: protectedProcedure
@@ -117,6 +138,17 @@ export const llmRouter = createTRPCRouter({
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const existingSnapshot = await ctx.db.query.benchmarkModelSnapshots.findFirst({
+        where: eq(benchmarkModelSnapshots.llmId, input.id),
+        columns: { id: true },
+      })
+      if (existingSnapshot) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'LLMs that have already been used in benchmark seasons cannot be deleted',
+        })
+      }
 
       const deleted = await ctx.db.delete(llms).where(eq(llms.id, input.id)).returning()
       if (!deleted[0]) {
