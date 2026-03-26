@@ -62,6 +62,28 @@ describe('promptRouter', () => {
     expect(prompt.content).toBeNull()
   })
 
+  it('returns stored prompt content when contentMd exists', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    await adminCaller.prompt.create({
+      title: 'Stored Prompt',
+      slug: 'stored-prompt',
+      level: 'beginner',
+      description: 'test',
+      contentMd: '# Build a SaaS app',
+      isActive: true,
+    })
+
+    const caller = createTestCaller(null)
+    const prompt = await caller.prompt.getBySlug({
+      slug: 'stored-prompt',
+      level: 'beginner',
+    })
+
+    expect(prompt.content).toBe('# Build a SaaS app')
+  })
+
   it('lists prompt variants by slug across levels', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
@@ -95,15 +117,18 @@ describe('promptRouter', () => {
       slug: 'saas-application',
       level: 'beginner',
       description: 'original',
+      contentMd: '# Original prompt',
       isActive: true,
     })
 
     const updated = await caller.prompt.update({
       id: created?.id ?? '',
       description: 'updated description',
+      contentMd: '# Updated prompt',
       expectedCategories: ['auth', 'payments'],
     })
     expect(updated.description).toBe('updated description')
+    expect(updated.contentMd).toBe('# Updated prompt')
     expect(updated.expectedCategories).toEqual(['auth', 'payments'])
 
     const toggled = await caller.prompt.toggleActive({
