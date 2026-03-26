@@ -695,7 +695,7 @@ describe('runBenchmark', () => {
     const reclaimedRun = await db.query.benchmarkRuns.findFirst({
       where: eq(benchmarkRuns.id, run.id),
     })
-    expect(reclaimedRun?.startedAt?.toISOString()).toBe(staleHeartbeatAt.toISOString())
+    expect(reclaimedRun?.startedAt?.toISOString()).toBe(reclaimTime.toISOString())
     expect(reclaimedRun?.qcSummaryJson).toEqual(
       expect.objectContaining({
         snapshotCaseIds: caseIds,

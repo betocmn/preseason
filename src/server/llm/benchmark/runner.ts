@@ -282,7 +282,7 @@ async function claimRunExecution(
       .update(benchmarkRuns)
       .set({
         status: 'running',
-        startedAt: run.startedAt ?? currentTime,
+        startedAt: currentTime,
         completedAt: null,
         qcSummaryJson: buildRunCaseSummaryPatch(run, {
           executionToken,
@@ -720,14 +720,25 @@ async function executeRun(
       .map((benchmarkCase) => benchmarkCase.id)
 
     if (retryableCaseIdsToRetry.length > 0) {
-      await database
-        .delete(benchmarkCaseResults)
-        .where(
-          and(
-            eq(benchmarkCaseResults.runId, run.id),
-            inArray(benchmarkCaseResults.caseId, retryableCaseIdsToRetry),
-          ),
-        )
+      try {
+        await database.transaction(async (tx) => {
+          await verifyRunOwnershipForUpdate(tx, run)
+          await tx
+            .delete(benchmarkCaseResults)
+            .where(
+              and(
+                eq(benchmarkCaseResults.runId, run.id),
+                inArray(benchmarkCaseResults.caseId, retryableCaseIdsToRetry),
+              ),
+            )
+        })
+      } catch (error) {
+        if (error instanceof OwnershipLostError) {
+          const latestRun = await findRunById(database, run.id)
+          return await buildRunSummary(database, latestRun, seasonId)
+        }
+        throw error
+      }
     }
 
     const toolIndex = await buildToolResolutionIndex(database)
