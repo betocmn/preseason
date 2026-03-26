@@ -1,6 +1,6 @@
 import { type BenchmarkAppendix, validateBenchmarkAppendix } from '~/server/llm/benchmark/schema'
 
-export const PARSER_VERSION = 'strict-v1'
+export const PARSER_VERSION = 'strict-v2'
 
 const OPEN_TAG = '<preseason_benchmark_json>'
 const CLOSE_TAG = '</preseason_benchmark_json>'

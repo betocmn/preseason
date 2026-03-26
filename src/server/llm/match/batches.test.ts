@@ -17,7 +17,7 @@ import {
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { seedUser } from '~/test/trpc'
-import { claimMatchBatchExecution, createMatchBatch } from './batches'
+import { claimMatchBatchExecution, claimNextMatchBatchExecution, createMatchBatch } from './batches'
 
 function first<T>(arr: T[]): T {
   if (arr.length === 0) throw new Error('Expected at least one result')
@@ -514,5 +514,253 @@ describe('claimMatchBatchExecution', () => {
 
     expect(result.execute).toBe(false)
     expect(result.claimToken).toBeNull()
+  })
+})
+
+describe('claimNextMatchBatchExecution', () => {
+  beforeAll(async () => {
+    await setupTestDatabase()
+  }, 120_000)
+
+  afterAll(async () => {
+    await teardownTestDatabase()
+  })
+
+  beforeEach(async () => {
+    await cleanTestDatabase()
+  })
+
+  it('should claim the oldest pending batch', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const olderBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    const newerBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+      idempotencyKey: 'second-batch',
+    })
+
+    const olderCreatedAt = new Date('2026-01-01T00:00:00.000Z')
+    const newerCreatedAt = new Date('2026-01-01T00:05:00.000Z')
+
+    await db
+      .update(matchBatches)
+      .set({ createdAt: olderCreatedAt })
+      .where(eq(matchBatches.id, olderBatch.id))
+
+    await db
+      .update(matchBatches)
+      .set({ createdAt: newerCreatedAt })
+      .where(eq(matchBatches.id, newerBatch.id))
+
+    const result = await claimNextMatchBatchExecution(db)
+
+    expect(result.execute).toBe(true)
+    expect(result.batch?.id).toBe(olderBatch.id)
+    expect(result.claimToken).toBeTruthy()
+  })
+
+  it('should prefer reclaiming stale running batches before new pending ones', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const staleBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    const pendingBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+      idempotencyKey: 'pending-batch',
+    })
+
+    const now = new Date('2026-01-01T00:20:00.000Z')
+    const staleHeartbeatAt = new Date('2026-01-01T00:00:00.000Z')
+
+    await db
+      .update(matchBatches)
+      .set({
+        status: 'running',
+        claimToken: crypto.randomUUID(),
+        startedAt: staleHeartbeatAt,
+        lastHeartbeatAt: staleHeartbeatAt,
+      })
+      .where(eq(matchBatches.id, staleBatch.id))
+
+    await db
+      .update(matchBatches)
+      .set({ createdAt: new Date('2026-01-01T00:01:00.000Z') })
+      .where(eq(matchBatches.id, pendingBatch.id))
+
+    const result = await claimNextMatchBatchExecution(db, {
+      staleAfterMs: 10 * 60 * 1000,
+      now: () => now,
+    })
+
+    expect(result.execute).toBe(true)
+    expect(result.batch?.id).toBe(staleBatch.id)
+  })
+
+  it('should scope dispatch selection to the requested season', async () => {
+    const db = getTestDb()
+    const { category, toolA, toolB, template } = await seedMatchFixture()
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'proto-2',
+          name: 'Protocol 2',
+          mode: 'benchmark',
+          parserVersion: 'strict-v1',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+
+    const firstSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-filter-a',
+          name: 'Season Filter A',
+          status: 'active',
+        })
+        .returning(),
+    )
+
+    const secondSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-filter-b',
+          name: 'Season Filter B',
+          status: 'archived',
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'GPT-4.1',
+          slug: 'gpt-4-1',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4.1',
+          modelId: 'gpt-4.1',
+        })
+        .returning(),
+    )
+
+    const snapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: 'GPT-4.1',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4.1',
+          tier: 'frontier',
+          requestedModelId: 'gpt-4.1',
+          snapshotKey: 'gpt-4.1::0.2::1::1200::null',
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkSeasonModels).values([
+      { seasonId: firstSeason.id, modelSnapshotId: snapshot.id },
+      { seasonId: secondSeason.id, modelSnapshotId: snapshot.id },
+    ])
+
+    const filteredBatch = await createMatchBatch(db, {
+      seasonId: secondSeason.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    await createMatchBatch(db, {
+      seasonId: firstSeason.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+      idempotencyKey: 'unfiltered-season-batch',
+    })
+
+    const result = await claimNextMatchBatchExecution(db, {
+      seasonId: secondSeason.id,
+    })
+
+    expect(result.execute).toBe(true)
+    expect(result.batch?.id).toBe(filteredBatch.id)
+  })
+
+  it('should return no work when only fresh running batches remain', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const batch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    const freshTime = new Date('2026-01-01T00:00:00.000Z')
+    await db
+      .update(matchBatches)
+      .set({
+        status: 'running',
+        claimToken: crypto.randomUUID(),
+        startedAt: freshTime,
+        lastHeartbeatAt: freshTime,
+      })
+      .where(eq(matchBatches.id, batch.id))
+
+    const result = await claimNextMatchBatchExecution(db, {
+      now: () => new Date('2026-01-01T00:05:00.000Z'),
+    })
+
+    expect(result).toEqual({
+      batch: null,
+      claimToken: null,
+      execute: false,
+    })
   })
 })

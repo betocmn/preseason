@@ -128,11 +128,11 @@ pnpm run evals:export   # Export DB-backed prompts for external Promptfoo usage
 - [How Benchmarks Work](docs/guides/how-benchmarks-work.md)
 - [How Prompts Work](docs/guides/how-prompts-work.md)
 - [How Rankings Work](docs/guides/how-rankings-work.md)
-- [How Automation Works](docs/guides/how-automation-works.md)
+- [How Cron Benchmarks Work](docs/guides/how-cron-benchmarks-work.md)
 - [How Evals Work](docs/guides/how-evals-work.md)
 - [How LLM Service Works](docs/guides/how-llm-service-works.md)
 - [Recommendation Methodology](docs/guides/recommendation-methodology.md)
-- [How to Manually Test Automation Locally](docs/guides/how-to-manually-test-automation-locally.md)
+- [How to Manually Test Cron Benchmarks Locally](docs/guides/how-to-manually-test-cron-benchmarks-locally.md)
 
 ## Testing
 

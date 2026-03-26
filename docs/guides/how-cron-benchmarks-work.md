@@ -1,24 +1,55 @@
-# How Automation Works
+# How Cron Benchmarks Work
+
+## TL;DR
+
+This is the repo's scheduled evaluation pipeline for benchmark runs and match
+batches.
+
+It does two things:
+
+- Runs the active benchmark season against its frozen prompt and model panel
+- Claims and executes pending match batches for head-to-head comparisons
+
+The goal is to keep benchmark results and match outcomes moving forward without
+manual triggering, while keeping runs idempotent, authenticated, and auditable.
 
 ## Overview
 
-Production automation is now the benchmark runner. There is one cron-facing
-entry point:
+Production cron benchmarks now have two cron-facing entry points:
 
 - `/api/cron/benchmark-run`
+- `/api/cron/match-run`
 
 The removed `/api/cron/run` and `/api/cron/settle` routes are gone along with
 the old exploration pipeline.
+
+## Schedule
+
+The deployed schedule lives in `vercel.json`.
+
+| Route | What runs | When | Cron |
+| --- | --- | --- | --- |
+| `/api/cron/benchmark-run` | Creates or resumes the daily benchmark run for the newest active season | Every day at 07:00 UTC | `0 7 * * *` |
+| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
+
+In practice:
+
+- Benchmark cron is the daily snapshot of the active season's benchmark matrix
+- Match cron is the background dispatcher that keeps queued match batches moving
 
 ## File Structure
 
 ```text
 src/app/api/cron/benchmark-run/route.ts
+src/app/api/cron/match-run/route.ts
 src/server/llm/benchmark/runner.ts
 src/server/llm/benchmark/parser.ts
 src/server/llm/benchmark/prompt-builder.ts
 src/server/llm/benchmark/tool-resolver.ts
 src/server/llm/benchmark/qc.ts
+src/server/llm/match/batches.ts
+src/server/llm/match/runner.ts
+src/server/llm/match/parser.ts
 ```
 
 ## End-to-End Flow
@@ -38,6 +69,17 @@ src/server/llm/benchmark/qc.ts
 10. QC is evaluated and the run finishes as `completed`, `failed`, or
     `qc_failed`.
 11. Admins publish passing runs manually from the benchmark admin UI.
+
+## Match Dispatch Flow
+
+1. Admin workflows create pending match batches.
+2. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
+3. `GET /api/cron/match-run` claims the next pending, failed, or stale running
+   batch.
+4. `runMatchBatch()` executes the batch against the frozen model snapshots for
+   that season.
+5. Parsed match evaluations are stored and the batch is marked `completed` or
+   `failed`.
 
 ## Runner Guarantees
 
@@ -94,4 +136,4 @@ admin action after QC review.
 
 - `docs/guides/how-benchmarks-work.md`
 - `docs/guides/how-rankings-work.md`
-- `docs/guides/how-to-manually-test-automation-locally.md`
+- `docs/guides/how-to-manually-test-cron-benchmarks-locally.md`

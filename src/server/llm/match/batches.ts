@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { and, count, eq, lte, or } from 'drizzle-orm'
+import { and, asc, count, eq, lte, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -33,7 +33,16 @@ export type ClaimResult = {
   execute: boolean
 }
 
+export type ClaimNextResult =
+  | ClaimResult
+  | {
+      batch: null
+      claimToken: null
+      execute: false
+    }
+
 const STALE_AFTER_MS = 10 * 60 * 1000
+const MAX_DISPATCH_ATTEMPTS = 20
 
 type MatchBatchDimensions = Pick<
   MatchBatchRecord,
@@ -313,6 +322,74 @@ export async function claimMatchBatchExecution(
 
     return { batch, claimToken: null, execute: false }
   }
+}
+
+async function findNextDispatchableMatchBatchId(
+  database: DatabaseClient,
+  currentTime: Date,
+  staleAfterMs: number,
+  seasonId?: string,
+) {
+  const staleCutoff = new Date(currentTime.getTime() - staleAfterMs)
+  const seasonClause = seasonId ? eq(matchBatches.seasonId, seasonId) : undefined
+
+  const staleBatch = await database.query.matchBatches.findFirst({
+    where: and(
+      seasonClause,
+      eq(matchBatches.status, 'running'),
+      lte(matchBatches.lastHeartbeatAt, staleCutoff),
+    ),
+    orderBy: [asc(matchBatches.lastHeartbeatAt), asc(matchBatches.createdAt), asc(matchBatches.id)],
+    columns: { id: true },
+  })
+
+  if (staleBatch) {
+    return staleBatch.id
+  }
+
+  const queuedBatch = await database.query.matchBatches.findFirst({
+    where: and(
+      seasonClause,
+      or(eq(matchBatches.status, 'pending'), eq(matchBatches.status, 'failed')),
+    ),
+    orderBy: [asc(matchBatches.createdAt), asc(matchBatches.id)],
+    columns: { id: true },
+  })
+
+  return queuedBatch?.id ?? null
+}
+
+export async function claimNextMatchBatchExecution(
+  database: DatabaseClient = defaultDb,
+  options: { staleAfterMs?: number; now?: () => Date; seasonId?: string } = {},
+): Promise<ClaimNextResult> {
+  const staleAfterMs = options.staleAfterMs ?? STALE_AFTER_MS
+  const now = options.now ?? (() => new Date())
+
+  for (let attempt = 0; attempt < MAX_DISPATCH_ATTEMPTS; attempt++) {
+    const currentTime = now()
+    const batchId = await findNextDispatchableMatchBatchId(
+      database,
+      currentTime,
+      staleAfterMs,
+      options.seasonId,
+    )
+
+    if (!batchId) {
+      return { batch: null, claimToken: null, execute: false }
+    }
+
+    const result = await claimMatchBatchExecution(database, batchId, {
+      staleAfterMs,
+      now: () => currentTime,
+    })
+
+    if (result.execute && result.claimToken) {
+      return result
+    }
+  }
+
+  return { batch: null, claimToken: null, execute: false }
 }
 
 export function buildBenchmarkRunIdempotencyKey(
