@@ -48,6 +48,26 @@ const updateLlmInput = z
   )
 
 export const llmRouter = createTRPCRouter({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+    return ctx.db.query.llms.findMany({
+      orderBy: [asc(llms.name)],
+    })
+  }),
+
+  getById: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+      const llm = await ctx.db.query.llms.findFirst({
+        where: eq(llms.id, input.id),
+      })
+      if (!llm) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'LLM not found' })
+      }
+      return llm
+    }),
+
   listActive: publicProcedure.query(async ({ ctx }) => {
     return ctx.db.query.llms.findMany({
       where: eq(llms.isActive, true),

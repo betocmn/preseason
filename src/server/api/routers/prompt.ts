@@ -51,6 +51,35 @@ const updatePromptInput = z
   )
 
 export const promptRouter = createTRPCRouter({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+    return ctx.db
+      .select({
+        id: prompts.id,
+        title: prompts.title,
+        slug: prompts.slug,
+        level: prompts.level,
+        description: prompts.description,
+        expectedCategories: prompts.expectedCategories,
+        isActive: prompts.isActive,
+      })
+      .from(prompts)
+      .orderBy(asc(prompts.title))
+  }),
+
+  getById: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+      const prompt = await ctx.db.query.prompts.findFirst({
+        where: eq(prompts.id, input.id),
+      })
+      if (!prompt) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Prompt not found' })
+      }
+      return prompt
+    }),
+
   listActive: publicProcedure
     .input(
       z
