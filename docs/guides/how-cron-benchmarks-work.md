@@ -29,7 +29,7 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 15 minutes | `*/15 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 10 minutes | `*/10 * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
 
 In practice:

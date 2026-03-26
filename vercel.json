@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/benchmark-run", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/benchmark-run", "schedule": "*/10 * * * *" },
     { "path": "/api/cron/match-run", "schedule": "*/15 * * * *" }
   ]
 }
