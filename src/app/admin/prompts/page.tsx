@@ -42,6 +42,7 @@ export default async function PromptsPage() {
               <TableHead>Level</TableHead>
               <TableHead>Expected Categories</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Usage</TableHead>
               <TableHead className="w-32">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -70,6 +71,13 @@ export default async function PromptsPage() {
                   )}
                 </TableCell>
                 <TableCell>
+                  {prompt.isUsed ? (
+                    <Badge variant="secondary">Used</Badge>
+                  ) : (
+                    <Badge variant="outline">Unused</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center gap-1">
                     <TogglePromptActiveButton promptId={prompt.id} isActive={prompt.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
@@ -77,14 +85,18 @@ export default async function PromptsPage() {
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <DeletePromptButton promptId={prompt.id} promptTitle={prompt.title} />
+                    <DeletePromptButton
+                      promptId={prompt.id}
+                      promptTitle={prompt.title}
+                      isUsed={prompt.isUsed}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
             ))}
             {prompts.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   No prompts found
                 </TableCell>
               </TableRow>

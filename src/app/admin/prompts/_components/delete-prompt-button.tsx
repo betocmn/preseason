@@ -20,9 +20,10 @@ import { api } from '~/trpc/react'
 type DeletePromptButtonProps = {
   promptId: string
   promptTitle: string
+  isUsed: boolean
 }
 
-export function DeletePromptButton({ promptId, promptTitle }: DeletePromptButtonProps) {
+export function DeletePromptButton({ promptId, promptTitle, isUsed }: DeletePromptButtonProps) {
   const router = useRouter()
   const deleteMutation = api.prompt.delete.useMutation({
     onSuccess: () => {
@@ -31,6 +32,19 @@ export function DeletePromptButton({ promptId, promptTitle }: DeletePromptButton
     },
     onError: (err) => toast.error(err.message),
   })
+
+  if (isUsed) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Used prompts cannot be deleted"
+        onClick={() => toast.error('Used prompts cannot be deleted')}
+      >
+        <Trash2 className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    )
+  }
 
   return (
     <AlertDialog>
@@ -43,8 +57,7 @@ export function DeletePromptButton({ promptId, promptTitle }: DeletePromptButton
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {promptTitle}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this prompt and all associated data. This action cannot be
-            undone.
+            This permanently deletes this prompt. Used prompts cannot be deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

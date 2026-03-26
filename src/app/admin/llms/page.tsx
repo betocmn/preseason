@@ -42,6 +42,7 @@ export default async function LlmsPage() {
               <TableHead>Provider</TableHead>
               <TableHead>Model ID</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Usage</TableHead>
               <TableHead className="w-32">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -64,6 +65,13 @@ export default async function LlmsPage() {
                   )}
                 </TableCell>
                 <TableCell>
+                  {llm.isUsed ? (
+                    <Badge variant="secondary">Used</Badge>
+                  ) : (
+                    <Badge variant="outline">Unused</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center gap-1">
                     <ToggleLlmActiveButton llmId={llm.id} isActive={llm.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
@@ -71,14 +79,14 @@ export default async function LlmsPage() {
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <DeleteLlmButton llmId={llm.id} llmName={llm.name} />
+                    <DeleteLlmButton llmId={llm.id} llmName={llm.name} isUsed={llm.isUsed} />
                   </div>
                 </TableCell>
               </TableRow>
             ))}
             {llms.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   No LLMs found
                 </TableCell>
               </TableRow>

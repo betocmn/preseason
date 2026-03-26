@@ -20,9 +20,10 @@ import { api } from '~/trpc/react'
 type DeleteLlmButtonProps = {
   llmId: string
   llmName: string
+  isUsed: boolean
 }
 
-export function DeleteLlmButton({ llmId, llmName }: DeleteLlmButtonProps) {
+export function DeleteLlmButton({ llmId, llmName, isUsed }: DeleteLlmButtonProps) {
   const router = useRouter()
   const deleteMutation = api.llm.delete.useMutation({
     onSuccess: () => {
@@ -31,6 +32,19 @@ export function DeleteLlmButton({ llmId, llmName }: DeleteLlmButtonProps) {
     },
     onError: (err) => toast.error(err.message),
   })
+
+  if (isUsed) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Used LLMs cannot be deleted"
+        onClick={() => toast.error('Used LLMs cannot be deleted')}
+      >
+        <Trash2 className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    )
+  }
 
   return (
     <AlertDialog>
@@ -43,8 +57,7 @@ export function DeleteLlmButton({ llmId, llmName }: DeleteLlmButtonProps) {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {llmName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this LLM and all associated data. This action cannot be
-            undone.
+            This permanently deletes this LLM. Used LLMs cannot be deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -1,6 +1,7 @@
 import type { TRPCError } from '@trpc/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { cleanTestDatabase, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { benchmarkPromptVersions } from '~/server/db/schema'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
 
 describe('promptRouter', () => {
@@ -151,6 +152,42 @@ describe('promptRouter', () => {
       }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('marks used prompts and rejects deleting them', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const db = getTestDb()
+
+    const created = await caller.prompt.create({
+      title: 'Used Prompt',
+      slug: 'used-prompt',
+      level: 'beginner',
+      contentMd: '# Prompt content',
+      isActive: true,
+    })
+    if (!created) {
+      throw new Error('Expected prompt to be created')
+    }
+
+    await db.insert(benchmarkPromptVersions).values({
+      promptId: created.id,
+      slug: created.slug,
+      level: created.level,
+      version: 1,
+      contentMd: created.contentMd ?? '# Prompt content',
+      contentHash: `hash-${crypto.randomUUID()}`,
+      promptContractVersion: '1.0',
+      isActive: true,
+    })
+
+    const listed = await caller.prompt.list()
+    expect(listed.find((prompt) => prompt.id === created.id)?.isUsed).toBe(true)
+
+    await expect(caller.prompt.delete({ id: created.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Prompts that have already been used in benchmark seasons cannot be deleted',
     } satisfies Partial<TRPCError>)
   })
 })
