@@ -1,14 +1,14 @@
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 import { z } from 'zod'
-import { serverSettings } from '~/constants/server-settings'
 import type { db } from '~/server/db'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 
 type DatabaseClient = typeof db
-type BenchmarkRunStatus = typeof benchmarkRuns.$inferSelect.status
-
-const BENCHMARK_RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
-const UNFINISHED_BENCHMARK_RUN_STATUSES: BenchmarkRunStatus[] = ['pending', 'failed', 'running']
+const UNFINISHED_BENCHMARK_RUN_STATUSES: Array<typeof benchmarkRuns.$inferSelect.status> = [
+  'pending',
+  'failed',
+  'running',
+]
 
 export const anchorDateSchema = z
   .string()
@@ -68,7 +68,6 @@ export async function findBenchmarkSeasonId(database: DatabaseClient, seasonId: 
 
 type ResolveBenchmarkCronRunTargetOptions = {
   now?: Date
-  runStaleAfterMs?: number
 }
 
 export type BenchmarkCronRunTarget = {
@@ -83,35 +82,6 @@ function formatScheduledFor(date: Date): string {
   return scheduledFor ?? date.toISOString()
 }
 
-function getRunHeartbeatAt(qcSummaryJson: unknown): Date | null {
-  if (!qcSummaryJson || typeof qcSummaryJson !== 'object' || Array.isArray(qcSummaryJson)) {
-    return null
-  }
-
-  const heartbeatAt = (qcSummaryJson as { lastHeartbeatAt?: unknown }).lastHeartbeatAt
-  if (typeof heartbeatAt !== 'string') return null
-
-  const parsed = new Date(heartbeatAt)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
-
-function isStaleRunningBenchmarkRun(
-  run: Pick<typeof benchmarkRuns.$inferSelect, 'status' | 'startedAt' | 'qcSummaryJson'>,
-  currentTime: Date,
-  staleAfterMs: number,
-) {
-  if (run.status !== 'running') {
-    return false
-  }
-
-  const staleSince = getRunHeartbeatAt(run.qcSummaryJson) ?? run.startedAt
-  if (!staleSince) {
-    return true
-  }
-
-  return currentTime.getTime() - staleSince.getTime() >= staleAfterMs
-}
-
 export async function resolveBenchmarkCronRunTarget(
   database: DatabaseClient,
   options: ResolveBenchmarkCronRunTargetOptions = {},
@@ -122,15 +92,11 @@ export async function resolveBenchmarkCronRunTarget(
   }
 
   const currentTime = options.now ?? new Date()
-  const runStaleAfterMs = options.runStaleAfterMs ?? BENCHMARK_RUN_STALE_AFTER_MS
 
   const unfinishedRuns = await database
     .select({
       id: benchmarkRuns.id,
       scheduledFor: benchmarkRuns.scheduledFor,
-      status: benchmarkRuns.status,
-      startedAt: benchmarkRuns.startedAt,
-      qcSummaryJson: benchmarkRuns.qcSummaryJson,
     })
     .from(benchmarkRuns)
     .where(
@@ -141,13 +107,7 @@ export async function resolveBenchmarkCronRunTarget(
     )
     .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.createdAt), asc(benchmarkRuns.id))
 
-  const runToResume = unfinishedRuns.find((run) => {
-    if (run.status === 'running') {
-      return isStaleRunningBenchmarkRun(run, currentTime, runStaleAfterMs)
-    }
-
-    return run.status === 'pending' || run.status === 'failed'
-  })
+  const runToResume = unfinishedRuns[0]
 
   if (runToResume) {
     return {

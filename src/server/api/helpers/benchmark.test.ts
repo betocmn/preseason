@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -80,11 +79,11 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
-  it('resumes stale running work and skips healthy running work', async () => {
+  it('keeps an older healthy running run ahead of starting a new day', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
-    const [staleRun] = await db
+    const [olderRunningRun] = await db
       .insert(benchmarkRuns)
       .values([
         {
@@ -99,52 +98,46 @@ describe('resolveBenchmarkCronRunTarget', () => {
         {
           seasonId: season.id,
           scheduledFor: '2026-03-26',
-          status: 'running',
-          startedAt: new Date('2026-03-26T11:59:00.000Z'),
-          qcSummaryJson: {
-            lastHeartbeatAt: '2026-03-26T11:59:30.000Z',
-          },
+          status: 'pending',
         },
       ])
       .returning({ id: benchmarkRuns.id, scheduledFor: benchmarkRuns.scheduledFor })
 
-    if (!staleRun) {
-      throw new Error('Expected stale run to exist')
+    if (!olderRunningRun) {
+      throw new Error('Expected older running run to exist')
     }
 
-    const staleTarget = await resolveBenchmarkCronRunTarget(db, {
+    const target = await resolveBenchmarkCronRunTarget(db, {
       now: new Date('2026-03-26T12:00:00.000Z'),
-      runStaleAfterMs: 5 * 60 * 1000,
     })
 
-    expect(staleTarget).toMatchObject({
+    expect(target).toMatchObject({
       seasonId: season.id,
-      runId: staleRun.id,
-      scheduledFor: staleRun.scheduledFor,
+      runId: olderRunningRun.id,
+      scheduledFor: olderRunningRun.scheduledFor,
       source: 'unfinished',
     })
+  })
 
-    await db
-      .update(benchmarkRuns)
-      .set({
-        status: 'completed',
-        startedAt: new Date('2026-03-26T11:59:00.000Z'),
-        qcSummaryJson: {
-          lastHeartbeatAt: '2026-03-26T11:59:30.000Z',
-        },
-      })
-      .where(eq(benchmarkRuns.id, staleRun.id))
+  it('starts today when no unfinished benchmark runs remain', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
 
-    const healthyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
-      runStaleAfterMs: 5 * 60 * 1000,
+    await db.insert(benchmarkRuns).values({
+      seasonId: season.id,
+      scheduledFor: '2026-03-25',
+      status: 'completed',
     })
 
-    expect(healthyTarget).toMatchObject({
+    const target = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-26T12:00:00.000Z'),
+    })
+
+    expect(target).toMatchObject({
       seasonId: season.id,
       scheduledFor: '2026-03-26',
       source: 'today',
     })
-    expect(healthyTarget?.runId).toBeUndefined()
+    expect(target?.runId).toBeUndefined()
   })
 })

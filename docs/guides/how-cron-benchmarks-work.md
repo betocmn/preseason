@@ -56,9 +56,10 @@ src/server/llm/match/parser.ts
 
 1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
 2. The route loads the newest `active` benchmark season.
-3. Benchmark cron targets the oldest unfinished run first (`pending`, `failed`,
-   or stale `running`) and only starts a new UTC day when no unfinished work
-   exists.
+3. Benchmark cron targets the oldest unfinished run first and only starts a new
+   UTC day when no unfinished work exists. If that run is already healthy
+   `running`, cron returns the in-flight summary; if it is stale, the runner
+   reclaims it.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
 5. The runner claims execution, or resumes/returns an in-flight run safely.
