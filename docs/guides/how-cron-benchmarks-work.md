@@ -1,5 +1,18 @@
 # How Cron Benchmarks Work
 
+## TL;DR
+
+This is the repo's scheduled evaluation pipeline for benchmark runs and match
+batches.
+
+It does two things:
+
+- Runs the active benchmark season against its frozen prompt and model panel
+- Claims and executes pending match batches for head-to-head comparisons
+
+The goal is to keep benchmark results and match outcomes moving forward without
+manual triggering, while keeping runs idempotent, authenticated, and auditable.
+
 ## Overview
 
 Production cron benchmarks now have two cron-facing entry points:
@@ -9,6 +22,20 @@ Production cron benchmarks now have two cron-facing entry points:
 
 The removed `/api/cron/run` and `/api/cron/settle` routes are gone along with
 the old exploration pipeline.
+
+## Schedule
+
+The deployed schedule lives in `vercel.json`.
+
+| Route | What runs | When | Cron |
+| --- | --- | --- | --- |
+| `/api/cron/benchmark-run` | Creates or resumes the daily benchmark run for the newest active season | Every day at 07:00 UTC | `0 7 * * *` |
+| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
+
+In practice:
+
+- Benchmark cron is the daily snapshot of the active season's benchmark matrix
+- Match cron is the background dispatcher that keeps queued match batches moving
 
 ## File Structure
 
