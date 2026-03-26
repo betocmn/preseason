@@ -1,6 +1,6 @@
 import { type MatchResponse, validateMatchResponse } from '~/server/llm/match/schema'
 
-export const MATCH_PARSER_VERSION = 'match-repair-v1'
+export const MATCH_PARSER_VERSION = 'match-repair-v2'
 
 const OPEN_TAG = '<preseason_match_json>'
 const CLOSE_TAG = '</preseason_match_json>'
@@ -15,6 +15,7 @@ const KEY_ALIASES = new Map<string, string>([
   ['toola', 'tool_a'],
   ['toolb', 'tool_b'],
   ['evidencesentence', 'evidence_sentence'],
+  ['evidencename', 'evidence_sentence'],
   ['eevidencesentence', 'evidence_sentence'],
   ['evidenceevidencesentence', 'evidence_sentence'],
 ])
@@ -112,6 +113,28 @@ function stripMarkdownCodeFence(rawAppendix: string) {
   return fencedMatch?.[1]?.trim() ?? trimmed
 }
 
+function findLastJsonCodeFence(rawContent: string) {
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/gu
+  let match = fencePattern.exec(rawContent)
+  let lastMatch: {
+    rawAppendix: string
+    naturalResponse: string
+  } | null = null
+
+  while (match) {
+    const rawAppendix = match[1]?.trim()
+    if (rawAppendix && (rawAppendix.startsWith('{') || rawAppendix.startsWith('['))) {
+      lastMatch = {
+        rawAppendix,
+        naturalResponse: rawContent.slice(0, match.index).trim(),
+      }
+    }
+    match = fencePattern.exec(rawContent)
+  }
+
+  return lastMatch
+}
+
 function repairMissingAnalysisArrayClosures(rawAppendix: string) {
   return rawAppendix.replace(/(\})(\s*,\s*"cons"\s*:)/gu, '$1]$2')
 }
@@ -179,12 +202,19 @@ export function parseMatchResponse(rawContent: string): MatchParseResult {
   const openIdx = tagBlock?.openIdx ?? -1
   const closeIdx = tagBlock?.closeIdx ?? -1
 
-  if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
+  const extractedAppendix =
+    openIdx !== -1 && closeIdx !== -1 && closeIdx > openIdx
+      ? {
+          rawAppendix: rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim(),
+          naturalResponse: rawContent.slice(0, openIdx).trim(),
+        }
+      : findLastJsonCodeFence(rawContent)
+
+  if (!extractedAppendix) {
     return { status: 'invalid_output', reason: 'Missing <preseason_match_json> tags' }
   }
 
-  const rawAppendix = rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim()
-  const naturalResponse = rawContent.slice(0, openIdx).trim()
+  const { rawAppendix, naturalResponse } = extractedAppendix
 
   let parsed: unknown
   let normalizedAppendix = rawAppendix
