@@ -1,8 +1,8 @@
-# How Automation Works
+# How Cron Benchmarks Work
 
 ## Overview
 
-Production automation now has two cron-facing entry points:
+Production cron benchmarks now have two cron-facing entry points:
 
 - `/api/cron/benchmark-run`
 - `/api/cron/match-run`
@@ -109,4 +109,4 @@ admin action after QC review.
 
 - `docs/guides/how-benchmarks-work.md`
 - `docs/guides/how-rankings-work.md`
-- `docs/guides/how-to-manually-test-automation-locally.md`
+- `docs/guides/how-to-manually-test-cron-benchmarks-locally.md`

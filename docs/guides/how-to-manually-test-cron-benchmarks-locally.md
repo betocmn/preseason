@@ -1,8 +1,8 @@
-# How to Manually Test Automation Locally
+# How to Manually Test Cron Benchmarks Locally
 
 ## Overview
 
-This guide covers the benchmark automation flow that replaced the legacy
+This guide covers the cron benchmark flow that replaced the legacy
 exploration pipeline.
 
 Recommended repeatable smoke path:
