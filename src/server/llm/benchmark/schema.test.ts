@@ -95,6 +95,23 @@ describe('benchmarkAppendixSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  it('should accept missing confidence and coerce it to null', () => {
+    const result = benchmarkAppendixSchema.safeParse({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'none',
+          reasoning: 'No tool needed',
+        },
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.categories[0]?.confidence).toBeNull()
+  })
+
   it('should reject empty categories array', () => {
     const result = benchmarkAppendixSchema.safeParse({
       schema_version: 'benchmark-v1',
