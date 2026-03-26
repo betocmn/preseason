@@ -21,9 +21,9 @@ As of March 26, 2026, these are the main blockers or caveats:
 2. ~~`pnpm run db:seed` is not production-safe as-is.~~ **Resolved.**
    `db:seed` now only seeds reference data (categories, tools, LLMs, prompts).
    Synthetic benchmark and critic data moved to `pnpm run db:seed-dev`.
-3. There is no admin UI for managing LLMs or prompts.
-   The benchmark season freeze flow depends on active prompt rows and active LLM
-   rows already existing in the database.
+3. ~~There is no admin UI for managing LLMs or prompts.~~ **Resolved.**
+   Admin CRUD pages now exist at `/beto-admin/llms` and `/beto-admin/prompts`
+   with full create/edit/delete/toggle-active support.
 4. Cron execution in production requires `CRON_SECRET` to be set.
 5. Runs only become public after an admin publishes them, and publishing is
    allowed only when the run is `completed` and `qcStatus = passed`.
