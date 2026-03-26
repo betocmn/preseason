@@ -89,6 +89,90 @@ function wait(ms: number) {
 
 type TestDb = ReturnType<typeof getTestDb>
 
+function createDelayedCaseSnapshotDb(
+  db: TestDb,
+  options: {
+    caseIdQueryStarted: ReturnType<typeof createDeferred>
+    allowCaseIdQuery: ReturnType<typeof createDeferred>
+  },
+) {
+  let shouldDelayCaseIdQuery = true
+
+  function wrapBuilder(builder: unknown, isCaseIdQuery: boolean, delayOnExecute: boolean): unknown {
+    if (
+      builder === null ||
+      builder === undefined ||
+      (typeof builder !== 'object' && typeof builder !== 'function')
+    ) {
+      return builder
+    }
+
+    return new Proxy(builder, {
+      get(target, prop, receiver) {
+        if (prop === 'then') {
+          const then = Reflect.get(target, prop, receiver)
+
+          if (typeof then !== 'function') {
+            return then
+          }
+
+          return (...args: unknown[]) => {
+            if (delayOnExecute) {
+              shouldDelayCaseIdQuery = false
+              options.caseIdQueryStarted.resolve()
+
+              return options.allowCaseIdQuery.promise.then(() => Reflect.apply(then, target, args))
+            }
+
+            return Reflect.apply(then, target, args)
+          }
+        }
+
+        const value = Reflect.get(target, prop, receiver)
+        if (typeof value !== 'function') {
+          return value
+        }
+
+        return (...args: unknown[]) => {
+          const result = Reflect.apply(value, target, args)
+          const nextDelayOnExecute =
+            delayOnExecute ||
+            (prop === 'from' &&
+              isCaseIdQuery &&
+              shouldDelayCaseIdQuery &&
+              args[0] === benchmarkCases)
+
+          return wrapBuilder(result, isCaseIdQuery, nextDelayOnExecute)
+        }
+      },
+    })
+  }
+
+  return new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop === 'select') {
+        return (...args: unknown[]) => {
+          const selection = args[0]
+          const isCaseIdQuery =
+            shouldDelayCaseIdQuery &&
+            args.length === 1 &&
+            selection !== null &&
+            typeof selection === 'object' &&
+            !Array.isArray(selection) &&
+            Object.keys(selection as Record<string, unknown>).length === 1 &&
+            (selection as { id?: unknown }).id === benchmarkCases.id
+
+          const builder = Reflect.apply(target.select, target, args)
+          return wrapBuilder(builder, isCaseIdQuery, false)
+        }
+      }
+
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as TestDb
+}
+
 async function seedFullPanel(db: TestDb) {
   const group = first(
     await db
@@ -635,6 +719,83 @@ describe('runBenchmark', () => {
 
     expect(firstSummary.status).toBe('completed')
     expect(llmService.complete).toHaveBeenCalledTimes(15)
+  })
+
+  it('should stop a reclaimed worker from inheriting the new execution token before snapshot setup', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const caseIdQueryStarted = createDeferred()
+    const allowCaseIdQuery = createDeferred()
+    const staleWorkerDb = createDelayedCaseSnapshotDb(db, {
+      caseIdQueryStarted,
+      allowCaseIdQuery,
+    })
+
+    const staleWorkerService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const reclaimingWorkerFirstCallStarted = createDeferred()
+    const reclaimingWorkerFirstCallBlocked = createDeferred()
+
+    let reclaimingWorkerCallCount = 0
+    const reclaimingWorkerService = createMockLlmService(async (_provider, request) => {
+      reclaimingWorkerCallCount++
+      if (reclaimingWorkerCallCount === 1) {
+        reclaimingWorkerFirstCallStarted.resolve()
+        await reclaimingWorkerFirstCallBlocked.promise
+      }
+
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const staleStartTime = new Date('2026-03-10T00:00:00.000Z')
+    const reclaimTime = new Date('2026-03-10T01:00:00.000Z')
+
+    const staleRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: staleWorkerDb,
+      llmService: staleWorkerService,
+      now: () => staleStartTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await caseIdQueryStarted.promise
+
+    const reclaimedRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService: reclaimingWorkerService,
+      now: () => reclaimTime,
+      runStaleAfterMs: 100,
+      runHeartbeatIntervalMs: 60_000,
+    })
+
+    await reclaimingWorkerFirstCallStarted.promise
+
+    allowCaseIdQuery.resolve()
+    const staleSummary = await staleRunPromise
+
+    expect(staleWorkerService.complete).not.toHaveBeenCalled()
+    expect(staleSummary.status).toBe('running')
+
+    reclaimingWorkerFirstCallBlocked.resolve()
+    const reclaimedSummary = await reclaimedRunPromise
+
+    expect(staleSummary.runId).toBe(reclaimedSummary.runId)
+    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.completedCases).toBe(15)
+    expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
+
+    const persistedRun = await db.query.benchmarkRuns.findFirst({
+      where: and(
+        eq(benchmarkRuns.seasonId, season.id),
+        eq(benchmarkRuns.scheduledFor, '2026-03-10'),
+      ),
+    })
+
+    expect(persistedRun?.status).toBe('completed')
+    expect(persistedRun?.qcStatus).toBe('passed')
   })
 
   it('should ignore terminal updates from a stale worker after reclaim finalizes the run', async () => {

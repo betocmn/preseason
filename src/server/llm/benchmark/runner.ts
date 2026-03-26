@@ -421,6 +421,10 @@ function buildRunCaseSummaryPatch(
   return { ...(base as Record<string, unknown>), ...update }
 }
 
+function buildRunCaseSummaryMergeSql(update: Partial<RunCaseSnapshot>) {
+  return sql`coalesce(${benchmarkRuns.qcSummaryJson}, '{}'::jsonb) || ${JSON.stringify(update)}::jsonb`
+}
+
 async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, seasonId: string) {
   const caseIds =
     getRunCaseSnapshot(run)?.snapshotCaseIds ??
@@ -433,27 +437,36 @@ async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, s
     ).map((row) => row.id)
 
   if (getRunCaseSnapshot(run) == null) {
-    const latestRun = await database.query.benchmarkRuns.findFirst({
-      where: eq(benchmarkRuns.id, run.id),
-    })
-
-    if (!latestRun) throw new Error('Benchmark run not found')
-
-    const nextQcSummary = buildRunCaseSummaryPatch(latestRun, { snapshotCaseIds: caseIds })
-
-    await database
+    const [ownedRun] = await database
       .update(benchmarkRuns)
       .set({
-        qcSummaryJson: nextQcSummary,
+        qcSummaryJson: buildRunCaseSummaryMergeSql({ snapshotCaseIds: caseIds }),
         expectedCaseCount: caseIds.length,
       })
-      .where(eq(benchmarkRuns.id, run.id))
-    run.qcSummaryJson = nextQcSummary
+      .where(getRunExecutionOwnershipClause(run))
+      .returning({
+        expectedCaseCount: benchmarkRuns.expectedCaseCount,
+        qcSummaryJson: benchmarkRuns.qcSummaryJson,
+      })
+
+    if (!ownedRun) {
+      throw new OwnershipLostError()
+    }
+
+    run.expectedCaseCount = ownedRun.expectedCaseCount
+    run.qcSummaryJson = ownedRun.qcSummaryJson
   } else if (run.expectedCaseCount == null) {
-    await database
+    const [ownedRun] = await database
       .update(benchmarkRuns)
       .set({ expectedCaseCount: caseIds.length })
-      .where(eq(benchmarkRuns.id, run.id))
+      .where(getRunExecutionOwnershipClause(run))
+      .returning({ expectedCaseCount: benchmarkRuns.expectedCaseCount })
+
+    if (!ownedRun) {
+      throw new OwnershipLostError()
+    }
+
+    run.expectedCaseCount = ownedRun.expectedCaseCount
   }
 
   if (caseIds.length === 0) {
@@ -615,7 +628,16 @@ async function executeRun(
         .where(eq(benchmarkRuns.id, run.id))
     }
 
-    const allCases = await loadRunCases(database, run, seasonId)
+    let allCases: Awaited<ReturnType<typeof loadRunCases>>
+    try {
+      allCases = await loadRunCases(database, run, seasonId)
+    } catch (error) {
+      if (error instanceof OwnershipLostError) {
+        const latestRun = await findRunById(database, run.id)
+        return await buildRunSummary(database, latestRun, seasonId)
+      }
+      throw error
+    }
 
     if (allCases.length === 0) {
       const qc = evaluateQc({
