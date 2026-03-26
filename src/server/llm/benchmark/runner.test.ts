@@ -332,6 +332,103 @@ describe('runBenchmark', () => {
     expect(allRuns).toHaveLength(1)
   })
 
+  it('should process only maxCases and keep the run resumable when work remains', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 4,
+    })
+
+    expect(summary.status).toBe('running')
+    expect(summary.processedThisInvocation).toBe(4)
+    expect(summary.completedCases).toBe(4)
+    expect(summary.remainingCases).toBe(11)
+    expect(summary.hasRemainingWork).toBe(true)
+    expect(llmService.complete).toHaveBeenCalledTimes(4)
+
+    const persistedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, summary.runId),
+    })
+    expect(persistedRun?.status).toBe('pending')
+    expect(persistedRun?.completedAt).toBeNull()
+  })
+
+  it('should resume the same run across chunked invocations without duplicate case results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const firstSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 8,
+    })
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 8,
+    })
+
+    expect(firstSummary.runId).toBe(secondSummary.runId)
+    expect(firstSummary.status).toBe('running')
+    expect(firstSummary.hasRemainingWork).toBe(true)
+    expect(secondSummary.status).toBe('completed')
+    expect(secondSummary.hasRemainingWork).toBe(false)
+    expect(secondSummary.remainingCases).toBe(0)
+    expect(secondSummary.completedCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+
+    const runResults = await db
+      .select({
+        id: benchmarkCaseResults.id,
+        caseId: benchmarkCaseResults.caseId,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, firstSummary.runId))
+
+    expect(runResults).toHaveLength(15)
+    expect(new Set(runResults.map((result) => result.caseId)).size).toBe(15)
+  })
+
+  it('should finalize as qc_failed on the final chunk when QC does not pass', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Just a plain response with no appendix tags', request),
+    )
+
+    const firstSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 10,
+    })
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 10,
+    })
+
+    expect(firstSummary.status).toBe('running')
+    expect(firstSummary.invalidOutputCases).toBe(10)
+    expect(firstSummary.hasRemainingWork).toBe(true)
+    expect(secondSummary.status).toBe('qc_failed')
+    expect(secondSummary.invalidOutputCases).toBe(15)
+    expect(secondSummary.hasRemainingWork).toBe(false)
+    expect(secondSummary.remainingCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(20)
+  })
+
   it('should return the persisted summary for an already completed run', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
@@ -514,6 +611,7 @@ describe('runBenchmark', () => {
     const reclaimedRun = await db.query.benchmarkRuns.findFirst({
       where: eq(benchmarkRuns.id, run.id),
     })
+    expect(reclaimedRun?.startedAt?.toISOString()).toBe(staleHeartbeatAt.toISOString())
     expect(reclaimedRun?.qcSummaryJson).toEqual(
       expect.objectContaining({
         snapshotCaseIds: caseIds,

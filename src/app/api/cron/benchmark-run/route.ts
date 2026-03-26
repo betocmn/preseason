@@ -1,8 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { env } from '~/env'
+import { resolveBenchmarkCronRunTarget } from '~/server/api/helpers/benchmark'
 import { db } from '~/server/db'
-import { benchmarkSeasons } from '~/server/db/schema'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
@@ -21,11 +20,6 @@ function isAuthorized(request: Request, expectedToken: string | undefined) {
   return token.length > 0 && token === expectedToken
 }
 
-function formatScheduledFor(date: Date): string {
-  const [scheduledFor] = date.toISOString().split('T')
-  return scheduledFor ?? date.toISOString()
-}
-
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
     return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
@@ -36,17 +30,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const activeSeason = await db.query.benchmarkSeasons.findFirst({
-      where: eq(benchmarkSeasons.status, 'active'),
-      orderBy: desc(benchmarkSeasons.createdAt),
-    })
-
-    if (!activeSeason) {
+    const runTarget = await resolveBenchmarkCronRunTarget(db)
+    if (!runTarget) {
       return NextResponse.json({ ok: true, message: 'No active benchmark season' })
     }
 
-    const scheduledFor = formatScheduledFor(new Date())
-    const summary = await runBenchmark(activeSeason.id, scheduledFor)
+    const summary = await runBenchmark(runTarget.seasonId, runTarget.scheduledFor, {
+      database: db,
+      maxCases: env.BENCHMARK_CASES_PER_CRON,
+    })
 
     return NextResponse.json({ ok: true, summary })
   } catch (error) {

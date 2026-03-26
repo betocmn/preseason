@@ -29,12 +29,12 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Creates or resumes the daily benchmark run for the newest active season | Every day at 07:00 UTC | `0 7 * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 15 minutes | `*/15 * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
 
 In practice:
 
-- Benchmark cron is the daily snapshot of the active season's benchmark matrix
+- Benchmark cron assembles one logical daily run across many short invocations
 - Match cron is the background dispatcher that keeps queued match batches moving
 
 ## File Structure
@@ -56,19 +56,27 @@ src/server/llm/match/parser.ts
 
 1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
 2. The route loads the newest `active` benchmark season.
-3. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
+3. Benchmark cron targets the oldest unfinished run first (`pending`, `failed`,
+   or stale `running`) and only starts a new UTC day when no unfinished work
+   exists.
+4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
-4. The runner claims execution, or resumes/returns an in-flight run safely.
-5. Active benchmark cases are loaded from the frozen season panel.
-6. Each case builds a benchmark prompt from the frozen prompt version and its
+5. The runner claims execution, or resumes/returns an in-flight run safely.
+6. Active benchmark cases are loaded from the frozen season panel.
+7. A single invocation processes only `BENCHMARK_CASES_PER_CRON` cases
+   (default `8`) and then yields.
+8. Each case builds a benchmark prompt from the frozen prompt version and its
    eligible categories.
-7. The LLM service executes the case and stores a `benchmark_case_result`.
-8. The strict parser extracts one decision per eligible category and stores
+9. The LLM service executes the case and stores a `benchmark_case_result`.
+10. The strict parser extracts one decision per eligible category and stores
    `benchmark_case_decision` rows.
-9. Unknown tool names go to `tool_candidate` for manual review.
-10. QC is evaluated and the run finishes as `completed`, `failed`, or
+11. Unknown tool names go to `tool_candidate` for manual review.
+12. If work remains, the run is set back to `pending` so the next cron
+    invocation can continue; QC terminal status is evaluated only when all
+    cases are done.
+13. QC is evaluated and the run finishes as `completed`, `failed`, or
     `qc_failed`.
-11. Admins publish passing runs manually from the benchmark admin UI.
+14. Admins publish passing runs manually from the benchmark admin UI.
 
 ## Match Dispatch Flow
 
@@ -131,6 +139,7 @@ admin action after QC review.
 - `DATABASE_URL`
 - `OPENROUTER_API_KEY`
 - `CRON_SECRET`
+- `BENCHMARK_CASES_PER_CRON` (default `8`)
 
 ## Related Docs
 
