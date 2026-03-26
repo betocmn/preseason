@@ -245,6 +245,32 @@ describe('parseBenchmarkResponse', () => {
   })
 
   it('should export PARSER_VERSION', () => {
-    expect(PARSER_VERSION).toBe('strict-v1')
+    expect(PARSER_VERSION).toBe('strict-v2')
+  })
+
+  it('should accept a category without confidence and coerce it to null', () => {
+    const json = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+        {
+          category_slug: 'database',
+          decision: 'none',
+          reasoning: 'Not needed',
+        },
+      ],
+    })
+
+    const result = parseBenchmarkResponse(wrapInTags(json), ELIGIBLE)
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.appendix.categories[1]?.confidence).toBeNull()
   })
 })

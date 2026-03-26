@@ -533,6 +533,8 @@ async function main() {
     artifact.completedAt = formatTimestamp(new Date())
     await writeArtifact(artifactDir, artifact)
     console.log(JSON.stringify(artifact, null, 2))
+    const { dbConnection } = await import('../src/server/db')
+    await dbConnection.end({ timeout: 1 })
     await sqlClient.end({ timeout: 1 })
   }
 }
