@@ -12,16 +12,10 @@ const linkGroups = [
     ],
   },
   {
-    title: 'Company',
+    title: 'About',
     links: [
-      { href: '/about', label: 'About' },
       { href: '/methodology', label: 'Methodology' },
       { href: '/business', label: 'Business Access' },
-    ],
-  },
-  {
-    title: 'Legal',
-    links: [
       { href: '/privacy', label: 'Privacy Policy' },
       { href: '/terms', label: 'Terms & Conditions' },
     ],
