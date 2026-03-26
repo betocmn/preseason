@@ -1,6 +1,7 @@
 import type { TRPCError } from '@trpc/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { cleanTestDatabase, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { benchmarkPromptVersions } from '~/server/db/schema'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
 
 describe('promptRouter', () => {
@@ -62,6 +63,28 @@ describe('promptRouter', () => {
     expect(prompt.content).toBeNull()
   })
 
+  it('returns stored prompt content when contentMd exists', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    await adminCaller.prompt.create({
+      title: 'Stored Prompt',
+      slug: 'stored-prompt',
+      level: 'beginner',
+      description: 'test',
+      contentMd: '# Build a SaaS app',
+      isActive: true,
+    })
+
+    const caller = createTestCaller(null)
+    const prompt = await caller.prompt.getBySlug({
+      slug: 'stored-prompt',
+      level: 'beginner',
+    })
+
+    expect(prompt.content).toBe('# Build a SaaS app')
+  })
+
   it('lists prompt variants by slug across levels', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
@@ -95,15 +118,18 @@ describe('promptRouter', () => {
       slug: 'saas-application',
       level: 'beginner',
       description: 'original',
+      contentMd: '# Original prompt',
       isActive: true,
     })
 
     const updated = await caller.prompt.update({
       id: created?.id ?? '',
       description: 'updated description',
+      contentMd: '# Updated prompt',
       expectedCategories: ['auth', 'payments'],
     })
     expect(updated.description).toBe('updated description')
+    expect(updated.contentMd).toBe('# Updated prompt')
     expect(updated.expectedCategories).toEqual(['auth', 'payments'])
 
     const toggled = await caller.prompt.toggleActive({
@@ -126,6 +152,42 @@ describe('promptRouter', () => {
       }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('marks used prompts and rejects deleting them', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const db = getTestDb()
+
+    const created = await caller.prompt.create({
+      title: 'Used Prompt',
+      slug: 'used-prompt',
+      level: 'beginner',
+      contentMd: '# Prompt content',
+      isActive: true,
+    })
+    if (!created) {
+      throw new Error('Expected prompt to be created')
+    }
+
+    await db.insert(benchmarkPromptVersions).values({
+      promptId: created.id,
+      slug: created.slug,
+      level: created.level,
+      version: 1,
+      contentMd: created.contentMd ?? '# Prompt content',
+      contentHash: `hash-${crypto.randomUUID()}`,
+      promptContractVersion: '1.0',
+      isActive: true,
+    })
+
+    const listed = await caller.prompt.list()
+    expect(listed.find((prompt) => prompt.id === created.id)?.isUsed).toBe(true)
+
+    await expect(caller.prompt.delete({ id: created.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Prompts that have already been used in benchmark seasons cannot be deleted',
     } satisfies Partial<TRPCError>)
   })
 })
