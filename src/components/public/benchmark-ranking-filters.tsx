@@ -1,6 +1,6 @@
 'use client'
 
-import { FlaskConical, Layers, Tag } from 'lucide-react'
+import { Bot, FlaskConical, Layers, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -11,6 +11,7 @@ import {
   SelectSeparator,
   SelectTrigger,
 } from '~/components/ui/select'
+import type { ModelFilterCompany } from '~/lib/model-filters'
 
 type CategoryGroup = {
   slug: string
@@ -20,25 +21,51 @@ type CategoryGroup = {
 
 type BenchmarkRankingFiltersProps = {
   groups: CategoryGroup[]
+  modelFilters: ModelFilterCompany[]
   currentGroup?: string
   currentSub?: string
   currentPromptLevel?: string
   currentModelTier?: string
+  currentModelSnapshotId?: string
   basePath?: string
   showCategorySelect?: boolean
 }
 
 export function BenchmarkRankingFilters({
   groups,
+  modelFilters,
   currentGroup,
   currentSub,
   currentPromptLevel,
   currentModelTier,
+  currentModelSnapshotId,
   basePath = '/rankings',
   showCategorySelect = true,
 }: BenchmarkRankingFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  const modelLookup = new Map(
+    modelFilters.flatMap((company) =>
+      company.families.flatMap((family) =>
+        family.models.map((model) => [
+          model.id,
+          {
+            ...model,
+            company: company.name,
+            family: family.name,
+          },
+        ]),
+      ),
+    ),
+  )
+  const normalizedModelSnapshotId =
+    currentModelSnapshotId && modelLookup.has(currentModelSnapshotId)
+      ? currentModelSnapshotId
+      : undefined
+  const selectedModel = normalizedModelSnapshotId
+    ? modelLookup.get(normalizedModelSnapshotId)
+    : undefined
 
   function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -96,10 +123,12 @@ export function BenchmarkRankingFilters({
               {groups.map((group, i) => (
                 <SelectGroup key={group.slug}>
                   {i > 0 && <SelectSeparator />}
-                  <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
-                    {group.name}
-                  </SelectLabel>
-                  <SelectItem value={group.slug}>All {group.name}</SelectItem>
+                  <SelectItem
+                    value={group.slug}
+                    className="text-xs font-semibold tracking-wider text-[#7da1ff] dark:text-[#93b0ff]"
+                  >
+                    All {group.name}
+                  </SelectItem>
                   {group.subcategories.map((sub) => (
                     <SelectItem key={sub.slug} value={`${group.slug}:${sub.slug}`}>
                       <span className="pl-2">{sub.name}</span>
@@ -120,15 +149,15 @@ export function BenchmarkRankingFilters({
             navigate({ promptLevel: val === 'all' ? undefined : val })
           }}
         >
-          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+          <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
               {currentPromptLevel
                 ? `${currentPromptLevel.charAt(0).toUpperCase()}${currentPromptLevel.slice(1)}`
-                : 'All Levels'}
+                : 'All User Prompting Levels'}
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Levels</SelectItem>
+            <SelectItem value="all">All User Prompting Levels</SelectItem>
             <SelectItem value="beginner">Beginner</SelectItem>
             <SelectItem value="intermediate">Intermediate</SelectItem>
             <SelectItem value="advanced">Advanced</SelectItem>
@@ -156,6 +185,42 @@ export function BenchmarkRankingFilters({
             <SelectItem value="frontier">Frontier</SelectItem>
             <SelectItem value="mid">Mid</SelectItem>
             <SelectItem value="small">Small</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Bot className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={normalizedModelSnapshotId ?? 'all'}
+          onValueChange={(val) => {
+            navigate({ modelSnapshotId: val === 'all' ? undefined : val })
+          }}
+        >
+          <SelectTrigger className="h-9 w-[260px] border-border/60 bg-background/80 text-sm">
+            <span className="truncate">
+              {selectedModel
+                ? `${selectedModel.family} - ${selectedModel.version}`
+                : 'All Model Versions'}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Model Versions</SelectItem>
+            {modelFilters.map((company, companyIndex) => (
+              <SelectGroup key={company.name}>
+                {companyIndex > 0 && <SelectSeparator />}
+                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
+                  {company.name}
+                </SelectLabel>
+                {company.families.flatMap((family) =>
+                  family.models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <span className="pl-2">{`${family.name} - ${model.version}`}</span>
+                    </SelectItem>
+                  )),
+                )}
+              </SelectGroup>
+            ))}
           </SelectContent>
         </Select>
       </div>
