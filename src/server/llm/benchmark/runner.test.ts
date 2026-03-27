@@ -367,7 +367,7 @@ describe('runBenchmark', () => {
     await cleanTestDatabase()
   })
 
-  it('should complete a full run with valid responses', async () => {
+  it('should auto-publish a full run with valid responses', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
 
@@ -380,7 +380,7 @@ describe('runBenchmark', () => {
       llmService,
     })
 
-    expect(summary.status).toBe('completed')
+    expect(summary.status).toBe('published')
     expect(summary.totalCases).toBe(15)
     expect(summary.completedCases).toBe(15)
     expect(summary.failedCases).toBe(0)
@@ -390,7 +390,7 @@ describe('runBenchmark', () => {
     const run = await db.query.benchmarkRuns.findFirst({
       where: eq(benchmarkRuns.id, summary.runId),
     })
-    expect(run?.status).toBe('completed')
+    expect(run?.status).toBe('published')
     expect(run?.qcStatus).toBe('passed')
   })
 
@@ -466,7 +466,7 @@ describe('runBenchmark', () => {
     expect(firstSummary.runId).toBe(secondSummary.runId)
     expect(firstSummary.status).toBe('running')
     expect(firstSummary.hasRemainingWork).toBe(true)
-    expect(secondSummary.status).toBe('completed')
+    expect(secondSummary.status).toBe('published')
     expect(secondSummary.hasRemainingWork).toBe(false)
     expect(secondSummary.remainingCases).toBe(0)
     expect(secondSummary.completedCases).toBe(15)
@@ -513,7 +513,7 @@ describe('runBenchmark', () => {
     expect(llmService.complete).toHaveBeenCalledTimes(20)
   })
 
-  it('should return the persisted summary for an already completed run', async () => {
+  it('should return the persisted summary for an already published run', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
 
@@ -524,8 +524,8 @@ describe('runBenchmark', () => {
     const summary1 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
     const summary2 = await runBenchmark(season.id, '2026-03-10', { database: db, llmService })
 
-    expect(summary1.status).toBe('completed')
-    expect(summary2.status).toBe('completed')
+    expect(summary1.status).toBe('published')
+    expect(summary2.status).toBe('published')
     expect(summary2.qc.passed).toBe(true)
     expect(summary2.completedCases).toBe(15)
     expect(summary2.invalidOutputCases).toBe(0)
@@ -577,7 +577,7 @@ describe('runBenchmark', () => {
     firstCallBlocked.resolve()
     const firstSummary = await firstRunPromise
 
-    expect(firstSummary.status).toBe('completed')
+    expect(firstSummary.status).toBe('published')
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
@@ -640,7 +640,7 @@ describe('runBenchmark', () => {
     firstCallBlocked.resolve()
     const firstSummary = await firstRunPromise
 
-    expect(firstSummary.status).toBe('completed')
+    expect(firstSummary.status).toBe('published')
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
@@ -717,7 +717,7 @@ describe('runBenchmark', () => {
     firstCallBlocked.resolve()
     const firstSummary = await firstRunPromise
 
-    expect(firstSummary.status).toBe('completed')
+    expect(firstSummary.status).toBe('published')
     expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
@@ -783,7 +783,7 @@ describe('runBenchmark', () => {
     const reclaimedSummary = await reclaimedRunPromise
 
     expect(staleSummary.runId).toBe(reclaimedSummary.runId)
-    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.completedCases).toBe(15)
     expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
 
@@ -794,7 +794,7 @@ describe('runBenchmark', () => {
       ),
     })
 
-    expect(persistedRun?.status).toBe('completed')
+    expect(persistedRun?.status).toBe('published')
     expect(persistedRun?.qcStatus).toBe('passed')
   })
 
@@ -841,13 +841,13 @@ describe('runBenchmark', () => {
       runHeartbeatIntervalMs: 60_000,
     })
 
-    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.errors).toHaveLength(0)
 
     staleWorkerBlocked.resolve()
     const staleSummary = await staleRunPromise
 
-    expect(staleSummary.status).toBe('completed')
+    expect(staleSummary.status).toBe('published')
     expect(staleSummary.errors).toHaveLength(0)
 
     const persistedRun = await db.query.benchmarkRuns.findFirst({
@@ -857,7 +857,7 @@ describe('runBenchmark', () => {
       ),
     })
 
-    expect(persistedRun?.status).toBe('completed')
+    expect(persistedRun?.status).toBe('published')
     expect(persistedRun?.qcStatus).toBe('passed')
     expect(persistedRun?.errorLog).toBeNull()
     expect(reclaimingWorkerService.complete).toHaveBeenCalledTimes(15)
@@ -925,7 +925,7 @@ describe('runBenchmark', () => {
     const staleSummary = await staleRunPromise
     const reclaimedSummary = await reclaimedRunPromise
 
-    expect(reclaimedSummary.status).toBe('completed')
+    expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.completedCases).toBe(15)
     expect(reclaimedSummary.invalidOutputCases).toBe(0)
     expect(staleWorkerService.complete).toHaveBeenCalledTimes(1)

@@ -684,7 +684,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' })
       }
-      if (!['completed', 'qc_failed', 'failed'].includes(run.status)) {
+      if (!['completed', 'published', 'qc_failed', 'failed'].includes(run.status)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Cannot retry cases for run in ${run.status} status`,
@@ -731,7 +731,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
           .where(
             and(
               eq(benchmarkRuns.id, input.runId),
-              inArray(benchmarkRuns.status, ['completed', 'qc_failed', 'failed']),
+              inArray(benchmarkRuns.status, ['completed', 'published', 'qc_failed', 'failed']),
             ),
           )
           .returning({ id: benchmarkRuns.id })

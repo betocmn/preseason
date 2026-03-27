@@ -71,9 +71,10 @@ One execution batch on one date within a season. Runs are **idempotent by
 `(season, date)`** — if a run is interrupted and restarted, it only executes
 cases that don't already have results. This means cron failures are self-healing.
 
-Runs go through a lifecycle: `pending` → `running` → `completed` (or `failed`
-or `qc_failed`) → `published`. Publication is a separate step that requires
-passing quality control checks.
+Runs go through a lifecycle: `pending` → `running` → `published` on QC-passing
+success, or `failed` / `qc_failed` on terminal failure. Older legacy runs may
+still exist in `completed` status and can be backfilled to `published`
+manually, but successful new runs auto-publish once quality control passes.
 
 ### Case Results
 

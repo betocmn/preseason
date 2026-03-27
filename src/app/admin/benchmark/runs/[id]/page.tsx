@@ -46,9 +46,14 @@ export default async function RunDetailPage({ params }: PageProps) {
   const hasFailures = (run.resultStats.failed ?? 0) + (run.resultStats.invalid_output ?? 0) > 0
   const canPublish = run.status === 'completed' && run.qcStatus === 'passed'
   const canRetry =
-    (run.status === 'completed' && hasFailures) ||
+    ((run.status === 'completed' || run.status === 'published') && hasFailures) ||
     run.status === 'qc_failed' ||
     run.status === 'failed'
+  const publicationNote = canPublish
+    ? 'This completed run predates auto-publish. Use Publish Legacy Run only to backfill it.'
+    : run.status === 'published' && run.qcStatus === 'passed'
+      ? 'This run published automatically when QC passed.'
+      : null
 
   const qcChecks: QcCheck[] = run.qcSummaryJson
     ? ((run.qcSummaryJson as { checks?: QcCheck[] }).checks ?? [])
@@ -70,6 +75,9 @@ export default async function RunDetailPage({ params }: PageProps) {
             </Link>{' '}
             &middot; Trigger: {run.trigger}
           </p>
+          {publicationNote && (
+            <p className="text-muted-foreground mt-2 text-sm">{publicationNote}</p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Badge

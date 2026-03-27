@@ -129,4 +129,40 @@ describe('GET /api/cron/benchmark-run', () => {
       maxCases: 6,
     })
   })
+
+  it('returns a published summary when a run auto-publishes after QC passes', async () => {
+    resolveBenchmarkCronRunTargetMock.mockResolvedValue({
+      seasonId: 'season-1',
+      scheduledFor: '2026-03-26',
+      source: 'today',
+    })
+    runBenchmarkMock.mockResolvedValue({
+      runId: 'run-2',
+      seasonId: 'season-1',
+      scheduledFor: '2026-03-26',
+      status: 'published',
+      totalCases: 15,
+      completedCases: 15,
+      failedCases: 0,
+      invalidOutputCases: 0,
+      unresolvedToolCount: 0,
+      processedThisInvocation: 15,
+      remainingCases: 0,
+      hasRemainingWork: false,
+      qc: { passed: true, checks: [] },
+      errors: [],
+    })
+
+    const response = await GET(makeRequest())
+    const body = (await response.json()) as {
+      ok: boolean
+      summary: { status: string; hasRemainingWork: boolean; scheduledFor: string }
+    }
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.summary.status).toBe('published')
+    expect(body.summary.hasRemainingWork).toBe(false)
+    expect(body.summary.scheduledFor).toBe('2026-03-26')
+  })
 })

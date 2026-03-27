@@ -20,7 +20,7 @@ export function PublishRunButton({ runId }: { runId: string }) {
   const router = useRouter()
   const mutation = api.benchmarkAdmin.publishRun.useMutation({
     onSuccess: () => {
-      toast.success('Run published')
+      toast.success('Legacy run published')
       router.refresh()
     },
     onError: (err) => toast.error(err.message),
@@ -29,14 +29,14 @@ export function PublishRunButton({ runId }: { runId: string }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button>Publish Run</Button>
+        <Button>Publish Legacy Run</Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Publish this run?</AlertDialogTitle>
+          <AlertDialogTitle>Publish this legacy run?</AlertDialogTitle>
           <AlertDialogDescription>
-            Published runs are included in public rankings and scoring. Make sure QC checks have
-            passed.
+            New QC-passing runs publish automatically. Use this only to backfill an older completed
+            run that predates auto-publish.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -45,7 +45,7 @@ export function PublishRunButton({ runId }: { runId: string }) {
             onClick={() => mutation.mutate({ runId })}
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? 'Publishing...' : 'Publish'}
+            {mutation.isPending ? 'Publishing...' : 'Publish Legacy Run'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
