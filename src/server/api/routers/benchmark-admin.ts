@@ -797,7 +797,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
         const suggestedResult = rankedResults[0] ?? null
         const isUniqueTopMatch = Boolean(
           suggestedResult &&
-            (rankedResults.length === 1 || suggestedResult.score > rankedResults[1]!.score),
+            (rankedResults.length === 1 || suggestedResult.score > (rankedResults[1]?.score ?? 0)),
         )
 
         return {

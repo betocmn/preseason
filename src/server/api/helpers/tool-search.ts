@@ -1,6 +1,6 @@
 import { asc } from 'drizzle-orm'
-import { fingerprintToolText, normalizeToolText } from '~/server/llm/benchmark/tool-normalization'
 import { tools } from '~/server/db/schema'
+import { fingerprintToolText, normalizeToolText } from '~/server/llm/benchmark/tool-normalization'
 
 type Database = typeof import('~/server/db').db
 
