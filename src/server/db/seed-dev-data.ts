@@ -52,7 +52,7 @@ const CATEGORY_TOOL_PRIORITIES: Record<string, string[]> = {
   ai: ['openai', 'anthropic', 'replicate', 'hugging-face'],
   realtime: ['pusher', 'ably', 'socket-io'],
   testing: ['vitest', 'jest', 'playwright', 'cypress'],
-  'ci-cd': ['github-actions', 'vercel-ci', 'circleci'],
+  'ci-cd': ['github-actions', 'vercel', 'circleci'],
   jobs: ['inngest', 'trigger-dev', 'bullmq', 'quirrel'],
   notifications: ['novu', 'onesignal'],
 }

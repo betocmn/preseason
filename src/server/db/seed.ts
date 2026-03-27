@@ -475,6 +475,7 @@ const TOOLS = [
     slug: 'vercel',
     website: 'https://vercel.com',
     description: 'Frontend deployment and serverless platform',
+    aliases: ['Vercel CI'],
     logoUrl: '/logos/vercel.png',
   },
   {
@@ -780,13 +781,6 @@ const TOOLS = [
     logoUrl: '/logos/github-actions.png',
   },
   {
-    name: 'Vercel CI',
-    slug: 'vercel-ci',
-    website: 'https://vercel.com',
-    description: 'Continuous deployment via Vercel',
-    logoUrl: '/logos/vercel-ci.png',
-  },
-  {
     name: 'CircleCI',
     slug: 'circleci',
     website: 'https://circleci.com',
@@ -961,7 +955,6 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'cypress', categorySlug: 'testing', isPrimary: true },
   // CI/CD
   { toolSlug: 'github-actions', categorySlug: 'ci-cd', isPrimary: true },
-  { toolSlug: 'vercel-ci', categorySlug: 'ci-cd', isPrimary: true },
   { toolSlug: 'circleci', categorySlug: 'ci-cd', isPrimary: true },
   // Jobs
   { toolSlug: 'inngest', categorySlug: 'jobs', isPrimary: true },
