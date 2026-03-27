@@ -618,8 +618,8 @@ QC summary persisted as JSON on the run record.
 - Create-or-load benchmark run for today
 - Execute only missing cases (idempotent resume)
 - Compute QC summary
-- Set run status to `completed` or `qc_failed`
-- Do NOT auto-publish (publication is a separate admin action initially)
+- Set run status to `published` on QC-passing success, otherwise `qc_failed`
+- Keep `publishRun` only as a legacy backfill path for older completed runs
 
 Keep existing `/api/cron/run` for exploration mode.
 
@@ -871,7 +871,7 @@ candidates, and publishing runs.
 #### Run management
 - `listBenchmarkRuns` — Paginated list with QC status
 - `getBenchmarkRun` — Detail view with case result stats
-- `publishRun` — Set status to `published` (only if QC passes)
+- `publishRun` — Backfill a legacy `completed` run into `published`
 - `retryFailedCases` — Re-execute only failed/invalid cases in a run
 
 #### Tool candidate review

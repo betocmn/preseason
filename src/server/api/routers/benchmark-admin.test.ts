@@ -417,6 +417,53 @@ describe('benchmarkAdminRouter', () => {
     expect(detail.caseRows[0]?.result?.decisions[0]?.toolName).toBe('Clerk')
   })
 
+  it('retries failed cases on a published run', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'published',
+        qcStatus: 'passed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [benchmarkCase] = await db.select().from(benchmarkCases)
+    if (!benchmarkCase) throw new Error('No case found')
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'failed',
+      errorMessage: 'Timed out',
+    })
+
+    const result = await caller.benchmarkAdmin.retryFailedCases({ runId: run.id })
+    expect(result.retriedCount).toBe(1)
+
+    const updatedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, run.id),
+    })
+    expect(updatedRun?.status).toBe('pending')
+    expect(updatedRun?.qcStatus).toBeNull()
+  })
+
   // ---------------------------------------------------------------------------
   // Tool candidate review
   // ---------------------------------------------------------------------------

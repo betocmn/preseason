@@ -25,8 +25,10 @@ As of March 26, 2026, these are the main blockers or caveats:
    Admin CRUD pages now exist at `/beto-admin/llms` and `/beto-admin/prompts`
    with full create/edit/delete/toggle-active support.
 4. Cron execution in production requires `CRON_SECRET` to be set.
-5. Runs only become public after an admin publishes them, and publishing is
-   allowed only when the run is `completed` and `qcStatus = passed`.
+5. ~~Runs only become public after an admin publishes them, and publishing is
+   allowed only when the run is `completed` and `qcStatus = passed`.~~
+   **Resolved.** QC-passing runs now auto-publish. Manual publish remains only
+   as a backfill path for legacy completed runs.
 
 ## What Production Needs
 
@@ -89,7 +91,7 @@ not be able to:
 - create seasons
 - freeze seasons
 - review tool candidates
-- publish runs
+- backfill legacy runs if needed
 
 ## Recommended Pre-Deploy Checklist
 
@@ -173,7 +175,7 @@ to watch progress.
 What to look for on the run page:
 
 - case counts are increasing
-- status eventually becomes `completed` or `qc_failed`
+- status eventually becomes `published` or `qc_failed`
 - `invalid_output` is low
 - drift errors are absent
 - unresolved tool names are manageable
@@ -192,16 +194,21 @@ not contribute cleanly to rankings.
 Do this continuously during the first few days of production, because live
 outputs will surface naming variants you did not seed as aliases yet.
 
-### 5. Publish Only Passing Runs
+### 5. QC-Passing Runs Auto-Publish
 
 Open the run detail page:
 
 - `/beto-admin/benchmark/runs/<runId>`
 
-Publish is available only when:
+Once a run finishes with:
 
-- `status = completed`
 - `qcStatus = passed`
+
+it is automatically moved to `published` and starts contributing to public
+rankings, matches, and prompt summaries.
+
+Manual publish is still available only for older completed runs that predate
+auto-publish.
 
 If the run is `qc_failed`, fix the actual issue first. Common causes are:
 
@@ -237,7 +244,7 @@ So, in the first 24 hours, the public benchmark pages stay empty until:
 
 1. a benchmark run finishes
 2. QC passes
-3. an admin publishes that run
+3. the run auto-publishes
 
 If none of that has happened yet:
 
@@ -316,7 +323,7 @@ That means:
 ### Days 2 to 7
 
 - Review tool candidates daily
-- Publish only clean passing runs
+- Investigate any `qc_failed` runs
 - Watch which categories consistently clear thresholds
 
 ### After 21 Published Runs
