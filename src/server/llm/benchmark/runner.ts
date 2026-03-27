@@ -35,7 +35,12 @@ export type BenchmarkRunOptions = {
   maxCases?: number
 }
 
-export type BenchmarkRunSummaryStatus = 'completed' | 'failed' | 'qc_failed' | 'running'
+export type BenchmarkRunSummaryStatus =
+  | 'completed'
+  | 'failed'
+  | 'published'
+  | 'qc_failed'
+  | 'running'
 
 export type BenchmarkRunSummary = {
   runId: string
@@ -78,7 +83,6 @@ function getErrorMessage(error: unknown): string {
 }
 
 function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): BenchmarkRunSummaryStatus {
-  if (status === 'published') return 'completed'
   if (status === 'pending') return 'running'
   return status
 }
@@ -1026,7 +1030,7 @@ async function executeRun(
       }
     }
 
-    const finalStatus = metrics.qc.passed ? 'completed' : 'qc_failed'
+    const finalStatus = metrics.qc.passed ? 'published' : 'qc_failed'
 
     const [finalizedRun] = await database
       .update(benchmarkRuns)

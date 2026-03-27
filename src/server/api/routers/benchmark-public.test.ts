@@ -37,6 +37,8 @@ async function seedSeasonDecision(args: {
   decisionType?: 'tool' | 'none'
   toolId?: string | null
   rawToolName?: string | null
+  runStatus?: 'completed' | 'published'
+  qcStatus?: string | null
   scheduledFor?: string
 }) {
   const {
@@ -48,6 +50,8 @@ async function seedSeasonDecision(args: {
     decisionType = 'tool',
     toolId = null,
     rawToolName = null,
+    runStatus = 'published',
+    qcStatus = 'passed',
     scheduledFor = '2026-03-10',
   } = args
 
@@ -67,7 +71,8 @@ async function seedSeasonDecision(args: {
       .values({
         seasonId,
         scheduledFor,
-        status: 'published',
+        status: runStatus,
+        qcStatus,
       })
       .returning(),
   )
@@ -184,13 +189,18 @@ async function seedBenchmarkPublicFixture() {
       })
       .returning(),
   )
-  await db.insert(benchmarkSeasons).values({
-    protocolId: protocol.id,
-    slug: 'season-fresh',
-    name: 'Fresh Season',
-    status: 'active',
-    createdAt: new Date('2026-03-04T00:00:00.000Z'),
-  })
+  const freshSeason = first(
+    await db
+      .insert(benchmarkSeasons)
+      .values({
+        protocolId: protocol.id,
+        slug: 'season-fresh',
+        name: 'Fresh Season',
+        status: 'active',
+        createdAt: new Date('2026-03-04T00:00:00.000Z'),
+      })
+      .returning(),
+  )
 
   const prompt = first(
     await db
@@ -275,7 +285,7 @@ async function seedBenchmarkPublicFixture() {
     rawToolName: 'Clerk',
   })
 
-  return { authCategory, clerk, explorationSeason, supabase }
+  return { authCategory, clerk, explorationSeason, freshSeason, modelSnapshot, promptVersion, supabase }
 }
 
 describe('benchmark public routers', () => {
@@ -302,6 +312,32 @@ describe('benchmark public routers', () => {
     })
 
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
+  })
+
+  it('uses an auto-published passing run without requiring publishRun', async () => {
+    const { authCategory, freshSeason, modelSnapshot, promptVersion, supabase } =
+      await seedBenchmarkPublicFixture()
+
+    await seedSeasonDecision({
+      db: getTestDb(),
+      seasonId: freshSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: authCategory.id,
+      toolId: supabase?.id ?? '',
+      rawToolName: 'Supabase',
+      runStatus: 'published',
+      qcStatus: 'passed',
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'auth',
+      windowType: 'run_day',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.ranking?.items[0]?.toolSlug).toBe('supabase')
   })
 
   it('uses the latest published benchmark season for matches when seasonId is omitted', async () => {
