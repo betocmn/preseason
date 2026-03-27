@@ -1,6 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { categories, subcategories, toolAliases, toolCandidates, tools } from '~/server/db/schema'
+import {
+  categories,
+  subcategories,
+  toolAliases,
+  toolCandidates,
+  toolCategories,
+  tools,
+} from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import {
   buildToolResolutionIndex,
@@ -47,6 +54,17 @@ async function seedSubcategory(db: ReturnType<typeof getTestDb>, groupId: string
       .insert(subcategories)
       .values({ categoryId: groupId, name: 'Auth', slug: 'auth', displayOrder: 1 })
       .returning(),
+  )
+}
+
+async function assignToolToCategory(
+  db: ReturnType<typeof getTestDb>,
+  toolId: string,
+  categoryId: string,
+  isPrimary = true,
+) {
+  return first(
+    await db.insert(toolCategories).values({ toolId, categoryId, isPrimary }).returning(),
   )
 }
 
@@ -123,6 +141,38 @@ describe('Tool Resolver', () => {
       }
     })
 
+    it('should auto-resolve known fingerprint variants and save them as aliases', async () => {
+      const db = getTestDb()
+      const group = await seedCategoryGroup(db)
+      const category = await seedSubcategory(db, group.id)
+      const tool = await seedTool(db, 'Clerk', 'clerk')
+      await assignToolToCategory(db, tool.id, category.id)
+      const index = await buildToolResolutionIndex(db)
+
+      const result = await resolveToolWithCandidateQueue(db, 'clerk.dev', index, category.id)
+
+      expect(result.status).toBe('resolved')
+      if (result.status === 'resolved') {
+        expect(result.toolId).toBe(tool.id)
+      }
+
+      const alias = await db.query.toolAliases.findFirst({
+        where: eq(toolAliases.normalizedAlias, 'clerk.dev'),
+      })
+      expect(alias?.toolId).toBe(tool.id)
+      expect(alias?.source).toBe('auto_resolver')
+    })
+
+    it('should auto-resolve unique global fingerprints without category context', async () => {
+      const db = getTestDb()
+      await seedTool(db, 'Clerk', 'clerk')
+      const index = await buildToolResolutionIndex(db)
+
+      const result = await resolveToolWithCandidateQueue(db, 'clerk.dev', index, null)
+
+      expect(result).toMatchObject({ status: 'resolved' })
+    })
+
     it('should create a tool candidate for unknown tools', async () => {
       const db = getTestDb()
       const index = await buildToolResolutionIndex(db)
@@ -168,6 +218,20 @@ describe('Tool Resolver', () => {
         .from(toolCandidates)
         .where(eq(toolCandidates.normalizedName, 'newtool'))
       expect(candidates[0]?.suggestedCategoryId).toBe(category.id)
+    })
+
+    it('should keep generic unknown names unresolved', async () => {
+      const db = getTestDb()
+      const index = await buildToolResolutionIndex(db)
+
+      const result = await resolveToolWithCandidateQueue(db, 'PostgreSQL', index, null)
+
+      expect(result.status).toBe('unresolved_tool')
+
+      const candidate = await db.query.toolCandidates.findFirst({
+        where: eq(toolCandidates.normalizedName, 'postgresql'),
+      })
+      expect(candidate?.status).toBe('pending')
     })
   })
 })
