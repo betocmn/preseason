@@ -11,9 +11,9 @@
  */
 
 import crypto from 'node:crypto'
-import { isNotNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { cleanBenchmarkData } from '~/server/db/benchmark-cleanup'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
 import { isPromptLevel } from '~/server/llm/prompts'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
@@ -70,35 +70,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // CLEANUP
 // ============================================================================
 
-async function cleanBenchmarkData() {
-  console.log('Cleaning previous benchmark data...')
-  await db.delete(schema.benchmarkCaseDecisions).where(isNotNull(schema.benchmarkCaseDecisions.id))
-  await db.delete(schema.benchmarkCaseResults).where(isNotNull(schema.benchmarkCaseResults.id))
-  await db.delete(schema.benchmarkRuns).where(isNotNull(schema.benchmarkRuns.id))
-  await db.delete(schema.benchmarkCases).where(isNotNull(schema.benchmarkCases.id))
-  await db
-    .delete(schema.benchmarkSeasonModels)
-    .where(isNotNull(schema.benchmarkSeasonModels.seasonId))
-  await db
-    .delete(schema.benchmarkSeasonPrompts)
-    .where(isNotNull(schema.benchmarkSeasonPrompts.seasonId))
-  await db
-    .delete(schema.benchmarkPromptVersionCategories)
-    .where(isNotNull(schema.benchmarkPromptVersionCategories.promptVersionId))
-  await db
-    .delete(schema.benchmarkPromptVersions)
-    .where(isNotNull(schema.benchmarkPromptVersions.id))
-  await db
-    .delete(schema.benchmarkModelSnapshots)
-    .where(isNotNull(schema.benchmarkModelSnapshots.id))
-  await db.delete(schema.benchmarkSeasons).where(isNotNull(schema.benchmarkSeasons.id))
-  await db.delete(schema.benchmarkProtocols).where(isNotNull(schema.benchmarkProtocols.id))
-  await db
-    .delete(schema.benchmarkModelWeightConfigs)
-    .where(isNotNull(schema.benchmarkModelWeightConfigs.id))
-  console.log('  Cleaned 12 benchmark tables')
-}
-
 // ============================================================================
 // LOAD EXISTING DATA
 // ============================================================================
@@ -148,7 +119,9 @@ async function loadExistingData() {
 async function seedBenchmarkData() {
   console.log('=== Benchmark Data Generation ===\n')
 
-  await cleanBenchmarkData()
+  console.log('Cleaning previous benchmark data...')
+  await cleanBenchmarkData(db)
+  console.log('  Cleaned benchmark and match benchmark-derived tables')
   const data = await loadExistingData()
   const { allPrompts, allLlms, categorySlugToId, categoryToolsMap } = data
 
