@@ -9,6 +9,7 @@
  * All operations are idempotent (safe to run multiple times).
  */
 
+import { pathToFileURL } from 'node:url'
 import { notInArray, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
@@ -16,15 +17,10 @@ import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 
 import * as schema from './schema'
 
-const DATABASE_URL = process.env.DATABASE_URL
+type SeedDatabase = typeof import('~/server/db').db
 
-if (!DATABASE_URL) {
-  console.error('DATABASE_URL environment variable is required')
-  process.exit(1)
-}
-
-const conn = postgres(DATABASE_URL)
-const db = drizzle(conn, { schema })
+let conn: ReturnType<typeof postgres> | null = null
+let db!: SeedDatabase
 
 // ============================================================================
 // SEED DATA
@@ -116,7 +112,7 @@ const SUBCATEGORY_GROUP_MAP: Record<string, string> = {
   notifications: 'devtools',
 }
 
-const SUBCATEGORIES = [
+export const SUBCATEGORIES = [
   {
     name: 'Authentication',
     slug: 'auth',
@@ -266,7 +262,7 @@ const SUBCATEGORIES = [
   },
 ]
 
-const TOOLS = [
+export const TOOLS = [
   // Auth
   {
     name: 'Clerk',
@@ -985,7 +981,7 @@ const TOOLS = [
 ]
 
 // Map tool slugs to their category slugs (with isPrimary flag)
-const TOOL_CATEGORY_ASSIGNMENTS: Array<{
+export const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   toolSlug: string
   categorySlug: string
   isPrimary: boolean
@@ -1133,7 +1129,7 @@ const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
   isActive: true,
 }))
 
-const PROMPTS = [
+export const PROMPTS = [
   {
     title: 'Real Estate Website',
     slug: 'real-estate-website',
@@ -1531,6 +1527,14 @@ async function seedPrompts() {
 // ============================================================================
 
 async function seed() {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL environment variable is required')
+  }
+
+  conn = postgres(databaseUrl)
+  db = drizzle(conn, { schema })
+
   await seedAdminUsers()
   await seedCategoryGroups()
   await seedSubcategories()
@@ -1541,11 +1545,16 @@ async function seed() {
   console.log('Seeding complete!')
 }
 
-seed()
-  .catch((e) => {
-    console.error('Seeding failed:', e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await conn.end()
-  })
+const entrypoint = process.argv[1]
+const isDirectExecution = entrypoint ? import.meta.url === pathToFileURL(entrypoint).href : false
+
+if (isDirectExecution) {
+  void seed()
+    .catch((e) => {
+      console.error('Seeding failed:', e)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await conn?.end()
+    })
+}
