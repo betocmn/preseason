@@ -623,6 +623,50 @@ describe('claimNextMatchBatchExecution', () => {
     expect(result.batch?.id).toBe(staleBatch.id)
   })
 
+  it('should prefer pending batches over older failed retries', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const failedBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+      idempotencyKey: 'failed-batch',
+    })
+
+    const pendingBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+      idempotencyKey: 'pending-batch-priority',
+    })
+
+    await db
+      .update(matchBatches)
+      .set({
+        status: 'failed',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        completedAt: new Date('2026-01-01T00:01:00.000Z'),
+      })
+      .where(eq(matchBatches.id, failedBatch.id))
+
+    await db
+      .update(matchBatches)
+      .set({ createdAt: new Date('2026-01-01T00:05:00.000Z') })
+      .where(eq(matchBatches.id, pendingBatch.id))
+
+    const result = await claimNextMatchBatchExecution(db)
+
+    expect(result.execute).toBe(true)
+    expect(result.batch?.id).toBe(pendingBatch.id)
+  })
+
   it('should scope dispatch selection to the requested season', async () => {
     const db = getTestDb()
     const { category, toolA, toolB, template } = await seedMatchFixture()

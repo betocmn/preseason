@@ -347,16 +347,26 @@ async function findNextDispatchableMatchBatchId(
     return staleBatch.id
   }
 
-  const queuedBatch = await database.query.matchBatches.findFirst({
+  const pendingBatch = await database.query.matchBatches.findFirst({
     where: and(
       seasonClause,
-      or(eq(matchBatches.status, 'pending'), eq(matchBatches.status, 'failed')),
+      eq(matchBatches.status, 'pending'),
     ),
     orderBy: [asc(matchBatches.createdAt), asc(matchBatches.id)],
     columns: { id: true },
   })
 
-  return queuedBatch?.id ?? null
+  if (pendingBatch) {
+    return pendingBatch.id
+  }
+
+  const failedBatch = await database.query.matchBatches.findFirst({
+    where: and(seasonClause, eq(matchBatches.status, 'failed')),
+    orderBy: [asc(matchBatches.createdAt), asc(matchBatches.id)],
+    columns: { id: true },
+  })
+
+  return failedBatch?.id ?? null
 }
 
 export async function claimNextMatchBatchExecution(
