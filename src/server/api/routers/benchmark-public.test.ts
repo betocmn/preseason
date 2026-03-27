@@ -285,7 +285,15 @@ async function seedBenchmarkPublicFixture() {
     rawToolName: 'Clerk',
   })
 
-  return { authCategory, clerk, explorationSeason, freshSeason, modelSnapshot, promptVersion, supabase }
+  return {
+    authCategory,
+    clerk,
+    explorationSeason,
+    freshSeason,
+    modelSnapshot,
+    promptVersion,
+    supabase,
+  }
 }
 
 describe('benchmark public routers', () => {
