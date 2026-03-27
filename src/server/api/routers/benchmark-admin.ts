@@ -3,6 +3,12 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
+import {
+  describeToolSearchMatch,
+  loadToolSearchCatalog,
+  rankToolSearchCatalog,
+  stripToolSearchRelations,
+} from '~/server/api/helpers/tool-search'
 import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc'
 import {
   benchmarkCaseDecisions,
@@ -763,6 +769,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
       await requireRole(ctx.db, ctx.user.id, ['admin'])
 
       const where = input.status ? eq(toolCandidates.status, input.status) : undefined
+      const toolSearchCatalog = await loadToolSearchCatalog(ctx.db)
 
       const countResult = await ctx.db
         .select({ count: sql<number>`count(*)` })
@@ -781,7 +788,37 @@ export const benchmarkAdminRouter = createTRPCRouter({
         },
       })
 
-      return { items, total, limit: input.limit, offset: input.offset }
+      const itemsWithSuggestions = items.map((candidate) => {
+        const rankedResults = rankToolSearchCatalog(toolSearchCatalog, {
+          query: candidate.rawName,
+          categoryId: candidate.suggestedCategoryId ?? undefined,
+          limit: 2,
+        })
+        const suggestedResult = rankedResults[0] ?? null
+        const isUniqueTopMatch = Boolean(
+          suggestedResult &&
+            (rankedResults.length === 1 || suggestedResult.score > rankedResults[1]!.score),
+        )
+
+        return {
+          ...candidate,
+          suggestedTool: suggestedResult ? stripToolSearchRelations(suggestedResult.tool) : null,
+          suggestionReason:
+            suggestedResult && isUniqueTopMatch
+              ? describeToolSearchMatch(suggestedResult, isUniqueTopMatch)
+              : null,
+          canAutoApprove: Boolean(
+            suggestedResult && isUniqueTopMatch && suggestedResult.matchType !== 'substring',
+          ),
+        }
+      })
+
+      return {
+        items: itemsWithSuggestions,
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      }
     }),
 
   approveCandidate: protectedProcedure

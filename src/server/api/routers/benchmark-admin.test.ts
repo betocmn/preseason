@@ -608,6 +608,40 @@ describe('benchmarkAdminRouter', () => {
     expect(toolCategory?.categoryId).toBe(category.id)
   })
 
+  it('returns unique candidate suggestions for likely matches', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+
+    const tool = await caller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Expected tool to be created')
+
+    const db = getTestDb()
+    await db.insert(toolCandidates).values({
+      rawName: 'clerk.dev',
+      normalizedName: 'clerk.dev',
+      seenCount: 3,
+      suggestedCategoryId: category.id,
+      status: 'pending',
+    })
+
+    const candidates = await caller.benchmarkAdmin.listToolCandidates({
+      limit: 10,
+      offset: 0,
+      status: 'pending',
+    })
+
+    expect(candidates.items[0]?.suggestedTool?.id).toBe(tool.id)
+    expect(candidates.items[0]?.suggestionReason).toBe(
+      'Unique fingerprint match in suggested category',
+    )
+    expect(candidates.items[0]?.canAutoApprove).toBe(true)
+  })
+
   it('rejects a candidate with notes', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
