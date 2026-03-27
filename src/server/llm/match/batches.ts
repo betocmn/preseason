@@ -348,10 +348,7 @@ async function findNextDispatchableMatchBatchId(
   }
 
   const pendingBatch = await database.query.matchBatches.findFirst({
-    where: and(
-      seasonClause,
-      eq(matchBatches.status, 'pending'),
-    ),
+    where: and(seasonClause, eq(matchBatches.status, 'pending')),
     orderBy: [asc(matchBatches.createdAt), asc(matchBatches.id)],
     columns: { id: true },
   })
