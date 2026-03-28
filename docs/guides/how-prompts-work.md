@@ -10,7 +10,7 @@ The runtime source of truth is the `preseason_prompt` table:
 | Column | Purpose |
 |--------|---------|
 | `slug` | Stable identifier used in URLs and versioning |
-| `level` | Audience segment (`vibe-coder`, `software-dev-beginner`, `software-dev-experienced`) |
+| `level` | Audience segment (`beginner`, `intermediate`, `advanced`) |
 | `title` | Human-readable prompt name |
 | `description` | Short summary for public/admin views |
 | `expected_categories` | The categories this prompt should produce decisions for |
@@ -27,7 +27,7 @@ prompt content from `preseason_prompt.content_md`:
 ```ts
 import { getPromptContent } from '~/server/llm/prompts'
 
-const content = await getPromptContent('real-estate-website', 'vibe-coder', db)
+const content = await getPromptContent('real-estate-website', 'beginner', db)
 ```
 
 That helper is used by the public prompt pages and by benchmark-related flows
@@ -42,7 +42,7 @@ Each frozen prompt version stores:
 
 - The prompt content snapshot
 - A SHA-256 content hash
-- The prompt tier (`basic`, `intermediate`, `advanced`)
+- The prompt level (`beginner`, `intermediate`, `advanced`)
 - The prompt contract version
 - The system prompt snapshot used at freeze time
 - The eligible categories for that version
@@ -57,17 +57,18 @@ Prompt levels are still part of the corpus:
 
 | Level | Description |
 |-------|-------------|
-| `vibe-coder` | Non-technical builder describing an outcome |
-| `software-dev-beginner` | Junior developer with some technical detail |
-| `software-dev-experienced` | Experienced developer with explicit technical constraints |
+| `beginner` | Plain-language request focused on product outcomes and core features |
+| `intermediate` | More technical request with implementation details and standard engineering constraints |
+| `advanced` | Production-grade request with explicit architecture, reliability, and operational constraints |
 
-Season 1 is still mostly `vibe-coder` web-app prompts, but the schema supports
-multiple levels without mixing them accidentally.
+The seeded corpus now contains 45 prompt variants: 15 web-app scenarios x 3
+levels. The schema keeps those variants separated by `(slug, level)` so they do
+not get mixed accidentally.
 
 ## Editing the Corpus
 
-The seeded prompt corpus currently lives in `src/server/db/seed.ts`, where both
-metadata and `contentMd` are inserted together.
+The seeded prompt corpus currently lives in `src/server/db/prompt-corpus.ts`,
+and `src/server/db/seed.ts` imports it when seeding the database.
 
 When you change prompt text:
 
