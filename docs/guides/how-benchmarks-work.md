@@ -40,8 +40,8 @@ always reference the exact text that was sent to the model.
 
 Each prompt version has:
 - **Content hash** — SHA-256 of the prompt markdown, used for deduplication
-- **Difficulty tier** — `basic`, `intermediate`, or `advanced` based on the
-  complexity of the development scenario
+- **Prompt level** — `beginner`, `intermediate`, or `advanced` based on how
+  technically specific the request is
 - **Eligible categories** — explicit list of which tool categories the prompt
   should produce recommendations for
 
@@ -62,7 +62,7 @@ Each model snapshot has:
 ### Cases
 
 The cartesian product of a season's prompt versions and model snapshots. If a
-season has 15 prompts and 8 models, it has 120 cases. Each case represents one
+season has 45 prompts and 8 models, it has 360 cases. Each case represents one
 specific evaluation: "What does this model recommend for this prompt?"
 
 ### Runs
@@ -199,8 +199,8 @@ potentially misleading thin-coverage rankings.
 
 Public rankings support two filters that compose:
 
-- **Prompt tier** — "What do models recommend for hard problems?" (`advanced`)
-  vs. simple ones (`basic`)
+- **Prompt level** — "What do models recommend for highly technical requests?"
+  (`advanced`) vs. simpler ones (`beginner`)
 - **Model tier** — "What do frontier models recommend?" (`frontier`) vs. all models
 
 These filters are where defensibility comes from. "Supabase is the #1 database
@@ -297,7 +297,8 @@ The benchmark does not go public until ALL of these are true:
 ## Honest Scope
 
 The benchmark's prompt panel currently covers **web application development
-scenarios** (vibe-coder prompts for building SaaS, blogs, e-commerce, etc.).
-Rankings reflect LLM recommendations for this specific domain. The benchmark
-does not claim to cover all developer workflows — that requires expanding the
-prompt panel in future seasons.
+scenarios** across 15 recurring slugs, each represented at `beginner`,
+`intermediate`, and `advanced` prompting levels. Rankings reflect LLM
+recommendations for this specific domain. The benchmark does not claim to cover
+all developer workflows — that requires expanding the prompt panel in future
+seasons.

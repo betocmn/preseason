@@ -46,9 +46,11 @@ export default function MethodologyPage() {
           </P>
           <P>
             <strong className="text-foreground">Prompt panel:</strong> A curated set of development
-            scenarios ranging from simple applications to complex multi-service architectures. Each
-            prompt is classified by difficulty tier (basic, intermediate, advanced) and specifies
-            which tool categories are relevant.
+            scenarios ranging from simple applications to complex multi-service architectures. The
+            current seeded corpus covers 15 web-app scenarios, each represented at beginner,
+            intermediate, and advanced prompting levels for 45 prompt variants total. Each prompt
+            level changes the technical specificity of the request while keeping the target tool
+            categories consistent within a scenario.
           </P>
           <P>
             <strong className="text-foreground">Model panel:</strong> A curated panel of 20 current
@@ -189,9 +191,10 @@ export default function MethodologyPage() {
         <Section title="Scope">
           <P>
             The current prompt panel focuses on{' '}
-            <strong className="text-foreground">web application development</strong> scenarios,
-            primarily full-stack and SaaS applications. Rankings should be interpreted within this
-            scope.
+            <strong className="text-foreground">web application development</strong> scenarios. It
+            currently covers 15 recurring scenario slugs represented across beginner, intermediate,
+            and advanced prompting levels, with a bias toward full-stack and SaaS style products.
+            Rankings should be interpreted within this scope.
           </P>
           <P>
             Categories with limited prompt coverage (few prompts mentioning that category) will show
