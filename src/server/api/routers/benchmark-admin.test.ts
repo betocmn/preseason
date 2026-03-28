@@ -681,6 +681,45 @@ describe('benchmarkAdminRouter', () => {
     expect(candidates.items[0]?.canAutoApprove).toBe(true)
   })
 
+  it('does not mark low-confidence ai suggestions as auto-approvable', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+
+    const tool = await caller.tool.create({
+      name: 'Simple',
+      slug: 'simple',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Expected tool to be created')
+
+    const db = getTestDb()
+    await db.insert(toolCandidates).values({
+      rawName: 'Simple Labs CI',
+      normalizedName: 'simple labs ci',
+      seenCount: 2,
+      suggestedCategoryId: category.id,
+      status: 'pending',
+      aiSuggestedToolId: tool.id,
+      aiReviewConfidence: 0.61,
+      aiReviewReason: 'This might be a variant of Simple, but the evidence is weak.',
+      aiReviewModel: 'openai/gpt-5.4-mini',
+      aiReviewedAt: new Date('2026-03-28T00:00:00Z'),
+    })
+
+    const candidates = await caller.benchmarkAdmin.listToolCandidates({
+      limit: 10,
+      offset: 0,
+      status: 'pending',
+    })
+
+    expect(candidates.items[0]?.suggestedTool?.id).toBe(tool.id)
+    expect(candidates.items[0]?.suggestionReason).toBe(
+      'This might be a variant of Simple, but the evidence is weak.',
+    )
+    expect(candidates.items[0]?.canAutoApprove).toBe(false)
+  })
+
   it('rejects a candidate with notes', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

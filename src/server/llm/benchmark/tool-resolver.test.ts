@@ -233,5 +233,57 @@ describe('Tool Resolver', () => {
       })
       expect(candidate?.status).toBe('pending')
     })
+
+    it('should use the suggested category to disambiguate fingerprint matches', async () => {
+      const db = getTestDb()
+      const group = await seedCategoryGroup(db)
+      const authCategory = await seedSubcategory(db, group.id)
+      const opsCategory = first(
+        await db
+          .insert(subcategories)
+          .values({ categoryId: group.id, name: 'Ops', slug: 'ops', displayOrder: 2 })
+          .returning(),
+      )
+      const authTool = await seedTool(db, 'Acme Auth', 'acme-auth')
+      const opsTool = await seedTool(db, 'Acme.Auth', 'acme-auth-dotted')
+      await assignToolToCategory(db, authTool.id, authCategory.id)
+      await assignToolToCategory(db, opsTool.id, opsCategory.id)
+      const index = await buildToolResolutionIndex(db)
+
+      const result = await resolveToolWithCandidateQueue(
+        db,
+        'https://acme.auth',
+        index,
+        authCategory.id,
+      )
+
+      expect(result).toEqual({ status: 'resolved', toolId: authTool.id })
+    })
+
+    it('should keep ambiguous fingerprint matches unresolved without category context', async () => {
+      const db = getTestDb()
+      const group = await seedCategoryGroup(db)
+      const authCategory = await seedSubcategory(db, group.id)
+      const opsCategory = first(
+        await db
+          .insert(subcategories)
+          .values({ categoryId: group.id, name: 'Ops', slug: 'ops', displayOrder: 2 })
+          .returning(),
+      )
+      const authTool = await seedTool(db, 'Acme Auth', 'acme-auth')
+      const opsTool = await seedTool(db, 'Acme.Auth', 'acme-auth-dotted')
+      await assignToolToCategory(db, authTool.id, authCategory.id)
+      await assignToolToCategory(db, opsTool.id, opsCategory.id)
+      const index = await buildToolResolutionIndex(db)
+
+      const result = await resolveToolWithCandidateQueue(db, 'https://acme.auth', index, null)
+
+      expect(result.status).toBe('unresolved_tool')
+
+      const candidate = await db.query.toolCandidates.findFirst({
+        where: eq(toolCandidates.normalizedName, 'https://acme.auth'),
+      })
+      expect(candidate?.status).toBe('pending')
+    })
   })
 })
