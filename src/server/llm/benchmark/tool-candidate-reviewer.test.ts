@@ -1,9 +1,9 @@
-import type { CompletionRequest, CompletionResponse } from '~/server/llm/service'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toolCandidates } from '~/server/db/schema'
-import { reviewPendingToolCandidates } from './tool-candidate-reviewer'
+import type { CompletionRequest, CompletionResponse } from '~/server/llm/service'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
+import { reviewPendingToolCandidates } from './tool-candidate-reviewer'
 
 type MockCompleteFn = (_provider: string, request: CompletionRequest) => Promise<CompletionResponse>
 
