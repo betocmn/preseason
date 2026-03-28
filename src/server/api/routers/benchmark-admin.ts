@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import {
@@ -785,10 +786,22 @@ export const benchmarkAdminRouter = createTRPCRouter({
         with: {
           suggestedCategory: true,
           approvedTool: true,
+          aiSuggestedTool: true,
         },
       })
 
       const itemsWithSuggestions = items.map((candidate) => {
+        if (candidate.aiSuggestedTool) {
+          return {
+            ...candidate,
+            suggestedTool: candidate.aiSuggestedTool,
+            suggestionReason: candidate.aiReviewReason ?? 'LLM-reviewed likely match',
+            canAutoApprove:
+              (candidate.aiReviewConfidence ?? 0) >=
+              serverSettings.toolCandidateReview.autoApproveConfidence,
+          }
+        }
+
         const rankedResults = rankToolSearchCatalog(toolSearchCatalog, {
           query: candidate.rawName,
           categoryId: candidate.suggestedCategoryId ?? undefined,

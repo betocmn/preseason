@@ -642,6 +642,45 @@ describe('benchmarkAdminRouter', () => {
     expect(candidates.items[0]?.canAutoApprove).toBe(true)
   })
 
+  it('prefers stored ai-reviewed suggestions over fallback matching', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+
+    const tool = await caller.tool.create({
+      name: 'Simple',
+      slug: 'simple',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Expected tool to be created')
+
+    const db = getTestDb()
+    await db.insert(toolCandidates).values({
+      rawName: 'Simple Labs CI',
+      normalizedName: 'simple labs ci',
+      seenCount: 2,
+      suggestedCategoryId: category.id,
+      status: 'pending',
+      aiSuggestedToolId: tool.id,
+      aiReviewConfidence: 0.94,
+      aiReviewReason: 'LLM confirmed this is a branded variant of Simple.',
+      aiReviewModel: 'openai/gpt-5.4-mini',
+      aiReviewedAt: new Date('2026-03-28T00:00:00Z'),
+    })
+
+    const candidates = await caller.benchmarkAdmin.listToolCandidates({
+      limit: 10,
+      offset: 0,
+      status: 'pending',
+    })
+
+    expect(candidates.items[0]?.suggestedTool?.id).toBe(tool.id)
+    expect(candidates.items[0]?.suggestionReason).toBe(
+      'LLM confirmed this is a branded variant of Simple.',
+    )
+    expect(candidates.items[0]?.canAutoApprove).toBe(true)
+  })
+
   it('rejects a candidate with notes', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

@@ -134,6 +134,38 @@ describe('toolRouter', () => {
     expect(fingerprintSearch[0]?.slug).toBe('clerk')
   })
 
+  it('searches by fuzzy long-form variants', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const adminCaller = createTestCaller(authUser)
+
+    const group = await adminCaller.category.createGroup({
+      name: 'Devtools',
+      slug: 'devtools',
+      displayOrder: 1,
+    })
+    if (!group) throw new Error('Expected group to be created')
+    const category = await adminCaller.category.create({
+      name: 'CI/CD',
+      slug: 'ci-cd',
+      categoryId: group.id,
+      description: 'CI',
+      icon: 'refresh-cw',
+      displayOrder: 1,
+    })
+    if (!category) throw new Error('Expected category to be created')
+
+    await adminCaller.tool.create({
+      name: 'Simple',
+      slug: 'simple',
+      categoryIds: [category.id],
+    })
+
+    const caller = createTestCaller(null)
+    const fuzzySearch = await caller.tool.search({ query: 'Simple Labs CI', limit: 10 })
+
+    expect(fuzzySearch[0]?.slug).toBe('simple')
+  })
+
   it('biases search results toward the requested category', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const adminCaller = createTestCaller(authUser)
