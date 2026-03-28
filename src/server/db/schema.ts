@@ -694,6 +694,14 @@ export const toolCandidates = createTable(
       .references(() => subcategories.id, { onDelete: 'set null' }),
     status: toolCandidateStatusEnum().notNull().default('pending'),
     approvedToolId: d.uuid('approved_tool_id').references(() => tools.id, { onDelete: 'set null' }),
+    aiSuggestedToolId: d
+      .uuid('ai_suggested_tool_id')
+      .references(() => tools.id, { onDelete: 'set null' }),
+    aiReviewConfidence: real('ai_review_confidence'),
+    aiReviewReason: d.text('ai_review_reason'),
+    aiReviewError: d.text('ai_review_error'),
+    aiReviewModel: d.varchar('ai_review_model', { length: 255 }),
+    aiReviewedAt: d.timestamp('ai_reviewed_at', { withTimezone: true }),
     notes: d.text(),
   }),
   (t) => [index('tool_candidate_status_idx').on(t.status)],
@@ -950,6 +958,12 @@ export const toolRelations = relations(tools, ({ one, many }) => ({
     fields: [tools.providerUserId],
     references: [userProfiles.id],
   }),
+  approvedToolCandidates: many(toolCandidates, {
+    relationName: 'candidateApprovedTool',
+  }),
+  aiSuggestedToolCandidates: many(toolCandidates, {
+    relationName: 'candidateAiSuggestedTool',
+  }),
   toolCategories: many(toolCategories),
   toolAliases: many(toolAliases),
 }))
@@ -1153,7 +1167,13 @@ export const toolCandidateRelations = relations(toolCandidates, ({ one }) => ({
     references: [subcategories.id],
   }),
   approvedTool: one(tools, {
+    relationName: 'candidateApprovedTool',
     fields: [toolCandidates.approvedToolId],
+    references: [tools.id],
+  }),
+  aiSuggestedTool: one(tools, {
+    relationName: 'candidateAiSuggestedTool',
+    fields: [toolCandidates.aiSuggestedToolId],
     references: [tools.id],
   }),
 }))
