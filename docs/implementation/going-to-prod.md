@@ -2,354 +2,480 @@
 
 ## Purpose
 
-This document is the production runbook for launching Preseason's benchmark
-pipeline and public benchmark pages.
+This is the production launch runbook for the code currently on `main`.
 
-It covers:
+It is based on the repo state as of March 30, 2026 and is meant to answer two
+practical questions:
 
-- what must be done before deployment
-- what an admin must do after the site is live
-- what the public site will and will not show in the first 24 hours
+1. what still needs to be done before the first real production benchmark run
+2. how to get public benchmark data visible fast enough for a demo without
+   waiting a full day
 
-## Current Production Blockers
+## Repo-Verified Current State
 
-As of March 26, 2026, these are the main blockers or caveats:
+These points are already true in the current codebase:
 
-1. The benchmark cron is still designed as a once-per-day full run.
-   It must be converted to chunked execution before production, because the
-   current active season is too large for one Vercel invocation.
-2. ~~`pnpm run db:seed` is not production-safe as-is.~~ **Resolved.**
-   `db:seed` now only seeds reference data (categories, tools, LLMs, prompts).
-   Synthetic benchmark and critic data moved to `pnpm run db:seed-dev`.
-3. ~~There is no admin UI for managing LLMs or prompts.~~ **Resolved.**
-   Admin CRUD pages now exist at `/beto-admin/llms` and `/beto-admin/prompts`
-   with full create/edit/delete/toggle-active support.
-4. Cron execution in production requires `CRON_SECRET` to be set.
-5. ~~Runs only become public after an admin publishes them, and publishing is
-   allowed only when the run is `completed` and `qcStatus = passed`.~~
-   **Resolved.** QC-passing runs now auto-publish. Manual publish remains only
-   as a backfill path for legacy completed runs.
+- Benchmark cron is already chunked and resumable.
+  - `vercel.json` runs `/api/cron/benchmark-run` every `10` minutes.
+  - Each invocation processes `8` benchmark cases.
+  - Unfinished runs are resumed before a new day is started.
+  - Stale run recovery uses a `15` minute threshold.
+- Match cron already exists.
+  - `vercel.json` runs `/api/cron/match-run` every `15` minutes.
+  - `vercel.json` runs `/api/cron/tool-candidate-review` every `30` minutes.
+- Benchmark runs auto-publish when final QC passes.
+  - New passing runs do not need a manual publish click.
+- Public benchmark pages only read `published` runs.
+  - Until the first run is published, public rankings, public matches, and the
+    homepage prompt carousel stay empty.
+- Public `/matches` pages are built from published benchmark decisions.
+  - They do not depend on direct match batches.
+- Direct match cron only executes existing match batches.
+  - It does not create them automatically from benchmark runs.
+- `pnpm run db:seed` is production-safe reference data only.
+  - It seeds admin users, categories, tools, aliases, LLMs, and prompts.
+  - It does not seed seasons, benchmark runs, critics, or comments.
+- `pnpm run db:migrate` runs a post-migrate hook that already seeds:
+  - default match prompt templates
+  - canonical tool reconciliation invariants
 
-## What Production Needs
+## What Is Still Not Bootstrapped Automatically
 
-### Environment Variables
+These are the remaining manual setup items:
+
+- A benchmark protocol row is not seeded automatically.
+  - There is admin UI to create seasons, but no admin UI to create protocols.
+  - You must insert at least one benchmark protocol row in Supabase before you
+    can create a season.
+- A model weight config is not seeded automatically.
+  - You need exactly one active weight config before cron work is meaningful.
+- A benchmark season is not created or frozen automatically.
+  - An admin must create the season and click `Freeze Season`.
+- Tool candidate review cron does not auto-resolve unknown tool names.
+  - It only writes AI suggestions.
+  - An admin still needs to approve or reject candidates in
+    `/beto-admin/benchmark/tool-candidates`.
+  - Approval auto-replays unresolved decisions.
+- Critics and comments are not created automatically.
+  - The homepage "Latest Verified Critics" section stays empty until you add
+    real critic data.
+
+## Hard Requirements
+
+### Vercel
+
+- Use Vercel `Pro` or `Enterprise`.
+  - This repo defines cron schedules every `10`, `15`, and `30` minutes.
+  - Vercel Hobby rejects cron schedules that run more than once per day.
+- Only the production deployment should be treated as the live benchmark
+  target.
+  - That is the deployment cron jobs will hit.
+
+### Supabase
+
+- Email OTP sign-in must work.
+  - The app uses email OTP for login and signup.
+  - For a real public launch, configure custom SMTP.
+  - For a quick demo, the seeded admin email can be enough if that inbox is
+    usable, but do not rely on default email delivery for a broad launch.
+
+## Environment Variables
 
 Set these in Vercel production:
 
 - `DATABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_APP_URL`
 - `OPENROUTER_API_KEY`
 - `CRON_SECRET`
 
-Notes:
+Strongly recommended:
 
-- `OPENROUTER_API_KEY` is required for benchmark and match execution
-- `CRON_SECRET` is required for both cron routes
-- `SUPABASE_SERVICE_ROLE_KEY` exists in `src/env.js` but is currently unused by
-  the app code
+- `NEXT_PUBLIC_APP_URL`
+  - used for metadata base URLs
+  - used as the OpenRouter HTTP referer
 
-### Database
+Currently unused by app code:
 
-Before launch:
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-1. Point `DATABASE_URL` at the production Postgres / Supabase database
-2. Run migrations with `pnpm run db:migrate`
-3. Do not run `pnpm run db:push`
+## Production Database Commands
 
-### Reference Data
+Be careful here: the package scripts for database work load `.env.local`.
 
-The benchmark season freeze flow snapshots active prompts and active LLMs from
-the database. Before production cron can work, production data must already
-contain:
+That is convenient in local dev, but it is easy to migrate or seed the wrong
+database by accident when preparing production.
 
-- categories
-- tools
-- tool aliases
-- LLM rows
-- prompts
-- at least one active weight config
-- at least one active match prompt template if you plan to use internal match
-  batches
+For production setup, prefer running the underlying commands with an explicit
+`DATABASE_URL` in your shell instead of relying on `.env.local`.
+
+Use this pattern:
+
+```bash
+export DATABASE_URL="postgres://..."
+
+pnpm exec tsx src/server/db/pre-migrate.ts
+pnpm exec drizzle-kit migrate
+pnpm exec tsx src/server/db/post-migrate.ts
+pnpm exec tsx src/server/db/seed.ts
+```
 
 Important:
 
-- `pnpm run db:seed` now seeds only production-safe reference data
-- Synthetic benchmark/critic data lives in `pnpm run db:seed-dev` (do not run
-  this against production)
+- do not run `pnpm run db:push`
+- do not run `pnpm run db:seed-dev`
+- do not run `pnpm run db:seed-benchmark`
 
-### Admin Access
+## Launch Timing Reality
 
-The benchmark admin lives under `/beto-admin`.
+### First Benchmark Run Size
 
-`/admin` redirects there, but the actual admin URL is `/beto-admin`.
+Current seeded reference data produces:
 
-Before launch, make sure your user profile has role `admin`. Otherwise you will
-not be able to:
+- `45` active prompts
+- `20` active LLMs
+- `900` benchmark cases per frozen season run
 
-- create seasons
-- freeze seasons
-- review tool candidates
-- backfill legacy runs if needed
+Current benchmark cron capacity:
 
-## Recommended Pre-Deploy Checklist
+- `8` cases per invocation
+- one invocation every `10` minutes
+- `144` invocations per day
+- `1152` cases/day of total scheduled capacity
 
-1. Land the benchmark batching change from
-   `docs/implementation/benchmark-cron-batching-plan.md`
-2. Re-run the real OpenRouter smoke verification on the final code
-3. Confirm `vercel.json` cron schedules are the intended production schedules
-4. Prepare a production-safe reference-data load path
-5. Run production migrations
-6. Set production environment variables in Vercel
-7. Confirm your own account is `admin`
-8. Deploy
+That means:
 
-## Immediate Post-Deploy Checks
+- one full `900` case benchmark run needs `113` invocations
+- cron-only completion time is about `18h 50m` after season freeze
 
-After the first production deploy:
+### What This Means For Your Demo
 
-1. Open the site and confirm basic app health
-2. Log into `/beto-admin`
-3. Open `/beto-admin/benchmark/weight-configs` and confirm exactly one weight
-   config is active
-4. Verify the database already contains the prompts and LLMs you expect to
-   freeze into the season
-5. Manually call the cron routes once with the production `CRON_SECRET` and
-   confirm they return `200`
+If you freeze a season and do nothing else:
 
-Suggested manual checks:
+- the first published run should still happen in less than `24` hours
+- it will not reliably happen within `12` hours
 
-- `GET /api/cron/benchmark-run`
-- `GET /api/cron/match-run`
+If you want first public data inside `12` hours, you should manually trigger
+extra benchmark cron invocations immediately after freezing.
 
-The match cron is not required for public `/matches` pages to function, but it
-should still be healthy if you plan to use background match batches.
+Two workable options:
 
-## Admin Workflow In Production
+1. Recommended: manually call `/api/cron/benchmark-run` in a serial loop until
+   the run finishes and auto-publishes.
+2. Minimum front-load for a `~12h` finish: manually trigger about `45-50`
+   extra chunks right after freeze, then let normal cron finish the rest.
 
-### 1. Create the Benchmark Season
+Do not parallelize those manual calls. The runner is resumable and ownership
+guarded, but the fastest reliable path is still one chunk at a time.
 
-In `/beto-admin/benchmark`:
+## What Public Pages Will Show After The First Published Run
 
-1. Click `New Season`
-2. Create the new season record
-3. Open the season detail page
+Once the first benchmark run is `published`:
 
-At this point the season is still `draft`.
+- the homepage prompt carousel can populate
+- the homepage featured matches can populate
+- `/rankings` can populate
+- `/matches` can populate
 
-### 2. Freeze the Season
+Current prompt-covered subcategories all clear the ranking publication
+thresholds after one published run:
 
-On `/beto-admin/benchmark/seasons/<seasonId>`:
+- `analytics`: `240` eligible decisions
+- `api`: `180`
+- `auth`: `660`
+- `cms`: `120`
+- `database`: `780`
+- `email`: `420`
+- `hosting`: `900`
+- `notifications`: `240`
+- `orm`: `780`
+- `payments`: `180`
+- `realtime`: `180`
+- `search`: `300`
+- `state`: `180`
+- `storage`: `420`
+- `styling`: `240`
+- `ui-components`: `300`
 
-1. Click `Freeze Season`
+These seeded subcategories still stay empty because the current prompt corpus
+does not cover them:
 
-This is the important transition. Freeze does all of the following:
+- `monitoring`
+- `ai`
+- `testing`
+- `ci-cd`
+- `jobs`
 
-- snapshots the active prompts into immutable prompt versions
-- snapshots the active LLMs into immutable model snapshots
-- creates the full case matrix
-- changes the season status from `draft` to `active`
+Important nuance for public matches:
 
-After freeze, verify:
+- the public matches UI can appear after the first published run
+- many individual matchups may still display "Insufficient data"
+- that label clears only when a specific head-to-head reaches `30` decisive
+  cases
 
-- prompt count looks correct
-- model count looks correct
-- the resulting case count is what you expect
+Important nuance for the homepage:
 
-With the current active local panel shape, a full benchmark season is
-`45 prompts x 20 models = 900 cases`.
+- the benchmark-driven sections can populate after the first published run
+- the "Latest Verified Critics" section stays hidden until you create critic
+  comments manually
 
-### 3. Let Cron Populate Runs
+## Recommended Launch Sequence
 
-Once the season is `active`, the benchmark cron should start filling in runs.
+### 1. Prepare Supabase Production
 
-Use:
+Create the production Supabase project and collect:
+
+- project URL
+- anon key
+- direct Postgres connection string for `DATABASE_URL`
+
+Also make sure email OTP sign-in is usable for the admin account you plan to
+use.
+
+### 2. Run Production Migrations
+
+From your machine, with the production `DATABASE_URL` exported:
+
+```bash
+pnpm exec tsx src/server/db/pre-migrate.ts
+pnpm exec drizzle-kit migrate
+pnpm exec tsx src/server/db/post-migrate.ts
+```
+
+### 3. Seed Production Reference Data
+
+Still against the production `DATABASE_URL`:
+
+```bash
+pnpm exec tsx src/server/db/seed.ts
+```
+
+This seeds:
+
+- `humberto.mn@gmail.com` as an admin user profile
+- category groups and subcategories
+- tools and aliases
+- LLM catalog rows
+- prompts
+
+### 4. Insert The Benchmark Protocol
+
+Run this once in the Supabase SQL editor:
+
+```sql
+insert into public.preseason_benchmark_protocol (
+  slug,
+  name,
+  description,
+  mode,
+  parser_version,
+  scoring_version,
+  prompt_contract_version
+)
+values (
+  'benchmark-v1',
+  'Benchmark Protocol v1',
+  'Standard benchmark protocol for tool recommendation evaluation',
+  'benchmark',
+  '1.0',
+  '1.0',
+  '1.0'
+)
+on conflict (slug) do nothing;
+```
+
+Without this row, the "New Season" admin page has no usable protocol to select.
+
+### 5. Verify Admin Access
+
+If you are using the seeded admin email, confirm that account is the one you
+will log into.
+
+If you need a different email to be admin, update it directly in Supabase
+before launch.
+
+### 6. Configure Vercel Production
+
+Set the production env vars:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `OPENROUTER_API_KEY`
+- `CRON_SECRET`
+- `NEXT_PUBLIC_APP_URL`
+
+Then deploy to production.
+
+### 7. Confirm Base App Health
+
+After the production deploy:
+
+1. open the site
+2. confirm the public homepage loads
+3. log in at `/login`
+4. confirm `/beto-admin` opens successfully
+
+### 8. Create And Activate A Weight Config
+
+Open:
+
+- `/beto-admin/benchmark/weight-configs`
+
+Create one if needed, then make sure exactly one config is active.
+
+A simple first production config is uniform `1 / 1 / 1`.
+
+### 9. Create The Season
+
+Open:
+
+- `/beto-admin/benchmark`
+
+Then:
+
+1. click `New Season`
+2. select the benchmark protocol
+3. create the season record
+
+### 10. Freeze The Season
+
+On the season detail page:
+
+1. click `Freeze Season`
+2. confirm the frozen counts
+
+With the current seeded corpus, you should expect:
+
+- `45` prompt versions
+- `20` model snapshots
+- `900` benchmark cases
+
+### 11. Start Benchmark Work Immediately
+
+Do not wait for the next scheduled cron tick.
+
+Set:
+
+```bash
+export APP_URL="https://your-production-domain.com"
+export CRON_SECRET="your-production-cron-secret"
+```
+
+Smoke test one benchmark chunk:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  "$APP_URL/api/cron/benchmark-run"
+```
+
+If you want the first run to finish as fast as possible, keep calling it
+serially until the response reports `"hasRemainingWork":false`.
+
+Example loop:
+
+```bash
+for i in {1..130}; do
+  echo "benchmark chunk $i"
+  body=$(curl -sS \
+    -H "Authorization: Bearer $CRON_SECRET" \
+    "$APP_URL/api/cron/benchmark-run")
+  echo "$body"
+
+  if [[ "$body" == *'"hasRemainingWork":false'* ]]; then
+    break
+  fi
+done
+```
+
+If you do not want to babysit the full run, do at least `45-50` manual chunks,
+then let normal cron finish the remaining work over the next several hours.
+
+### 12. Keep Tool Candidate Review Moving
+
+While benchmark chunks are running, also trigger tool-candidate review a few
+times so the suggestion queue stays fresh:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  "$APP_URL/api/cron/tool-candidate-review"
+```
+
+Then actively review:
+
+- `/beto-admin/benchmark/tool-candidates`
+
+Important:
+
+- the cron writes suggestions
+- it does not auto-approve them
+- approval from the admin UI auto-replays unresolved benchmark decisions
+
+### 13. Watch The First Run
+
+Monitor:
 
 - `/beto-admin/benchmark`
 - `/beto-admin/benchmark/seasons/<seasonId>`
 - `/beto-admin/benchmark/runs/<runId>`
 
-to watch progress.
+Healthy first-run outcome:
 
-What to look for on the run page:
-
-- case counts are increasing
-- status eventually becomes `published` or `qc_failed`
-- `invalid_output` is low
-- drift errors are absent
-- unresolved tool names are manageable
-
-### 4. Review Tool Candidates
-
-Open:
-
-- `/beto-admin/benchmark/tool-candidates`
-
-Any unknown tool names extracted from live model outputs land here.
-
-This review matters because unresolved tool decisions count against QC and do
-not contribute cleanly to rankings.
-
-Do this continuously during the first few days of production, because live
-outputs will surface naming variants you did not seed as aliases yet.
-
-### 5. QC-Passing Runs Auto-Publish
-
-Open the run detail page:
-
-- `/beto-admin/benchmark/runs/<runId>`
-
-Once a run finishes with:
-
+- status becomes `published`
 - `qcStatus = passed`
+- public pages start filling in
 
-it is automatically moved to `published` and starts contributing to public
-rankings, matches, and prompt summaries.
+### 14. If The First Run Ends As `qc_failed`
 
-Manual publish is still available only for older completed runs that predate
-auto-publish.
+Most likely causes:
 
-If the run is `qc_failed`, fix the actual issue first. Common causes are:
-
-- too many unresolved tool names
+- unresolved tool names
 - too many invalid outputs
-- too few completed prompt/model cases
+- too many failed cases
 
-### 6. Manage Season Changes
+Recovery path:
 
-When you want to change the prompt panel or model panel:
+1. approve tool candidates in `/beto-admin/benchmark/tool-candidates`
+2. let approval auto-replay unresolved decisions
+3. open the run detail page
+4. click `Retry Failed Cases`
+5. call `/api/cron/benchmark-run` again once or a few times
 
-1. stop treating the current season as the live benchmark panel
-2. click `Complete Season` on the active season page
-3. create a new season
-4. freeze the new season
+Because retry resets the run to `pending`, the benchmark runner can recompute
+the final QC state and auto-publish the run if the repaired metrics now pass.
 
-Do not mutate an active season's frozen panel in place.
+## Direct Match Cron
 
-## What The Public Site Will Show In The First 24 Hours
+This is optional for tomorrow's demo.
 
-## Short Answer
+Facts to keep straight:
 
-Yes, the website can be technically usable in the first 24 hours, but the
-benchmark story should still be considered early and incomplete.
+- public `/matches` pages already come from published benchmark runs
+- direct match cron only works when pending match batches already exist
+- no automatic benchmark-to-match batch creation is wired in
 
-## What Must Happen First
+So if your only goal is to make public matches visible, focus on getting the
+first benchmark run published. That is the actual unlock.
 
-Public rankings and matches do not read raw in-progress runs.
+Only trigger `/api/cron/match-run` if you intentionally create direct match
+batches in admin tooling.
 
-They read the latest published benchmark season and published benchmark runs.
+## Minimal Demo Checklist
 
-So, in the first 24 hours, the public benchmark pages stay empty until:
+If your demo is tomorrow and you want the fewest moving parts:
 
-1. a benchmark run finishes
-2. QC passes
-3. the run auto-publishes
+1. migrate production
+2. seed production reference data
+3. insert benchmark protocol row
+4. deploy to Vercel production with env vars
+5. log into `/beto-admin`
+6. create one active weight config
+7. create season
+8. freeze season
+9. manually drive benchmark cron until the first run publishes
+10. review and approve tool candidates if QC needs help
 
-If none of that has happened yet:
-
-- `/rankings` shows no published benchmark data
-- `/matches` shows no benchmark matchups yet
-
-## What Can Be Visible After Day One
-
-With the current active panel shape, one published daily run can already meet
-the `>= 100 eligible decisions` threshold for several categories, because the
-threshold is per category and the season has `20` models.
-
-Current estimated eligible decisions per single published run:
-
-- `hosting`: `300`
-- `database`: `260`
-- `orm`: `260`
-- `auth`: `220`
-- `email`: `140`
-- `storage`: `140`
-- `search`: `100`
-- `ui-components`: `100`
-
-These categories can clear the minimum eligible-decision threshold after the
-first published run, assuming the run completes and publishes cleanly.
-
-Categories below that threshold after one run:
-
-- `analytics`: `80`
-- `notifications`: `80`
-- `styling`: `80`
-- `api`: `60`
-- `payments`: `60`
-- `realtime`: `60`
-- `state`: `60`
-- `cms`: `40`
-
-Those should still show insufficient data states after day one.
-
-## Important Nuance
-
-Even if some categories become visible after the first published run, the repo's
-own benchmark launch bar is still much higher:
-
-- at least `21` published daily runs in the active season
-- enough category coverage
-- enough decisive head-to-head trials
-- zero published drift incidents
-
-So the right interpretation is:
-
-- **Usable in the first 24 hours:** yes, technically
-- **Ready for strong benchmark claims in the first 24 hours:** no
-
-## Matches In The First 24 Hours
-
-Public `/matches` pages are generated from published benchmark decisions, not
-from the internal match-batch cron.
-
-That means:
-
-- you do not need internal match batches for public match pages to render
-- you do need published benchmark runs
-- many head-to-heads may still show thin-data states because public matchups
-  require `>= 30` decisive trials
-
-## Recommended Public Rollout Positioning
-
-### Day 0 to Day 1
-
-- Launch the site
-- Confirm benchmark cron is healthy
-- Do not market the rankings as stable yet
-- Expect some benchmark pages to be empty or marked insufficient
-
-### Days 2 to 7
-
-- Review tool candidates daily
-- Investigate any `qc_failed` runs
-- Watch which categories consistently clear thresholds
-
-### After 21 Published Runs
-
-This is the first point where the benchmark can be positioned as an
-authoritative recurring signal rather than a fresh experiment.
-
-At that point, re-check:
-
-- run QC health
-- unresolved tool backlog
-- category threshold coverage
-- head-to-head sample sizes
-- public methodology wording
-
-## Practical Step-By-Step Summary
-
-1. Implement benchmark batching before launch
-2. Migrate the production database
-3. Load production-safe reference data
-4. Set production env vars
-5. Deploy
-6. Confirm your account has admin access
-7. Create and freeze the benchmark season in `/beto-admin/benchmark`
-8. Let cron accumulate cases
-9. Review tool candidates
-10. Publish only QC-passing runs
-11. Expect partial public usefulness on day one
-12. Treat `>= 21` published runs as the real benchmark public launch bar
+That is the shortest path to getting the homepage, rankings, and public matches
+filled with real data.
