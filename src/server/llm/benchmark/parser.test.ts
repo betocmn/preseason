@@ -49,6 +49,8 @@ describe('parseBenchmarkResponse', () => {
   it('should return invalid_output when only opening tag is present', () => {
     const result = parseBenchmarkResponse('<preseason_benchmark_json>{}', ELIGIBLE)
     expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('Truncated')
   })
 
   it('should ignore closing tag mentions in the natural-language preamble', () => {
@@ -245,7 +247,7 @@ describe('parseBenchmarkResponse', () => {
   })
 
   it('should export PARSER_VERSION', () => {
-    expect(PARSER_VERSION).toBe('strict-v2')
+    expect(PARSER_VERSION).toBe('strict-v3')
   })
 
   it('should accept a category without confidence and coerce it to null', () => {
@@ -272,5 +274,14 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
     expect(result.appendix.categories[1]?.confidence).toBeNull()
+  })
+
+  it('should explain malformed appendix blocks when JSON does not start after the opening tag', () => {
+    const raw = 'Answer\n\n<preseason_benchmark_json>\nnot-json\n</preseason_benchmark_json>'
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('JSON must start immediately')
   })
 })

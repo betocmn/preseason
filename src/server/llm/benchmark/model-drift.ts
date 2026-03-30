@@ -5,6 +5,7 @@ export type DriftCheckResult = {
 }
 
 const SNAPSHOT_SUFFIX_PATTERN = /(?:[-_](?:\d{4}-\d{2}-\d{2}|(?:19|20)\d{6}|\d{4,8}))$/u
+const LLAMA_ALIAS_SUFFIX_PATTERN = /(?:-\d+b(?:-\d+e)?-instruct)$/u
 
 function normalizeForComparison(id: string): string {
   const parts = id.split('/')
@@ -28,8 +29,12 @@ function stripTrailingSnapshotSuffixes(name: string): string {
   }
 }
 
+function stripKnownAliasDecorators(name: string) {
+  return name.replace(LLAMA_ALIAS_SUFFIX_PATTERN, '')
+}
+
 function canonicalizeAlias(name: string): string {
-  return stripTrailingSnapshotSuffixes(name)
+  return stripKnownAliasDecorators(stripTrailingSnapshotSuffixes(name))
     .split(/[-_]/u)
     .filter((token) => token.length > 0)
     .sort()

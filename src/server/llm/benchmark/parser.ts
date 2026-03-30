@@ -1,6 +1,6 @@
 import { type BenchmarkAppendix, validateBenchmarkAppendix } from '~/server/llm/benchmark/schema'
 
-export const PARSER_VERSION = 'strict-v2'
+export const PARSER_VERSION = 'strict-v3'
 
 const OPEN_TAG = '<preseason_benchmark_json>'
 const CLOSE_TAG = '</preseason_benchmark_json>'
@@ -38,6 +38,29 @@ function findAppendixTagBlock(rawContent: string) {
   }
 
   return null
+}
+
+function explainMissingAppendixReason(rawContent: string) {
+  const openIdx = rawContent.lastIndexOf(OPEN_TAG)
+  if (openIdx === -1) {
+    return 'Missing <preseason_benchmark_json> tags'
+  }
+
+  const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
+  if (contentStart === -1) {
+    return 'Empty <preseason_benchmark_json> block'
+  }
+
+  const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+  if (closeIdx === -1) {
+    return 'Truncated <preseason_benchmark_json> block: missing closing tag'
+  }
+
+  if (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[') {
+    return 'Malformed <preseason_benchmark_json> block: JSON must start immediately after opening tag'
+  }
+
+  return 'Malformed <preseason_benchmark_json> block'
 }
 
 function findFirstNonWhitespaceIndex(rawContent: string, start: number) {
@@ -109,6 +132,15 @@ function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
   return null
 }
 
+export function extractBenchmarkNaturalResponse(rawContent: string) {
+  const openIdx = rawContent.lastIndexOf(OPEN_TAG)
+  if (openIdx === -1) {
+    return rawContent.trim()
+  }
+
+  return rawContent.slice(0, openIdx).trim()
+}
+
 export function parseBenchmarkResponse(
   rawContent: string,
   eligibleCategorySlugs: string[],
@@ -118,11 +150,11 @@ export function parseBenchmarkResponse(
   const closeIdx = tagBlock?.closeIdx ?? -1
 
   if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
-    return { status: 'invalid_output', reason: 'Missing <preseason_benchmark_json> tags' }
+    return { status: 'invalid_output', reason: explainMissingAppendixReason(rawContent) }
   }
 
   const rawAppendix = rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim()
-  const naturalResponse = rawContent.slice(0, openIdx).trim()
+  const naturalResponse = extractBenchmarkNaturalResponse(rawContent)
 
   let parsed: unknown
   try {
