@@ -28,7 +28,7 @@ const AvatarImage = React.forwardRef<
     asChild
     {...props}
   >
-    <NextImage src={src ?? ''} alt={alt ?? ''} width={size} height={size} />
+    <NextImage src={(src as string) ?? ''} alt={alt ?? ''} width={size} height={size} />
   </AvatarPrimitive.Image>
 ))
 AvatarImage.displayName = AvatarPrimitive.Image.displayName
