@@ -166,8 +166,17 @@ async function reconcileTool(sql: postgres.Sql, rule: ToolReconciliationRule): P
 
     await tx`
       update public.preseason_tool_candidate
-      set approved_tool_id = ${targetToolId}::uuid
+      set
+        approved_tool_id = case
+          when approved_tool_id = ${sourceToolId}::uuid then ${targetToolId}::uuid
+          else approved_tool_id
+        end,
+        ai_suggested_tool_id = case
+          when ai_suggested_tool_id = ${sourceToolId}::uuid then ${targetToolId}::uuid
+          else ai_suggested_tool_id
+        end
       where approved_tool_id = ${sourceToolId}::uuid
+         or ai_suggested_tool_id = ${sourceToolId}::uuid
     `
 
     await tx`

@@ -263,6 +263,7 @@ describe('ensureCanonicalToolReconciliation', () => {
       rawName: 'Vercel CI',
       normalizedName: 'vercel ci candidate',
       approvedToolId: sourceTool.id,
+      aiSuggestedToolId: sourceTool.id,
       status: 'approved',
     })
 
@@ -324,6 +325,7 @@ describe('ensureCanonicalToolReconciliation', () => {
       where: eq(toolCandidates.normalizedName, 'vercel ci candidate'),
     })
     expect(candidate?.approvedToolId).toBe(targetTool.id)
+    expect(candidate?.aiSuggestedToolId).toBe(targetTool.id)
 
     const comment = await db.query.comments.findFirst({
       where: eq(comments.content, 'Reliable deploys'),
