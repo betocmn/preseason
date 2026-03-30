@@ -270,7 +270,8 @@ insert into public.preseason_benchmark_protocol (
   mode,
   parser_version,
   scoring_version,
-  prompt_contract_version
+  prompt_contract_version,
+  "createdAt"
 )
 values (
   'benchmark-v1',
@@ -279,7 +280,8 @@ values (
   'benchmark',
   '1.0',
   '1.0',
-  '1.0'
+  '1.0',
+  now()
 )
 on conflict (slug) do nothing;
 ```
