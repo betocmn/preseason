@@ -1,3 +1,13 @@
+import type { PromptLevel } from '~/server/llm/prompts'
+
+const backgroundSmokePromptSelections = [
+  { slug: 'real-estate-website', level: 'beginner' },
+  { slug: 'chat-application', level: 'beginner' },
+] as const satisfies readonly {
+  slug: string
+  level: PromptLevel
+}[]
+
 export const serverSettings = {
   benchmark: {
     // Bound benchmark cron work so each invocation stays short and resumable.
@@ -14,5 +24,8 @@ export const serverSettings = {
     modelId: 'openai/gpt-5.4-mini',
     temperature: 0,
     maxTokens: 350,
+  },
+  backgroundSmoke: {
+    promptSelections: backgroundSmokePromptSelections,
   },
 } as const

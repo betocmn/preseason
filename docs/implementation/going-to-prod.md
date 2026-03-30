@@ -158,7 +158,7 @@ After freeze, verify:
 - the resulting case count is what you expect
 
 With the current active local panel shape, a full benchmark season is
-`15 prompts x 20 models = 300 cases`.
+`45 prompts x 20 models = 900 cases`.
 
 ### 3. Let Cron Populate Runs
 

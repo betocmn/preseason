@@ -15,6 +15,7 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 
+import { PROMPT_CORPUS } from './prompt-corpus'
 import * as schema from './schema'
 
 type SeedDatabase = typeof import('~/server/db').db
@@ -1129,203 +1130,7 @@ const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
   isActive: true,
 }))
 
-export const PROMPTS = [
-  {
-    title: 'Real Estate Website',
-    slug: 'real-estate-website',
-    level: 'beginner' as const,
-    description: 'A real estate listing site with admin panel and property management',
-    contentMd:
-      'Create a real estate website with an admin area for uploading listings. Include property search with filters, image galleries, agent profiles, and a contact form. The site should have user authentication for saved searches and favorites.',
-    expectedCategories: [
-      'auth',
-      'database',
-      'orm',
-      'hosting',
-      'storage',
-      'styling',
-      'ui-components',
-    ],
-  },
-  {
-    title: 'SaaS Application',
-    slug: 'saas-application',
-    level: 'intermediate' as const,
-    description: 'Full-featured SaaS starter with auth, billing, and team management',
-    contentMd:
-      'Build a SaaS application with user authentication, subscription billing, and a dashboard. Include team management, role-based access control, usage analytics, and email notifications for billing events.',
-    expectedCategories: [
-      'auth',
-      'database',
-      'orm',
-      'payments',
-      'email',
-      'hosting',
-      'analytics',
-      'ui-components',
-    ],
-  },
-  {
-    title: 'Blog Platform with CMS',
-    slug: 'blog-platform-cms',
-    level: 'beginner' as const,
-    description: 'Blogging platform with content management and newsletter',
-    contentMd:
-      'Create a blog platform with a CMS, comments, and email newsletter. Include rich text editing, category/tag management, SEO optimization, social sharing, and subscriber management with automated email digests.',
-    expectedCategories: ['cms', 'database', 'orm', 'email', 'hosting', 'search', 'styling'],
-  },
-  {
-    title: 'E-commerce Store',
-    slug: 'ecommerce-store',
-    level: 'intermediate' as const,
-    description: 'Online store with catalog, cart, payments, and order management',
-    contentMd:
-      'Build an e-commerce store with product catalog, shopping cart, and payment processing. Include inventory management, order tracking, customer reviews, discount codes, and email order confirmations.',
-    expectedCategories: [
-      'payments',
-      'database',
-      'orm',
-      'auth',
-      'email',
-      'storage',
-      'hosting',
-      'search',
-    ],
-  },
-  {
-    title: 'Project Management Tool',
-    slug: 'project-management-tool',
-    level: 'intermediate' as const,
-    description: 'Kanban-style project management with real-time updates',
-    contentMd:
-      'Create a project management tool like Trello with real-time collaboration. Include boards, lists, cards, drag-and-drop, team workspaces, file attachments, activity logs, and due date notifications.',
-    expectedCategories: [
-      'realtime',
-      'database',
-      'orm',
-      'auth',
-      'storage',
-      'hosting',
-      'notifications',
-      'state',
-    ],
-  },
-  {
-    title: 'Social Media Platform',
-    slug: 'social-media-platform',
-    level: 'advanced' as const,
-    description: 'Social network with feed, messaging, and media sharing',
-    contentMd:
-      'Build a social media platform with user profiles, posts, likes, and comments. Include a news feed algorithm, image/video uploads, follow system, direct messaging, and push notifications.',
-    expectedCategories: [
-      'auth',
-      'database',
-      'orm',
-      'storage',
-      'realtime',
-      'hosting',
-      'notifications',
-      'search',
-    ],
-  },
-  {
-    title: 'Job Board',
-    slug: 'job-board',
-    level: 'beginner' as const,
-    description: 'Job listing site with company profiles and application management',
-    contentMd:
-      'Create a job board where companies post positions and applicants apply. Include company profiles, resume uploads, application tracking, email notifications, search with filters, and saved job listings.',
-    expectedCategories: ['auth', 'database', 'orm', 'email', 'storage', 'hosting', 'search'],
-  },
-  {
-    title: 'Restaurant Reservation System',
-    slug: 'restaurant-reservation-system',
-    level: 'beginner' as const,
-    description: 'Reservation booking system with calendar and notifications',
-    contentMd:
-      'Build a restaurant reservation system with email confirmations. Include table management, availability calendar, waitlist, customer profiles, review system, and automated reminder emails.',
-    expectedCategories: ['auth', 'database', 'orm', 'email', 'hosting', 'notifications'],
-  },
-  {
-    title: 'Online Learning Platform',
-    slug: 'online-learning-platform',
-    level: 'intermediate' as const,
-    description: 'E-learning platform with courses, quizzes, and progress tracking',
-    contentMd:
-      'Create an online learning platform with courses, quizzes, and certificates. Include video hosting, progress tracking, discussion forums, instructor dashboards, payment for premium courses, and completion certificates.',
-    expectedCategories: ['auth', 'database', 'orm', 'payments', 'storage', 'hosting', 'email'],
-  },
-  {
-    title: 'Multi-tenant CRM',
-    slug: 'multi-tenant-crm',
-    level: 'advanced' as const,
-    description: 'Customer relationship management with multi-tenancy and email',
-    contentMd:
-      'Build a multi-tenant CRM with contact management and email integration. Include deal pipelines, task management, activity logging, email templates, team workspaces, reporting dashboards, and API integrations.',
-    expectedCategories: ['auth', 'database', 'orm', 'email', 'hosting', 'analytics', 'api'],
-  },
-  {
-    title: 'Weather Dashboard',
-    slug: 'weather-dashboard',
-    level: 'beginner' as const,
-    description: 'Weather app with API integration and data visualization',
-    contentMd:
-      'Create a weather dashboard that pulls data from external APIs. Include current conditions, forecasts, interactive maps, location search, saved locations, weather alerts, and historical data charts.',
-    expectedCategories: ['api', 'hosting', 'state', 'styling', 'ui-components'],
-  },
-  {
-    title: 'Chat Application',
-    slug: 'chat-application',
-    level: 'intermediate' as const,
-    description: 'Real-time messaging app with file sharing and group chats',
-    contentMd:
-      'Build a chat application with real-time messaging and file sharing. Include group chats, direct messages, typing indicators, read receipts, message search, emoji reactions, and push notifications.',
-    expectedCategories: [
-      'realtime',
-      'auth',
-      'database',
-      'orm',
-      'storage',
-      'hosting',
-      'notifications',
-    ],
-  },
-  {
-    title: 'Fitness Tracking App',
-    slug: 'fitness-tracking-app',
-    level: 'advanced' as const,
-    description: 'Workout tracker with progress visualization and social features',
-    contentMd:
-      'Create a fitness tracking app with workout logging and progress charts. Include exercise library, custom workout plans, body measurements, goal setting, social challenges, and integration with wearable devices.',
-    expectedCategories: [
-      'auth',
-      'database',
-      'orm',
-      'hosting',
-      'analytics',
-      'ui-components',
-      'state',
-    ],
-  },
-  {
-    title: 'URL Shortener',
-    slug: 'url-shortener',
-    level: 'beginner' as const,
-    description: 'Link shortener with click analytics and custom URLs',
-    contentMd:
-      'Build a URL shortener with analytics tracking. Include custom short URLs, click analytics with geographic data, link expiration, QR code generation, API access, and a dashboard showing link performance.',
-    expectedCategories: ['database', 'orm', 'hosting', 'analytics', 'api'],
-  },
-  {
-    title: 'Documentation Site',
-    slug: 'documentation-site',
-    level: 'beginner' as const,
-    description: 'Technical documentation site with versioning and search',
-    contentMd:
-      'Create a documentation site with search, versioning, and dark mode. Include MDX content, API reference generation, code syntax highlighting, navigation sidebar, version selector, and full-text search.',
-    expectedCategories: ['cms', 'search', 'hosting', 'styling', 'ui-components'],
-  },
-]
+export const PROMPTS = PROMPT_CORPUS
 
 // ============================================================================
 // SEED FUNCTIONS
@@ -1517,8 +1322,8 @@ async function seedLlms() {
 
 async function seedPrompts() {
   console.log('Seeding prompts...')
-  await db.insert(schema.prompts).values(PROMPTS).onConflictDoNothing()
-  console.log(`  ${PROMPTS.length} prompts ready`)
+  await db.insert(schema.prompts).values(PROMPT_CORPUS).onConflictDoNothing()
+  console.log(`  ${PROMPT_CORPUS.length} prompts ready`)
 }
 
 // Tool priority per category — first tool is most frequently recommended

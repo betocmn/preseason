@@ -24,8 +24,11 @@ import {
   subcategories,
   tools,
 } from '~/server/db/schema'
+import {
+  backgroundSmokePromptSlugs,
+  selectBackgroundSmokePromptRows,
+} from '~/server/llm/benchmark/background-smoke-prompts'
 
-const BENCHMARK_PROMPT_SLUGS = ['real-estate-website', 'chat-application'] as const
 const BENCHMARK_MODEL_SLUGS = [
   'gemini-2-5-flash',
   'gpt-5-4-mini',
@@ -186,7 +189,8 @@ function orderBySelection<T extends { slug: string }>(rows: T[], orderedSlugs: r
 async function resolveBenchmarkPromptFixtures(seasonId: string) {
   const rows = await database
     .select({
-      slug: prompts.slug,
+      slug: benchmarkPromptVersions.slug,
+      level: benchmarkPromptVersions.level,
       title: prompts.title,
       promptId: prompts.id,
       promptVersionId: benchmarkSeasonPrompts.promptVersionId,
@@ -200,17 +204,11 @@ async function resolveBenchmarkPromptFixtures(seasonId: string) {
     .where(
       and(
         eq(benchmarkSeasonPrompts.seasonId, seasonId),
-        inArray(prompts.slug, [...BENCHMARK_PROMPT_SLUGS]),
+        inArray(benchmarkPromptVersions.slug, backgroundSmokePromptSlugs),
       ),
     )
 
-  if (rows.length !== BENCHMARK_PROMPT_SLUGS.length) {
-    throw new Error(
-      `Expected ${BENCHMARK_PROMPT_SLUGS.length} benchmark prompt fixtures, found ${rows.length}`,
-    )
-  }
-
-  return orderBySelection(rows, BENCHMARK_PROMPT_SLUGS).map<BenchmarkPromptFixture>((row) => ({
+  return selectBackgroundSmokePromptRows(rows).map<BenchmarkPromptFixture>((row) => ({
     promptId: row.promptId,
     promptVersionId: row.promptVersionId,
     promptSlug: row.slug,
