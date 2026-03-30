@@ -347,11 +347,55 @@ describe('reviewPendingToolCandidates', () => {
       errorCount: 1,
     })
     expect(reviewedCandidate?.aiSuggestedToolId).toBeNull()
+    expect(reviewedCandidate?.aiReviewedAt).toBeNull()
     expect(reviewedCandidate?.aiReviewReason).toBeNull()
     expect(reviewedCandidate?.aiReviewError).toBe(
       'tool_id must refer to one of the shortlisted tools',
     )
     expect(reviewedCandidate?.aiReviewModel).toBe('openai/gpt-5.4-mini')
     expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    const retryLlmService = createMockLlmService(async () => ({
+      content: `<preseason_tool_candidate_review_json>${JSON.stringify({
+        schema_version: 'tool-candidate-review-v1',
+        decision: 'match',
+        tool_id: tool.id,
+        confidence: 0.91,
+        reason: 'Retry succeeded with a valid shortlisted match.',
+      })}</preseason_tool_candidate_review_json>`,
+      requestedModel: 'openai/gpt-5.4-mini',
+      returnedModel: 'openai/gpt-5.4-mini',
+      provider: 'openai',
+      finishReason: 'stop',
+      usage: {
+        promptTokens: 100,
+        completionTokens: 30,
+        totalTokens: 130,
+      },
+      latencyMs: 25,
+    }))
+
+    const retrySummary = await reviewPendingToolCandidates({
+      database: db,
+      llmService: retryLlmService as never,
+      now: () => new Date('2026-03-28T00:10:00Z'),
+    })
+
+    const retriedCandidate = await db.query.toolCandidates.findFirst({
+      where: (fields, { eq }) => eq(fields.id, candidate.id),
+    })
+
+    expect(retrySummary).toEqual({
+      reviewedCount: 1,
+      suggestedCount: 1,
+      noMatchCount: 0,
+      errorCount: 0,
+    })
+    expect(retriedCandidate?.aiSuggestedToolId).toBe(tool.id)
+    expect(retriedCandidate?.aiReviewConfidence).toBe(0.91)
+    expect(retriedCandidate?.aiReviewReason).toBe('Retry succeeded with a valid shortlisted match.')
+    expect(retriedCandidate?.aiReviewError).toBeNull()
+    expect(retriedCandidate?.aiReviewedAt).toEqual(new Date('2026-03-28T00:10:00Z'))
+    expect(retryLlmService.complete).toHaveBeenCalledTimes(1)
   })
 })

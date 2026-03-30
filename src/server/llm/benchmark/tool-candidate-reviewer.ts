@@ -155,25 +155,26 @@ async function persistReviewResult(
   database: DatabaseClient,
   candidateId: string,
   payload: {
-    reviewedAt: Date
+    reviewedAt?: Date | null
     reviewModel: string | null
-    suggestedToolId: string | null
-    confidence: number | null
-    reason: string | null
-    error: string | null
+    suggestedToolId?: string | null
+    confidence?: number | null
+    reason?: string | null
+    error?: string | null
   },
 ) {
-  await database
-    .update(toolCandidates)
-    .set({
-      aiSuggestedToolId: payload.suggestedToolId,
-      aiReviewConfidence: payload.confidence,
-      aiReviewReason: payload.reason,
-      aiReviewError: payload.error,
-      aiReviewModel: payload.reviewModel,
-      aiReviewedAt: payload.reviewedAt,
-    })
-    .where(eq(toolCandidates.id, candidateId))
+  const updateValues = {
+    ...(payload.reviewedAt !== undefined ? { aiReviewedAt: payload.reviewedAt } : {}),
+    ...(payload.suggestedToolId !== undefined
+      ? { aiSuggestedToolId: payload.suggestedToolId }
+      : {}),
+    ...(payload.confidence !== undefined ? { aiReviewConfidence: payload.confidence } : {}),
+    ...(payload.reason !== undefined ? { aiReviewReason: payload.reason } : {}),
+    ...(payload.error !== undefined ? { aiReviewError: payload.error } : {}),
+    aiReviewModel: payload.reviewModel,
+  }
+
+  await database.update(toolCandidates).set(updateValues).where(eq(toolCandidates.id, candidateId))
 }
 
 export async function reviewPendingToolCandidates(
@@ -222,6 +223,8 @@ export async function reviewPendingToolCandidates(
   }
 
   for (const candidate of pendingCandidates) {
+    let reviewModel: string | null = null
+
     const shortlist = buildToolReviewShortlist(catalog, {
       query: candidate.rawName,
       categoryId: candidate.suggestedCategoryId ?? undefined,
@@ -254,6 +257,7 @@ export async function reviewPendingToolCandidates(
           maxTokens: serverSettings.toolCandidateReview.maxTokens,
         },
       )
+      reviewModel = completion.returnedModel
 
       const review = parseToolCandidateReviewResponse(
         completion.content,
@@ -279,11 +283,7 @@ export async function reviewPendingToolCandidates(
       const message = error instanceof Error ? error.message : 'Unknown review error'
 
       await persistReviewResult(database, candidate.id, {
-        reviewedAt: reviewTime,
-        reviewModel: serverSettings.toolCandidateReview.modelId,
-        suggestedToolId: null,
-        confidence: null,
-        reason: null,
+        reviewModel: reviewModel ?? serverSettings.toolCandidateReview.modelId,
         error: message,
       })
 

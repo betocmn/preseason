@@ -18,6 +18,9 @@ import {
   comments,
   criticProfiles,
   llms,
+  matchBatches,
+  matchConfigs,
+  matchPromptTemplates,
   prompts,
   subcategories,
   toolAliases,
@@ -331,5 +334,163 @@ describe('ensureCanonicalToolReconciliation', () => {
       where: eq(comments.content, 'Reliable deploys'),
     })
     expect(comment?.targetId).toBe(targetTool.id)
+  })
+
+  it('defers reconciliation when legacy match configs or batches still reference the source tool', async () => {
+    const db = getTestDb()
+
+    const categoryGroup = first(
+      await db
+        .insert(categories)
+        .values({
+          name: 'Devtools',
+          slug: 'devtools',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+    const cicdCategory = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: categoryGroup.id,
+          name: 'CI/CD',
+          slug: 'ci-cd',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+
+    const targetTool = first(
+      await db
+        .insert(tools)
+        .values({
+          id: '00000000-0000-4000-8000-000000000010',
+          name: 'Vercel',
+          slug: 'vercel',
+        })
+        .returning(),
+    )
+    const sourceTool = first(
+      await db
+        .insert(tools)
+        .values({
+          id: '00000000-0000-4000-8000-000000000020',
+          name: 'Vercel CI',
+          slug: 'vercel-ci',
+        })
+        .returning(),
+    )
+    const otherTool = first(
+      await db
+        .insert(tools)
+        .values({
+          id: '00000000-0000-4000-8000-000000000030',
+          name: 'CircleCI',
+          slug: 'circleci',
+        })
+        .returning(),
+    )
+
+    const owner = first(
+      await db
+        .insert(userProfiles)
+        .values({
+          id: '00000000-0000-4000-8000-000000000040',
+          email: 'owner@example.com',
+          displayName: 'Owner',
+          role: 'admin',
+        })
+        .returning(),
+    )
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-match-v1',
+          name: 'Benchmark Match V1',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const season = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'match-season-1',
+          name: 'Match Season 1',
+          status: 'active',
+        })
+        .returning(),
+    )
+
+    const promptTemplate = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-v1',
+          name: 'Match Compare V1',
+          templateMd: 'Compare {{TOOL_A}} vs {{TOOL_B}} for {{CATEGORY}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    const [config] = await db
+      .insert(matchConfigs)
+      .values({
+        seasonId: season.id,
+        categoryId: cicdCategory.id,
+        toolAId: sourceTool.id,
+        toolBId: otherTool.id,
+        promptTemplateId: promptTemplate.id,
+        createdBy: owner.id,
+      })
+      .returning()
+    if (!config) {
+      throw new Error('Expected match config to be created')
+    }
+
+    const [batch] = await db
+      .insert(matchBatches)
+      .values({
+        seasonId: season.id,
+        configId: config.id,
+        categoryId: cicdCategory.id,
+        toolAId: sourceTool.id,
+        toolBId: otherTool.id,
+        promptTemplateId: promptTemplate.id,
+        triggerMode: 'manual',
+      })
+      .returning()
+    if (!batch) {
+      throw new Error('Expected match batch to be created')
+    }
+
+    await expect(ensureCanonicalToolReconciliation(db.$client)).resolves.toBeUndefined()
+
+    const sourceToolAfter = await db.query.tools.findFirst({
+      where: eq(tools.id, sourceTool.id),
+    })
+    const targetToolAfter = await db.query.tools.findFirst({
+      where: eq(tools.id, targetTool.id),
+    })
+    const configAfter = await db.query.matchConfigs.findFirst({
+      where: eq(matchConfigs.id, config.id),
+    })
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+
+    expect(sourceToolAfter?.slug).toBe('vercel-ci')
+    expect(targetToolAfter?.slug).toBe('vercel')
+    expect(configAfter?.toolAId).toBe(sourceTool.id)
+    expect(batchAfter?.toolAId).toBe(sourceTool.id)
   })
 })

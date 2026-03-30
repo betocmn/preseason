@@ -23,7 +23,7 @@ type ReferenceCounts = {
   matchBatchCount: number
 }
 
-async function getUnexpectedReferenceCounts(
+async function getMatchReferenceCounts(
   sql: postgres.Sql,
   sourceToolId: string,
 ): Promise<ReferenceCounts> {
@@ -77,20 +77,20 @@ async function reconcileTool(sql: postgres.Sql, rule: ToolReconciliationRule): P
     )
   }
 
-  const unexpectedRefs = await getUnexpectedReferenceCounts(sql, sourceToolId)
-  if (unexpectedRefs.matchConfigCount > 0 || unexpectedRefs.matchBatchCount > 0) {
+  const matchRefs = await getMatchReferenceCounts(sql, sourceToolId)
+  if (matchRefs.matchConfigCount > 0 || matchRefs.matchBatchCount > 0) {
     const details = [
-      unexpectedRefs.matchConfigCount > 0
-        ? `match_config=${unexpectedRefs.matchConfigCount}`
-        : null,
-      unexpectedRefs.matchBatchCount > 0 ? `match_batch=${unexpectedRefs.matchBatchCount}` : null,
+      matchRefs.matchConfigCount > 0 ? `match_config=${matchRefs.matchConfigCount}` : null,
+      matchRefs.matchBatchCount > 0 ? `match_batch=${matchRefs.matchBatchCount}` : null,
     ]
       .filter((detail): detail is string => detail !== null)
       .join(', ')
 
-    throw new Error(
-      `Unable to reconcile duplicate tool "${rule.sourceSlug}" with active match references: ${details}`,
+    console.warn(
+      `Skipping duplicate tool reconciliation for "${rule.sourceSlug}" because legacy match data still references it: ${details}`,
     )
+
+    return false
   }
 
   const preferredAlias = rule.preferredAlias
