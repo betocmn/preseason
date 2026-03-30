@@ -73,7 +73,7 @@ export default async function CriticDetailPage({ params }: Props) {
         <div className="flex items-start gap-4">
           <Avatar className="h-16 w-16 ring-2 ring-border">
             {critic.user.avatarUrl && (
-              <AvatarImage src={critic.user.avatarUrl} alt={critic.user.displayName} />
+              <AvatarImage src={critic.user.avatarUrl} alt={critic.user.displayName} size={64} />
             )}
             <AvatarFallback className="text-lg font-medium">
               {critic.user.displayName.slice(0, 2).toUpperCase()}

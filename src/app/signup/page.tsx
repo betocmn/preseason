@@ -14,6 +14,7 @@ export default function SignUpPage() {
               width={160}
               height={37}
               priority
+              unoptimized
             />
           </Link>
         </div>

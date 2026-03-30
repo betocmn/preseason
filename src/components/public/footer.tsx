@@ -33,6 +33,7 @@ export function Footer() {
               alt="Preseason"
               width={120}
               height={28}
+              unoptimized
               style={{ filter: 'var(--logo-filter)' }}
             />
           </Link>

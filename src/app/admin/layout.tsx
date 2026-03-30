@@ -34,6 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               width={120}
               height={28}
               priority
+              unoptimized
             />
           </Link>
         </div>
