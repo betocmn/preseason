@@ -49,9 +49,10 @@ const sizeClasses: Record<number, string> = {
 }
 
 function ToolLogo({ url, name, size = 5 }: { url: string | null; name: string; size?: number }) {
+  const px = size === 4 ? 16 : 20
   return (
     <Avatar className={`${sizeClasses[size] ?? 'h-5 w-5'} ring-1 ring-border`}>
-      {url && <AvatarImage src={url} alt={name} />}
+      {url && <AvatarImage src={url} alt={name} size={px} />}
       <AvatarFallback className="bg-secondary text-[8px]">
         {name.slice(0, 2).toUpperCase()}
       </AvatarFallback>
@@ -83,6 +84,7 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
                         <AvatarImage
                           src={comment.critic.user.avatarUrl}
                           alt={comment.critic.user.displayName}
+                          size={28}
                         />
                       )}
                       <AvatarFallback className="text-[10px]">
