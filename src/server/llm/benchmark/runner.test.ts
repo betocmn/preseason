@@ -23,6 +23,7 @@ import {
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { REPAIR_PARSER_VERSION } from './repair'
 import { runBenchmark } from './runner'
 
 function first<T>(rows: T[]): T {
@@ -510,7 +511,67 @@ describe('runBenchmark', () => {
     expect(secondSummary.invalidOutputCases).toBe(15)
     expect(secondSummary.hasRemainingWork).toBe(false)
     expect(secondSummary.remainingCases).toBe(0)
-    expect(llmService.complete).toHaveBeenCalledTimes(20)
+    expect(llmService.complete).toHaveBeenCalledTimes(40)
+  })
+
+  it('should repair truncated benchmark appendices with a secondary extraction pass', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest(
+        'Use Clerk for auth and Supabase for the database.\n\n<preseason_benchmark_json>\n{"schema_version":"benchmark-v1","categories":[{"category_slug":"auth"',
+        request,
+        {
+          finishReason: 'length',
+          usage: { promptTokens: 100, completionTokens: 1200, totalTokens: 1300 },
+        },
+      )
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
+
+    const repairedResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, summary.runId),
+    })
+
+    expect(repairedResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
+    expect(repairedResult?.naturalResponse).toContain('Use Clerk for auth')
   })
 
   it('should return the persisted summary for an already published run', async () => {
@@ -546,7 +607,7 @@ describe('runBenchmark', () => {
     expect(summary1.status).toBe('qc_failed')
     expect(summary2.status).toBe('qc_failed')
     expect(summary2.invalidOutputCases).toBe(15)
-    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
   })
 
   it('should not execute duplicate LLM calls while the same run is already running', async () => {
@@ -928,7 +989,7 @@ describe('runBenchmark', () => {
     expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.completedCases).toBe(15)
     expect(reclaimedSummary.invalidOutputCases).toBe(0)
-    expect(staleWorkerService.complete).toHaveBeenCalledTimes(1)
+    expect(staleWorkerService.complete).toHaveBeenCalledTimes(2)
     expect(staleSummary.runId).toBe(reclaimedSummary.runId)
 
     const invalidResults = await db

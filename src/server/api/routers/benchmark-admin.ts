@@ -47,10 +47,6 @@ function extractSnapshotCaseIds(qcSummaryJson: unknown): string[] | null {
   return ids as string[]
 }
 
-const BENCHMARK_DEFAULT_TEMPERATURE = 0.2
-const BENCHMARK_DEFAULT_TOP_P = 1
-const BENCHMARK_DEFAULT_MAX_TOKENS = 1200
-
 const createToolForCandidateSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
@@ -301,9 +297,9 @@ export const benchmarkAdminRouter = createTRPCRouter({
       const modelSnapshots: Awaited<ReturnType<typeof getOrCreateModelSnapshot>>[] = []
       for (const llm of activeLlms) {
         const snapshot = await getOrCreateModelSnapshot(ctx.db, llm.id, {
-          temperature: BENCHMARK_DEFAULT_TEMPERATURE,
-          topP: BENCHMARK_DEFAULT_TOP_P,
-          maxTokens: BENCHMARK_DEFAULT_MAX_TOKENS,
+          temperature: serverSettings.benchmark.modelDefaults.temperature,
+          topP: serverSettings.benchmark.modelDefaults.topP,
+          maxTokens: serverSettings.benchmark.modelDefaults.maxTokens,
         })
         modelSnapshots.push(snapshot)
       }
