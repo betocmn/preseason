@@ -22,7 +22,12 @@ const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> & { size?: number }
 >(({ className, size = 40, src, alt, ...props }, ref) => (
-  <AvatarPrimitive.Image ref={ref} className={cn('aspect-square h-full w-full', className)} asChild {...props}>
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn('aspect-square h-full w-full', className)}
+    asChild
+    {...props}
+  >
     <NextImage src={src ?? ''} alt={alt ?? ''} width={size} height={size} />
   </AvatarPrimitive.Image>
 ))
