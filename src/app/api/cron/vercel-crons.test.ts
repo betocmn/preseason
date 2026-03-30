@@ -33,11 +33,12 @@ describe('vercel cron config', () => {
     expect(missingRoutes).toEqual([])
   })
 
-  it('runs benchmark cron every 10 minutes and match cron every 15 minutes', () => {
+  it('runs benchmark, match, and tool review crons on the expected schedules', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
     expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/10 * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('*/15 * * * *')
+    expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('*/30 * * * *')
   })
 })
