@@ -64,7 +64,7 @@ type AvatarImageProps = Omit<
 
 const AvatarImage = React.forwardRef<React.ElementRef<typeof NextImage>, AvatarImageProps>(
   ({ className, size = 40, src, alt, onLoad, onError, onLoadingStatusChange, ...props }, ref) => {
-    const { setImageLoadingStatus } = useAvatarImageStatusContext('AvatarImage')
+    const { imageLoadingStatus, setImageLoadingStatus } = useAvatarImageStatusContext('AvatarImage')
     const imageSrc = typeof src === 'string' ? src : undefined
 
     const updateLoadingStatus = React.useCallback(
@@ -91,7 +91,11 @@ const AvatarImage = React.forwardRef<React.ElementRef<typeof NextImage>, AvatarI
       <NextImage
         ref={ref}
         src={imageSrc}
-        className={cn('aspect-square h-full w-full', className)}
+        className={cn(
+          'absolute inset-0 aspect-square h-full w-full',
+          imageLoadingStatus === 'loaded' ? 'opacity-100' : 'opacity-0',
+          className,
+        )}
         alt={alt ?? ''}
         width={size}
         height={size}
