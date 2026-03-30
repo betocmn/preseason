@@ -85,6 +85,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
               <TableHead>Seen</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Suggested Match</TableHead>
               <TableHead>Resolved To</TableHead>
               <TableHead className="w-40">Actions</TableHead>
             </TableRow>
@@ -107,6 +108,18 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
                 <TableCell>
                   <Badge variant={statusVariant(candidate.status)}>{candidate.status}</Badge>
                 </TableCell>
+                <TableCell className="text-sm">
+                  {candidate.suggestedTool ? (
+                    <div className="space-y-1">
+                      <p className="font-medium">{candidate.suggestedTool.name}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {candidate.suggestionReason ?? candidate.suggestedTool.slug}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {candidate.approvedTool?.name ?? '-'}
                 </TableCell>
@@ -117,6 +130,9 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
                         candidateId={candidate.id}
                         candidateName={candidate.rawName}
                         suggestedCategoryId={candidate.suggestedCategoryId}
+                        suggestedTool={candidate.suggestedTool}
+                        suggestionReason={candidate.suggestionReason}
+                        canAutoApprove={candidate.canAutoApprove}
                         categories={categories}
                       />
                       <RejectCandidateDialog
@@ -130,7 +146,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
             ))}
             {candidates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   No tool candidates found
                 </TableCell>
               </TableRow>

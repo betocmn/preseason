@@ -28,6 +28,13 @@ type Props = {
   candidateId: string
   candidateName: string
   suggestedCategoryId?: string | null
+  suggestedTool?: {
+    id: string
+    name: string
+    slug: string
+  } | null
+  suggestionReason?: string | null
+  canAutoApprove?: boolean
   categories: Array<{
     id: string
     name: string
@@ -41,6 +48,9 @@ export function ApproveCandidateDialog({
   candidateId,
   candidateName,
   suggestedCategoryId,
+  suggestedTool,
+  suggestionReason,
+  canAutoApprove = false,
   categories,
 }: Props) {
   const router = useRouter()
@@ -54,7 +64,7 @@ export function ApproveCandidateDialog({
   )
 
   const { data: searchResults } = api.tool.search.useQuery(
-    { query: searchQuery, limit: 10 },
+    { query: searchQuery, limit: 10, categoryId: suggestedCategoryId ?? undefined },
     { enabled: open && searchQuery.length > 0 },
   )
 
@@ -114,6 +124,23 @@ export function ApproveCandidateDialog({
               <h3 className="text-sm font-medium">Link Existing Tool</h3>
               <p className="text-muted-foreground text-xs">Search and select a canonical tool.</p>
             </div>
+            {suggestedTool && suggestionReason && (
+              <div className="bg-muted/50 flex items-center justify-between rounded-md border p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{suggestedTool.name}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {suggestionReason} · {suggestedTool.slug}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={isPending || !canAutoApprove}
+                  onClick={() => approveMutation.mutate({ candidateId, toolId: suggestedTool.id })}
+                >
+                  {canAutoApprove ? 'Approve Suggested Match' : 'Review Suggested Match'}
+                </Button>
+              </div>
+            )}
             <Input
               placeholder="Search tools..."
               value={searchQuery}

@@ -9,6 +9,7 @@
  * All operations are idempotent (safe to run multiple times).
  */
 
+import { pathToFileURL } from 'node:url'
 import { notInArray, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
@@ -17,15 +18,10 @@ import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 import { PROMPT_CORPUS } from './prompt-corpus'
 import * as schema from './schema'
 
-const DATABASE_URL = process.env.DATABASE_URL
+type SeedDatabase = typeof import('~/server/db').db
 
-if (!DATABASE_URL) {
-  console.error('DATABASE_URL environment variable is required')
-  process.exit(1)
-}
-
-const conn = postgres(DATABASE_URL)
-const db = drizzle(conn, { schema })
+let conn: ReturnType<typeof postgres> | null = null
+let db!: SeedDatabase
 
 // ============================================================================
 // SEED DATA
@@ -117,7 +113,7 @@ const SUBCATEGORY_GROUP_MAP: Record<string, string> = {
   notifications: 'devtools',
 }
 
-const SUBCATEGORIES = [
+export const SUBCATEGORIES = [
   {
     name: 'Authentication',
     slug: 'auth',
@@ -267,7 +263,7 @@ const SUBCATEGORIES = [
   },
 ]
 
-const TOOLS = [
+export const TOOLS = [
   // Auth
   {
     name: 'Clerk',
@@ -298,6 +294,25 @@ const TOOLS = [
     description: 'Lightweight auth library for TypeScript',
     logoUrl: '/logos/lucia.png',
   },
+  {
+    name: 'Better Auth',
+    slug: 'better-auth',
+    website: 'https://www.better-auth.com',
+    description: 'TypeScript-first authentication framework for modern apps',
+  },
+  {
+    name: 'Kinde',
+    slug: 'kinde',
+    website: 'https://kinde.com',
+    description: 'Authentication and user management for applications',
+  },
+  {
+    name: 'WorkOS AuthKit',
+    slug: 'workos-authkit',
+    website: 'https://workos.com/authkit',
+    description: 'Authentication flows and user management from WorkOS',
+    aliases: ['AuthKit'],
+  },
   // Database
   {
     name: 'Supabase',
@@ -326,7 +341,7 @@ const TOOLS = [
     slug: 'firebase',
     website: 'https://firebase.google.com',
     description: 'Google app development platform with Firestore',
-    aliases: ['Firebase Auth', 'Firebase Cloud Messaging', 'FCM'],
+    aliases: ['Firebase Auth', 'Firebase Cloud Messaging', 'Firebase Cloud Messaging (FCM)', 'FCM'],
     logoUrl: '/logos/firebase.png',
   },
   {
@@ -342,6 +357,18 @@ const TOOLS = [
     website: 'https://turso.tech',
     description: 'Edge-hosted SQLite database',
     logoUrl: '/logos/turso.png',
+  },
+  {
+    name: 'Convex',
+    slug: 'convex',
+    website: 'https://www.convex.dev',
+    description: 'Reactive backend platform with sync and database primitives',
+  },
+  {
+    name: 'Appwrite',
+    slug: 'appwrite',
+    website: 'https://appwrite.io',
+    description: 'Open source backend platform with database and auth services',
   },
   // ORM
   {
@@ -476,6 +503,7 @@ const TOOLS = [
     slug: 'vercel',
     website: 'https://vercel.com',
     description: 'Frontend deployment and serverless platform',
+    aliases: ['Vercel CI'],
     logoUrl: '/logos/vercel.png',
   },
   {
@@ -584,6 +612,39 @@ const TOOLS = [
     description: 'Full-featured React component library',
     logoUrl: '/logos/mantine.png',
   },
+  // State
+  {
+    name: 'Zustand',
+    slug: 'zustand',
+    website: 'https://zustand.docs.pmnd.rs',
+    description: 'Small, fast state management for React applications',
+  },
+  {
+    name: 'Redux Toolkit',
+    slug: 'redux-toolkit',
+    website: 'https://redux-toolkit.js.org',
+    description: 'Standard Redux tooling for state and async logic',
+    aliases: ['RTK'],
+  },
+  {
+    name: 'TanStack Query',
+    slug: 'tanstack-query',
+    website: 'https://tanstack.com/query',
+    description: 'Asynchronous state management and server-state caching for React',
+    aliases: ['React Query', 'react-query'],
+  },
+  {
+    name: 'Jotai',
+    slug: 'jotai',
+    website: 'https://jotai.org',
+    description: 'Primitive and atomic state management for React',
+  },
+  {
+    name: 'XState',
+    slug: 'xstate',
+    website: 'https://stately.ai/docs',
+    description: 'State machines and actor-based orchestration for applications',
+  },
   // API
   {
     name: 'tRPC',
@@ -606,6 +667,24 @@ const TOOLS = [
     website: 'https://hono.dev',
     description: 'Small, fast web framework for the edge',
     logoUrl: '/logos/hono.png',
+  },
+  {
+    name: 'Express',
+    slug: 'express',
+    website: 'https://expressjs.com',
+    description: 'Minimal and flexible web framework for Node.js',
+  },
+  {
+    name: 'Fastify',
+    slug: 'fastify',
+    website: 'https://fastify.dev',
+    description: 'Fast and low-overhead web framework for Node.js',
+  },
+  {
+    name: 'NestJS',
+    slug: 'nestjs',
+    website: 'https://nestjs.com',
+    description: 'Progressive Node.js framework for scalable server applications',
   },
   // Analytics
   {
@@ -691,6 +770,25 @@ const TOOLS = [
     aliases: ['HuggingFace'],
     logoUrl: '/logos/hugging-face.png',
   },
+  {
+    name: 'OpenRouter',
+    slug: 'openrouter',
+    website: 'https://openrouter.ai',
+    description: 'Unified API for accessing and routing across LLM providers',
+  },
+  {
+    name: 'AI SDK',
+    slug: 'vercel-ai-sdk',
+    website: 'https://ai-sdk.dev',
+    description: 'Unified toolkit for text, structured output, and tool calling with LLMs',
+    aliases: ['Vercel AI SDK'],
+  },
+  {
+    name: 'LangChain',
+    slug: 'langchain',
+    website: 'https://js.langchain.com',
+    description: 'Framework for building LLM applications and agent workflows',
+  },
   // Realtime / WebSocket
   {
     name: 'Pusher',
@@ -714,12 +812,19 @@ const TOOLS = [
     aliases: ['SocketIO', 'socket.io'],
     logoUrl: '/logos/socket-io.png',
   },
+  {
+    name: 'PubNub',
+    slug: 'pubnub',
+    website: 'https://www.pubnub.com',
+    description: 'Realtime messaging and event infrastructure platform',
+  },
   // Search
   {
     name: 'Algolia',
     slug: 'algolia',
     website: 'https://algolia.com',
     description: 'AI-powered search and discovery',
+    aliases: ['Algolia DocSearch'],
     logoUrl: '/logos/algolia.png',
   },
   {
@@ -779,13 +884,6 @@ const TOOLS = [
     website: 'https://github.com/features/actions',
     description: 'CI/CD built into GitHub',
     logoUrl: '/logos/github-actions.png',
-  },
-  {
-    name: 'Vercel CI',
-    slug: 'vercel-ci',
-    website: 'https://vercel.com',
-    description: 'Continuous deployment via Vercel',
-    logoUrl: '/logos/vercel-ci.png',
   },
   {
     name: 'CircleCI',
@@ -854,6 +952,18 @@ const TOOLS = [
     aliases: ['Payload'],
     logoUrl: '/logos/payload-cms.png',
   },
+  {
+    name: 'Directus',
+    slug: 'directus',
+    website: 'https://directus.io',
+    description: 'Headless data platform and CMS for custom applications',
+  },
+  {
+    name: 'Docusaurus',
+    slug: 'docusaurus',
+    website: 'https://docusaurus.io',
+    description: 'Documentation site generator and content publishing framework',
+  },
   // Notifications
   {
     name: 'Novu',
@@ -872,7 +982,7 @@ const TOOLS = [
 ]
 
 // Map tool slugs to their category slugs (with isPrimary flag)
-const TOOL_CATEGORY_ASSIGNMENTS: Array<{
+export const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   toolSlug: string
   categorySlug: string
   isPrimary: boolean
@@ -928,10 +1038,19 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'mui', categorySlug: 'ui-components', isPrimary: true },
   { toolSlug: 'ant-design', categorySlug: 'ui-components', isPrimary: true },
   { toolSlug: 'mantine', categorySlug: 'ui-components', isPrimary: true },
+  // State
+  { toolSlug: 'zustand', categorySlug: 'state', isPrimary: true },
+  { toolSlug: 'redux-toolkit', categorySlug: 'state', isPrimary: true },
+  { toolSlug: 'tanstack-query', categorySlug: 'state', isPrimary: true },
+  { toolSlug: 'jotai', categorySlug: 'state', isPrimary: true },
+  { toolSlug: 'xstate', categorySlug: 'state', isPrimary: true },
   // API
   { toolSlug: 'trpc', categorySlug: 'api', isPrimary: true },
   { toolSlug: 'apollo-graphql', categorySlug: 'api', isPrimary: true },
   { toolSlug: 'hono', categorySlug: 'api', isPrimary: true },
+  { toolSlug: 'express', categorySlug: 'api', isPrimary: true },
+  { toolSlug: 'fastify', categorySlug: 'api', isPrimary: true },
+  { toolSlug: 'nestjs', categorySlug: 'api', isPrimary: true },
   // Analytics
   { toolSlug: 'posthog', categorySlug: 'analytics', isPrimary: true },
   { toolSlug: 'plausible', categorySlug: 'analytics', isPrimary: true },
@@ -946,10 +1065,14 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'anthropic', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'replicate', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'hugging-face', categorySlug: 'ai', isPrimary: true },
+  { toolSlug: 'openrouter', categorySlug: 'ai', isPrimary: true },
+  { toolSlug: 'vercel-ai-sdk', categorySlug: 'ai', isPrimary: true },
+  { toolSlug: 'langchain', categorySlug: 'ai', isPrimary: true },
   // Realtime
   { toolSlug: 'pusher', categorySlug: 'realtime', isPrimary: true },
   { toolSlug: 'ably', categorySlug: 'realtime', isPrimary: true },
   { toolSlug: 'socket-io', categorySlug: 'realtime', isPrimary: true },
+  { toolSlug: 'pubnub', categorySlug: 'realtime', isPrimary: true },
   // Search
   { toolSlug: 'algolia', categorySlug: 'search', isPrimary: true },
   { toolSlug: 'typesense', categorySlug: 'search', isPrimary: true },
@@ -962,7 +1085,6 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'cypress', categorySlug: 'testing', isPrimary: true },
   // CI/CD
   { toolSlug: 'github-actions', categorySlug: 'ci-cd', isPrimary: true },
-  { toolSlug: 'vercel-ci', categorySlug: 'ci-cd', isPrimary: true },
   { toolSlug: 'circleci', categorySlug: 'ci-cd', isPrimary: true },
   // Jobs
   { toolSlug: 'inngest', categorySlug: 'jobs', isPrimary: true },
@@ -974,9 +1096,18 @@ const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'contentful', categorySlug: 'cms', isPrimary: true },
   { toolSlug: 'strapi', categorySlug: 'cms', isPrimary: true },
   { toolSlug: 'payload-cms', categorySlug: 'cms', isPrimary: true },
+  { toolSlug: 'directus', categorySlug: 'cms', isPrimary: true },
+  { toolSlug: 'docusaurus', categorySlug: 'cms', isPrimary: true },
   // Notifications
   { toolSlug: 'novu', categorySlug: 'notifications', isPrimary: true },
   { toolSlug: 'onesignal', categorySlug: 'notifications', isPrimary: true },
+  // Auth extensions
+  { toolSlug: 'better-auth', categorySlug: 'auth', isPrimary: true },
+  { toolSlug: 'kinde', categorySlug: 'auth', isPrimary: true },
+  { toolSlug: 'workos-authkit', categorySlug: 'auth', isPrimary: true },
+  // Database extensions
+  { toolSlug: 'convex', categorySlug: 'database', isPrimary: true },
+  { toolSlug: 'appwrite', categorySlug: 'database', isPrimary: true },
   // Cross-category assignments (tools that span multiple categories)
   { toolSlug: 'supabase', categorySlug: 'auth', isPrimary: false },
   { toolSlug: 'supabase', categorySlug: 'storage', isPrimary: false },
@@ -998,6 +1129,8 @@ const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
   modelId: entry.modelId,
   isActive: true,
 }))
+
+export const PROMPTS = PROMPT_CORPUS
 
 // ============================================================================
 // SEED FUNCTIONS
@@ -1199,6 +1332,14 @@ async function seedPrompts() {
 // ============================================================================
 
 async function seed() {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL environment variable is required')
+  }
+
+  conn = postgres(databaseUrl)
+  db = drizzle(conn, { schema })
+
   await seedAdminUsers()
   await seedCategoryGroups()
   await seedSubcategories()
@@ -1209,11 +1350,16 @@ async function seed() {
   console.log('Seeding complete!')
 }
 
-seed()
-  .catch((e) => {
-    console.error('Seeding failed:', e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await conn.end()
-  })
+const entrypoint = process.argv[1]
+const isDirectExecution = entrypoint ? import.meta.url === pathToFileURL(entrypoint).href : false
+
+if (isDirectExecution) {
+  void seed()
+    .catch((e) => {
+      console.error('Seeding failed:', e)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await conn?.end()
+    })
+}

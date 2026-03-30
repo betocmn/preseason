@@ -1,8 +1,13 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
+import {
+  loadToolSearchCatalog,
+  rankToolSearchCatalog,
+  stripToolSearchRelations,
+} from '~/server/api/helpers/tool-search'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import { subcategories, toolAliases, toolCategories, tools } from '~/server/db/schema'
 
@@ -238,38 +243,14 @@ export const toolRouter = createTRPCRouter({
       z.object({
         query: z.string().min(1).max(255),
         limit: z.number().int().min(1).max(50).default(10),
+        categoryId: z.string().uuid().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const pattern = `%${input.query}%`
-
-      const aliasToolIds = await ctx.db
-        .select({ toolId: toolAliases.toolId })
-        .from(toolAliases)
-        .where(ilike(toolAliases.alias, pattern))
-
-      const aliasIds = aliasToolIds.map((r) => r.toolId)
-
-      return ctx.db.query.tools.findMany({
-        where: or(
-          ilike(tools.name, pattern),
-          ilike(tools.slug, pattern),
-          aliasIds.length > 0 ? inArray(tools.id, aliasIds) : undefined,
-        ),
-        orderBy: [asc(tools.name)],
-        limit: input.limit,
-        with: {
-          toolCategories: {
-            with: {
-              category: {
-                with: {
-                  categoryGroup: true,
-                },
-              },
-            },
-          },
-        },
-      })
+      const catalog = await loadToolSearchCatalog(ctx.db)
+      return rankToolSearchCatalog(catalog, input).map((result) =>
+        stripToolSearchRelations(result.tool),
+      )
     }),
 
   listMine: protectedProcedure
