@@ -6,6 +6,10 @@ import * as React from 'react'
 
 import { cn } from '~/lib/utils'
 
+export function shouldOptimizeAvatarSrc(src: string | undefined) {
+  return typeof src === 'string' && src.startsWith('/')
+}
+
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
@@ -21,17 +25,28 @@ Avatar.displayName = AvatarPrimitive.Root.displayName
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> & { size?: number }
->(({ className, size = 40, src, alt, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    src={src}
-    className={cn('aspect-square h-full w-full', className)}
-    asChild
-    {...props}
-  >
-    <NextImage src={(src as string) ?? ''} alt={alt ?? ''} width={size} height={size} />
-  </AvatarPrimitive.Image>
-))
+>(({ className, size = 40, src, alt, ...props }, ref) => {
+  const imageSrc = typeof src === 'string' ? src : undefined
+
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      src={imageSrc}
+      className={cn('aspect-square h-full w-full', className)}
+      asChild
+      {...props}
+    >
+      <NextImage
+        src={imageSrc ?? ''}
+        alt={alt ?? ''}
+        width={size}
+        height={size}
+        // Only local assets go through Next's optimizer; user-supplied remote avatars stay client-fetched.
+        unoptimized={!shouldOptimizeAvatarSrc(imageSrc)}
+      />
+    </AvatarPrimitive.Image>
+  )
+})
 AvatarImage.displayName = AvatarPrimitive.Image.displayName
 
 const AvatarFallback = React.forwardRef<
