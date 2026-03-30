@@ -12,6 +12,7 @@ type ToolBadgeProps = {
 
 export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolBadgeProps) {
   const avatarSize = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6'
+  const avatarPx = size === 'sm' ? 20 : 24
   const textSize = size === 'sm' ? 'text-xs' : 'text-sm'
 
   return (
@@ -24,7 +25,7 @@ export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolB
       )}
     >
       <Avatar className={cn(avatarSize, 'bg-muted-foreground/25 ring-2 ring-muted-foreground/40')}>
-        {logoUrl && <AvatarImage src={logoUrl} alt={name} />}
+        {logoUrl && <AvatarImage src={logoUrl} alt={name} size={avatarPx} />}
         <AvatarFallback className="text-[10px]">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
       </Avatar>
       {name}

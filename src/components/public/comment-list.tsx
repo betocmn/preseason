@@ -54,6 +54,7 @@ export function CommentList({ comments }: CommentListProps) {
                   <AvatarImage
                     src={comment.critic.user.avatarUrl}
                     alt={comment.critic.user.displayName}
+                    size={28}
                   />
                 )}
                 <AvatarFallback className="text-[10px]">

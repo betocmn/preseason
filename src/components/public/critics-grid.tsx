@@ -57,7 +57,7 @@ export function CriticsGrid() {
           >
             <Avatar className="h-9 w-9 shrink-0 ring-2 ring-border">
               {critic.user.avatarUrl && (
-                <AvatarImage src={critic.user.avatarUrl} alt={critic.user.displayName} />
+                <AvatarImage src={critic.user.avatarUrl} alt={critic.user.displayName} size={36} />
               )}
               <AvatarFallback className="bg-secondary text-[10px] font-semibold">
                 {critic.user.displayName.slice(0, 2).toUpperCase()}
