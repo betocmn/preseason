@@ -23,6 +23,7 @@ import {
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { PARSER_VERSION } from './parser'
 import { REPAIR_PARSER_VERSION } from './repair'
 import { runBenchmark } from './runner'
 
@@ -904,6 +905,76 @@ describe('runBenchmark', () => {
     expect(recoveredResult?.status).toBe('completed')
     expect(recoveredResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
     expect(recoveredResult?.rawResponse).toBe(storedRawResponse)
+  })
+
+  it('should skip stored-output recovery for model drift invalid outputs', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedFullPanel(db)
+    const benchmarkCase = first(caseRows)
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'manual',
+        status: 'pending',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const driftedRawResponse = buildValidResponse(['auth', 'database'])
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'invalid_output',
+      rawResponse: driftedRawResponse,
+      requestedModelId: 'anthropic/claude-opus-20260301',
+      returnedModelId: 'anthropic/claude-sonnet-4',
+      provider: 'anthropic',
+      finishReason: 'stop',
+      promptTokens: 100,
+      completionTokens: 200,
+      totalTokens: 300,
+      latencyMs: 1500,
+      temperature: 0.2,
+      topP: 1,
+      maxTokens: 4096,
+      parserVersion: PARSER_VERSION,
+      systemPromptSnapshot: 'You are a pragmatic assistant.',
+      errorMessage:
+        'Model drift detected: requested anthropic/claude-opus-20260301, got anthropic/claude-sonnet-4',
+    })
+
+    const freshRawResponse = buildValidResponse(['auth', 'database'])
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.userPrompt.startsWith('Repair or reconstruct the benchmark appendix')) {
+        throw new Error('Repair call should not run for stored model drift rows')
+      }
+
+      return mockCompletionForRequest(freshRawResponse, request)
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+    })
+
+    expect(summary.completedCases).toBe(1)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    const result = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, run.id),
+    })
+
+    expect(result?.status).toBe('completed')
+    expect(result?.parserVersion).toBe(PARSER_VERSION)
+    expect(result?.rawResponse).toBe(freshRawResponse)
   })
 
   it('should return the persisted summary for an already published run', async () => {

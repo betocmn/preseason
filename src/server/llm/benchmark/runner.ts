@@ -114,9 +114,30 @@ type RunCaseSnapshot = {
 
 const RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
 const RUN_HEARTBEAT_INTERVAL_MS = serverSettings.benchmark.heartbeatIntervalMs
+const MODEL_DRIFT_ERROR_PREFIX = 'Model drift detected:'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
+}
+
+function isModelDriftInvalidOutput(result: BenchmarkCaseResultRecord) {
+  if (result.status !== 'invalid_output') {
+    return false
+  }
+
+  if (result.errorMessage?.startsWith(MODEL_DRIFT_ERROR_PREFIX)) {
+    return true
+  }
+
+  if (result.requestedModelId && result.returnedModelId) {
+    return checkModelDrift(result.requestedModelId, result.returnedModelId).hasDrift
+  }
+
+  return false
+}
+
+function shouldAttemptStoredInvalidOutputRecovery(result: BenchmarkCaseResultRecord) {
+  return result.status === 'invalid_output' && !isModelDriftInvalidOutput(result)
 }
 
 async function resolveBenchmarkOutput(
@@ -947,7 +968,7 @@ async function executeRun(
           }),
         )
 
-        if (existingResult?.status === 'invalid_output') {
+        if (existingResult && shouldAttemptStoredInvalidOutputRecovery(existingResult)) {
           const recovered = await resolveBenchmarkOutput(llmService, {
             promptContentMd,
             rawResponse: existingResult.rawResponse ?? '',
