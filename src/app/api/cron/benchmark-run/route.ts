@@ -7,7 +7,8 @@ import { db } from '~/server/db'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = serverSettings.benchmark.cronMaxDurationSeconds
+// Next.js route segment config must stay a statically analyzable literal.
+export const maxDuration = 800
 
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
