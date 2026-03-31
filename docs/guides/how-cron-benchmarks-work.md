@@ -29,7 +29,7 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 10 minutes | `*/10 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 5 minutes | `*/5 * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
 
 In practice:
@@ -65,7 +65,7 @@ src/server/llm/match/parser.ts
 5. The runner claims execution, or resumes/returns an in-flight run safely.
 6. Active benchmark cases are loaded from the frozen season panel.
 7. A single invocation processes only `serverSettings.benchmark.casesPerCronInvocation`
-   cases (default `8`) from `src/constants/server-settings.ts` and then yields.
+   cases (default `4`) from `src/constants/server-settings.ts` and then yields.
 8. Each case builds a benchmark prompt from the frozen prompt version and its
    eligible categories.
 9. The LLM service executes the case and stores a `benchmark_case_result`.
@@ -77,7 +77,7 @@ src/server/llm/match/parser.ts
     cases are done.
 13. QC is evaluated and the run finishes as `completed`, `failed`, or
     `qc_failed`.
-14. Admins publish passing runs manually from the benchmark admin UI.
+14. Passing runs auto-publish after final QC passes.
 
 ## Match Dispatch Flow
 
@@ -108,10 +108,9 @@ results after another worker has taken over.
 The benchmark parser only accepts the structured appendix contract. There is no
 heuristic fallback path in production.
 
-### Manual Publication
+### Auto-Publication
 
-Completing a run does not publish it automatically. Publication is a separate
-admin action after QC review.
+Completing a passing run publishes it automatically after QC review succeeds.
 
 ## Stored Data
 

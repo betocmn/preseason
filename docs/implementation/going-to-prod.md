@@ -16,8 +16,8 @@ practical questions:
 These points are already true in the current codebase:
 
 - Benchmark cron is already chunked and resumable.
-  - `vercel.json` runs `/api/cron/benchmark-run` every `10` minutes.
-  - Each invocation processes `8` benchmark cases.
+  - `vercel.json` runs `/api/cron/benchmark-run` every `5` minutes.
+  - Each invocation processes `4` benchmark cases.
   - Unfinished runs are resumed before a new day is started.
   - Stale run recovery uses a `15` minute threshold.
 - Match cron already exists.
@@ -65,7 +65,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines cron schedules every `10`, `15`, and `30` minutes.
+  - This repo defines cron schedules every `5`, `15`, and `30` minutes.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.
@@ -138,15 +138,15 @@ Current seeded reference data produces:
 
 Current benchmark cron capacity:
 
-- `8` cases per invocation
-- one invocation every `10` minutes
-- `144` invocations per day
+- `4` cases per invocation
+- one invocation every `5` minutes
+- `288` invocations per day
 - `1152` cases/day of total scheduled capacity
 
 That means:
 
-- one full `900` case benchmark run needs `113` invocations
-- cron-only completion time is about `18h 50m` after season freeze
+- one full `900` case benchmark run needs `225` invocations
+- cron-only completion time is about `18h 45m` after season freeze
 
 ### What This Means For Your Demo
 
@@ -162,7 +162,7 @@ Two workable options:
 
 1. Recommended: manually call `/api/cron/benchmark-run` in a serial loop until
    the run finishes and auto-publishes.
-2. Minimum front-load for a `~12h` finish: manually trigger about `45-50`
+2. Minimum front-load for a `~12h` finish: manually trigger about `80-85`
    extra chunks right after freeze, then let normal cron finish the rest.
 
 Do not parallelize those manual calls. The runner is resumable and ownership
