@@ -44,7 +44,7 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Missing')
-    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
   })
 
   it('should return invalid_output when only opening tag is present', () => {
@@ -52,6 +52,7 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Truncated')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should ignore closing tag mentions in the natural-language preamble', () => {

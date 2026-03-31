@@ -10,7 +10,6 @@ export type ParseResult =
   | { status: 'invalid_output'; reason: string }
 
 const REPAIRABLE_INVALID_OUTPUT_PATTERNS = [
-  /^Missing <preseason_benchmark_json> tags$/u,
   /^Empty <preseason_benchmark_json> block$/u,
   /^Truncated <preseason_benchmark_json> block:/u,
   /^Malformed <preseason_benchmark_json> block/u,
