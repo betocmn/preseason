@@ -29,12 +29,13 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every 5 minutes | `*/5 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every minute | `* * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
 
 In practice:
 
 - Benchmark cron assembles one logical daily run across many short invocations
+- Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the background dispatcher that keeps queued match batches moving
 
 ## File Structure
@@ -57,27 +58,34 @@ src/server/llm/match/parser.ts
 1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
 2. The route loads the newest `active` benchmark season.
 3. Benchmark cron targets the oldest unfinished run first and only starts a new
-   UTC day when no unfinished work exists. If that run is already healthy
-   `running`, cron returns the in-flight summary; if it is stale, the runner
-   reclaims it.
+   UTC day when no unfinished work exists.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
-5. The runner claims execution, or resumes/returns an in-flight run safely.
-6. Active benchmark cases are loaded from the frozen season panel.
-7. A single invocation processes only `serverSettings.benchmark.casesPerCronInvocation`
-   cases (default `4`) from `src/constants/server-settings.ts` and then yields.
-8. Each case builds a benchmark prompt from the frozen prompt version and its
+5. Run initialization is serialized with a Postgres advisory lock so snapshot
+   setup and legacy migration happen once.
+6. The runner freezes `snapshotCaseIds`, backfills one `benchmark_case_result`
+   row per case, and stores missing work as `pending`.
+7. A single invocation claims up to
+   `serverSettings.benchmark.casesPerCronInvocation` cases from
+   `src/constants/server-settings.ts` and then yields. The default is `1`.
+8. Case claiming uses `FOR UPDATE SKIP LOCKED` on `benchmark_case_result`, so
+   overlapping invocations do not claim the same row.
+9. Claim order is:
+   - stale `running` rows
+   - fresh `pending` rows
+   - `failed` / `invalid_output` rows
+10. Each claimed case builds a benchmark prompt from the frozen prompt version and its
    eligible categories.
-9. The LLM service executes the case and stores a `benchmark_case_result`.
-10. The strict parser extracts one decision per eligible category and stores
+11. The LLM service executes the case and updates that claimed
+    `benchmark_case_result` row in place.
+12. The strict parser extracts one decision per eligible category and stores
    `benchmark_case_decision` rows.
-11. Unknown tool names go to `tool_candidate` for manual review.
-12. If work remains, the run is set back to `pending` so the next cron
-    invocation can continue; QC terminal status is evaluated only when all
-    cases are done.
-13. QC is evaluated and the run finishes as `completed`, `failed`, or
+13. Unknown tool names go to `tool_candidate` for manual review.
+14. If any case rows are still `pending` or `running`, the run stays `running`
+    and waits for the next invocation.
+15. QC is evaluated only when no non-terminal case rows remain.
+16. Passing runs auto-publish as `published`; failing runs finalize as
     `qc_failed`.
-14. Passing runs auto-publish after final QC passes.
 
 ## Match Dispatch Flow
 
@@ -99,9 +107,24 @@ same date resumes the existing run instead of creating duplicates.
 
 ### Safe Reclaim of Stale Work
 
-`runBenchmark` can reclaim a stale `running` record if the worker stops
-heartbeating. The reclaim logic is tested so stale workers cannot write terminal
-results after another worker has taken over.
+`runBenchmark` can reclaim a stale `running` case row after
+`serverSettings.benchmark.caseClaimStaleAfterMs` elapses. The default is
+`11` minutes, chosen to sit just beyond the benchmark route's `600s`
+`maxDuration`. Claim-token guarded writes prevent stale workers from writing
+terminal results after another worker has reclaimed the case.
+
+### Safe Parallelism
+
+Benchmark runs no longer use a single run-level owner. Multiple Vercel cron
+invocations or manual requests can overlap safely because each worker claims a
+single case row at a time.
+
+### Legacy Run Migration
+
+If a legacy run still carries `qcSummaryJson.executionToken` and its old
+heartbeat is fresh, new workers leave it alone. Once that legacy worker becomes
+stale, or flips the run back to `pending`, the case-worker initializer migrates
+it in place and resumes from the preserved snapshot.
 
 ### Strict Parsing
 
@@ -123,10 +146,18 @@ Completing a passing run publishes it automatically after QC review succeeds.
 
 ### `benchmark_case_result`
 
+- Lifecycle row for one `(run, case)` pair
+- Queue status including `pending`, `running`, `completed`, `failed`, and
+  `invalid_output`
+- Claim token, started/completed timestamps, and attempt count
 - Raw response and parsed appendix payload
 - Requested and returned model IDs
 - Token counts and latency
 - Parser version and error message
+
+Important: for migrated and new runs, `benchmark_case_result.created_at` is row
+creation time, not completion time. Use `completed_at` as the completion
+timestamp.
 
 ### `benchmark_case_decision`
 
