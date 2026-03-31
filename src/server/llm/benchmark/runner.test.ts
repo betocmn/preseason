@@ -511,7 +511,7 @@ describe('runBenchmark', () => {
     expect(secondSummary.invalidOutputCases).toBe(15)
     expect(secondSummary.hasRemainingWork).toBe(false)
     expect(secondSummary.remainingCases).toBe(0)
-    expect(llmService.complete).toHaveBeenCalledTimes(40)
+    expect(llmService.complete).toHaveBeenCalledTimes(20)
   })
 
   it('should not repair schema-validity failures into completed benchmark results', async () => {
@@ -536,6 +536,30 @@ describe('runBenchmark', () => {
         `Use Clerk for auth.\n\n<preseason_benchmark_json>\n${semanticallyInvalidAppendix}\n</preseason_benchmark_json>`,
         request,
       ),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('should not repair tagless outputs into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Use Clerk for auth.', request),
     )
 
     const summary = await runBenchmark(season.id, '2026-03-10', {
@@ -647,7 +671,7 @@ describe('runBenchmark', () => {
     expect(summary1.status).toBe('qc_failed')
     expect(summary2.status).toBe('qc_failed')
     expect(summary2.invalidOutputCases).toBe(15)
-    expect(llmService.complete).toHaveBeenCalledTimes(30)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
   })
 
   it('should not execute duplicate LLM calls while the same run is already running', async () => {
@@ -1029,7 +1053,7 @@ describe('runBenchmark', () => {
     expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.completedCases).toBe(15)
     expect(reclaimedSummary.invalidOutputCases).toBe(0)
-    expect(staleWorkerService.complete).toHaveBeenCalledTimes(2)
+    expect(staleWorkerService.complete).toHaveBeenCalledTimes(1)
     expect(staleSummary.runId).toBe(reclaimedSummary.runId)
 
     const invalidResults = await db
