@@ -101,6 +101,7 @@ export async function repairBenchmarkResponse(
   options: {
     promptContentMd: string
     rawResponse: string
+    appendixOpenIdx?: number
     eligibleCategorySlugs: string[]
   },
 ): Promise<BenchmarkRepairResult> {
@@ -144,7 +145,7 @@ export async function repairBenchmarkResponse(
     status: 'recovered',
     appendix: validation.data,
     rawAppendix,
-    naturalResponse: extractBenchmarkNaturalResponse(options.rawResponse),
+    naturalResponse: extractBenchmarkNaturalResponse(options.rawResponse, options.appendixOpenIdx),
     repairModel: completion.returnedModel,
   }
 }

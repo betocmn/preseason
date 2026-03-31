@@ -857,6 +857,7 @@ async function executeRun(
               const repaired = await repairBenchmarkResponse(llmService, {
                 promptContentMd: promptVersion.contentMd ?? '',
                 rawResponse: completion.content,
+                appendixOpenIdx: parseResult.appendixOpenIdx,
                 eligibleCategorySlugs,
               })
 
