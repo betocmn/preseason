@@ -17,7 +17,7 @@ export const serverSettings = {
     modelDefaults: {
       temperature: 0.2,
       topP: 1,
-      maxTokens: 2000,
+      maxTokens: 4096,
     },
     outputRepair: {
       modelProvider: 'openai',

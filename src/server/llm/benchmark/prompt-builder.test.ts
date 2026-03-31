@@ -37,6 +37,7 @@ describe('buildBenchmarkPrompt', () => {
   it('should instruct models to keep the natural-language answer brief', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('Keep the natural-language answer brief')
+    expect(result).toContain('at most 3 short sentences')
   })
 
   it('should forbid omitting the closing tag', () => {
