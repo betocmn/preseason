@@ -697,6 +697,63 @@ describe('runBenchmark', () => {
     })
   })
 
+  it('reconciles deleted cases out of a stored run snapshot before resuming', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 3, modelCount: 1 })
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const deletedCase = caseRows[2]
+    if (!deletedCase) throw new Error('Expected a case to delete')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        status: 'pending',
+        expectedCaseCount: caseRows.length,
+        qcSummaryJson: {
+          snapshotCaseIds: caseRows.map((benchmarkCase) => benchmarkCase.id),
+        },
+      })
+      .returning()
+    if (!run) throw new Error('Expected seeded run')
+
+    await db.delete(benchmarkCases).where(eq(benchmarkCases.id, deletedCase.id))
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+    })
+
+    expect(summary.status).toBe('running')
+    expect(summary.totalCases).toBe(caseRows.length - 1)
+    expect(summary.processedThisInvocation).toBe(1)
+    expect(summary.remainingCases).toBe(1)
+
+    const updatedRun = await findRun(db, season.id, '2026-03-10')
+    expect(updatedRun.expectedCaseCount).toBe(caseRows.length - 1)
+    expect(updatedRun.qcSummaryJson).toEqual({
+      snapshotCaseIds: caseRows
+        .filter((benchmarkCase) => benchmarkCase.id !== deletedCase.id)
+        .map((benchmarkCase) => benchmarkCase.id),
+    })
+
+    const results = await db
+      .select({
+        caseId: benchmarkCaseResults.caseId,
+        status: benchmarkCaseResults.status,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+
+    expect(results).toHaveLength(caseRows.length - 1)
+    expect(results.some((row) => row.caseId === deletedCase.id)).toBe(false)
+  })
+
   it('leaves a fresh legacy running run alone until it becomes stale', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })
