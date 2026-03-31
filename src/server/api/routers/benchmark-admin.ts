@@ -784,6 +784,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
               claimToken: null,
               startedAt: null,
               completedAt: null,
+              attemptCount: 0,
               naturalResponse: null,
               appendixRaw: null,
               appendixJson: null,

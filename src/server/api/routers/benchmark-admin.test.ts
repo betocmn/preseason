@@ -602,7 +602,7 @@ describe('benchmarkAdminRouter', () => {
         status: 'failed',
         startedAt: new Date('2026-03-01T00:00:00.000Z'),
         completedAt: new Date('2026-03-01T00:05:00.000Z'),
-        attemptCount: 2,
+        attemptCount: 3,
         rawResponse: 'Bad output',
         errorMessage: 'Timed out',
       })
@@ -634,7 +634,7 @@ describe('benchmarkAdminRouter', () => {
     expect(resetResult?.status).toBe('pending')
     expect(resetResult?.startedAt).toBeNull()
     expect(resetResult?.completedAt).toBeNull()
-    expect(resetResult?.attemptCount).toBe(2)
+    expect(resetResult?.attemptCount).toBe(0)
     expect(resetResult?.rawResponse).toBe('Bad output')
     expect(resetResult?.errorMessage).toBeNull()
 
