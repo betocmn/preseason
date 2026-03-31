@@ -61,6 +61,49 @@ describe('repairBenchmarkResponse', () => {
     expect(result.repairModel).toBe('openai/gpt-5.4-mini')
   })
 
+  it('should extract repaired natural text using the parser appendix offset', async () => {
+    const llmService = createMockLlmService(
+      JSON.stringify({
+        schema_version: 'benchmark-v1',
+        categories: [
+          {
+            category_slug: 'auth',
+            decision: 'tool',
+            tool: 'Clerk',
+            reasoning: 'Good fit',
+            confidence: 0.9,
+          },
+          {
+            category_slug: 'database',
+            decision: 'none',
+            reasoning: 'No database tool needed',
+            confidence: 0.4,
+          },
+        ],
+      }),
+    )
+
+    const rawResponse = [
+      'Use Clerk for auth.',
+      '',
+      '<preseason_benchmark_json>',
+      '{"schema_version":"benchmark-v1"',
+      '',
+      'Do not literally print <preseason_benchmark_json> in prose after the appendix.',
+    ].join('\n')
+
+    const result = await repairBenchmarkResponse(llmService, {
+      promptContentMd: '# Build a SaaS app',
+      rawResponse,
+      appendixOpenIdx: rawResponse.indexOf('<preseason_benchmark_json>'),
+      eligibleCategorySlugs: ['auth', 'database'],
+    })
+
+    expect(result.status).toBe('recovered')
+    if (result.status !== 'recovered') return
+    expect(result.naturalResponse).toBe('Use Clerk for auth.')
+  })
+
   it('should strip JSON code fences from the repair model output', async () => {
     const llmService = createMockLlmService(`\`\`\`json
 {"schema_version":"benchmark-v1","categories":[{"category_slug":"auth","decision":"none","reasoning":"No auth tool needed","confidence":0.5},{"category_slug":"database","decision":"tool","tool":"Supabase","reasoning":"Good fit","confidence":0.8}]}

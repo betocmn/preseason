@@ -5,9 +5,15 @@ export const PARSER_VERSION = 'strict-v3'
 const OPEN_TAG = '<preseason_benchmark_json>'
 const CLOSE_TAG = '</preseason_benchmark_json>'
 
+type InvalidOutputParseResult = {
+  status: 'invalid_output'
+  reason: string
+  appendixOpenIdx?: number
+}
+
 export type ParseResult =
   | { status: 'ok'; appendix: BenchmarkAppendix; rawAppendix: string; naturalResponse: string }
-  | { status: 'invalid_output'; reason: string }
+  | InvalidOutputParseResult
 
 const REPAIRABLE_INVALID_OUTPUT_PATTERNS = [
   /^Truncated <preseason_benchmark_json> block:/u,
@@ -46,26 +52,50 @@ function findAppendixTagBlock(rawContent: string) {
   return null
 }
 
-function explainMissingAppendixReason(rawContent: string) {
-  const openIdx = rawContent.lastIndexOf(OPEN_TAG)
-  if (openIdx === -1) {
-    return 'Missing <preseason_benchmark_json> tags'
+function explainMissingAppendixReason(rawContent: string): InvalidOutputParseResult {
+  let searchFrom = rawContent.length
+  let foundOpeningTagWithoutJson = false
+
+  while (searchFrom >= 0) {
+    const openIdx = rawContent.lastIndexOf(OPEN_TAG, searchFrom)
+    if (openIdx === -1) {
+      break
+    }
+
+    const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
+    if (
+      contentStart === -1 ||
+      (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[')
+    ) {
+      foundOpeningTagWithoutJson = true
+      searchFrom = openIdx - 1
+      continue
+    }
+
+    const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+    if (closeIdx === -1) {
+      return {
+        status: 'invalid_output',
+        reason: 'Truncated <preseason_benchmark_json> block: missing closing tag',
+        appendixOpenIdx: openIdx,
+      }
+    }
+
+    return {
+      status: 'invalid_output',
+      reason: 'Malformed <preseason_benchmark_json> block',
+      appendixOpenIdx: openIdx,
+    }
   }
 
-  const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
-  if (
-    contentStart === -1 ||
-    (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[')
-  ) {
-    return 'Opening <preseason_benchmark_json> tag without JSON appendix'
+  if (foundOpeningTagWithoutJson) {
+    return {
+      status: 'invalid_output',
+      reason: 'Opening <preseason_benchmark_json> tag without JSON appendix',
+    }
   }
 
-  const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
-  if (closeIdx === -1) {
-    return 'Truncated <preseason_benchmark_json> block: missing closing tag'
-  }
-
-  return 'Malformed <preseason_benchmark_json> block'
+  return { status: 'invalid_output', reason: 'Missing <preseason_benchmark_json> tags' }
 }
 
 function findFirstNonWhitespaceIndex(rawContent: string, start: number) {
@@ -162,7 +192,7 @@ export function parseBenchmarkResponse(
   const closeIdx = tagBlock?.closeIdx ?? -1
 
   if (openIdx === -1 || closeIdx === -1 || closeIdx <= openIdx) {
-    return { status: 'invalid_output', reason: explainMissingAppendixReason(rawContent) }
+    return explainMissingAppendixReason(rawContent)
   }
 
   const rawAppendix = rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim()
@@ -173,7 +203,11 @@ export function parseBenchmarkResponse(
     parsed = JSON.parse(rawAppendix)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error'
-    return { status: 'invalid_output', reason: `Malformed JSON: ${message}` }
+    return {
+      status: 'invalid_output',
+      reason: `Malformed JSON: ${message}`,
+      appendixOpenIdx: openIdx,
+    }
   }
 
   const validation = validateBenchmarkAppendix(parsed, eligibleCategorySlugs)

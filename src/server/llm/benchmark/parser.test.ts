@@ -66,6 +66,24 @@ describe('parseBenchmarkResponse', () => {
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
   })
 
+  it('should keep earlier truncated appendices repairable when prose later mentions the tag', () => {
+    const raw = [
+      'Use Clerk for auth.',
+      '',
+      '<preseason_benchmark_json>',
+      '{"schema_version":"benchmark-v1"',
+      '',
+      'Do not literally print <preseason_benchmark_json> in prose after the appendix.',
+    ].join('\n')
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('Truncated')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+  })
+
   it('should ignore closing tag mentions in the natural-language preamble', () => {
     const json = buildValidAppendix([
       { slug: 'auth', decision: 'tool', tool: 'Clerk' },

@@ -638,7 +638,14 @@ describe('runBenchmark', () => {
       }
 
       return mockCompletionForRequest(
-        'Use Clerk for auth and Supabase for the database.\n\n<preseason_benchmark_json>\n{"schema_version":"benchmark-v1","categories":[{"category_slug":"auth"',
+        [
+          'Use Clerk for auth and Supabase for the database.',
+          '',
+          '<preseason_benchmark_json>',
+          '{"schema_version":"benchmark-v1","categories":[{"category_slug":"auth"',
+          '',
+          'Do not literally print <preseason_benchmark_json> in prose after the appendix.',
+        ].join('\n'),
         request,
         {
           finishReason: 'length',
@@ -662,7 +669,9 @@ describe('runBenchmark', () => {
     })
 
     expect(repairedResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
-    expect(repairedResult?.naturalResponse).toContain('Use Clerk for auth')
+    expect(repairedResult?.naturalResponse).toBe(
+      'Use Clerk for auth and Supabase for the database.',
+    )
   })
 
   it('should return the persisted summary for an already published run', async () => {
