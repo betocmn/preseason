@@ -421,6 +421,55 @@ async function calculateRunMetrics(
   }
 }
 
+async function buildPersistedRunErrorLog(database: DatabaseClient, runId: string) {
+  const rows = await database
+    .select({
+      status: benchmarkCaseResults.status,
+      errorMessage: benchmarkCaseResults.errorMessage,
+      cnt: count(),
+    })
+    .from(benchmarkCaseResults)
+    .where(
+      and(
+        eq(benchmarkCaseResults.runId, runId),
+        inArray(benchmarkCaseResults.status, ['failed', 'invalid_output']),
+        sql`${benchmarkCaseResults.errorMessage} is not null`,
+      ),
+    )
+    .groupBy(benchmarkCaseResults.status, benchmarkCaseResults.errorMessage)
+
+  const summaryLines = rows
+    .map((row) => ({
+      status: row.status,
+      errorMessage: row.errorMessage,
+      count: Number(row.cnt),
+    }))
+    .filter(
+      (
+        row,
+      ): row is {
+        status: 'failed' | 'invalid_output'
+        errorMessage: string
+        count: number
+      } => row.status === 'failed' || row.status === 'invalid_output',
+    )
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count
+      }
+
+      if (left.status !== right.status) {
+        return left.status.localeCompare(right.status)
+      }
+
+      return left.errorMessage.localeCompare(right.errorMessage)
+    })
+    .slice(0, 10)
+    .map((row) => `[${row.status} x${row.count}] ${row.errorMessage}`)
+
+  return summaryLines.length > 0 ? summaryLines.join('\n') : null
+}
+
 async function buildRunSummary(
   database: DatabaseClient,
   run: BenchmarkRunRecord,
@@ -1117,6 +1166,7 @@ async function finalizeRunIfExhausted(
 
     const metrics = await calculateRunMetrics(tx, runId, totalCases)
     const finalStatus = metrics.qc.passed ? 'published' : 'qc_failed'
+    const errorLog = metrics.qc.passed ? null : await buildPersistedRunErrorLog(tx, runId)
 
     const [updatedRun] = await tx
       .update(benchmarkRuns)
@@ -1127,7 +1177,7 @@ async function finalizeRunIfExhausted(
         failedCaseCount: metrics.failedCases,
         qcStatus: metrics.qc.passed ? 'passed' : 'failed',
         qcSummaryJson: metrics.qc,
-        errorLog: null,
+        errorLog,
       })
       .where(eq(benchmarkRuns.id, runId))
       .returning()

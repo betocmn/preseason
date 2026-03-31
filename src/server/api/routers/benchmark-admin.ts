@@ -55,6 +55,19 @@ function hasLegacyExecutionMetadata(qcSummaryJson: unknown) {
   return typeof (qcSummaryJson as { executionToken?: unknown }).executionToken === 'string'
 }
 
+function normalizeLegacyCaseResultPresentation(result: typeof benchmarkCaseResults.$inferSelect) {
+  const isTerminal =
+    result.status === 'completed' ||
+    result.status === 'failed' ||
+    result.status === 'invalid_output'
+
+  return {
+    startedAt: result.startedAt ?? (isTerminal ? result.createdAt : null),
+    completedAt: result.completedAt ?? (isTerminal ? result.createdAt : null),
+    attemptCount: result.attemptCount > 0 ? result.attemptCount : isTerminal ? 1 : 0,
+  }
+}
+
 const createToolForCandidateSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
@@ -629,23 +642,26 @@ export const benchmarkAdminRouter = createTRPCRouter({
             company: benchmarkCase.modelSnapshot.company,
           },
           result: benchmarkCase.results[0]
-            ? {
-                id: benchmarkCase.results[0].id,
-                status: benchmarkCase.results[0].status,
-                errorMessage: benchmarkCase.results[0].errorMessage,
-                returnedModelId: benchmarkCase.results[0].returnedModelId,
-                startedAt: benchmarkCase.results[0].startedAt,
-                completedAt: benchmarkCase.results[0].completedAt,
-                attemptCount: benchmarkCase.results[0].attemptCount,
-                decisions: benchmarkCase.results[0].decisions.map((decision) => ({
-                  id: decision.id,
-                  decisionType: decision.decisionType,
-                  resolutionStatus: decision.resolutionStatus,
-                  rawToolName: decision.rawToolName,
-                  categoryName: decision.category.name,
-                  toolName: decision.tool?.name ?? null,
-                })),
-              }
+            ? (() => {
+                const normalized = normalizeLegacyCaseResultPresentation(benchmarkCase.results[0])
+                return {
+                  id: benchmarkCase.results[0].id,
+                  status: benchmarkCase.results[0].status,
+                  errorMessage: benchmarkCase.results[0].errorMessage,
+                  returnedModelId: benchmarkCase.results[0].returnedModelId,
+                  startedAt: normalized.startedAt,
+                  completedAt: normalized.completedAt,
+                  attemptCount: normalized.attemptCount,
+                  decisions: benchmarkCase.results[0].decisions.map((decision) => ({
+                    id: decision.id,
+                    decisionType: decision.decisionType,
+                    resolutionStatus: decision.resolutionStatus,
+                    rawToolName: decision.rawToolName,
+                    categoryName: decision.category.name,
+                    toolName: decision.tool?.name ?? null,
+                  })),
+                }
+              })()
             : null,
         })),
       }

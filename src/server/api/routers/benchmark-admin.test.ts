@@ -470,6 +470,57 @@ describe('benchmarkAdminRouter', () => {
     expect(detail.caseRows[0]?.result?.completedAt).toBeNull()
   })
 
+  it('falls back to legacy case-result timestamps and attempt counts in benchmark run detail', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+        qcStatus: 'passed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [benchmarkCase] = await db.select().from(benchmarkCases)
+    if (!benchmarkCase) throw new Error('No case found')
+
+    const [legacyResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'completed',
+      })
+      .returning()
+    if (!legacyResult) throw new Error('Failed to create legacy case result')
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.caseRows[0]?.result?.attemptCount).toBe(1)
+    expect(detail.caseRows[0]?.result?.startedAt?.toISOString()).toBe(
+      legacyResult.createdAt.toISOString(),
+    )
+    expect(detail.caseRows[0]?.result?.completedAt?.toISOString()).toBe(
+      legacyResult.createdAt.toISOString(),
+    )
+  })
+
   it('retries failed cases on a published run by resetting rows in place', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
