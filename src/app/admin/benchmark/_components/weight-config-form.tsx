@@ -1,7 +1,6 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -17,6 +16,7 @@ import {
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 const formSchema = z.object({
   name: z.string().min(1).max(255),
@@ -30,8 +30,6 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 export function WeightConfigForm() {
-  const router = useRouter()
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,8 +45,7 @@ export function WeightConfigForm() {
   const mutation = api.benchmarkAdmin.createWeightConfig.useMutation({
     onSuccess: () => {
       toast.success('Weight config created')
-      router.refresh()
-      form.reset()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => toast.error(err.message),
   })
