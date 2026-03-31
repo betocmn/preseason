@@ -1172,7 +1172,6 @@ async function finalizeRunIfExhausted(
 
     const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
     const pendingCases = countByStatus.get('pending') ?? 0
-    const runningCases = countByStatus.get('running') ?? 0
     const completedCases = countByStatus.get('completed') ?? 0
     const failedCases = countByStatus.get('failed') ?? 0
 
