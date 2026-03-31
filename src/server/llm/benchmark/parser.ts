@@ -9,6 +9,14 @@ export type ParseResult =
   | { status: 'ok'; appendix: BenchmarkAppendix; rawAppendix: string; naturalResponse: string }
   | { status: 'invalid_output'; reason: string }
 
+const REPAIRABLE_INVALID_OUTPUT_PATTERNS = [
+  /^Missing <preseason_benchmark_json> tags$/u,
+  /^Empty <preseason_benchmark_json> block$/u,
+  /^Truncated <preseason_benchmark_json> block:/u,
+  /^Malformed <preseason_benchmark_json> block/u,
+  /^Malformed JSON:/u,
+] as const
+
 function findAppendixTagBlock(rawContent: string) {
   let searchFrom = rawContent.length
 
@@ -139,6 +147,13 @@ export function extractBenchmarkNaturalResponse(rawContent: string, appendixOpen
   }
 
   return rawContent.slice(0, openIdx).trim()
+}
+
+export function shouldRepairBenchmarkParseFailure(parseResult: ParseResult) {
+  return (
+    parseResult.status === 'invalid_output' &&
+    REPAIRABLE_INVALID_OUTPUT_PATTERNS.some((pattern) => pattern.test(parseResult.reason))
+  )
 }
 
 export function parseBenchmarkResponse(
