@@ -8,6 +8,8 @@ export function buildBenchmarkPrompt(contentMd: string, eligibleCategorySlugs: s
     '',
     'IMPORTANT: After your natural-language answer, you MUST include a machine-readable appendix.',
     'Keep the natural-language answer brief and move to the appendix quickly.',
+    'Limit the natural-language answer to at most 3 short sentences.',
+    'If space is tight, prioritize finishing the appendix instead of adding more prose.',
     'Wrap the appendix exactly between the XML tags shown below. The JSON must be valid and complete.',
     'Do not put the JSON in a code fence. Do not omit the closing tag.',
     '',
