@@ -24,6 +24,7 @@ import {
 } from '~/components/ui/select'
 import { Textarea } from '~/components/ui/textarea'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 const formSchema = z.object({
   name: z.string().min(1).max(255),
@@ -57,7 +58,7 @@ export function SeasonForm({ protocols }: { protocols: Protocol[] }) {
   const createMutation = api.benchmarkAdmin.createSeason.useMutation({
     onSuccess: () => {
       toast.success('Season created')
-      router.push('/beto-admin/benchmark')
+      loadFreshBenchmarkAdminPage('/beto-admin/benchmark')
     },
     onError: (err) => toast.error(err.message),
   })

@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import {
@@ -17,6 +16,7 @@ import {
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 type Props = {
   candidateId: string
@@ -24,13 +24,12 @@ type Props = {
 }
 
 export function RejectCandidateDialog({ candidateId, candidateName }: Props) {
-  const router = useRouter()
   const [notes, setNotes] = useState('')
 
   const mutation = api.benchmarkAdmin.rejectCandidate.useMutation({
     onSuccess: () => {
       toast.success('Candidate rejected')
-      router.refresh()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => toast.error(err.message),
   })
