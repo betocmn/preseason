@@ -47,14 +47,6 @@ function extractSnapshotCaseIds(qcSummaryJson: unknown): string[] | null {
   return ids as string[]
 }
 
-function hasLegacyExecutionMetadata(qcSummaryJson: unknown) {
-  if (!qcSummaryJson || typeof qcSummaryJson !== 'object' || Array.isArray(qcSummaryJson)) {
-    return false
-  }
-
-  return typeof (qcSummaryJson as { executionToken?: unknown }).executionToken === 'string'
-}
-
 function normalizeLegacyCaseResultPresentation(result: typeof benchmarkCaseResults.$inferSelect) {
   const isTerminal =
     result.status === 'completed' ||
@@ -602,13 +594,12 @@ export const benchmarkAdminRouter = createTRPCRouter({
               )[0]?.count ?? 0,
             ))
       const resultCount = Object.values(resultStats).reduce((a, b) => a + b, 0)
-      const shouldUseLegacyPendingFallback =
+      const shouldBackfillPendingCounts =
         totalCases > resultCount &&
         (resultStats.pending ?? 0) === 0 &&
-        (resultStats.running ?? 0) === 0 &&
-        hasLegacyExecutionMetadata(run.qcSummaryJson)
+        (resultStats.running ?? 0) === 0
 
-      if (shouldUseLegacyPendingFallback) {
+      if (shouldBackfillPendingCounts) {
         resultStats.pending = (resultStats.pending ?? 0) + (totalCases - resultCount)
       }
 

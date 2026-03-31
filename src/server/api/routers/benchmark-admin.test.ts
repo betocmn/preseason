@@ -470,6 +470,42 @@ describe('benchmarkAdminRouter', () => {
     expect(detail.caseRows[0]?.result?.completedAt).toBeNull()
   })
 
+  it('synthesizes pending counts for pending runs before result rows exist', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const caseRows = await db.select({ id: benchmarkCases.id }).from(benchmarkCases)
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'pending',
+        expectedCaseCount: caseRows.length,
+        qcSummaryJson: { snapshotCaseIds: caseRows.map((row) => row.id) },
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.resultStats.pending).toBe(caseRows.length)
+    expect(detail.resultStats.running ?? 0).toBe(0)
+    expect(detail.caseRows).toHaveLength(caseRows.length)
+    expect(detail.caseRows.every((row) => row.result === null)).toBe(true)
+  })
+
   it('falls back to legacy case-result timestamps and attempt counts in benchmark run detail', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
