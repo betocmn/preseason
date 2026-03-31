@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PARSER_VERSION, parseBenchmarkResponse } from './parser'
+import { PARSER_VERSION, parseBenchmarkResponse, shouldRepairBenchmarkParseFailure } from './parser'
 
 function buildValidAppendix(
   categories: Array<{ slug: string; decision: 'tool' | 'none'; tool?: string }>,
@@ -44,6 +44,7 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Missing')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output when only opening tag is present', () => {
@@ -143,6 +144,7 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Malformed JSON')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output for wrong schema_version', () => {
@@ -169,6 +171,7 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('database')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
   })
 
   it('should return invalid_output when extra categories are present', () => {

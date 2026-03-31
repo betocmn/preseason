@@ -13,7 +13,11 @@ import {
   subcategories,
 } from '~/server/db/schema'
 import { checkModelDrift } from '~/server/llm/benchmark/model-drift'
-import { PARSER_VERSION, parseBenchmarkResponse } from '~/server/llm/benchmark/parser'
+import {
+  PARSER_VERSION,
+  parseBenchmarkResponse,
+  shouldRepairBenchmarkParseFailure,
+} from '~/server/llm/benchmark/parser'
 import { buildBenchmarkPrompt } from '~/server/llm/benchmark/prompt-builder'
 import { evaluateQc, type QcCheckResult } from '~/server/llm/benchmark/qc'
 import { REPAIR_PARSER_VERSION, repairBenchmarkResponse } from '~/server/llm/benchmark/repair'
@@ -848,23 +852,25 @@ async function executeRun(
         } else {
           invalidReason = originalParseReason
 
-          try {
-            const repaired = await repairBenchmarkResponse(llmService, {
-              promptContentMd: promptVersion.contentMd ?? '',
-              rawResponse: completion.content,
-              eligibleCategorySlugs,
-            })
+          if (shouldRepairBenchmarkParseFailure(parseResult)) {
+            try {
+              const repaired = await repairBenchmarkResponse(llmService, {
+                promptContentMd: promptVersion.contentMd ?? '',
+                rawResponse: completion.content,
+                eligibleCategorySlugs,
+              })
 
-            if (repaired.status === 'recovered') {
-              appendix = repaired.appendix
-              rawAppendix = repaired.rawAppendix
-              naturalResponse = repaired.naturalResponse
-              parserVersion = REPAIR_PARSER_VERSION
-            } else {
-              invalidReason = `${originalParseReason}; ${repaired.reason}`
+              if (repaired.status === 'recovered') {
+                appendix = repaired.appendix
+                rawAppendix = repaired.rawAppendix
+                naturalResponse = repaired.naturalResponse
+                parserVersion = REPAIR_PARSER_VERSION
+              } else {
+                invalidReason = `${originalParseReason}; ${repaired.reason}`
+              }
+            } catch (error) {
+              invalidReason = `${originalParseReason}; Repair attempt failed: ${getErrorMessage(error)}`
             }
-          } catch (error) {
-            invalidReason = `${originalParseReason}; Repair attempt failed: ${getErrorMessage(error)}`
           }
         }
 

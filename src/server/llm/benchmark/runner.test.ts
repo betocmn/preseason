@@ -514,6 +514,46 @@ describe('runBenchmark', () => {
     expect(llmService.complete).toHaveBeenCalledTimes(40)
   })
 
+  it('should not repair schema-validity failures into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const semanticallyInvalidAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(
+        `Use Clerk for auth.\n\n<preseason_benchmark_json>\n${semanticallyInvalidAppendix}\n</preseason_benchmark_json>`,
+        request,
+      ),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
   it('should repair truncated benchmark appendices with a secondary extraction pass', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
