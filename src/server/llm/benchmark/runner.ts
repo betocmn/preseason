@@ -561,6 +561,24 @@ async function loadOrderedSeasonCaseIds(database: DatabaseClient, seasonId: stri
   return rows.map((row) => row.id)
 }
 
+async function reconcileStoredSnapshotCaseIds(
+  database: DatabaseClient,
+  seasonId: string,
+  snapshotCaseIds: string[],
+) {
+  if (snapshotCaseIds.length === 0) {
+    return snapshotCaseIds
+  }
+
+  const rows = await database
+    .select({ id: benchmarkCases.id })
+    .from(benchmarkCases)
+    .where(and(eq(benchmarkCases.seasonId, seasonId), inArray(benchmarkCases.id, snapshotCaseIds)))
+
+  const existingCaseIds = new Set(rows.map((row) => row.id))
+  return snapshotCaseIds.filter((caseId) => existingCaseIds.has(caseId))
+}
+
 function isFreshLegacyRun(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
   if (run.status !== 'running') return false
   if (!getRunExecutionToken(run)) return false
@@ -596,8 +614,10 @@ async function initializeRunForCaseWorkers(
       return { run, state: 'legacy_in_flight' }
     }
 
-    const snapshotCaseIds =
-      getRunCaseSnapshot(run)?.snapshotCaseIds ?? (await loadOrderedSeasonCaseIds(tx, seasonId))
+    const storedSnapshotCaseIds = getRunCaseSnapshot(run)?.snapshotCaseIds ?? null
+    const snapshotCaseIds = storedSnapshotCaseIds
+      ? await reconcileStoredSnapshotCaseIds(tx, seasonId, storedSnapshotCaseIds)
+      : await loadOrderedSeasonCaseIds(tx, seasonId)
 
     if (snapshotCaseIds.length > 0) {
       await tx
@@ -630,7 +650,9 @@ async function initializeRunForCaseWorkers(
         status: 'running',
         startedAt: shouldRefreshRunState ? currentTime : (run.startedAt ?? currentTime),
         completedAt: null,
-        expectedCaseCount: run.expectedCaseCount ?? snapshotCaseIds.length,
+        expectedCaseCount: storedSnapshotCaseIds
+          ? snapshotCaseIds.length
+          : (run.expectedCaseCount ?? snapshotCaseIds.length),
         weightConfigId,
         completedCaseCount: run.completedCaseCount,
         failedCaseCount: run.failedCaseCount,
