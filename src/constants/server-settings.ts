@@ -26,6 +26,10 @@ export const serverSettings = {
       maxTokens: 700,
     },
   },
+  openRouter: {
+    transportRetryAttempts: 3,
+    transportRetryBaseDelayMs: 1_000,
+  },
   toolCandidateReview: {
     cronBatchSize: 8,
     shortlistSize: 6,
