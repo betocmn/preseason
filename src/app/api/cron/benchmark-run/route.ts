@@ -6,6 +6,7 @@ import { db } from '~/server/db'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 600
 
 function isAuthorized(request: Request, expectedToken: string | undefined) {
   if (!expectedToken) {

@@ -11,9 +11,8 @@ const backgroundSmokePromptSelections = [
 export const serverSettings = {
   benchmark: {
     // Bound benchmark cron work so each invocation stays short and resumable.
-    casesPerCronInvocation: 4,
-    staleRunThresholdMs: 15 * 60 * 1000,
-    heartbeatIntervalMs: 5 * 60 * 1000,
+    casesPerCronInvocation: 1,
+    caseClaimStaleAfterMs: 11 * 60 * 1000,
     modelDefaults: {
       temperature: 0.2,
       topP: 1,

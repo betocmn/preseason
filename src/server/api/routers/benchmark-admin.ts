@@ -47,6 +47,14 @@ function extractSnapshotCaseIds(qcSummaryJson: unknown): string[] | null {
   return ids as string[]
 }
 
+function hasLegacyExecutionMetadata(qcSummaryJson: unknown) {
+  if (!qcSummaryJson || typeof qcSummaryJson !== 'object' || Array.isArray(qcSummaryJson)) {
+    return false
+  }
+
+  return typeof (qcSummaryJson as { executionToken?: unknown }).executionToken === 'string'
+}
+
 const createToolForCandidateSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
@@ -564,13 +572,23 @@ export const benchmarkAdminRouter = createTRPCRouter({
               )[0]?.count ?? 0,
             ))
       const resultCount = Object.values(resultStats).reduce((a, b) => a + b, 0)
-      if (totalCases > resultCount) {
+      const shouldUseLegacyPendingFallback =
+        totalCases > resultCount &&
+        (resultStats.pending ?? 0) === 0 &&
+        (resultStats.running ?? 0) === 0 &&
+        hasLegacyExecutionMetadata(run.qcSummaryJson)
+
+      if (shouldUseLegacyPendingFallback) {
         resultStats.pending = (resultStats.pending ?? 0) + (totalCases - resultCount)
       }
 
       const caseRows = await ctx.db.query.benchmarkCases.findMany({
         where: caseWhereClause,
-        orderBy: [asc(benchmarkCases.id)],
+        orderBy: [
+          asc(benchmarkCases.promptVersionId),
+          asc(benchmarkCases.modelSnapshotId),
+          asc(benchmarkCases.id),
+        ],
         with: {
           promptVersion: {
             with: {
@@ -616,7 +634,9 @@ export const benchmarkAdminRouter = createTRPCRouter({
                 status: benchmarkCase.results[0].status,
                 errorMessage: benchmarkCase.results[0].errorMessage,
                 returnedModelId: benchmarkCase.results[0].returnedModelId,
-                createdAt: benchmarkCase.results[0].createdAt,
+                startedAt: benchmarkCase.results[0].startedAt,
+                completedAt: benchmarkCase.results[0].completedAt,
+                attemptCount: benchmarkCase.results[0].attemptCount,
                 decisions: benchmarkCase.results[0].decisions.map((decision) => ({
                   id: decision.id,
                   decisionType: decision.decisionType,
@@ -721,16 +741,45 @@ export const benchmarkAdminRouter = createTRPCRouter({
             ),
           )
 
+        if (retryableRows.length > 0) {
+          await tx.delete(benchmarkCaseDecisions).where(
+            inArray(
+              benchmarkCaseDecisions.caseResultId,
+              retryableRows.map((row) => row.id),
+            ),
+          )
+
+          await tx
+            .update(benchmarkCaseResults)
+            .set({
+              status: 'pending',
+              claimToken: null,
+              startedAt: null,
+              completedAt: null,
+              naturalResponse: null,
+              appendixRaw: null,
+              appendixJson: null,
+              errorMessage: null,
+            })
+            .where(
+              inArray(
+                benchmarkCaseResults.id,
+                retryableRows.map((row) => row.id),
+              ),
+            )
+        }
+
         const [updated] = await tx
           .update(benchmarkRuns)
           .set({
             status: 'pending',
+            startedAt: null,
             completedAt: null,
             completedCaseCount: null,
             failedCaseCount: null,
             errorLog: null,
             qcStatus: null,
-            qcSummaryJson: snapshotCaseIds.length > 0 ? { snapshotCaseIds } : null,
+            qcSummaryJson: { snapshotCaseIds },
           })
           .where(
             and(

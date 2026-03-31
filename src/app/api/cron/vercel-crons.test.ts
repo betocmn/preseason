@@ -37,7 +37,7 @@ describe('vercel cron config', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/5 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('*/15 * * * *')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('*/30 * * * *')
   })
