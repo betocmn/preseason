@@ -1,5 +1,8 @@
 import type { PromptLevel } from '~/server/llm/prompts'
 
+const benchmarkCronMaxDurationSeconds = 800
+const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
+
 const backgroundSmokePromptSelections = [
   { slug: 'real-estate-website', level: 'beginner' },
   { slug: 'chat-application', level: 'beginner' },
@@ -10,10 +13,15 @@ const backgroundSmokePromptSelections = [
 
 export const serverSettings = {
   benchmark: {
+    // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
     // Bound benchmark cron work so each invocation stays short and resumable.
-    casesPerCronInvocation: 4,
-    staleRunThresholdMs: 15 * 60 * 1000,
-    heartbeatIntervalMs: 5 * 60 * 1000,
+    cronMaxDurationSeconds: benchmarkCronMaxDurationSeconds,
+    casesPerCronInvocation: 1,
+    // Stop retrying a case after this many attempts to avoid burning API credits.
+    maxCaseAttempts: 3,
+    // Do not reclaim an in-flight case before the benchmark worker itself can time out.
+    caseClaimStaleAfterMs:
+      benchmarkCronMaxDurationSeconds * 1000 + benchmarkCaseClaimSafetyBufferMs,
     modelDefaults: {
       temperature: 0.2,
       topP: 1,
