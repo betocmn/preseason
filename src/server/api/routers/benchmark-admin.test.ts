@@ -548,19 +548,14 @@ describe('benchmarkAdminRouter', () => {
       resolutionStatus: 'unresolved_tool',
     })
 
-    // Approve the candidate
-    const approved = await caller.benchmarkAdmin.approveCandidate({
+    // Approve the candidate (replay happens atomically)
+    const result = await caller.benchmarkAdmin.approveCandidate({
       candidateId: candidate.id,
       toolId: tool.id,
     })
-    expect(approved.status).toBe('approved')
-    expect(approved.approvedToolId).toBe(tool.id)
-
-    // Replay decisions
-    const replay = await caller.benchmarkAdmin.replayDecisions({
-      candidateId: candidate.id,
-    })
-    expect(replay.updatedCount).toBe(1)
+    expect(result.candidate.status).toBe('approved')
+    expect(result.candidate.approvedToolId).toBe(tool.id)
+    expect(result.replayedCount).toBe(1)
   })
 
   it('approves a candidate by creating a new tool', async () => {
@@ -580,7 +575,7 @@ describe('benchmarkAdminRouter', () => {
       .returning()
     if (!candidate) throw new Error('Failed to create candidate')
 
-    const approved = await caller.benchmarkAdmin.approveCandidate({
+    const result = await caller.benchmarkAdmin.approveCandidate({
       candidateId: candidate.id,
       newTool: {
         name: 'New Auth Tool',
@@ -589,10 +584,10 @@ describe('benchmarkAdminRouter', () => {
       },
     })
 
-    expect(approved.status).toBe('approved')
-    expect(approved.approvedToolId).toBeTruthy()
+    expect(result.candidate.status).toBe('approved')
+    expect(result.candidate.approvedToolId).toBeTruthy()
 
-    const approvedToolId = approved.approvedToolId
+    const approvedToolId = result.candidate.approvedToolId
     if (!approvedToolId) {
       throw new Error('Expected approved tool id')
     }
