@@ -114,16 +114,6 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     tier: 'frontier',
   },
   {
-    name: 'GPT 5.4 Pro',
-    slug: 'gpt-5-4-pro',
-    provider: 'openai',
-    company: 'OpenAI',
-    modelFamily: 'GPT Pro',
-    modelVersion: '5.4',
-    modelId: 'openai/gpt-5.4-pro',
-    tier: 'frontier',
-  },
-  {
     name: 'GPT 5.4 Mini',
     slug: 'gpt-5-4-mini',
     provider: 'openai',
