@@ -605,6 +605,68 @@ describe('runBenchmark', () => {
     ).toHaveLength(0)
   })
 
+  it('should repair outputs truncated immediately after the opening tag', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest(
+        'Use Clerk for auth and Supabase for the database.\n\n<preseason_benchmark_json>\n',
+        request,
+        {
+          finishReason: 'length',
+          usage: { promptTokens: 100, completionTokens: 1200, totalTokens: 1300 },
+        },
+      )
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
+
+    const repairedResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, summary.runId),
+    })
+
+    expect(repairedResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
+    expect(repairedResult?.naturalResponse).toBe(
+      'Use Clerk for auth and Supabase for the database.',
+    )
+  })
+
   it('should repair truncated benchmark appendices with a secondary extraction pass', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
