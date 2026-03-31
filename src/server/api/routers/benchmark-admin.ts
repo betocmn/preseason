@@ -1045,6 +1045,72 @@ export const benchmarkAdminRouter = createTRPCRouter({
       return { updatedCount: updated.length }
     }),
 
+  resetCandidate: protectedProcedure
+    .input(z.object({ candidateId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const candidate = await ctx.db.query.toolCandidates.findFirst({
+        where: eq(toolCandidates.id, input.candidateId),
+      })
+      if (!candidate) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Candidate not found' })
+      }
+      if (candidate.status === 'pending') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Candidate is already pending',
+        })
+      }
+
+      return await ctx.db.transaction(async (tx) => {
+        // Revert resolved decisions back to unresolved_tool
+        if (candidate.status === 'approved' && candidate.approvedToolId) {
+          await tx
+            .update(benchmarkCaseDecisions)
+            .set({ toolId: null, resolutionStatus: 'unresolved_tool' })
+            .where(
+              and(
+                eq(benchmarkCaseDecisions.toolId, candidate.approvedToolId),
+                eq(benchmarkCaseDecisions.resolutionStatus, 'resolved'),
+                sql`lower(trim(${benchmarkCaseDecisions.rawToolName})) = ${candidate.normalizedName}`,
+              ),
+            )
+        }
+
+        // Remove tool alias created during approval
+        await tx
+          .delete(toolAliases)
+          .where(
+            and(
+              eq(toolAliases.normalizedAlias, candidate.normalizedName),
+              eq(toolAliases.source, 'candidate_approval'),
+            ),
+          )
+
+        // Reset candidate back to pending
+        const [updated] = await tx
+          .update(toolCandidates)
+          .set({ status: 'pending', approvedToolId: null, notes: null })
+          .where(
+            and(
+              eq(toolCandidates.id, input.candidateId),
+              eq(toolCandidates.status, candidate.status),
+            ),
+          )
+          .returning()
+
+        if (!updated) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Candidate status changed; refresh and try again',
+          })
+        }
+
+        return updated
+      })
+    }),
+
   // ---------------------------------------------------------------------------
   // PROTOCOL LISTING (for season creation form)
   // ---------------------------------------------------------------------------

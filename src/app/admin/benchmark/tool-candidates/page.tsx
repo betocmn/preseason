@@ -12,6 +12,7 @@ import {
 import { api } from '~/trpc/server'
 import { ApproveCandidateDialog } from '../_components/approve-candidate-dialog'
 import { RejectCandidateDialog } from '../_components/reject-candidate-dialog'
+import { ResetCandidateDialog } from '../_components/reset-candidate-dialog'
 
 function statusVariant(status: string) {
   switch (status) {
@@ -124,7 +125,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
                   {candidate.approvedTool?.name ?? '-'}
                 </TableCell>
                 <TableCell>
-                  {candidate.status === 'pending' && (
+                  {candidate.status === 'pending' ? (
                     <div className="flex gap-1">
                       <ApproveCandidateDialog
                         candidateId={candidate.id}
@@ -140,6 +141,12 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
                         candidateName={candidate.rawName}
                       />
                     </div>
+                  ) : (
+                    <ResetCandidateDialog
+                      candidateId={candidate.id}
+                      candidateName={candidate.rawName}
+                      currentStatus={candidate.status}
+                    />
                   )}
                 </TableCell>
               </TableRow>
