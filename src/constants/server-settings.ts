@@ -51,4 +51,8 @@ export const serverSettings = {
   backgroundSmoke: {
     promptSelections: backgroundSmokePromptSelections,
   },
+  supabasePooler: {
+    hostnameSuffix: '.pooler.supabase.com',
+    port: '6543',
+  },
 } as const

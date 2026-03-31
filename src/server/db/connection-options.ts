@@ -1,3 +1,5 @@
+import { serverSettings } from '~/constants/server-settings'
+
 type PostgresClientOptions = {
   prepare?: boolean
 }
@@ -5,7 +7,8 @@ type PostgresClientOptions = {
 export function usesSupabaseTransactionPooler(databaseUrl: string): boolean {
   try {
     const parsedUrl = new URL(databaseUrl)
-    return parsedUrl.hostname.endsWith('.pooler.supabase.com') && parsedUrl.port === '6543'
+    const { hostnameSuffix, port } = serverSettings.supabasePooler
+    return parsedUrl.hostname.endsWith(hostnameSuffix) && parsedUrl.port === port
   } catch {
     return false
   }
