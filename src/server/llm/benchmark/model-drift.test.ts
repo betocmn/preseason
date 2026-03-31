@@ -44,6 +44,13 @@ describe('checkModelDrift', () => {
     ).toBe(false)
   })
 
+  it('preserves drift detection across materially different llama sizes', () => {
+    expect(
+      checkModelDrift('meta-llama/llama-3.1-8b-instruct', 'meta-llama/llama-3.1-70b-instruct')
+        .hasDrift,
+    ).toBe(true)
+  })
+
   it('returns hasDrift=true when model families differ', () => {
     const result = checkModelDrift('gpt-4o', 'gpt-4.1')
     expect(result.hasDrift).toBe(true)
