@@ -1,32 +1,21 @@
 import { NextResponse } from 'next/server'
 import { serverSettings } from '~/constants/server-settings'
 import { env } from '~/env'
+import { isCronRequestAuthorized } from '~/lib/cron-auth'
 import { resolveBenchmarkCronRunTarget } from '~/server/api/helpers/benchmark'
 import { db } from '~/server/db'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
-
-function isAuthorized(request: Request, expectedToken: string | undefined) {
-  if (!expectedToken) {
-    return false
-  }
-
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return false
-  }
-
-  const token = authHeader.slice('Bearer '.length).trim()
-  return token.length > 0 && token === expectedToken
-}
+// Next.js route segment config must stay a statically analyzable literal.
+export const maxDuration = 800
 
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
     return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
   }
 
-  if (!isAuthorized(request, env.CRON_SECRET)) {
+  if (!isCronRequestAuthorized(request, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

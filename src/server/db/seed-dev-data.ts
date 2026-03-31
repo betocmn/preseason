@@ -370,12 +370,20 @@ async function seedBenchmarkData() {
   }
 
   // 9. Create case results
-  const caseResultValues = allCases.map((c) => ({
-    seasonId: seasonRow.id,
-    runId: runRow.id,
-    caseId: c.id,
-    status: 'completed' as const,
-  }))
+  const caseResultValues = allCases.map((c, index) => {
+    const completedAt = new Date(Date.now() + index * 1_000)
+    const startedAt = new Date(completedAt.getTime() - 15_000)
+
+    return {
+      seasonId: seasonRow.id,
+      runId: runRow.id,
+      caseId: c.id,
+      status: 'completed' as const,
+      startedAt,
+      completedAt,
+      attemptCount: 1,
+    }
+  })
   await db.insert(schema.benchmarkCaseResults).values(caseResultValues).onConflictDoNothing()
   const allCaseResults = await db
     .select()

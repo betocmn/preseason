@@ -381,6 +381,9 @@ async function seedBenchmarkData() {
     runId: string
     caseId: string
     status: 'completed'
+    startedAt: Date
+    completedAt: Date
+    attemptCount: number
     promptTokens: number
     completionTokens: number
     totalTokens: number
@@ -392,15 +395,20 @@ async function seedBenchmarkData() {
     for (const caseRow of insertedCases) {
       const promptTokens = randomInt(800, 1500)
       const completionTokens = randomInt(300, 800)
+      const completedAt = new Date(`${run.scheduledFor}T12:00:00.000Z`)
+      const latencyMs = randomInt(500, 3000)
       resultBatch.push({
         seasonId: season.id,
         runId: run.id,
         caseId: caseRow.id,
         status: 'completed',
+        startedAt: new Date(completedAt.getTime() - latencyMs),
+        completedAt,
+        attemptCount: 1,
         promptTokens,
         completionTokens,
         totalTokens: promptTokens + completionTokens,
-        latencyMs: randomInt(500, 3000),
+        latencyMs,
         parserVersion: '1.0',
       })
     }
