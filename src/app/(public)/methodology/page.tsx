@@ -2,18 +2,15 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Methodology',
-  description:
-    'How Preseason tests AI models, scores tool recommendations, and generates rankings.',
+  description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
   openGraph: {
     title: 'Methodology',
-    description:
-      'How Preseason tests AI models, scores tool recommendations, and generates rankings.',
+    description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Methodology',
-    description:
-      'How Preseason tests AI models, scores tool recommendations, and generates rankings.',
+    description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
   },
 }
 
@@ -38,101 +35,90 @@ export default function MethodologyPage() {
       </div>
 
       <div className="space-y-10">
-        <Section title="How We Test">
+        <Section title="What We Measure">
           <P>
-            Preseason runs a daily benchmark that asks a panel of AI models what tools they would
-            recommend for specific development scenarios. Each benchmark run evaluates every
-            combination of prompt and model in the active season.
+            Preseason measures recommendation behavior, not product quality in the abstract. We ask
+            a frozen panel of AI models which tools they would choose for realistic software
+            building scenarios, then aggregate those decisions into public rankings and matchups.
           </P>
           <P>
-            <strong className="text-foreground">Prompt panel:</strong> A curated set of development
-            scenarios ranging from simple applications to complex multi-service architectures. The
-            current seeded corpus covers 15 web-app scenarios, each represented at beginner,
-            intermediate, and advanced prompting levels for 45 prompt variants total. Each prompt
-            level changes the technical specificity of the request while keeping the target tool
-            categories consistent within a scenario.
-          </P>
-          <P>
-            <strong className="text-foreground">Model panel:</strong> A curated panel of 20 current
-            AI models with extra depth in coding-heavy families, including multiple OpenAI GPT and
-            Codex variants plus Anthropic Opus, Sonnet, and Haiku. Each model snapshot stores the
-            company, family, exact version, and explicit frozen inference parameters (temperature,
-            top_p, max_tokens) to ensure reproducibility.
-          </P>
-          <P>
-            <strong className="text-foreground">Immutable snapshots:</strong> Both prompts and model
-            configurations are frozen as immutable snapshots within each season. This ensures that
-            rankings are always traceable to the exact inputs that produced them.
+            Every public result comes from published runs inside a frozen benchmark season. A season
+            freezes the prompt versions, eligible categories, model snapshots, and run configuration
+            so rankings stay comparable and traceable over time.
           </P>
         </Section>
 
-        <Section title="Structured Output">
+        <Section title="Benchmark Design">
           <P>
-            For benchmark runs, each model must return a machine-readable response in a strict
-            format. For every eligible tool category in the prompt, the model provides a decision:
-            recommend a specific tool, or indicate that no tool is needed for that category.
+            Prompts are versioned snapshots grouped by user prompting level: beginner, intermediate,
+            and advanced. Each prompt version declares which tool categories should produce a
+            decision, which keeps the evaluation target explicit.
           </P>
           <P>
-            Responses that do not conform to the expected format are marked as invalid and excluded
-            from rankings. There is no heuristic parsing or attempt to rescue malformed outputs.
-            This strict approach ensures data quality at the cost of some data volume.
+            Model snapshots pin the provider, model identity, and inference settings used at
+            evaluation time. Each benchmark run executes the full prompt-by-model matrix for the
+            season, so each case can be reproduced and audited later.
+          </P>
+          <P>
+            The current corpus is intentionally focused on web application and SaaS-style scenarios,
+            which is important context when interpreting category leaders.
+          </P>
+        </Section>
+
+        <Section title="Decision Capture">
+          <P>
+            In benchmark mode, a model returns both natural language and a structured appendix. For
+            every eligible category in the prompt, that appendix must resolve to exactly one
+            category-level decision: recommend a tool or explicitly say no tool is needed.
+          </P>
+          <P>
+            We validate that appendix against the benchmark contract and store one case decision per
+            category. Outputs that cannot be validated are excluded rather than inferred from prose.
+          </P>
+          <P>
+            We also record the model identity returned by the provider so silent model swaps or
+            other drift can be caught before a run is allowed into the public dataset.
+          </P>
+        </Section>
+
+        <Section title="Tool Resolution">
+          <P>
+            Recommended tool names are resolved against Preseason&apos;s tool catalog and approved
+            aliases. When a name cannot be mapped confidently, it goes into a review queue and does
+            not count toward rankings until it is resolved.
+          </P>
+          <P>
+            This keeps the public data conservative: unknown or ambiguous names are held out rather
+            than silently forced into an existing tool entry.
           </P>
         </Section>
 
         <Section title="Scoring">
           <P>
-            The fundamental unit of measurement is a{' '}
-            <strong className="text-foreground">case decision</strong>: one model&apos;s tool choice
-            for one category in one prompt evaluation.
+            Rankings are computed from case decisions, not free-text mentions. The core metric is a
+            tool&apos;s support rate: the share of eligible decisions that selected it within the
+            chosen benchmark slice.
           </P>
           <P>
-            <strong className="text-foreground">Support rate:</strong> The fraction of eligible
-            decisions that selected a given tool. Shown as a percentage with the raw count (e.g.,
-            35.2% with 42/119 decisions).
+            We pair that rate with raw counts, Wilson confidence intervals, model coverage, prompt
+            coverage, and trend versus the previous non-overlapping published-run window. Rankings
+            are ordered by weighted support rate, with confidence and count used to break ties.
           </P>
           <P>
-            <strong className="text-foreground">Confidence interval:</strong> A Wilson 95%
-            confidence interval on the raw support rate. Narrower intervals indicate more reliable
-            rankings. The CI is computed on unweighted counts.
-          </P>
-          <P>
-            <strong className="text-foreground">Model coverage:</strong> The percentage of distinct
-            model snapshots that recommended this tool. High coverage means broad consensus across
-            different AI models.
-          </P>
-          <P>
-            <strong className="text-foreground">Prompt coverage:</strong> The percentage of distinct
-            prompt versions that produced a recommendation for this tool. High coverage means the
-            tool is recommended across diverse development scenarios.
-          </P>
-          <P>
-            <strong className="text-foreground">Trend:</strong> The change in support rate compared
-            to the previous non-overlapping time window of the same type.
+            The scoring layer supports model-tier weighting, and the weight configuration is frozen
+            with each run so historical results remain auditable.
           </P>
         </Section>
 
-        <Section title="Model Weighting">
+        <Section title="Publication Standards">
           <P>
-            Each case decision can carry a weight based on its model&apos;s capability tier
-            (frontier, mid, small). The weight configuration is versioned and snapshotted per run,
-            so historical results always reference the exact weights that produced them.
+            Only published runs feed the public site. Before a run can appear publicly, it must
+            clear quality checks around execution success, structured-output validity, unresolved
+            tool rate, and panel coverage.
           </P>
           <P>
-            <strong className="text-foreground">Season 1 uses uniform weights</strong> (all model
-            tiers = 1.0). This means every model gets one equal vote. We believe this is the most
-            transparent and defensible approach for a first release. Non-uniform weighting may be
-            introduced in future seasons once we have data to justify tier differentiation.
-          </P>
-          <P>
-            Both weighted and unweighted metrics are always computed and displayed. When weights are
-            uniform, they are identical.
-          </P>
-        </Section>
-
-        <Section title="Publication Thresholds">
-          <P>
-            A category ranking is only published as authoritative when it meets minimum data
-            thresholds:
+            For category rankings, we only treat the result as benchmark-ready when the window has
+            enough eligible decisions and enough diversity across both prompts and models.
           </P>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             <li>At least 100 eligible case decisions</li>
@@ -140,79 +126,33 @@ export default function MethodologyPage() {
             <li>At least 3 distinct prompt versions contributing</li>
           </ul>
           <P>
-            Categories below these thresholds display &ldquo;Insufficient benchmark data&rdquo;
-            rather than publishing potentially misleading rankings. Head-to-head comparisons require
-            at least 30 decisive cases.
+            Categories below those thresholds are labeled as insufficient data instead of being
+            presented as authoritative. Head-to-head tool matchups require at least 30 decisive
+            cases before we publish them as benchmark-ready.
           </P>
         </Section>
 
-        <Section title="Tool Resolution">
+        <Section title="Scope and Filters">
           <P>
-            When a model recommends a tool, we match it against our database of known tools and
-            approved aliases. If no match is found, the tool name enters a review queue for manual
-            resolution. Unresolved tools are excluded from rankings until reviewed.
+            Public rankings can be filtered by prompting level, model tier, and specific frozen
+            model version. By default, public reads resolve against the latest published season.
           </P>
           <P>
-            Tools are never auto-created from model output. This prevents hallucinated or misspelled
-            tool names from polluting the database.
-          </P>
-        </Section>
-
-        <Section title="Time Windows">
-          <P>Rankings are computed over explicit time windows:</P>
-          <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-            <li>
-              <strong className="text-foreground">Trailing 28 days</strong> (default): Last 28
-              published runs. Balances recency with statistical mass.
-            </li>
-            <li>
-              <strong className="text-foreground">Trailing 7 days:</strong> Short-term trend view.
-            </li>
-            <li>
-              <strong className="text-foreground">Season to date:</strong> All published runs in the
-              current season.
-            </li>
-          </ul>
-        </Section>
-
-        <Section title="What Rankings Reflect">
-          <P>
-            Rankings reflect what AI models recommend when asked about tool choices for development
-            scenarios. They are <strong className="text-foreground">not</strong> independent quality
-            evaluations of the tools themselves.
-          </P>
-          <P>
-            A tool&apos;s ranking is influenced by its presence in AI training data, its popularity
-            in developer communities, and how well it fits the specific scenarios in our prompt
-            panel.
+            That makes the benchmark useful for questions like &ldquo;what do frontier models prefer
+            for advanced requests?&rdquo; without pretending the answer generalizes to every product
+            category or engineering context.
           </P>
         </Section>
 
-        <Section title="Scope">
+        <Section title="How to Read Rankings">
           <P>
-            The current prompt panel focuses on{' '}
-            <strong className="text-foreground">web application development</strong> scenarios. It
-            currently covers 15 recurring scenario slugs represented across beginner, intermediate,
-            and advanced prompting levels, with a bias toward full-stack and SaaS style products.
-            Rankings should be interpreted within this scope.
+            A high rank means models in this benchmark panel frequently recommend a tool for the
+            scoped scenarios. It does not mean the tool is objectively best in every context, and it
+            does not replace hands-on evaluation by an engineering team.
           </P>
           <P>
-            Categories with limited prompt coverage (few prompts mentioning that category) will show
-            reduced confidence and may fall below publication thresholds. This is by design — we
-            prefer honesty about coverage gaps over thin rankings.
-          </P>
-        </Section>
-
-        <Section title="Transparency">
-          <P>
-            Every published ranking can be traced back to the exact prompt versions, model
-            snapshots, inference parameters, and weight configuration that produced it. The active
-            weight configuration is always visible. If non-uniform weights are ever used, the exact
-            values will be listed here.
-          </P>
-          <P>
-            <strong className="text-foreground">Current weight config:</strong> Uniform (frontier =
-            1.0, mid = 1.0, small = 1.0).
+            The benchmark is meant to make model behavior legible and auditable: what gets
+            recommended, how often, under which prompts, and with what level of statistical support.
           </P>
         </Section>
       </div>
