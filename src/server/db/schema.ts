@@ -49,6 +49,7 @@ export const runStatusV2Enum = pgEnum('run_status_v2', [
 ])
 export const caseResultStatusEnum = pgEnum('case_result_status', [
   'pending',
+  'running',
   'completed',
   'failed',
   'invalid_output',
@@ -587,6 +588,10 @@ export const benchmarkCaseResults = createTable(
       .notNull()
       .references(() => benchmarkCases.id),
     status: caseResultStatusEnum().notNull().default('pending'),
+    claimToken: d.uuid('claim_token'),
+    startedAt: d.timestamp('started_at', { withTimezone: true }),
+    completedAt: d.timestamp('completed_at', { withTimezone: true }),
+    attemptCount: integer('attempt_count').notNull().default(0),
     naturalResponse: d.text('natural_response'),
     appendixRaw: d.text('appendix_raw'),
     appendixJson: jsonb('appendix_json'),
@@ -614,6 +619,7 @@ export const benchmarkCaseResults = createTable(
   (t) => [
     uniqueIndex('benchmark_case_result_run_case_idx').on(t.runId, t.caseId),
     index('benchmark_case_result_run_status_idx').on(t.runId, t.status),
+    index('benchmark_case_result_run_status_started_idx').on(t.runId, t.status, t.startedAt),
     index('benchmark_case_result_case_id_idx').on(t.caseId),
     index('benchmark_case_result_season_id_idx').on(t.seasonId),
   ],

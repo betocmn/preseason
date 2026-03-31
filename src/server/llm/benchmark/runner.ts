@@ -1,5 +1,19 @@
-import { randomUUID } from 'node:crypto'
-import { and, count, countDistinct, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { createHash, randomUUID } from 'node:crypto'
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { serverSettings } from '~/constants/server-settings'
 import { db as defaultDb } from '~/server/db'
@@ -32,28 +46,15 @@ import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
 type BenchmarkCaseResultRecord = typeof benchmarkCaseResults.$inferSelect
-type BenchmarkCaseResultWriteMetadata = Pick<
-  BenchmarkCaseResultRecord,
-  | 'rawResponse'
-  | 'requestedModelId'
-  | 'returnedModelId'
-  | 'provider'
-  | 'finishReason'
-  | 'promptTokens'
-  | 'completionTokens'
-  | 'totalTokens'
-  | 'latencyMs'
-  | 'temperature'
-  | 'topP'
-  | 'maxTokens'
-  | 'systemPromptSnapshot'
->
 
 export type BenchmarkRunOptions = {
   database?: DatabaseClient
   llmService?: LlmService
   now?: () => Date
+  caseClaimStaleAfterMs?: number
+  // Backward-compatible alias for older tests/helpers.
   runStaleAfterMs?: number
+  // Backward-compatible no-op after removing run heartbeats.
   runHeartbeatIntervalMs?: number
   maxCases?: number
 }
@@ -88,10 +89,12 @@ type RunMetrics = {
   completedCases: number
   failedCases: number
   invalidOutputCases: number
+  pendingCases: number
+  runningCases: number
+  retryableTerminalCases: number
   unresolvedToolCount: number
   qc: QcCheckResult
 }
-
 type ResolvedBenchmarkOutput =
   | {
       status: 'completed'
@@ -111,17 +114,60 @@ type RunCaseSnapshot = {
   lastHeartbeatAt?: string
   executionToken?: string
 }
+type RunInitializationResult = {
+  run: BenchmarkRunRecord
+  state: 'ready' | 'legacy_in_flight' | 'terminal'
+}
+type ClaimedBenchmarkCase = {
+  caseResultId: string
+  caseId: string
+  claimToken: string
+  previousResult: BenchmarkCaseResultRecord
+}
+type ClaimCandidate = Pick<ClaimedBenchmarkCase, 'caseResultId' | 'caseId' | 'previousResult'>
+type CaseProcessingResources = {
+  toolIndex: Awaited<ReturnType<typeof buildToolResolutionIndex>>
+  categorySlugById: Map<string, string>
+}
+type CaseProcessingResult = {
+  processed: boolean
+  error: string | null
+}
 
-const RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
-const RUN_HEARTBEAT_INTERVAL_MS = serverSettings.benchmark.heartbeatIntervalMs
+const CASE_CLAIM_STALE_AFTER_MS = serverSettings.benchmark.caseClaimStaleAfterMs
+const MAX_CASE_ATTEMPTS = serverSettings.benchmark.maxCaseAttempts
+const BENCHMARK_RUN_LOCK_NAMESPACE = 41_027
+const TERMINAL_RUN_STATUSES = ['completed', 'published', 'qc_failed'] as const
+const RETRYABLE_CASE_RESULT_STATUSES: Array<BenchmarkCaseResultRecord['status']> = [
+  'failed',
+  'invalid_output',
+]
 const MODEL_DRIFT_ERROR_PREFIX = 'Model drift detected:'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
 }
 
-function isModelDriftInvalidOutput(result: BenchmarkCaseResultRecord) {
-  if (result.status !== 'invalid_output') {
+function hasStoredInvalidOutputPayload(
+  result: Pick<BenchmarkCaseResultRecord, 'rawResponse' | 'naturalResponse' | 'appendixJson'>,
+) {
+  return (
+    result.rawResponse !== null && result.naturalResponse === null && result.appendixJson === null
+  )
+}
+
+function isModelDriftInvalidOutput(
+  result: Pick<
+    BenchmarkCaseResultRecord,
+    | 'errorMessage'
+    | 'requestedModelId'
+    | 'returnedModelId'
+    | 'rawResponse'
+    | 'naturalResponse'
+    | 'appendixJson'
+  >,
+) {
+  if (!hasStoredInvalidOutputPayload(result)) {
     return false
   }
 
@@ -136,8 +182,18 @@ function isModelDriftInvalidOutput(result: BenchmarkCaseResultRecord) {
   return false
 }
 
-function shouldAttemptStoredInvalidOutputRecovery(result: BenchmarkCaseResultRecord) {
-  return result.status === 'invalid_output' && !isModelDriftInvalidOutput(result)
+function shouldAttemptStoredInvalidOutputRecovery(
+  result: Pick<
+    BenchmarkCaseResultRecord,
+    | 'errorMessage'
+    | 'requestedModelId'
+    | 'returnedModelId'
+    | 'rawResponse'
+    | 'naturalResponse'
+    | 'appendixJson'
+  >,
+) {
+  return hasStoredInvalidOutputPayload(result) && !isModelDriftInvalidOutput(result)
 }
 
 async function resolveBenchmarkOutput(
@@ -202,95 +258,10 @@ async function resolveBenchmarkOutput(
   }
 }
 
-async function insertCompletedBenchmarkCaseResult(
-  tx: DatabaseClient,
-  options: {
-    seasonId: string
-    runId: string
-    caseId: string
-    appendix: BenchmarkAppendix
-    rawAppendix: string
-    naturalResponse: string
-    parserVersion: string
-    metadata: BenchmarkCaseResultWriteMetadata
-    categoryIdBySlug: Map<string, string>
-    toolIndex: Awaited<ReturnType<typeof buildToolResolutionIndex>>
-  },
-) {
-  const [insertedCaseResult] = await tx
-    .insert(benchmarkCaseResults)
-    .values({
-      seasonId: options.seasonId,
-      runId: options.runId,
-      caseId: options.caseId,
-      status: 'completed',
-      naturalResponse: options.naturalResponse,
-      appendixRaw: options.rawAppendix,
-      appendixJson: options.appendix,
-      rawResponse: options.metadata.rawResponse,
-      requestedModelId: options.metadata.requestedModelId,
-      returnedModelId: options.metadata.returnedModelId,
-      provider: options.metadata.provider,
-      finishReason: options.metadata.finishReason,
-      promptTokens: options.metadata.promptTokens,
-      completionTokens: options.metadata.completionTokens,
-      totalTokens: options.metadata.totalTokens,
-      latencyMs: options.metadata.latencyMs,
-      temperature: options.metadata.temperature,
-      topP: options.metadata.topP,
-      maxTokens: options.metadata.maxTokens,
-      parserVersion: options.parserVersion,
-      systemPromptSnapshot: options.metadata.systemPromptSnapshot,
-      errorMessage: null,
-    })
-    .onConflictDoNothing()
-    .returning()
-
-  if (!insertedCaseResult) return null
-
-  for (const decision of options.appendix.categories) {
-    const categoryId = options.categoryIdBySlug.get(decision.category_slug)
-    if (!categoryId) continue
-
-    if (decision.decision === 'tool' && decision.tool) {
-      const resolved = await resolveToolWithCandidateQueue(
-        tx,
-        decision.tool,
-        options.toolIndex,
-        categoryId,
-      )
-
-      await tx
-        .insert(benchmarkCaseDecisions)
-        .values({
-          caseResultId: insertedCaseResult.id,
-          categoryId,
-          decisionType: 'tool',
-          toolId: resolved.status === 'resolved' ? resolved.toolId : null,
-          rawToolName: decision.tool,
-          reasoning: decision.reasoning,
-          selfReportedConfidence: decision.confidence,
-          resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
-        })
-        .onConflictDoNothing()
-    } else {
-      await tx
-        .insert(benchmarkCaseDecisions)
-        .values({
-          caseResultId: insertedCaseResult.id,
-          categoryId,
-          decisionType: 'none',
-          toolId: null,
-          rawToolName: null,
-          reasoning: decision.reasoning,
-          selfReportedConfidence: decision.confidence,
-          resolutionStatus: 'resolved',
-        })
-        .onConflictDoNothing()
-    }
-  }
-
-  return insertedCaseResult
+function isTerminalRunStatus(
+  status: BenchmarkRunRecord['status'],
+): status is (typeof TERMINAL_RUN_STATUSES)[number] {
+  return TERMINAL_RUN_STATUSES.includes(status as (typeof TERMINAL_RUN_STATUSES)[number])
 }
 
 function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): BenchmarkRunSummaryStatus {
@@ -311,26 +282,49 @@ function normalizeMaxCases(maxCases: number | undefined): number | null {
 }
 
 function calculateRemainingCases(metrics: RunMetrics): number {
-  const processed = metrics.completedCases + metrics.failedCases + metrics.invalidOutputCases
-  return Math.max(metrics.totalCases - processed, 0)
+  return metrics.pendingCases + metrics.runningCases + metrics.retryableTerminalCases
 }
 
-function isRunStale(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
-  if (run.status !== 'running') return false
-  const lastHeartbeatAt = getRunHeartbeatAt(run)
-  const staleSince = lastHeartbeatAt ?? run.startedAt
+function getRunCaseSnapshot(
+  run: Pick<BenchmarkRunRecord, 'qcSummaryJson'>,
+): RunCaseSnapshot | null {
+  const qcSummary = run.qcSummaryJson
+  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
+    return null
+  }
 
-  if (!staleSince) return true
-  return currentTime.getTime() - staleSince.getTime() >= staleAfterMs
+  const snapshotCaseIds = (qcSummary as Partial<RunCaseSnapshot>).snapshotCaseIds
+  const lastHeartbeatAt = (qcSummary as Partial<RunCaseSnapshot>).lastHeartbeatAt
+  const executionToken = (qcSummary as Partial<RunCaseSnapshot>).executionToken
+
+  if (!Array.isArray(snapshotCaseIds) || !snapshotCaseIds.every((id) => typeof id === 'string')) {
+    return null
+  }
+
+  return {
+    snapshotCaseIds,
+    lastHeartbeatAt: typeof lastHeartbeatAt === 'string' ? lastHeartbeatAt : undefined,
+    executionToken: typeof executionToken === 'string' ? executionToken : undefined,
+  }
 }
 
-async function findRunById(database: DatabaseClient, runId: string) {
-  const run = await database.query.benchmarkRuns.findFirst({
-    where: eq(benchmarkRuns.id, runId),
-  })
+function getRunHeartbeatAt(run: Pick<BenchmarkRunRecord, 'qcSummaryJson'>): Date | null {
+  const heartbeatAt = getRunCaseSnapshot(run)?.lastHeartbeatAt
+  if (!heartbeatAt) return null
 
-  if (!run) throw new Error('Benchmark run not found')
-  return run
+  const parsed = new Date(heartbeatAt)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getRunExecutionToken(run: Pick<BenchmarkRunRecord, 'qcSummaryJson'>): string | null {
+  return getRunCaseSnapshot(run)?.executionToken ?? null
+}
+
+function buildSummaryErrors(run: Pick<BenchmarkRunRecord, 'errorLog'>, invocationErrors: string[]) {
+  const persistedErrors = run.errorLog
+    ? run.errorLog.split('\n').filter((line) => line.length > 0)
+    : []
+  return [...persistedErrors, ...invocationErrors]
 }
 
 async function getRunTotalCases(
@@ -348,6 +342,21 @@ async function getRunTotalCases(
   return Number(row?.cnt ?? 0)
 }
 
+async function countClaimablePendingCases(database: DatabaseClient, runId: string) {
+  const [row] = await database
+    .select({ cnt: count() })
+    .from(benchmarkCaseResults)
+    .where(
+      and(
+        eq(benchmarkCaseResults.runId, runId),
+        eq(benchmarkCaseResults.status, 'pending'),
+        lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+      ),
+    )
+
+  return Number(row?.cnt ?? 0)
+}
+
 async function calculateRunMetrics(
   database: DatabaseClient,
   runId: string,
@@ -360,9 +369,28 @@ async function calculateRunMetrics(
     .groupBy(benchmarkCaseResults.status)
 
   const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
+  const rawPendingCases = countByStatus.get('pending') ?? 0
+  const pendingCases = rawPendingCases > 0 ? await countClaimablePendingCases(database, runId) : 0
+  const runningCases = countByStatus.get('running') ?? 0
   const completedCases = countByStatus.get('completed') ?? 0
   const failedCases = countByStatus.get('failed') ?? 0
   const invalidOutputCases = countByStatus.get('invalid_output') ?? 0
+  let retryableTerminalCases = 0
+
+  if (failedCases > 0 || invalidOutputCases > 0) {
+    const [retryableTerminalRow] = await database
+      .select({ cnt: count() })
+      .from(benchmarkCaseResults)
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+        ),
+      )
+
+    retryableTerminalCases = Number(retryableTerminalRow?.cnt ?? 0)
+  }
 
   let unresolvedToolCount = 0
   let totalToolDecisions = 0
@@ -429,9 +457,61 @@ async function calculateRunMetrics(
     completedCases,
     failedCases,
     invalidOutputCases,
+    pendingCases,
+    runningCases,
+    retryableTerminalCases,
     unresolvedToolCount,
     qc,
   }
+}
+
+async function buildPersistedRunErrorLog(database: DatabaseClient, runId: string) {
+  const rows = await database
+    .select({
+      status: benchmarkCaseResults.status,
+      errorMessage: benchmarkCaseResults.errorMessage,
+      cnt: count(),
+    })
+    .from(benchmarkCaseResults)
+    .where(
+      and(
+        eq(benchmarkCaseResults.runId, runId),
+        inArray(benchmarkCaseResults.status, ['failed', 'invalid_output']),
+        sql`${benchmarkCaseResults.errorMessage} is not null`,
+      ),
+    )
+    .groupBy(benchmarkCaseResults.status, benchmarkCaseResults.errorMessage)
+
+  const summaryLines = rows
+    .map((row) => ({
+      status: row.status,
+      errorMessage: row.errorMessage,
+      count: Number(row.cnt),
+    }))
+    .filter(
+      (
+        row,
+      ): row is {
+        status: 'failed' | 'invalid_output'
+        errorMessage: string
+        count: number
+      } => row.status === 'failed' || row.status === 'invalid_output',
+    )
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count
+      }
+
+      if (left.status !== right.status) {
+        return left.status.localeCompare(right.status)
+      }
+
+      return left.errorMessage.localeCompare(right.errorMessage)
+    })
+    .slice(0, 10)
+    .map((row) => `[${row.status} x${row.count}] ${row.errorMessage}`)
+
+  return summaryLines.length > 0 ? summaryLines.join('\n') : null
 }
 
 async function buildRunSummary(
@@ -439,6 +519,7 @@ async function buildRunSummary(
   run: BenchmarkRunRecord,
   seasonId: string,
   processedThisInvocation = 0,
+  invocationErrors: string[] = [],
 ): Promise<BenchmarkRunSummary> {
   const totalCases = await getRunTotalCases(database, seasonId, run.expectedCaseCount ?? null)
   const metrics = await calculateRunMetrics(database, run.id, totalCases)
@@ -453,305 +534,737 @@ async function buildRunSummary(
     processedThisInvocation,
     remainingCases,
     hasRemainingWork: remainingCases > 0,
-    errors: run.errorLog ? run.errorLog.split('\n').filter((line) => line.length > 0) : [],
+    errors: buildSummaryErrors(run, invocationErrors),
   }
 }
 
-async function claimRunExecution(
+async function withRunAdvisoryLock<T>(
+  database: DatabaseClient,
+  runId: string,
+  fn: (tx: DatabaseClient) => Promise<T>,
+) {
+  return await database.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${BENCHMARK_RUN_LOCK_NAMESPACE}, hashtext(${runId}))`,
+    )
+    return await fn(tx)
+  })
+}
+
+async function loadOrderedSeasonCaseIds(database: DatabaseClient, seasonId: string) {
+  const rows = await database
+    .select({ id: benchmarkCases.id })
+    .from(benchmarkCases)
+    .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
+    .orderBy(benchmarkCases.promptVersionId, benchmarkCases.modelSnapshotId, benchmarkCases.id)
+
+  return rows.map((row) => row.id)
+}
+
+function isFreshLegacyRun(run: BenchmarkRunRecord, currentTime: Date, staleAfterMs: number) {
+  if (run.status !== 'running') return false
+  if (!getRunExecutionToken(run)) return false
+
+  const staleSince = getRunHeartbeatAt(run) ?? run.startedAt
+  if (!staleSince) return true
+
+  return currentTime.getTime() - staleSince.getTime() < staleAfterMs
+}
+
+async function initializeRunForCaseWorkers(
+  database: DatabaseClient,
+  runId: string,
+  seasonId: string,
+  currentTime: Date,
+  staleAfterMs: number,
+): Promise<RunInitializationResult> {
+  return await withRunAdvisoryLock(database, runId, async (tx) => {
+    const [run] = await tx
+      .select()
+      .from(benchmarkRuns)
+      .where(eq(benchmarkRuns.id, runId))
+      .for('update')
+
+    if (!run) throw new Error('Benchmark run not found')
+
+    if (isTerminalRunStatus(run.status)) {
+      return { run, state: 'terminal' }
+    }
+
+    const legacyExecutionToken = getRunExecutionToken(run)
+    if (legacyExecutionToken && isFreshLegacyRun(run, currentTime, staleAfterMs)) {
+      return { run, state: 'legacy_in_flight' }
+    }
+
+    const snapshotCaseIds =
+      getRunCaseSnapshot(run)?.snapshotCaseIds ?? (await loadOrderedSeasonCaseIds(tx, seasonId))
+
+    if (snapshotCaseIds.length > 0) {
+      await tx
+        .insert(benchmarkCaseResults)
+        .values(
+          snapshotCaseIds.map((caseId) => ({
+            seasonId,
+            runId,
+            caseId,
+            status: 'pending' as const,
+          })),
+        )
+        .onConflictDoNothing()
+    }
+
+    let weightConfigId = run.weightConfigId
+    if (!weightConfigId) {
+      const weightConfig = await tx.query.benchmarkModelWeightConfigs.findFirst({
+        where: eq(benchmarkModelWeightConfigs.isActive, true),
+      })
+      weightConfigId = weightConfig?.id ?? null
+    }
+
+    const shouldRefreshRunState =
+      run.status === 'pending' || run.status === 'failed' || legacyExecutionToken !== null
+
+    const [updatedRun] = await tx
+      .update(benchmarkRuns)
+      .set({
+        status: 'running',
+        startedAt: shouldRefreshRunState ? currentTime : (run.startedAt ?? currentTime),
+        completedAt: null,
+        expectedCaseCount: run.expectedCaseCount ?? snapshotCaseIds.length,
+        weightConfigId,
+        completedCaseCount: run.completedCaseCount,
+        failedCaseCount: run.failedCaseCount,
+        qcStatus: null,
+        qcSummaryJson: { snapshotCaseIds },
+        errorLog: shouldRefreshRunState ? null : run.errorLog,
+      })
+      .where(eq(benchmarkRuns.id, runId))
+      .returning()
+
+    return { run: updatedRun ?? run, state: 'ready' }
+  })
+}
+
+function getClaimOwnershipClause(claimedCase: ClaimedBenchmarkCase) {
+  return and(
+    eq(benchmarkCaseResults.id, claimedCase.caseResultId),
+    eq(benchmarkCaseResults.status, 'running'),
+    eq(benchmarkCaseResults.claimToken, claimedCase.claimToken),
+  )
+}
+
+function buildClaimResetValues(currentTime: Date, claimToken: string) {
+  return {
+    status: 'running' as const,
+    claimToken,
+    startedAt: currentTime,
+    completedAt: null,
+    attemptCount: sql<number>`${benchmarkCaseResults.attemptCount} + 1`,
+    // Keep the prior raw completion payload until a new terminal write lands so
+    // retries can still recover from stored invalid output after a crash.
+    naturalResponse: null,
+    appendixRaw: null,
+    appendixJson: null,
+    errorMessage: null,
+  }
+}
+
+function buildExcludedCaseResultClause(excludedCaseResultIds: string[]) {
+  return excludedCaseResultIds.length > 0
+    ? notInArray(benchmarkCaseResults.id, excludedCaseResultIds)
+    : undefined
+}
+
+async function selectClaimCandidate(
+  tx: DatabaseClient,
+  whereClause: ReturnType<typeof and> | undefined,
+  orderBy: Array<ReturnType<typeof asc>>,
+): Promise<ClaimCandidate | null> {
+  const rows = await tx
+    .select({
+      caseResultId: benchmarkCaseResults.id,
+      caseId: benchmarkCaseResults.caseId,
+      previousResult: {
+        id: benchmarkCaseResults.id,
+        seasonId: benchmarkCaseResults.seasonId,
+        runId: benchmarkCaseResults.runId,
+        caseId: benchmarkCaseResults.caseId,
+        status: benchmarkCaseResults.status,
+        claimToken: benchmarkCaseResults.claimToken,
+        attemptCount: benchmarkCaseResults.attemptCount,
+        startedAt: benchmarkCaseResults.startedAt,
+        completedAt: benchmarkCaseResults.completedAt,
+        naturalResponse: benchmarkCaseResults.naturalResponse,
+        appendixRaw: benchmarkCaseResults.appendixRaw,
+        appendixJson: benchmarkCaseResults.appendixJson,
+        rawResponse: benchmarkCaseResults.rawResponse,
+        requestedModelId: benchmarkCaseResults.requestedModelId,
+        returnedModelId: benchmarkCaseResults.returnedModelId,
+        provider: benchmarkCaseResults.provider,
+        finishReason: benchmarkCaseResults.finishReason,
+        promptTokens: benchmarkCaseResults.promptTokens,
+        completionTokens: benchmarkCaseResults.completionTokens,
+        totalTokens: benchmarkCaseResults.totalTokens,
+        latencyMs: benchmarkCaseResults.latencyMs,
+        temperature: benchmarkCaseResults.temperature,
+        topP: benchmarkCaseResults.topP,
+        maxTokens: benchmarkCaseResults.maxTokens,
+        parserVersion: benchmarkCaseResults.parserVersion,
+        promptHash: benchmarkCaseResults.promptHash,
+        systemPromptSnapshot: benchmarkCaseResults.systemPromptSnapshot,
+        errorMessage: benchmarkCaseResults.errorMessage,
+        createdAt: benchmarkCaseResults.createdAt,
+      },
+    })
+    .from(benchmarkCaseResults)
+    .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+    .where(whereClause)
+    .orderBy(...orderBy)
+    .limit(1)
+    .for('update', { skipLocked: true })
+
+  const row = rows[0]
+  return row
+    ? {
+        caseResultId: row.caseResultId,
+        caseId: row.caseId,
+        previousResult: row.previousResult,
+      }
+    : null
+}
+
+async function claimNextBenchmarkCase(
   database: DatabaseClient,
   runId: string,
   currentTime: Date,
   staleAfterMs: number,
-): Promise<{ run: BenchmarkRunRecord; execute: boolean }> {
-  while (true) {
-    const run = await findRunById(database, runId)
+  excludedCaseResultIds: string[],
+): Promise<ClaimedBenchmarkCase | null> {
+  return await database.transaction(async (tx) => {
+    const excludedClause = buildExcludedCaseResultClause(excludedCaseResultIds)
+    const staleBefore = new Date(currentTime.getTime() - staleAfterMs)
 
-    if (run.status === 'completed' || run.status === 'published' || run.status === 'qc_failed') {
-      return { run, execute: false }
+    const staleRunningCandidate =
+      (await selectClaimCandidate(
+        tx,
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          eq(benchmarkCaseResults.status, 'running'),
+          or(
+            isNull(benchmarkCaseResults.startedAt),
+            lte(benchmarkCaseResults.startedAt, staleBefore),
+          ),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+          excludedClause,
+        ),
+        [
+          asc(benchmarkCaseResults.startedAt),
+          asc(benchmarkCases.promptVersionId),
+          asc(benchmarkCases.modelSnapshotId),
+          asc(benchmarkCases.id),
+        ],
+      )) ??
+      (await selectClaimCandidate(
+        tx,
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          eq(benchmarkCaseResults.status, 'pending'),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+          excludedClause,
+        ),
+        [
+          asc(benchmarkCases.promptVersionId),
+          asc(benchmarkCases.modelSnapshotId),
+          asc(benchmarkCases.id),
+        ],
+      )) ??
+      (await selectClaimCandidate(
+        tx,
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+          excludedClause,
+        ),
+        [
+          asc(benchmarkCases.promptVersionId),
+          asc(benchmarkCases.modelSnapshotId),
+          asc(benchmarkCases.id),
+        ],
+      ))
+
+    if (!staleRunningCandidate) {
+      return null
     }
 
-    if (run.status === 'running' && !isRunStale(run, currentTime, staleAfterMs)) {
-      return { run, execute: false }
-    }
+    const claimToken = randomUUID()
 
-    let whereClause: ReturnType<typeof and> | undefined
-
-    if (run.status === 'pending' || run.status === 'failed') {
-      whereClause = and(eq(benchmarkRuns.id, run.id), eq(benchmarkRuns.status, run.status))
-    } else if (run.status === 'running') {
-      whereClause = and(
-        eq(benchmarkRuns.id, run.id),
-        eq(benchmarkRuns.status, 'running'),
-        getRunStartedAtClaimClause(run),
-        getRunHeartbeatClaimClause(run),
-      )
-    }
-
-    if (!whereClause) {
-      return { run, execute: false }
-    }
-
-    const claimedHeartbeatAt = currentTime.toISOString()
-    const executionToken = randomUUID()
-    const [claimedRun] = await database
-      .update(benchmarkRuns)
-      .set({
-        status: 'running',
-        startedAt: currentTime,
-        completedAt: null,
-        qcSummaryJson: buildRunCaseSummaryPatch(run, {
-          executionToken,
-          lastHeartbeatAt: claimedHeartbeatAt,
-        }),
-      })
-      .where(whereClause)
-      .returning()
-
-    if (claimedRun) {
-      return { run: claimedRun, execute: true }
-    }
-  }
-}
-
-function getRunCaseSnapshot(run: BenchmarkRunRecord): RunCaseSnapshot | null {
-  const qcSummary = run.qcSummaryJson
-  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
-    return null
-  }
-
-  const snapshotCaseIds = (qcSummary as Partial<RunCaseSnapshot>).snapshotCaseIds
-  const lastHeartbeatAt = (qcSummary as Partial<RunCaseSnapshot>).lastHeartbeatAt
-
-  if (!Array.isArray(snapshotCaseIds) || !snapshotCaseIds.every((id) => typeof id === 'string')) {
-    return null
-  }
-
-  if (typeof lastHeartbeatAt !== 'string') {
-    return { snapshotCaseIds }
-  }
-
-  return { snapshotCaseIds, lastHeartbeatAt }
-}
-
-function getRunHeartbeatAt(run: BenchmarkRunRecord): Date | null {
-  const qcSummary = run.qcSummaryJson
-  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
-    return null
-  }
-
-  const heartbeatAt = (qcSummary as { lastHeartbeatAt?: unknown }).lastHeartbeatAt
-  if (typeof heartbeatAt !== 'string') return null
-
-  const parsed = new Date(heartbeatAt)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
-
-function getRunExecutionToken(run: Pick<BenchmarkRunRecord, 'qcSummaryJson'>): string | null {
-  const qcSummary = run.qcSummaryJson
-  if (!qcSummary || typeof qcSummary !== 'object' || Array.isArray(qcSummary)) {
-    return null
-  }
-
-  const executionToken = (qcSummary as { executionToken?: unknown }).executionToken
-  return typeof executionToken === 'string' && executionToken.length > 0 ? executionToken : null
-}
-
-function getRunHeartbeatClaimClause(run: BenchmarkRunRecord) {
-  if (
-    run.qcSummaryJson &&
-    typeof run.qcSummaryJson === 'object' &&
-    !Array.isArray(run.qcSummaryJson)
-  ) {
-    return eq(benchmarkRuns.qcSummaryJson, run.qcSummaryJson as Record<string, unknown>)
-  }
-
-  return isNull(benchmarkRuns.qcSummaryJson)
-}
-
-function getRunStartedAtClaimClause(run: Pick<BenchmarkRunRecord, 'startedAt'>) {
-  return run.startedAt
-    ? eq(benchmarkRuns.startedAt, run.startedAt)
-    : isNull(benchmarkRuns.startedAt)
-}
-
-function getRunExecutionOwnershipClause(
-  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
-) {
-  const executionToken = getRunExecutionToken(run)
-
-  return and(
-    eq(benchmarkRuns.id, run.id),
-    eq(benchmarkRuns.status, 'running'),
-    getRunStartedAtClaimClause(run),
-    executionToken
-      ? sql`${benchmarkRuns.qcSummaryJson} ->> 'executionToken' = ${executionToken}`
-      : undefined,
-  )
-}
-
-class OwnershipLostError extends Error {
-  constructor() {
-    super('Run ownership lost')
-    this.name = 'OwnershipLostError'
-  }
-}
-
-async function verifyRunOwnershipForUpdate(
-  tx: DatabaseClient,
-  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
-): Promise<void> {
-  const [owned] = await tx
-    .select({ id: benchmarkRuns.id })
-    .from(benchmarkRuns)
-    .where(getRunExecutionOwnershipClause(run))
-    .for('update')
-  if (!owned) throw new OwnershipLostError()
-}
-
-async function getRunSummaryIfOwnershipLost(
-  database: DatabaseClient,
-  run: Pick<BenchmarkRunRecord, 'id' | 'startedAt' | 'qcSummaryJson'>,
-  seasonId: string,
-): Promise<BenchmarkRunSummary | null> {
-  const ownedRun = await database.query.benchmarkRuns.findFirst({
-    columns: { id: true },
-    where: getRunExecutionOwnershipClause(run),
-  })
-
-  if (ownedRun) {
-    return null
-  }
-
-  const latestRun = await findRunById(database, run.id)
-  return await buildRunSummary(database, latestRun, seasonId)
-}
-
-function buildRunCaseSummaryPatch(
-  run: BenchmarkRunRecord,
-  update: Partial<RunCaseSnapshot>,
-): Record<string, unknown> {
-  const qcSummary = run.qcSummaryJson
-  const base =
-    qcSummary && typeof qcSummary === 'object' && !Array.isArray(qcSummary) ? qcSummary : {}
-  return { ...(base as Record<string, unknown>), ...update }
-}
-
-function buildRunCaseSummaryMergeSql(update: Partial<RunCaseSnapshot>) {
-  return sql`coalesce(${benchmarkRuns.qcSummaryJson}, '{}'::jsonb) || ${JSON.stringify(update)}::jsonb`
-}
-
-async function loadRunCases(database: DatabaseClient, run: BenchmarkRunRecord, seasonId: string) {
-  const caseIds =
-    getRunCaseSnapshot(run)?.snapshotCaseIds ??
-    (
-      await database
-        .select({ id: benchmarkCases.id })
-        .from(benchmarkCases)
-        .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
-        .orderBy(benchmarkCases.promptVersionId, benchmarkCases.modelSnapshotId, benchmarkCases.id)
-    ).map((row) => row.id)
-
-  if (getRunCaseSnapshot(run) == null) {
-    const [ownedRun] = await database
-      .update(benchmarkRuns)
-      .set({
-        qcSummaryJson: buildRunCaseSummaryMergeSql({ snapshotCaseIds: caseIds }),
-        expectedCaseCount: caseIds.length,
-      })
-      .where(getRunExecutionOwnershipClause(run))
+    const [claimedCase] = await tx
+      .update(benchmarkCaseResults)
+      .set(buildClaimResetValues(currentTime, claimToken))
+      .where(eq(benchmarkCaseResults.id, staleRunningCandidate.caseResultId))
       .returning({
-        expectedCaseCount: benchmarkRuns.expectedCaseCount,
-        qcSummaryJson: benchmarkRuns.qcSummaryJson,
+        caseResultId: benchmarkCaseResults.id,
+        caseId: benchmarkCaseResults.caseId,
       })
 
-    if (!ownedRun) {
-      throw new OwnershipLostError()
+    if (!claimedCase) {
+      return null
     }
 
-    run.expectedCaseCount = ownedRun.expectedCaseCount
-    run.qcSummaryJson = ownedRun.qcSummaryJson
-  } else if (run.expectedCaseCount == null) {
-    const [ownedRun] = await database
-      .update(benchmarkRuns)
-      .set({ expectedCaseCount: caseIds.length })
-      .where(getRunExecutionOwnershipClause(run))
-      .returning({ expectedCaseCount: benchmarkRuns.expectedCaseCount })
+    await tx
+      .delete(benchmarkCaseDecisions)
+      .where(eq(benchmarkCaseDecisions.caseResultId, claimedCase.caseResultId))
 
-    if (!ownedRun) {
-      throw new OwnershipLostError()
+    return {
+      caseResultId: claimedCase.caseResultId,
+      caseId: claimedCase.caseId,
+      claimToken,
+      previousResult: staleRunningCandidate.previousResult,
     }
+  })
+}
 
-    run.expectedCaseCount = ownedRun.expectedCaseCount
+async function loadProcessingResources(database: DatabaseClient): Promise<CaseProcessingResources> {
+  const [toolIndex, categoryRows] = await Promise.all([
+    buildToolResolutionIndex(database),
+    database.select({ id: subcategories.id, slug: subcategories.slug }).from(subcategories),
+  ])
+
+  return {
+    toolIndex,
+    categorySlugById: new Map(categoryRows.map((row) => [row.id, row.slug])),
   }
+}
 
-  if (caseIds.length === 0) {
-    return []
-  }
-
-  const cases = await database.query.benchmarkCases.findMany({
-    where: and(eq(benchmarkCases.seasonId, seasonId), inArray(benchmarkCases.id, caseIds)),
+async function loadBenchmarkCaseForProcessing(database: DatabaseClient, caseId: string) {
+  return await database.query.benchmarkCases.findFirst({
+    where: eq(benchmarkCases.id, caseId),
     with: {
       promptVersion: { with: { categories: true } },
       modelSnapshot: true,
     },
   })
-
-  if (cases.length !== caseIds.length) {
-    throw new Error('Benchmark run case snapshot no longer matches stored benchmark cases')
-  }
-
-  const orderById = new Map(caseIds.map((id, index) => [id, index]))
-  cases.sort((left, right) => {
-    const leftIndex = orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER
-    const rightIndex = orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER
-    return leftIndex - rightIndex
-  })
-
-  return cases
 }
 
-function startRunHeartbeat(
+async function persistTerminalCaseResult(
   database: DatabaseClient,
-  run: BenchmarkRunRecord,
-  now: () => Date,
-  heartbeatIntervalMs: number,
+  claimedCase: ClaimedBenchmarkCase,
+  values: Omit<
+    typeof benchmarkCaseResults.$inferInsert,
+    'id' | 'seasonId' | 'runId' | 'caseId' | 'status' | 'claimToken' | 'startedAt' | 'attemptCount'
+  > & {
+    status: 'completed' | 'failed' | 'invalid_output'
+    completedAt: Date
+  },
 ) {
-  let inFlightHeartbeat = Promise.resolve()
-  let heartbeatError: unknown = null
+  const [updated] = await database
+    .update(benchmarkCaseResults)
+    .set({
+      ...values,
+      claimToken: null,
+    })
+    .where(getClaimOwnershipClause(claimedCase))
+    .returning({ id: benchmarkCaseResults.id })
 
-  const heartbeat = () => {
-    inFlightHeartbeat = inFlightHeartbeat
-      .catch(() => undefined)
-      .then(async () => {
-        const heartbeatAt = now().toISOString()
-        await database
-          .update(benchmarkRuns)
-          .set({
-            qcSummaryJson: buildRunCaseSummaryPatch(run, { lastHeartbeatAt: heartbeatAt }),
+  return Boolean(updated)
+}
+
+async function persistCompletedCaseResult(
+  database: DatabaseClient,
+  claimedCase: ClaimedBenchmarkCase,
+  values: Omit<
+    typeof benchmarkCaseResults.$inferInsert,
+    'id' | 'seasonId' | 'runId' | 'caseId' | 'status' | 'claimToken' | 'startedAt' | 'attemptCount'
+  > & {
+    completedAt: Date
+  },
+  appendix: BenchmarkAppendix,
+  promptCategoryIds: Array<{ slug: string; categoryId: string }>,
+  resources: CaseProcessingResources,
+) {
+  return await database.transaction(async (tx) => {
+    const [updatedCaseResult] = await tx
+      .update(benchmarkCaseResults)
+      .set({
+        ...values,
+        status: 'completed',
+        claimToken: null,
+      })
+      .where(getClaimOwnershipClause(claimedCase))
+      .returning({ id: benchmarkCaseResults.id })
+
+    if (!updatedCaseResult) {
+      return false
+    }
+
+    const categoryIdBySlug = new Map(
+      promptCategoryIds.map((entry) => [entry.slug, entry.categoryId]),
+    )
+
+    for (const decision of appendix.categories) {
+      const categoryId = categoryIdBySlug.get(decision.category_slug)
+      if (!categoryId) continue
+
+      if (decision.decision === 'tool' && decision.tool) {
+        const resolved = await resolveToolWithCandidateQueue(
+          tx,
+          decision.tool,
+          resources.toolIndex,
+          categoryId,
+        )
+
+        await tx
+          .insert(benchmarkCaseDecisions)
+          .values({
+            caseResultId: updatedCaseResult.id,
+            categoryId,
+            decisionType: 'tool',
+            toolId: resolved.status === 'resolved' ? resolved.toolId : null,
+            rawToolName: decision.tool,
+            reasoning: decision.reasoning,
+            selfReportedConfidence: decision.confidence,
+            resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
           })
-          .where(getRunExecutionOwnershipClause(run))
-      })
-      .catch((error) => {
-        heartbeatError ??= error
-      })
-
-    return inFlightHeartbeat
-  }
-
-  const timer = setInterval(() => {
-    void heartbeat()
-  }, heartbeatIntervalMs)
-  timer.unref?.()
-
-  return {
-    stop: async () => {
-      clearInterval(timer)
-      await inFlightHeartbeat
-      if (heartbeatError) {
-        throw heartbeatError
+          .onConflictDoNothing()
+      } else {
+        await tx
+          .insert(benchmarkCaseDecisions)
+          .values({
+            caseResultId: updatedCaseResult.id,
+            categoryId,
+            decisionType: 'none',
+            toolId: null,
+            rawToolName: null,
+            reasoning: decision.reasoning,
+            selfReportedConfidence: decision.confidence,
+            resolutionStatus: 'resolved',
+          })
+          .onConflictDoNothing()
       }
-    },
+    }
+
+    return true
+  })
+}
+
+async function processClaimedBenchmarkCase(
+  database: DatabaseClient,
+  llmService: LlmService,
+  now: () => Date,
+  claimedCase: ClaimedBenchmarkCase,
+  resources: CaseProcessingResources,
+): Promise<CaseProcessingResult> {
+  const benchmarkCase = await loadBenchmarkCaseForProcessing(database, claimedCase.caseId)
+  if (!benchmarkCase) {
+    const processed = await persistTerminalCaseResult(database, claimedCase, {
+      status: 'failed',
+      completedAt: now(),
+      errorMessage: 'Benchmark case not found',
+      parserVersion: PARSER_VERSION,
+    })
+
+    return {
+      processed,
+      error: processed ? `[case ${claimedCase.caseId}] Benchmark case not found` : null,
+    }
   }
+
+  const { promptVersion, modelSnapshot } = benchmarkCase
+
+  let userPrompt: string | null = null
+  let systemPrompt: string | null = null
+  let promptHash: string | null = null
+
+  try {
+    const promptCategoryIds = promptVersion.categories
+      .map((entry) => ({
+        categoryId: entry.categoryId,
+        slug: resources.categorySlugById.get(entry.categoryId) ?? null,
+      }))
+      .filter((entry): entry is { categoryId: string; slug: string } => entry.slug !== null)
+
+    const eligibleCategorySlugs = promptCategoryIds.map((entry) => entry.slug)
+
+    if (eligibleCategorySlugs.length === 0) {
+      throw new Error('No eligible category slugs found for prompt version')
+    }
+
+    userPrompt = buildBenchmarkPrompt(promptVersion.contentMd ?? '', eligibleCategorySlugs)
+    systemPrompt =
+      promptVersion.systemPromptSnapshot ??
+      buildGenerationSystemPrompt(promptVersion.level as PromptLevel)
+    promptHash = createHash('sha256').update(userPrompt).digest('hex').slice(0, 64)
+
+    if (shouldAttemptStoredInvalidOutputRecovery(claimedCase.previousResult)) {
+      const recovered = await resolveBenchmarkOutput(llmService, {
+        promptContentMd: promptVersion.contentMd ?? '',
+        rawResponse: claimedCase.previousResult.rawResponse ?? '',
+        eligibleCategorySlugs,
+      })
+
+      if (recovered.status === 'completed') {
+        const processed = await persistCompletedCaseResult(
+          database,
+          claimedCase,
+          {
+            completedAt: now(),
+            naturalResponse: recovered.naturalResponse,
+            appendixRaw: recovered.rawAppendix,
+            appendixJson: recovered.appendix,
+            rawResponse: claimedCase.previousResult.rawResponse,
+            requestedModelId:
+              claimedCase.previousResult.requestedModelId ?? modelSnapshot.requestedModelId,
+            returnedModelId: claimedCase.previousResult.returnedModelId,
+            provider: claimedCase.previousResult.provider,
+            finishReason: claimedCase.previousResult.finishReason,
+            promptTokens: claimedCase.previousResult.promptTokens,
+            completionTokens: claimedCase.previousResult.completionTokens,
+            totalTokens: claimedCase.previousResult.totalTokens,
+            latencyMs: claimedCase.previousResult.latencyMs,
+            temperature: claimedCase.previousResult.temperature ?? modelSnapshot.temperature,
+            topP: claimedCase.previousResult.topP ?? modelSnapshot.topP,
+            maxTokens: claimedCase.previousResult.maxTokens ?? modelSnapshot.maxTokens,
+            parserVersion: recovered.parserVersion,
+            promptHash: claimedCase.previousResult.promptHash ?? promptHash,
+            systemPromptSnapshot: claimedCase.previousResult.systemPromptSnapshot ?? systemPrompt,
+            errorMessage: null,
+          },
+          recovered.appendix,
+          promptCategoryIds,
+          resources,
+        )
+
+        return { processed, error: null }
+      }
+    }
+
+    const completion = await llmService.complete(modelSnapshot.provider, {
+      model: modelSnapshot.requestedModelId,
+      systemPrompt,
+      userPrompt,
+      temperature: modelSnapshot.temperature ?? undefined,
+      topP: modelSnapshot.topP ?? undefined,
+      maxTokens: modelSnapshot.maxTokens ?? undefined,
+      seed: modelSnapshot.seed ?? undefined,
+    })
+
+    const baseTerminalValues = {
+      rawResponse: completion.content,
+      requestedModelId: modelSnapshot.requestedModelId,
+      returnedModelId: completion.returnedModel,
+      provider: completion.provider,
+      finishReason: completion.finishReason,
+      promptTokens: completion.usage.promptTokens,
+      completionTokens: completion.usage.completionTokens,
+      totalTokens: completion.usage.totalTokens,
+      latencyMs: completion.latencyMs,
+      temperature: modelSnapshot.temperature,
+      topP: modelSnapshot.topP,
+      maxTokens: modelSnapshot.maxTokens,
+      parserVersion: PARSER_VERSION,
+      promptHash,
+      systemPromptSnapshot: systemPrompt,
+      completedAt: now(),
+    }
+
+    const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
+
+    if (drift.hasDrift) {
+      const processed = await persistTerminalCaseResult(database, claimedCase, {
+        ...baseTerminalValues,
+        status: 'invalid_output',
+        errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
+      })
+
+      return {
+        processed,
+        error: processed
+          ? `[case ${benchmarkCase.id}] Model drift: ${drift.requestedModel} -> ${drift.returnedModel}`
+          : null,
+      }
+    }
+
+    const resolvedOutput = await resolveBenchmarkOutput(llmService, {
+      promptContentMd: promptVersion.contentMd ?? '',
+      rawResponse: completion.content,
+      eligibleCategorySlugs,
+    })
+
+    if (resolvedOutput.status === 'completed') {
+      const processed = await persistCompletedCaseResult(
+        database,
+        claimedCase,
+        {
+          ...baseTerminalValues,
+          completedAt: now(),
+          naturalResponse: resolvedOutput.naturalResponse,
+          appendixRaw: resolvedOutput.rawAppendix,
+          appendixJson: resolvedOutput.appendix,
+          parserVersion: resolvedOutput.parserVersion,
+          errorMessage: null,
+        },
+        resolvedOutput.appendix,
+        promptCategoryIds,
+        resources,
+      )
+
+      return { processed, error: null }
+    }
+
+    const processed = await persistTerminalCaseResult(database, claimedCase, {
+      ...baseTerminalValues,
+      status: 'invalid_output',
+      naturalResponse: null,
+      appendixRaw: null,
+      appendixJson: null,
+      errorMessage: resolvedOutput.invalidReason,
+    })
+
+    return {
+      processed,
+      error: processed
+        ? `[case ${benchmarkCase.id}] Invalid output: ${resolvedOutput.invalidReason}`
+        : null,
+    }
+  } catch (error) {
+    const message = getErrorMessage(error)
+    const processed = await persistTerminalCaseResult(database, claimedCase, {
+      status: 'failed',
+      completedAt: now(),
+      requestedModelId: modelSnapshot.requestedModelId,
+      parserVersion: PARSER_VERSION,
+      promptHash,
+      systemPromptSnapshot: systemPrompt,
+      temperature: modelSnapshot.temperature,
+      topP: modelSnapshot.topP,
+      maxTokens: modelSnapshot.maxTokens,
+      errorMessage: message,
+    })
+
+    return {
+      processed,
+      error: processed ? `[case ${benchmarkCase.id}] ${message}` : null,
+    }
+  }
+}
+
+async function finalizeRunIfExhausted(
+  database: DatabaseClient,
+  runId: string,
+  seasonId: string,
+  currentTime: Date,
+  staleAfterMs: number,
+) {
+  return await withRunAdvisoryLock(database, runId, async (tx) => {
+    const [run] = await tx
+      .select()
+      .from(benchmarkRuns)
+      .where(eq(benchmarkRuns.id, runId))
+      .for('update')
+
+    if (!run) throw new Error('Benchmark run not found')
+
+    if (isTerminalRunStatus(run.status)) {
+      return run
+    }
+
+    const totalCases = await getRunTotalCases(tx, seasonId, run.expectedCaseCount ?? null)
+    const statusCounts = await tx
+      .select({ status: benchmarkCaseResults.status, cnt: count() })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, runId))
+      .groupBy(benchmarkCaseResults.status)
+
+    const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
+    const rawPendingCases = countByStatus.get('pending') ?? 0
+    const pendingCases = rawPendingCases > 0 ? await countClaimablePendingCases(tx, runId) : 0
+    const completedCases = countByStatus.get('completed') ?? 0
+    const failedCases = countByStatus.get('failed') ?? 0
+    const staleBefore = new Date(currentTime.getTime() - staleAfterMs)
+
+    // Check whether any cases are still claimable (pending, retryable under the retry cap,
+    // or still actively running). Fresh final-attempt workers must stay in flight until they
+    // finish, even though another worker can no longer claim them.
+    let hasClaimableWork = pendingCases > 0
+    if (!hasClaimableWork) {
+      const [claimableRow] = await tx
+        .select({ cnt: count() })
+        .from(benchmarkCaseResults)
+        .where(
+          and(
+            eq(benchmarkCaseResults.runId, runId),
+            or(
+              and(
+                eq(benchmarkCaseResults.status, 'running'),
+                or(
+                  lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+                  isNull(benchmarkCaseResults.startedAt),
+                  gt(benchmarkCaseResults.startedAt, staleBefore),
+                ),
+              ),
+              and(
+                inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+                lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+              ),
+            ),
+          ),
+        )
+      hasClaimableWork = Number(claimableRow?.cnt ?? 0) > 0
+    }
+
+    if (hasClaimableWork) {
+      const [updatedRun] = await tx
+        .update(benchmarkRuns)
+        .set({
+          status: 'running',
+          completedAt: null,
+          completedCaseCount: completedCases,
+          failedCaseCount: failedCases,
+          qcStatus: null,
+        })
+        .where(eq(benchmarkRuns.id, runId))
+        .returning()
+
+      return updatedRun ?? run
+    }
+
+    // Mark any running cases that exhausted their retry budget as failed so metrics are accurate.
+    await tx
+      .update(benchmarkCaseResults)
+      .set({
+        status: 'failed',
+        claimToken: null,
+        completedAt: currentTime,
+        errorMessage: `Exhausted ${MAX_CASE_ATTEMPTS} attempts`,
+      })
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          inArray(benchmarkCaseResults.status, ['running', 'pending']),
+        ),
+      )
+
+    const metrics = await calculateRunMetrics(tx, runId, totalCases)
+    const finalStatus = metrics.qc.passed ? 'published' : 'qc_failed'
+    const errorLog = metrics.qc.passed ? null : await buildPersistedRunErrorLog(tx, runId)
+
+    const [updatedRun] = await tx
+      .update(benchmarkRuns)
+      .set({
+        status: finalStatus,
+        completedAt: currentTime,
+        completedCaseCount: metrics.completedCases,
+        failedCaseCount: metrics.failedCases,
+        qcStatus: metrics.qc.passed ? 'passed' : 'failed',
+        qcSummaryJson: metrics.qc,
+        errorLog,
+      })
+      .where(eq(benchmarkRuns.id, runId))
+      .returning()
+
+    return updatedRun ?? run
+  })
 }
 
 async function createOrLoadRun(database: DatabaseClient, seasonId: string, scheduledFor: string) {
@@ -779,32 +1292,74 @@ export async function runBenchmark(
   const database = options.database ?? defaultDb
   const llmService = options.llmService ?? new LlmService()
   const now = options.now ?? (() => new Date())
-  const runStaleAfterMs = options.runStaleAfterMs ?? RUN_STALE_AFTER_MS
-  const runHeartbeatIntervalMs = options.runHeartbeatIntervalMs ?? RUN_HEARTBEAT_INTERVAL_MS
+  const caseClaimStaleAfterMs =
+    options.caseClaimStaleAfterMs ?? options.runStaleAfterMs ?? CASE_CLAIM_STALE_AFTER_MS
   const maxCases = normalizeMaxCases(options.maxCases)
 
   const initialRun = await createOrLoadRun(database, seasonId, scheduledFor)
-  const currentTime = now()
-  const { run, execute } = await claimRunExecution(
+  const initializedRun = await initializeRunForCaseWorkers(
     database,
     initialRun.id,
-    currentTime,
-    runStaleAfterMs,
+    seasonId,
+    now(),
+    caseClaimStaleAfterMs,
   )
 
-  if (!execute) {
-    return await buildRunSummary(database, run, seasonId)
+  if (initializedRun.state !== 'ready') {
+    return await buildRunSummary(database, initializedRun.run, seasonId)
   }
 
+  let resources: CaseProcessingResources | null = null
+  const claimedCaseResultIds: string[] = []
+  const invocationErrors: string[] = []
+  let processedThisInvocation = 0
+
   try {
-    return await executeRun(
+    for (let claimCount = 0; maxCases == null || claimCount < maxCases; claimCount++) {
+      const claimedCase = await claimNextBenchmarkCase(
+        database,
+        initializedRun.run.id,
+        now(),
+        caseClaimStaleAfterMs,
+        claimedCaseResultIds,
+      )
+
+      if (!claimedCase) {
+        break
+      }
+
+      claimedCaseResultIds.push(claimedCase.caseResultId)
+      resources ??= await loadProcessingResources(database)
+
+      const result = await processClaimedBenchmarkCase(
+        database,
+        llmService,
+        now,
+        claimedCase,
+        resources,
+      )
+      if (result.processed) {
+        processedThisInvocation += 1
+      }
+      if (result.error) {
+        invocationErrors.push(result.error)
+      }
+    }
+
+    const finalizedRun = await finalizeRunIfExhausted(
       database,
-      llmService,
-      now,
-      runHeartbeatIntervalMs,
-      run,
+      initializedRun.run.id,
       seasonId,
-      maxCases,
+      now(),
+      caseClaimStaleAfterMs,
+    )
+
+    return await buildRunSummary(
+      database,
+      finalizedRun,
+      seasonId,
+      processedThisInvocation,
+      invocationErrors,
     )
   } catch (error) {
     const message = getErrorMessage(error)
@@ -815,459 +1370,13 @@ export async function runBenchmark(
         completedAt: now(),
         errorLog: message,
       })
-      .where(getRunExecutionOwnershipClause(run))
-    throw error
-  }
-}
-
-async function executeRun(
-  database: DatabaseClient,
-  llmService: LlmService,
-  now: () => Date,
-  runHeartbeatIntervalMs: number,
-  run: BenchmarkRunRecord,
-  seasonId: string,
-  maxCases: number | null,
-): Promise<BenchmarkRunSummary> {
-  const heartbeat = startRunHeartbeat(database, run, now, runHeartbeatIntervalMs)
-
-  try {
-    const weightConfig = await database.query.benchmarkModelWeightConfigs.findFirst({
-      where: eq(benchmarkModelWeightConfigs.isActive, true),
-    })
-
-    if (weightConfig) {
-      await database
-        .update(benchmarkRuns)
-        .set({ weightConfigId: weightConfig.id })
-        .where(eq(benchmarkRuns.id, run.id))
-    }
-
-    let allCases: Awaited<ReturnType<typeof loadRunCases>>
-    try {
-      allCases = await loadRunCases(database, run, seasonId)
-    } catch (error) {
-      if (error instanceof OwnershipLostError) {
-        const latestRun = await findRunById(database, run.id)
-        return await buildRunSummary(database, latestRun, seasonId)
-      }
-      throw error
-    }
-
-    if (allCases.length === 0) {
-      const qc = evaluateQc({
-        totalCases: 0,
-        completedCases: 0,
-        failedCases: 0,
-        invalidOutputCases: 0,
-        unresolvedToolDecisions: 0,
-        totalToolDecisions: 0,
-        distinctModelSnapshots: 0,
-        distinctPromptVersions: 0,
-      })
-
-      const [finalizedRun] = await database
-        .update(benchmarkRuns)
-        .set({
-          status: 'qc_failed',
-          completedAt: now(),
-          completedCaseCount: 0,
-          failedCaseCount: 0,
-          qcStatus: 'failed',
-          qcSummaryJson: qc,
-        })
-        .where(getRunExecutionOwnershipClause(run))
-        .returning({ id: benchmarkRuns.id })
-
-      if (!finalizedRun) {
-        const latestRun = await findRunById(database, run.id)
-        return await buildRunSummary(database, latestRun, seasonId)
-      }
-
-      return {
-        runId: run.id,
-        seasonId,
-        scheduledFor: run.scheduledFor,
-        status: 'qc_failed',
-        totalCases: 0,
-        completedCases: 0,
-        failedCases: 0,
-        invalidOutputCases: 0,
-        unresolvedToolCount: 0,
-        processedThisInvocation: 0,
-        remainingCases: 0,
-        hasRemainingWork: false,
-        qc,
-        errors: [],
-      }
-    }
-
-    const allSubcategories = await database
-      .select({ id: subcategories.id, slug: subcategories.slug })
-      .from(subcategories)
-
-    const categorySlugById = new Map(allSubcategories.map((s) => [s.id, s.slug]))
-
-    const existingResults = await database
-      .select()
-      .from(benchmarkCaseResults)
-      .where(eq(benchmarkCaseResults.runId, run.id))
-
-    const existingResultByCaseId = new Map(existingResults.map((result) => [result.caseId, result]))
-    const completedCaseIds = new Set(
-      existingResults
-        .filter((result) => result.status === 'completed')
-        .map((result) => result.caseId),
-    )
-    const retryableCaseIds = existingResults
-      .filter((result) => result.status === 'failed' || result.status === 'invalid_output')
-      .map((result) => result.caseId)
-    const retryableCaseIdSet = new Set(retryableCaseIds)
-    const untouchedCases = allCases.filter(
-      (benchmarkCase) =>
-        !completedCaseIds.has(benchmarkCase.id) && !retryableCaseIdSet.has(benchmarkCase.id),
-    )
-    const retryableCases = allCases.filter((benchmarkCase) =>
-      retryableCaseIdSet.has(benchmarkCase.id),
-    )
-    const pendingCases = [...untouchedCases, ...retryableCases]
-    const casesToProcess = maxCases == null ? pendingCases : pendingCases.slice(0, maxCases)
-
-    const toolIndex = await buildToolResolutionIndex(database)
-
-    const errors: string[] = []
-    let processedThisInvocation = 0
-
-    for (const benchmarkCase of casesToProcess) {
-      const summaryIfOwnershipLostBeforeCase = await getRunSummaryIfOwnershipLost(
-        database,
-        run,
-        seasonId,
+      .where(
+        and(
+          eq(benchmarkRuns.id, initializedRun.run.id),
+          inArray(benchmarkRuns.status, ['pending', 'failed', 'running']),
+        ),
       )
-      if (summaryIfOwnershipLostBeforeCase) {
-        return summaryIfOwnershipLostBeforeCase
-      }
 
-      try {
-        const { promptVersion, modelSnapshot } = benchmarkCase
-        const existingResult = existingResultByCaseId.get(benchmarkCase.id)
-
-        const eligibleCategorySlugs = promptVersion.categories
-          .map((c) => categorySlugById.get(c.categoryId))
-          .filter((slug): slug is string => slug !== undefined)
-
-        if (eligibleCategorySlugs.length === 0) {
-          throw new Error('No eligible category slugs found for prompt version')
-        }
-
-        const promptContentMd = promptVersion.contentMd ?? ''
-        const categoryIdBySlug = new Map(
-          promptVersion.categories.flatMap((category) => {
-            const slug = categorySlugById.get(category.categoryId)
-            return slug ? ([[slug, category.categoryId]] as const) : []
-          }),
-        )
-
-        if (existingResult && shouldAttemptStoredInvalidOutputRecovery(existingResult)) {
-          const recovered = await resolveBenchmarkOutput(llmService, {
-            promptContentMd,
-            rawResponse: existingResult.rawResponse ?? '',
-            eligibleCategorySlugs,
-          })
-
-          if (recovered.status === 'completed') {
-            const restoredCaseResult = await database.transaction(async (tx) => {
-              await verifyRunOwnershipForUpdate(tx, run)
-              await tx
-                .delete(benchmarkCaseResults)
-                .where(eq(benchmarkCaseResults.id, existingResult.id))
-
-              return await insertCompletedBenchmarkCaseResult(tx, {
-                seasonId,
-                runId: run.id,
-                caseId: benchmarkCase.id,
-                appendix: recovered.appendix,
-                rawAppendix: recovered.rawAppendix,
-                naturalResponse: recovered.naturalResponse,
-                parserVersion: recovered.parserVersion,
-                metadata: {
-                  rawResponse: existingResult.rawResponse,
-                  requestedModelId: existingResult.requestedModelId,
-                  returnedModelId: existingResult.returnedModelId,
-                  provider: existingResult.provider,
-                  finishReason: existingResult.finishReason,
-                  promptTokens: existingResult.promptTokens,
-                  completionTokens: existingResult.completionTokens,
-                  totalTokens: existingResult.totalTokens,
-                  latencyMs: existingResult.latencyMs,
-                  temperature: existingResult.temperature,
-                  topP: existingResult.topP,
-                  maxTokens: existingResult.maxTokens,
-                  systemPromptSnapshot: existingResult.systemPromptSnapshot,
-                },
-                categoryIdBySlug,
-                toolIndex,
-              })
-            })
-
-            if (!restoredCaseResult) continue
-            processedThisInvocation += 1
-            continue
-          }
-        }
-
-        if (
-          existingResult &&
-          (existingResult.status === 'failed' || existingResult.status === 'invalid_output')
-        ) {
-          await database.transaction(async (tx) => {
-            await verifyRunOwnershipForUpdate(tx, run)
-            await tx
-              .delete(benchmarkCaseResults)
-              .where(eq(benchmarkCaseResults.id, existingResult.id))
-          })
-        }
-
-        const userPrompt = buildBenchmarkPrompt(promptContentMd, eligibleCategorySlugs)
-        const systemPrompt =
-          promptVersion.systemPromptSnapshot ??
-          buildGenerationSystemPrompt(promptVersion.level as PromptLevel)
-
-        const completion = await llmService.complete(modelSnapshot.provider, {
-          model: modelSnapshot.requestedModelId,
-          systemPrompt,
-          userPrompt,
-          temperature: modelSnapshot.temperature ?? undefined,
-          topP: modelSnapshot.topP ?? undefined,
-          maxTokens: modelSnapshot.maxTokens ?? undefined,
-          seed: modelSnapshot.seed ?? undefined,
-        })
-
-        const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
-
-        if (drift.hasDrift) {
-          const result = await database.transaction(async (tx) => {
-            await verifyRunOwnershipForUpdate(tx, run)
-            const [inserted] = await tx
-              .insert(benchmarkCaseResults)
-              .values({
-                seasonId,
-                runId: run.id,
-                caseId: benchmarkCase.id,
-                status: 'invalid_output',
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                parserVersion: PARSER_VERSION,
-                systemPromptSnapshot: systemPrompt,
-                errorMessage: `Model drift detected: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
-              })
-              .onConflictDoNothing()
-              .returning()
-            return inserted ?? null
-          })
-
-          if (!result) continue
-          processedThisInvocation += 1
-          errors.push(
-            `[case ${benchmarkCase.id}] Model drift: ${drift.requestedModel} → ${drift.returnedModel}`,
-          )
-          continue
-        }
-
-        const resolvedOutput = await resolveBenchmarkOutput(llmService, {
-          promptContentMd,
-          rawResponse: completion.content,
-          eligibleCategorySlugs,
-        })
-
-        if (resolvedOutput.status === 'completed') {
-          const caseResult = await database.transaction(async (tx) => {
-            await verifyRunOwnershipForUpdate(tx, run)
-            return await insertCompletedBenchmarkCaseResult(tx, {
-              seasonId,
-              runId: run.id,
-              caseId: benchmarkCase.id,
-              appendix: resolvedOutput.appendix,
-              rawAppendix: resolvedOutput.rawAppendix,
-              naturalResponse: resolvedOutput.naturalResponse,
-              parserVersion: resolvedOutput.parserVersion,
-              metadata: {
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                systemPromptSnapshot: systemPrompt,
-              },
-              categoryIdBySlug,
-              toolIndex,
-            })
-          })
-
-          if (!caseResult) continue
-          processedThisInvocation += 1
-        } else {
-          const caseResult = await database.transaction(async (tx) => {
-            await verifyRunOwnershipForUpdate(tx, run)
-            const [inserted] = await tx
-              .insert(benchmarkCaseResults)
-              .values({
-                seasonId,
-                runId: run.id,
-                caseId: benchmarkCase.id,
-                status: 'invalid_output',
-                naturalResponse: null,
-                appendixRaw: null,
-                appendixJson: null,
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                parserVersion: PARSER_VERSION,
-                systemPromptSnapshot: systemPrompt,
-                errorMessage: resolvedOutput.invalidReason,
-              })
-              .onConflictDoNothing()
-              .returning()
-            return inserted ?? null
-          })
-
-          if (!caseResult) continue
-          processedThisInvocation += 1
-          errors.push(`[case ${benchmarkCase.id}] Invalid output: ${resolvedOutput.invalidReason}`)
-        }
-      } catch (error) {
-        if (error instanceof OwnershipLostError) {
-          const latestRun = await findRunById(database, run.id)
-          return await buildRunSummary(database, latestRun, seasonId)
-        }
-
-        const message = getErrorMessage(error)
-        errors.push(`[case ${benchmarkCase.id}] ${message}`)
-
-        try {
-          await database.transaction(async (tx) => {
-            await verifyRunOwnershipForUpdate(tx, run)
-            const [inserted] = await tx
-              .insert(benchmarkCaseResults)
-              .values({
-                seasonId,
-                runId: run.id,
-                caseId: benchmarkCase.id,
-                status: 'failed',
-                errorMessage: message,
-                parserVersion: PARSER_VERSION,
-              })
-              .onConflictDoNothing()
-              .returning({ id: benchmarkCaseResults.id })
-
-            if (inserted) {
-              processedThisInvocation += 1
-            }
-          })
-        } catch (writeError) {
-          if (writeError instanceof OwnershipLostError) {
-            const latestRun = await findRunById(database, run.id)
-            return await buildRunSummary(database, latestRun, seasonId)
-          }
-          throw writeError
-        }
-      }
-    }
-
-    const metrics = await calculateRunMetrics(database, run.id, allCases.length)
-    const remainingCases = calculateRemainingCases(metrics)
-
-    if (remainingCases > 0) {
-      const [resumedRun] = await database
-        .update(benchmarkRuns)
-        .set({
-          status: 'pending',
-          completedAt: null,
-          completedCaseCount: metrics.completedCases,
-          failedCaseCount: metrics.failedCases,
-          qcStatus: null,
-          errorLog: errors.length > 0 ? errors.join('\n') : null,
-        })
-        .where(getRunExecutionOwnershipClause(run))
-        .returning({ id: benchmarkRuns.id })
-
-      if (!resumedRun) {
-        const latestRun = await findRunById(database, run.id)
-        return await buildRunSummary(database, latestRun, seasonId)
-      }
-
-      return {
-        runId: run.id,
-        seasonId,
-        scheduledFor: run.scheduledFor,
-        status: 'running',
-        ...metrics,
-        processedThisInvocation,
-        remainingCases,
-        hasRemainingWork: true,
-        errors,
-      }
-    }
-
-    const finalStatus = metrics.qc.passed ? 'published' : 'qc_failed'
-
-    const [finalizedRun] = await database
-      .update(benchmarkRuns)
-      .set({
-        status: finalStatus,
-        completedAt: now(),
-        completedCaseCount: metrics.completedCases,
-        failedCaseCount: metrics.failedCases,
-        qcStatus: metrics.qc.passed ? 'passed' : 'failed',
-        qcSummaryJson: metrics.qc,
-        errorLog: errors.length > 0 ? errors.join('\n') : null,
-      })
-      .where(getRunExecutionOwnershipClause(run))
-      .returning({ id: benchmarkRuns.id })
-
-    if (!finalizedRun) {
-      const latestRun = await findRunById(database, run.id)
-      return await buildRunSummary(database, latestRun, seasonId)
-    }
-
-    return {
-      runId: run.id,
-      seasonId,
-      scheduledFor: run.scheduledFor,
-      status: finalStatus,
-      ...metrics,
-      processedThisInvocation,
-      remainingCases: 0,
-      hasRemainingWork: false,
-      errors,
-    }
-  } finally {
-    await heartbeat.stop()
+    throw error
   }
 }

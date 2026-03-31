@@ -23,6 +23,8 @@ type QcCheck = {
 
 function resultStatusVariant(status: string) {
   switch (status) {
+    case 'running':
+      return 'secondary' as const
     case 'completed':
       return 'default' as const
     case 'invalid_output':
@@ -123,6 +125,8 @@ export default async function RunDetailPage({ params }: PageProps) {
         <div className="grid max-w-md grid-cols-2 gap-y-2 text-sm">
           <span className="text-muted-foreground">Expected</span>
           <span>{run.expectedCaseCount ?? '-'}</span>
+          <span className="text-muted-foreground">Running</span>
+          <span>{run.resultStats.running ?? 0}</span>
           <span className="text-muted-foreground">Completed</span>
           <span>{run.resultStats.completed ?? 0}</span>
           <span className="text-muted-foreground">Failed</span>
@@ -144,6 +148,9 @@ export default async function RunDetailPage({ params }: PageProps) {
                 <TableHead>Prompt</TableHead>
                 <TableHead>Model</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Attempt</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Completed</TableHead>
                 <TableHead>Decisions</TableHead>
                 <TableHead>Error</TableHead>
               </TableRow>
@@ -170,6 +177,13 @@ export default async function RunDetailPage({ params }: PageProps) {
                       <Badge variant={resultStatusVariant(result?.status ?? 'pending')}>
                         {result?.status ?? 'pending'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>{result?.attemptCount ?? 0}</TableCell>
+                    <TableCell className="text-sm">
+                      {result?.startedAt ? new Date(result.startedAt).toLocaleString() : '-'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {result?.completedAt ? new Date(result.completedAt).toLocaleString() : '-'}
                     </TableCell>
                     <TableCell className="max-w-md">
                       {result?.decisions.length ? (

@@ -8,7 +8,7 @@ const envMock = vi.hoisted(
   }),
 )
 const serverSettingsMock = vi.hoisted(() => ({
-  benchmark: { casesPerCronInvocation: 4 },
+  benchmark: { cronMaxDurationSeconds: 800, casesPerCronInvocation: 1 },
 }))
 const dbMock = vi.hoisted(() => ({ __db: true }))
 const resolveBenchmarkCronRunTargetMock = vi.hoisted(() => vi.fn())
@@ -34,7 +34,7 @@ vi.mock('~/server/llm/benchmark/runner', () => ({
   runBenchmark: runBenchmarkMock,
 }))
 
-import { GET } from './route'
+import { GET, maxDuration } from './route'
 
 function makeRequest(
   url = 'http://localhost/api/cron/benchmark-run',
@@ -52,7 +52,11 @@ describe('GET /api/cron/benchmark-run', () => {
     resolveBenchmarkCronRunTargetMock.mockReset()
     runBenchmarkMock.mockReset()
     envMock.CRON_SECRET = 'test-secret'
-    serverSettingsMock.benchmark.casesPerCronInvocation = 4
+    serverSettingsMock.benchmark.casesPerCronInvocation = 1
+  })
+
+  it('exports the expected maxDuration for one-case benchmark workers', () => {
+    expect(maxDuration).toBe(800)
   })
 
   it('returns 500 when CRON_SECRET is not configured', async () => {

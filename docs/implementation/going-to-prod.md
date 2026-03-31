@@ -15,11 +15,14 @@ practical questions:
 
 These points are already true in the current codebase:
 
-- Benchmark cron is already chunked and resumable.
-  - `vercel.json` runs `/api/cron/benchmark-run` every `10` minutes.
-  - Each invocation processes `8` benchmark cases.
+- Benchmark cron is already chunked, resumable, and overlap-safe.
+  - `vercel.json` runs `/api/cron/benchmark-run` every minute.
+  - Each invocation processes `1` benchmark case by default.
   - Unfinished runs are resumed before a new day is started.
-  - Stale run recovery uses a `15` minute threshold.
+  - Overlapping cron or manual invocations safely claim different cases from the
+    same run.
+  - Stale case recovery uses an `11` minute threshold.
+  - `/api/cron/benchmark-run` exports `maxDuration = 800`.
 - Match cron already exists.
   - `vercel.json` runs `/api/cron/match-run` every `15` minutes.
   - `vercel.json` runs `/api/cron/tool-candidate-review` every `30` minutes.
@@ -65,7 +68,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines cron schedules every `10`, `15`, and `30` minutes.
+  - This repo defines cron schedules every `1`, `15`, and `30` minutes.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.
@@ -138,35 +141,36 @@ Current seeded reference data produces:
 
 Current benchmark cron capacity:
 
-- `8` cases per invocation
-- one invocation every `10` minutes
-- `144` invocations per day
-- `1152` cases/day of total scheduled capacity
+- `1` case per invocation by default
+- one invocation every minute
+- `1440` scheduled invocations per day
+- `1440` cases/day of base scheduled capacity
 
 That means:
 
-- one full `900` case benchmark run needs `113` invocations
-- cron-only completion time is about `18h 50m` after season freeze
+- one full `900` case benchmark run needs `900` invocations
+- cron-only completion time is about `15h` after season freeze
 
 ### What This Means For Your Demo
 
 If you freeze a season and do nothing else:
 
 - the first published run should still happen in less than `24` hours
-- it will not reliably happen within `12` hours
+- it still may not happen within `12` hours
 
 If you want first public data inside `12` hours, you should manually trigger
 extra benchmark cron invocations immediately after freezing.
 
 Two workable options:
 
-1. Recommended: manually call `/api/cron/benchmark-run` in a serial loop until
-   the run finishes and auto-publishes.
-2. Minimum front-load for a `~12h` finish: manually trigger about `45-50`
-   extra chunks right after freeze, then let normal cron finish the rest.
+1. Recommended: manually call `/api/cron/benchmark-run` with a small fixed
+   overlap, for example `2-4` concurrent invocations, until the run finishes.
+2. If you want to stay conservative, keep the default minute cron and manually
+   add a small burst of extra invocations right after freeze.
 
-Do not parallelize those manual calls. The runner is resumable and ownership
-guarded, but the fastest reliable path is still one chunk at a time.
+Unlike the old run-level worker, the current runner is safe to overlap. It
+claims work at the case level, so concurrent invocations do not double-spend
+the same case unless a worker becomes stale and is intentionally reclaimed.
 
 ## What Public Pages Will Show After The First Published Run
 

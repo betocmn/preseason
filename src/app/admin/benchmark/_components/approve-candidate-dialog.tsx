@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '~/components/ui/button'
@@ -24,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { slugify } from '~/lib/slug'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 type Props = {
   candidateId: string
@@ -54,7 +54,6 @@ export function ApproveCandidateDialog({
   canAutoApprove = false,
   categories,
 }: Props) {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState(suggestedTool ? 'match' : 'create')
   const [searchQuery, setSearchQuery] = useState(candidateName)
@@ -76,7 +75,7 @@ export function ApproveCandidateDialog({
         `Approved. ${result.replayedCount} decision${result.replayedCount === 1 ? '' : 's'} resolved.`,
       )
       setOpen(false)
-      router.refresh()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => toast.error(err.message),
   })
