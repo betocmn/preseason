@@ -75,7 +75,7 @@ async function loadSeasonCaseSnapshotIds(
   const caseRows = await database
     .select({ id: benchmarkCases.id })
     .from(benchmarkCases)
-    .where(eq(benchmarkCases.seasonId, seasonId))
+    .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
     .orderBy(
       asc(benchmarkCases.promptVersionId),
       asc(benchmarkCases.modelSnapshotId),

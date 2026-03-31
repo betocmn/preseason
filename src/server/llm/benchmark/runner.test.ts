@@ -905,6 +905,82 @@ describe('runBenchmark', () => {
     expect(run.status).toBe('qc_failed')
   })
 
+  it('keeps a fresh final-attempt worker in flight during overlapping invocations', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })
+    const benchmarkCase = caseRows[0]
+    if (!benchmarkCase) throw new Error('Expected a case')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'cron',
+        status: 'running',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Expected run')
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'failed',
+      attemptCount: 2,
+      startedAt: new Date('2026-03-09T00:00:00.000Z'),
+      completedAt: new Date('2026-03-09T00:05:00.000Z'),
+      errorMessage: 'Second attempt failed',
+    })
+
+    const releaseCall = createDeferred()
+    const firstCallStarted = createDeferred()
+    const llmService = createMockLlmService(async (_provider, request) => {
+      firstCallStarted.resolve()
+      await releaseCall.promise
+      return mockCompletionForRequest(buildValidResponse(['auth', 'database']), request)
+    })
+
+    const firstRunPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 60_000,
+    })
+    await firstCallStarted.promise
+
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 60_000,
+    })
+
+    expect(secondSummary.status).toBe('running')
+    expect(secondSummary.processedThisInvocation).toBe(0)
+    expect(secondSummary.remainingCases).toBe(1)
+
+    releaseCall.resolve()
+    const firstSummary = await firstRunPromise
+
+    expect(firstSummary.processedThisInvocation).toBe(1)
+
+    const finalRun = await findRun(db, season.id, '2026-03-10')
+    const [result] = await db
+      .select({
+        status: benchmarkCaseResults.status,
+        attemptCount: benchmarkCaseResults.attemptCount,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, finalRun.id))
+
+    expect(finalRun.status).toBe('qc_failed')
+    expect(result?.status).toBe('completed')
+    expect(result?.attemptCount).toBe(3)
+  })
+
   it('finalizes a run with exhausted running cases instead of blocking forever', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedBenchmarkPanel(db, {

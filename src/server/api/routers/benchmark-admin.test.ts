@@ -635,7 +635,18 @@ describe('benchmarkAdminRouter', () => {
     if (!run) throw new Error('Failed to create run')
 
     const caseRows = await db.select({ id: benchmarkCases.id }).from(benchmarkCases)
-    const expectedCaseIds = caseRows.map((row) => row.id).sort()
+    const deactivatedCaseId = caseRows[0]?.id
+    if (!deactivatedCaseId) throw new Error('Expected frozen benchmark case')
+
+    await db
+      .update(benchmarkCases)
+      .set({ isActive: false })
+      .where(eq(benchmarkCases.id, deactivatedCaseId))
+
+    const expectedCaseIds = caseRows
+      .filter((row) => row.id !== deactivatedCaseId)
+      .map((row) => row.id)
+      .sort()
 
     const result = await caller.benchmarkAdmin.retryFailedCases({ runId: run.id })
     expect(result.retriedCount).toBe(0)

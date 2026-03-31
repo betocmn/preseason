@@ -5,6 +5,7 @@ import {
   count,
   countDistinct,
   eq,
+  gt,
   inArray,
   isNull,
   lt,
@@ -1149,6 +1150,7 @@ async function finalizeRunIfExhausted(
   runId: string,
   seasonId: string,
   currentTime: Date,
+  staleAfterMs: number,
 ) {
   return await withRunAdvisoryLock(database, runId, async (tx) => {
     const [run] = await tx
@@ -1174,9 +1176,11 @@ async function finalizeRunIfExhausted(
     const pendingCases = countByStatus.get('pending') ?? 0
     const completedCases = countByStatus.get('completed') ?? 0
     const failedCases = countByStatus.get('failed') ?? 0
+    const staleBefore = new Date(currentTime.getTime() - staleAfterMs)
 
     // Check whether any cases are still claimable (pending, retryable under the retry cap,
-    // or running under the retry cap). Cases that exhausted attempts will never be reclaimed.
+    // or still actively running). Fresh final-attempt workers must stay in flight until they
+    // finish, even though another worker can no longer claim them.
     let hasClaimableWork = pendingCases > 0
     if (!hasClaimableWork) {
       const [claimableRow] = await tx
@@ -1185,8 +1189,20 @@ async function finalizeRunIfExhausted(
         .where(
           and(
             eq(benchmarkCaseResults.runId, runId),
-            inArray(benchmarkCaseResults.status, ['running', 'failed', 'invalid_output']),
-            lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+            or(
+              and(
+                eq(benchmarkCaseResults.status, 'running'),
+                or(
+                  lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+                  isNull(benchmarkCaseResults.startedAt),
+                  gt(benchmarkCaseResults.startedAt, staleBefore),
+                ),
+              ),
+              and(
+                inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+                lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+              ),
+            ),
           ),
         )
       hasClaimableWork = Number(claimableRow?.cnt ?? 0) > 0
@@ -1330,6 +1346,7 @@ export async function runBenchmark(
       initializedRun.run.id,
       seasonId,
       now(),
+      caseClaimStaleAfterMs,
     )
 
     return await buildRunSummary(
