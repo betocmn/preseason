@@ -1153,17 +1153,17 @@ async function finalizeRunIfExhausted(
     const completedCases = countByStatus.get('completed') ?? 0
     const failedCases = countByStatus.get('failed') ?? 0
 
-    // Check whether any pending/running cases are still claimable (under the retry cap).
-    // Running cases with exhausted attempts will never be reclaimed, so treat them as terminal.
+    // Check whether any cases are still claimable (pending, retryable under the retry cap,
+    // or running under the retry cap). Cases that exhausted attempts will never be reclaimed.
     let hasClaimableWork = pendingCases > 0
-    if (!hasClaimableWork && runningCases > 0) {
+    if (!hasClaimableWork && (runningCases > 0 || failedCases > 0)) {
       const [claimableRow] = await tx
         .select({ cnt: count() })
         .from(benchmarkCaseResults)
         .where(
           and(
             eq(benchmarkCaseResults.runId, runId),
-            eq(benchmarkCaseResults.status, 'running'),
+            inArray(benchmarkCaseResults.status, ['running', 'failed', 'invalid_output']),
             lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
           ),
         )

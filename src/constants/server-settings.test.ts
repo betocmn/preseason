@@ -7,4 +7,8 @@ describe('serverSettings.benchmark', () => {
       serverSettings.benchmark.cronMaxDurationSeconds * 1000,
     )
   })
+
+  it('sets a positive max case attempt limit', () => {
+    expect(serverSettings.benchmark.maxCaseAttempts).toBeGreaterThanOrEqual(2)
+  })
 })

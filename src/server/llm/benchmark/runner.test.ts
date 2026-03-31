@@ -832,4 +832,110 @@ describe('runBenchmark', () => {
     const run = await findRun(db, season.id, '2026-03-10')
     expect(run.status).toBe('qc_failed')
   })
+
+  it('stops retrying a case after maxCaseAttempts and finalizes the run', async () => {
+    const db = getTestDb()
+    const { season } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })
+
+    let callCount = 0
+    const llmService = createMockLlmService(async () => {
+      callCount += 1
+      throw new Error('Simulated transient failure')
+    })
+
+    // First attempt — case fails, run stays running (1 case total).
+    const first = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+    expect(first.status).toBe('running')
+    expect(callCount).toBe(1)
+
+    // Second attempt — case fails again.
+    const second = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+    expect(second.status).toBe('running')
+    expect(callCount).toBe(2)
+
+    // Third attempt — case fails, hits maxCaseAttempts (3), run finalizes.
+    const third = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+    expect(third.status).toBe('qc_failed')
+    expect(callCount).toBe(3)
+
+    // Fourth invocation — no more work, run stays finalized.
+    const fourth = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+    expect(fourth.status).toBe('qc_failed')
+    expect(fourth.processedThisInvocation).toBe(0)
+    expect(callCount).toBe(3)
+
+    const run = await findRun(db, season.id, '2026-03-10')
+    expect(run.status).toBe('qc_failed')
+  })
+
+  it('finalizes a run with exhausted running cases instead of blocking forever', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedBenchmarkPanel(db, {
+      promptCount: 1,
+      modelCount: 1,
+    })
+    const benchmarkCase = caseRows[0]
+    if (!benchmarkCase) throw new Error('Expected a case')
+
+    // Seed a run with a single case already in running state at max attempts.
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'cron',
+        status: 'running',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Expected run')
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'running',
+      attemptCount: 3,
+      startedAt: new Date('2026-03-09T00:00:00.000Z'),
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.processedThisInvocation).toBe(0)
+    expect(llmService.complete).not.toHaveBeenCalled()
+
+    const finalRun = await findRun(db, season.id, '2026-03-10')
+    expect(finalRun.status).toBe('qc_failed')
+  })
 })
