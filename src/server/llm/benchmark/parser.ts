@@ -1,25 +1,38 @@
 import { type BenchmarkAppendix, validateBenchmarkAppendix } from '~/server/llm/benchmark/schema'
 
-export const PARSER_VERSION = 'strict-v3'
+export const PARSER_VERSION = 'strict-v4'
 
 const OPEN_TAG = '<preseason_benchmark_json>'
 const CLOSE_TAG = '</preseason_benchmark_json>'
+const ALIAS_OPEN_TAGS = ['<appendix>', '<benchmark_json>'] as const
+
+export type BenchmarkInvalidOutputCode =
+  | 'blank_response'
+  | 'missing_appendix_tags'
+  | 'opening_tag_without_json_appendix'
+  | 'truncated_appendix_block'
+  | 'malformed_appendix_block'
+  | 'malformed_json'
+  | 'schema_invalid'
 
 type InvalidOutputParseResult = {
   status: 'invalid_output'
+  code: BenchmarkInvalidOutputCode
   reason: string
-  appendixOpenIdx?: number
+  repairBoundaryIdx?: number
 }
 
 export type ParseResult =
   | { status: 'ok'; appendix: BenchmarkAppendix; rawAppendix: string; naturalResponse: string }
   | InvalidOutputParseResult
 
-const REPAIRABLE_INVALID_OUTPUT_PATTERNS = [
-  /^Truncated <preseason_benchmark_json> block:/u,
-  /^Malformed <preseason_benchmark_json> block/u,
-  /^Malformed JSON:/u,
-] as const
+const REPAIRABLE_INVALID_OUTPUT_CODES = new Set<BenchmarkInvalidOutputCode>([
+  'missing_appendix_tags',
+  'truncated_appendix_block',
+  'malformed_appendix_block',
+  'malformed_json',
+  'schema_invalid',
+])
 
 function findAppendixTagBlock(rawContent: string) {
   let searchFrom = rawContent.length
@@ -53,6 +66,10 @@ function findAppendixTagBlock(rawContent: string) {
 }
 
 function explainMissingAppendixReason(rawContent: string): InvalidOutputParseResult {
+  if (rawContent.trim().length === 0) {
+    return { status: 'invalid_output', code: 'blank_response', reason: 'Blank response' }
+  }
+
   let searchFrom = rawContent.length
   let foundOpeningTagWithoutJson = false
 
@@ -66,50 +83,72 @@ function explainMissingAppendixReason(rawContent: string): InvalidOutputParseRes
     if (contentStart === -1) {
       return {
         status: 'invalid_output',
+        code: 'truncated_appendix_block',
         reason: 'Truncated <preseason_benchmark_json> block: missing JSON appendix',
-        appendixOpenIdx: openIdx,
+        repairBoundaryIdx: openIdx,
       }
     }
 
     if (rawContent.startsWith('```', contentStart)) {
       return {
         status: 'invalid_output',
+        code: 'malformed_appendix_block',
         reason:
           'Malformed <preseason_benchmark_json> block: JSON must not be wrapped in a code fence',
-        appendixOpenIdx: openIdx,
+        repairBoundaryIdx: openIdx,
       }
     }
 
     if (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[') {
+      const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+      if (closeIdx !== -1) {
+        return {
+          status: 'invalid_output',
+          code: 'malformed_appendix_block',
+          reason: 'Malformed <preseason_benchmark_json> block',
+          repairBoundaryIdx: openIdx,
+        }
+      }
+
       foundOpeningTagWithoutJson = true
       searchFrom = openIdx - 1
       continue
     }
 
-    const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
+    const closeIdx =
+      findJsonTerminatedCloseTag(rawContent, openIdx + OPEN_TAG.length) ??
+      rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
     if (closeIdx === -1) {
       return {
         status: 'invalid_output',
+        code: 'truncated_appendix_block',
         reason: 'Truncated <preseason_benchmark_json> block: missing closing tag',
-        appendixOpenIdx: openIdx,
+        repairBoundaryIdx: openIdx,
       }
     }
 
     return {
       status: 'invalid_output',
+      code: 'malformed_appendix_block',
       reason: 'Malformed <preseason_benchmark_json> block',
-      appendixOpenIdx: openIdx,
+      repairBoundaryIdx: openIdx,
     }
   }
 
   if (foundOpeningTagWithoutJson) {
     return {
       status: 'invalid_output',
+      code: 'opening_tag_without_json_appendix',
       reason: 'Opening <preseason_benchmark_json> tag without JSON appendix',
     }
   }
 
-  return { status: 'invalid_output', reason: 'Missing <preseason_benchmark_json> tags' }
+  return {
+    status: 'invalid_output',
+    code: 'missing_appendix_tags',
+    reason: 'Missing <preseason_benchmark_json> tags',
+    repairBoundaryIdx: findLikelyRepairBoundaryIndex(rawContent) ?? undefined,
+  }
 }
 
 function findFirstNonWhitespaceIndex(rawContent: string, start: number) {
@@ -181,20 +220,64 @@ function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
   return null
 }
 
-export function extractBenchmarkNaturalResponse(rawContent: string, appendixOpenIdx?: number) {
-  const openIdx = appendixOpenIdx ?? rawContent.lastIndexOf(OPEN_TAG)
-  if (openIdx === -1) {
+function findTagBoundaryIndex(rawContent: string, openTag: string) {
+  let searchFrom = rawContent.length
+
+  while (searchFrom >= 0) {
+    const openIdx = rawContent.lastIndexOf(openTag, searchFrom)
+    if (openIdx === -1) {
+      return null
+    }
+
+    const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + openTag.length)
+    if (
+      contentStart !== -1 &&
+      (rawContent[contentStart] === '{' ||
+        rawContent[contentStart] === '[' ||
+        rawContent.startsWith('```', contentStart))
+    ) {
+      return openIdx
+    }
+
+    searchFrom = openIdx - 1
+  }
+
+  return null
+}
+
+function findLikelyRepairBoundaryIndex(rawContent: string) {
+  let boundaryIdx: number | null = null
+
+  for (const tag of [OPEN_TAG, ...ALIAS_OPEN_TAGS]) {
+    const tagBoundary = findTagBoundaryIndex(rawContent, tag)
+    if (tagBoundary != null && (boundaryIdx == null || tagBoundary > boundaryIdx)) {
+      boundaryIdx = tagBoundary
+    }
+  }
+
+  if (boundaryIdx != null) {
+    return boundaryIdx
+  }
+
+  const jsonStart = findFirstNonWhitespaceIndex(rawContent, 0)
+  if (jsonStart === -1) {
+    return null
+  }
+
+  return rawContent[jsonStart] === '{' || rawContent[jsonStart] === '[' ? jsonStart : null
+}
+
+export function extractBenchmarkNaturalResponse(rawContent: string, repairBoundaryIdx?: number) {
+  const boundaryIdx = repairBoundaryIdx ?? findLikelyRepairBoundaryIndex(rawContent)
+  if (boundaryIdx == null || boundaryIdx === -1) {
     return rawContent.trim()
   }
 
-  return rawContent.slice(0, openIdx).trim()
+  return rawContent.slice(0, boundaryIdx).trim()
 }
 
 export function shouldRepairBenchmarkParseFailure(parseResult: ParseResult) {
-  return (
-    parseResult.status === 'invalid_output' &&
-    REPAIRABLE_INVALID_OUTPUT_PATTERNS.some((pattern) => pattern.test(parseResult.reason))
-  )
+  return parseResult.status === 'invalid_output' && REPAIRABLE_INVALID_OUTPUT_CODES.has(parseResult.code)
 }
 
 export function parseBenchmarkResponse(
@@ -219,14 +302,20 @@ export function parseBenchmarkResponse(
     const message = error instanceof Error ? error.message : 'Unknown parse error'
     return {
       status: 'invalid_output',
+      code: 'malformed_json',
       reason: `Malformed JSON: ${message}`,
-      appendixOpenIdx: openIdx,
+      repairBoundaryIdx: openIdx,
     }
   }
 
   const validation = validateBenchmarkAppendix(parsed, eligibleCategorySlugs)
   if (!validation.success) {
-    return { status: 'invalid_output', reason: validation.error }
+    return {
+      status: 'invalid_output',
+      code: 'schema_invalid',
+      reason: validation.error,
+      repairBoundaryIdx: openIdx,
+    }
   }
 
   return { status: 'ok', appendix: validation.data, rawAppendix, naturalResponse }

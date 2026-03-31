@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { PARSER_VERSION, parseBenchmarkResponse, shouldRepairBenchmarkParseFailure } from './parser'
+import {
+  extractBenchmarkNaturalResponse,
+  PARSER_VERSION,
+  parseBenchmarkResponse,
+  shouldRepairBenchmarkParseFailure,
+} from './parser'
 
 function buildValidAppendix(
   categories: Array<{ slug: string; decision: 'tool' | 'none'; tool?: string }>,
@@ -44,6 +49,16 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Missing')
+    expect(result.code).toBe('missing_appendix_tags')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+  })
+
+  it('should keep blank responses invalid without attempting repair', () => {
+    const result = parseBenchmarkResponse('   \n\t  ', ELIGIBLE)
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toBe('Blank response')
+    expect(result.code).toBe('blank_response')
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
   })
 
@@ -62,7 +77,7 @@ describe('parseBenchmarkResponse', () => {
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('missing JSON appendix')
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
-    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
   })
 
   it('should treat code-fenced appendix starts as repairable malformed output', () => {
@@ -78,7 +93,7 @@ describe('parseBenchmarkResponse', () => {
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('code fence')
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
-    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
   })
 
   it('should treat stray opening-tag mentions as unrecoverable invalid output', () => {
@@ -107,7 +122,7 @@ describe('parseBenchmarkResponse', () => {
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Truncated')
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
-    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
   })
 
   it('should ignore closing tag mentions in the natural-language preamble', () => {
@@ -219,6 +234,9 @@ describe('parseBenchmarkResponse', () => {
     })
     const result = parseBenchmarkResponse(wrapInTags(json), ELIGIBLE)
     expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.code).toBe('schema_invalid')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output when eligible categories are missing', () => {
@@ -227,7 +245,8 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('database')
-    expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
+    expect(result.code).toBe('schema_invalid')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output when extra categories are present', () => {
@@ -240,6 +259,8 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Extra')
+    expect(result.code).toBe('schema_invalid')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output when categories are duplicated', () => {
@@ -267,6 +288,8 @@ describe('parseBenchmarkResponse', () => {
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('Duplicate')
+    expect(result.code).toBe('schema_invalid')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should return invalid_output when decision=tool but tool is missing', () => {
@@ -279,6 +302,9 @@ describe('parseBenchmarkResponse', () => {
     })
     const result = parseBenchmarkResponse(wrapInTags(json), ELIGIBLE)
     expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.code).toBe('schema_invalid')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
   it('should extract natural response text before tags', () => {
@@ -306,7 +332,7 @@ describe('parseBenchmarkResponse', () => {
   })
 
   it('should export PARSER_VERSION', () => {
-    expect(PARSER_VERSION).toBe('strict-v3')
+    expect(PARSER_VERSION).toBe('strict-v4')
   })
 
   it('should accept a category without confidence and coerce it to null', () => {
@@ -341,7 +367,10 @@ describe('parseBenchmarkResponse', () => {
 
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
-    expect(result.reason).toContain('without JSON appendix')
+    expect(result.reason).toContain('Malformed')
+    expect(result.code).toBe('malformed_appendix_block')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
   })
 
   it('should extract the natural response from the appendix block that was actually parsed', () => {
@@ -367,5 +396,40 @@ describe('parseBenchmarkResponse', () => {
     if (result.status !== 'ok') return
     expect(result.naturalResponse).toBe('Answer first.')
     expect(result.rawAppendix).toBe(validJson)
+  })
+
+  it('should mark wrong-tag appendix outputs as repairable and preserve the alias boundary', () => {
+    const raw = [
+      'Use Clerk for auth and Supabase for the database.',
+      '',
+      '<appendix>',
+      '{"schema_version":"benchmark-v1"}',
+    ].join('\n')
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.code).toBe('missing_appendix_tags')
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<appendix>'))
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+  })
+
+  it('should extract natural response before alias appendix tags', () => {
+    const raw = [
+      'Use Clerk for auth and Supabase for the database.',
+      '',
+      '<benchmark_json>',
+      '{"schema_version":"benchmark-v1"}',
+    ].join('\n')
+
+    expect(extractBenchmarkNaturalResponse(raw)).toBe(
+      'Use Clerk for auth and Supabase for the database.',
+    )
+  })
+
+  it('should extract an empty natural response when raw content starts with JSON', () => {
+    expect(
+      extractBenchmarkNaturalResponse(' \n{"schema_version":"benchmark-v1","categories":[]}'),
+    ).toBe('')
   })
 })
