@@ -23,6 +23,7 @@ import {
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { REPAIR_PARSER_VERSION } from './repair'
 import { runBenchmark } from './runner'
 
 function first<T>(rows: T[]): T {
@@ -511,6 +512,228 @@ describe('runBenchmark', () => {
     expect(secondSummary.hasRemainingWork).toBe(false)
     expect(secondSummary.remainingCases).toBe(0)
     expect(llmService.complete).toHaveBeenCalledTimes(20)
+  })
+
+  it('should not repair schema-validity failures into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const semanticallyInvalidAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(
+        `Use Clerk for auth.\n\n<preseason_benchmark_json>\n${semanticallyInvalidAppendix}\n</preseason_benchmark_json>`,
+        request,
+      ),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('should not repair tagless outputs into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest('Use Clerk for auth.', request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('should not repair stray appendix-tag mentions into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(
+        'Do not literally print <preseason_benchmark_json> in prose.',
+        request,
+      ),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('should repair outputs truncated immediately after the opening tag', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest(
+        'Use Clerk for auth and Supabase for the database.\n\n<preseason_benchmark_json>\n',
+        request,
+        {
+          finishReason: 'length',
+          usage: { promptTokens: 100, completionTokens: 1200, totalTokens: 1300 },
+        },
+      )
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
+
+    const repairedResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, summary.runId),
+    })
+
+    expect(repairedResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
+    expect(repairedResult?.naturalResponse).toBe(
+      'Use Clerk for auth and Supabase for the database.',
+    )
+  })
+
+  it('should repair truncated benchmark appendices with a secondary extraction pass', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest(
+        [
+          'Use Clerk for auth and Supabase for the database.',
+          '',
+          '<preseason_benchmark_json>',
+          '{"schema_version":"benchmark-v1","categories":[{"category_slug":"auth"',
+          '',
+          'Do not literally print <preseason_benchmark_json> in prose after the appendix.',
+        ].join('\n'),
+        request,
+        {
+          finishReason: 'length',
+          usage: { promptTokens: 100, completionTokens: 1200, totalTokens: 1300 },
+        },
+      )
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
+
+    const repairedResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, summary.runId),
+    })
+
+    expect(repairedResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
+    expect(repairedResult?.naturalResponse).toBe(
+      'Use Clerk for auth and Supabase for the database.',
+    )
   })
 
   it('should return the persisted summary for an already published run', async () => {

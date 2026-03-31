@@ -13,9 +13,15 @@ import {
   subcategories,
 } from '~/server/db/schema'
 import { checkModelDrift } from '~/server/llm/benchmark/model-drift'
-import { PARSER_VERSION, parseBenchmarkResponse } from '~/server/llm/benchmark/parser'
+import {
+  PARSER_VERSION,
+  parseBenchmarkResponse,
+  shouldRepairBenchmarkParseFailure,
+} from '~/server/llm/benchmark/parser'
 import { buildBenchmarkPrompt } from '~/server/llm/benchmark/prompt-builder'
 import { evaluateQc, type QcCheckResult } from '~/server/llm/benchmark/qc'
+import { REPAIR_PARSER_VERSION, repairBenchmarkResponse } from '~/server/llm/benchmark/repair'
+import type { BenchmarkAppendix } from '~/server/llm/benchmark/schema'
 import {
   buildToolResolutionIndex,
   resolveToolWithCandidateQueue,
@@ -831,8 +837,45 @@ async function executeRun(
         }
 
         const parseResult = parseBenchmarkResponse(completion.content, eligibleCategorySlugs)
+        const originalParseReason =
+          parseResult.status === 'invalid_output' ? parseResult.reason : 'Unknown invalid output'
+        let appendix: BenchmarkAppendix | null = null
+        let rawAppendix: string | null = null
+        let naturalResponse: string | null = null
+        let parserVersion = PARSER_VERSION
+        let invalidReason: string | null = null
 
         if (parseResult.status === 'ok') {
+          appendix = parseResult.appendix
+          rawAppendix = parseResult.rawAppendix
+          naturalResponse = parseResult.naturalResponse
+        } else {
+          invalidReason = originalParseReason
+
+          if (shouldRepairBenchmarkParseFailure(parseResult)) {
+            try {
+              const repaired = await repairBenchmarkResponse(llmService, {
+                promptContentMd: promptVersion.contentMd ?? '',
+                rawResponse: completion.content,
+                appendixOpenIdx: parseResult.appendixOpenIdx,
+                eligibleCategorySlugs,
+              })
+
+              if (repaired.status === 'recovered') {
+                appendix = repaired.appendix
+                rawAppendix = repaired.rawAppendix
+                naturalResponse = repaired.naturalResponse
+                parserVersion = REPAIR_PARSER_VERSION
+              } else {
+                invalidReason = `${originalParseReason}; ${repaired.reason}`
+              }
+            } catch (error) {
+              invalidReason = `${originalParseReason}; Repair attempt failed: ${getErrorMessage(error)}`
+            }
+          }
+        }
+
+        if (appendix && rawAppendix !== null && naturalResponse !== null) {
           const categoryIdBySlug = new Map(
             promptVersion.categories.map((c) => [categorySlugById.get(c.categoryId), c.categoryId]),
           )
@@ -846,9 +889,9 @@ async function executeRun(
                 runId: run.id,
                 caseId: benchmarkCase.id,
                 status: 'completed',
-                naturalResponse: parseResult.naturalResponse,
-                appendixRaw: parseResult.rawAppendix,
-                appendixJson: parseResult.appendix,
+                naturalResponse,
+                appendixRaw: rawAppendix,
+                appendixJson: appendix,
                 rawResponse: completion.content,
                 requestedModelId: modelSnapshot.requestedModelId,
                 returnedModelId: completion.returnedModel,
@@ -861,7 +904,7 @@ async function executeRun(
                 temperature: modelSnapshot.temperature,
                 topP: modelSnapshot.topP,
                 maxTokens: modelSnapshot.maxTokens,
-                parserVersion: PARSER_VERSION,
+                parserVersion,
                 systemPromptSnapshot: systemPrompt,
                 errorMessage: null,
               })
@@ -870,7 +913,7 @@ async function executeRun(
 
             if (!insertedCaseResult) return null
 
-            for (const decision of parseResult.appendix.categories) {
+            for (const decision of appendix.categories) {
               const categoryId = categoryIdBySlug.get(decision.category_slug)
               if (!categoryId) continue
 
@@ -945,7 +988,7 @@ async function executeRun(
                 maxTokens: modelSnapshot.maxTokens,
                 parserVersion: PARSER_VERSION,
                 systemPromptSnapshot: systemPrompt,
-                errorMessage: parseResult.reason,
+                errorMessage: invalidReason ?? originalParseReason,
               })
               .onConflictDoNothing()
               .returning()
@@ -954,7 +997,9 @@ async function executeRun(
 
           if (!caseResult) continue
           processedThisInvocation += 1
-          errors.push(`[case ${benchmarkCase.id}] Invalid output: ${parseResult.reason}`)
+          errors.push(
+            `[case ${benchmarkCase.id}] Invalid output: ${invalidReason ?? originalParseReason}`,
+          )
         }
       } catch (error) {
         if (error instanceof OwnershipLostError) {
