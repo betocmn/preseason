@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -15,6 +14,7 @@ import {
 } from '~/components/ui/alert-dialog'
 import { Button } from '~/components/ui/button'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 type Props = {
   candidateId: string
@@ -23,12 +23,10 @@ type Props = {
 }
 
 export function ResetCandidateDialog({ candidateId, candidateName, currentStatus }: Props) {
-  const router = useRouter()
-
   const mutation = api.benchmarkAdmin.resetCandidate.useMutation({
     onSuccess: () => {
       toast.success('Candidate reset to pending')
-      router.refresh()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => toast.error(err.message),
   })

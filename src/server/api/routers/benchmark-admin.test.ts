@@ -397,6 +397,9 @@ describe('benchmarkAdminRouter', () => {
         runId: run.id,
         caseId: benchmarkCase.id,
         status: 'completed',
+        startedAt: new Date('2026-03-01T00:00:00.000Z'),
+        completedAt: new Date('2026-03-01T00:05:00.000Z'),
+        attemptCount: 2,
         returnedModelId: 'openai/gpt-4o',
       })
       .returning()
@@ -413,15 +416,152 @@ describe('benchmarkAdminRouter', () => {
     const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
 
     expect(detail.caseRows).toHaveLength(1)
+    expect(detail.resultStats.completed).toBe(1)
     expect(detail.caseRows[0]?.result?.status).toBe('completed')
+    expect(detail.caseRows[0]?.result?.attemptCount).toBe(2)
+    expect(detail.caseRows[0]?.result?.startedAt?.toISOString()).toBe('2026-03-01T00:00:00.000Z')
+    expect(detail.caseRows[0]?.result?.completedAt?.toISOString()).toBe('2026-03-01T00:05:00.000Z')
     expect(detail.caseRows[0]?.result?.decisions[0]?.toolName).toBe('Clerk')
   })
 
-  it('retries failed cases on a published run', async () => {
+  it('shows running case rows in benchmark run detail', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
     const protocol = await seedProtocol()
     await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'running',
+        expectedCaseCount: 1,
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [benchmarkCase] = await db.select().from(benchmarkCases)
+    if (!benchmarkCase) throw new Error('No case found')
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'running',
+      startedAt: new Date('2026-03-01T00:00:00.000Z'),
+      attemptCount: 1,
+    })
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.resultStats.running).toBe(1)
+    expect(detail.caseRows[0]?.result?.status).toBe('running')
+    expect(detail.caseRows[0]?.result?.attemptCount).toBe(1)
+    expect(detail.caseRows[0]?.result?.completedAt).toBeNull()
+  })
+
+  it('synthesizes pending counts for pending runs before result rows exist', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const caseRows = await db.select({ id: benchmarkCases.id }).from(benchmarkCases)
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'pending',
+        expectedCaseCount: caseRows.length,
+        qcSummaryJson: { snapshotCaseIds: caseRows.map((row) => row.id) },
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.resultStats.pending).toBe(caseRows.length)
+    expect(detail.resultStats.running ?? 0).toBe(0)
+    expect(detail.caseRows).toHaveLength(caseRows.length)
+    expect(detail.caseRows.every((row) => row.result === null)).toBe(true)
+  })
+
+  it('falls back to legacy case-result timestamps and attempt counts in benchmark run detail', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+        qcStatus: 'passed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [benchmarkCase] = await db.select().from(benchmarkCases)
+    if (!benchmarkCase) throw new Error('No case found')
+
+    const [legacyResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'completed',
+      })
+      .returning()
+    if (!legacyResult) throw new Error('Failed to create legacy case result')
+
+    const detail = await caller.benchmarkAdmin.getBenchmarkRun({ id: run.id })
+
+    expect(detail.caseRows[0]?.result?.attemptCount).toBe(1)
+    expect(detail.caseRows[0]?.result?.startedAt?.toISOString()).toBe(
+      legacyResult.createdAt.toISOString(),
+    )
+    expect(detail.caseRows[0]?.result?.completedAt?.toISOString()).toBe(
+      legacyResult.createdAt.toISOString(),
+    )
+  })
+
+  it('retries failed cases on a published run by resetting rows in place', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    const { category } = await seedPromptAndCategory(caller)
 
     const season = await caller.benchmarkAdmin.createSeason({
       protocolId: protocol.id,
@@ -445,13 +585,36 @@ describe('benchmarkAdminRouter', () => {
 
     const [benchmarkCase] = await db.select().from(benchmarkCases)
     if (!benchmarkCase) throw new Error('No case found')
-    await db.insert(benchmarkCaseResults).values({
-      seasonId: season.id,
-      runId: run.id,
-      caseId: benchmarkCase.id,
-      status: 'invalid_output',
-      rawResponse: 'Use Clerk for auth.',
-      errorMessage: 'Missing <preseason_benchmark_json> tags',
+
+    const tool = await caller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Failed to create tool')
+
+    const [failedResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'failed',
+        startedAt: new Date('2026-03-01T00:00:00.000Z'),
+        completedAt: new Date('2026-03-01T00:05:00.000Z'),
+        attemptCount: 3,
+        rawResponse: 'Bad output',
+        errorMessage: 'Timed out',
+      })
+      .returning()
+    if (!failedResult) throw new Error('Failed to create failed case result')
+
+    await db.insert(benchmarkCaseDecisions).values({
+      caseResultId: failedResult.id,
+      categoryId: category.id,
+      decisionType: 'tool',
+      toolId: tool.id,
+      rawToolName: 'Clerk',
     })
 
     const result = await caller.benchmarkAdmin.retryFailedCases({ runId: run.id })
@@ -461,13 +624,84 @@ describe('benchmarkAdminRouter', () => {
       where: eq(benchmarkRuns.id, run.id),
     })
     expect(updatedRun?.status).toBe('pending')
+    expect(updatedRun?.startedAt).toBeNull()
     expect(updatedRun?.qcStatus).toBeNull()
+    expect(updatedRun?.qcSummaryJson).toEqual({ snapshotCaseIds: [benchmarkCase.id] })
 
-    const preservedResults = await db
-      .select({ status: benchmarkCaseResults.status })
-      .from(benchmarkCaseResults)
-      .where(eq(benchmarkCaseResults.runId, run.id))
-    expect(preservedResults.map((row) => row.status)).toEqual(['invalid_output'])
+    const resetResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.id, failedResult.id),
+    })
+    expect(resetResult?.status).toBe('pending')
+    expect(resetResult?.startedAt).toBeNull()
+    expect(resetResult?.completedAt).toBeNull()
+    expect(resetResult?.attemptCount).toBe(0)
+    expect(resetResult?.rawResponse).toBe('Bad output')
+    expect(resetResult?.errorMessage).toBeNull()
+
+    const decisionRows = await db
+      .select({ id: benchmarkCaseDecisions.id })
+      .from(benchmarkCaseDecisions)
+      .where(eq(benchmarkCaseDecisions.caseResultId, failedResult.id))
+    expect(decisionRows).toHaveLength(0)
+  })
+
+  it('rebuilds retry snapshots from the season when a failed run has no stored results', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    await seedPromptAndCategory(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-1',
+      name: 'Season 1',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const db = getTestDb()
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'failed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const caseRows = await db.select({ id: benchmarkCases.id }).from(benchmarkCases)
+    const deactivatedCaseId = caseRows[0]?.id
+    if (!deactivatedCaseId) throw new Error('Expected frozen benchmark case')
+
+    await db
+      .update(benchmarkCases)
+      .set({ isActive: false })
+      .where(eq(benchmarkCases.id, deactivatedCaseId))
+
+    const expectedCaseIds = caseRows
+      .filter((row) => row.id !== deactivatedCaseId)
+      .map((row) => row.id)
+      .sort()
+
+    const result = await caller.benchmarkAdmin.retryFailedCases({ runId: run.id })
+    expect(result.retriedCount).toBe(0)
+
+    const updatedRun = await db.query.benchmarkRuns.findFirst({
+      where: eq(benchmarkRuns.id, run.id),
+    })
+    const snapshotCaseIds =
+      (
+        updatedRun?.qcSummaryJson as
+          | {
+              snapshotCaseIds?: string[]
+            }
+          | null
+          | undefined
+      )?.snapshotCaseIds ?? []
+
+    expect(updatedRun?.status).toBe('pending')
+    expect([...snapshotCaseIds].sort()).toEqual(expectedCaseIds)
   })
 
   // ---------------------------------------------------------------------------

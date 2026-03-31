@@ -47,6 +47,36 @@ function extractSnapshotCaseIds(qcSummaryJson: unknown): string[] | null {
   return ids as string[]
 }
 
+function normalizeLegacyCaseResultPresentation(result: typeof benchmarkCaseResults.$inferSelect) {
+  const isTerminal =
+    result.status === 'completed' ||
+    result.status === 'failed' ||
+    result.status === 'invalid_output'
+
+  return {
+    startedAt: result.startedAt ?? (isTerminal ? result.createdAt : null),
+    completedAt: result.completedAt ?? (isTerminal ? result.createdAt : null),
+    attemptCount: result.attemptCount > 0 ? result.attemptCount : isTerminal ? 1 : 0,
+  }
+}
+
+async function loadSeasonCaseSnapshotIds(
+  database: Parameters<typeof requireRole>[0],
+  seasonId: string,
+) {
+  const caseRows = await database
+    .select({ id: benchmarkCases.id })
+    .from(benchmarkCases)
+    .where(and(eq(benchmarkCases.seasonId, seasonId), eq(benchmarkCases.isActive, true)))
+    .orderBy(
+      asc(benchmarkCases.promptVersionId),
+      asc(benchmarkCases.modelSnapshotId),
+      asc(benchmarkCases.id),
+    )
+
+  return caseRows.map((row) => row.id)
+}
+
 const createToolForCandidateSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
@@ -564,13 +594,22 @@ export const benchmarkAdminRouter = createTRPCRouter({
               )[0]?.count ?? 0,
             ))
       const resultCount = Object.values(resultStats).reduce((a, b) => a + b, 0)
-      if (totalCases > resultCount) {
+      const shouldBackfillPendingCounts =
+        totalCases > resultCount &&
+        (resultStats.pending ?? 0) === 0 &&
+        (resultStats.running ?? 0) === 0
+
+      if (shouldBackfillPendingCounts) {
         resultStats.pending = (resultStats.pending ?? 0) + (totalCases - resultCount)
       }
 
       const caseRows = await ctx.db.query.benchmarkCases.findMany({
         where: caseWhereClause,
-        orderBy: [asc(benchmarkCases.id)],
+        orderBy: [
+          asc(benchmarkCases.promptVersionId),
+          asc(benchmarkCases.modelSnapshotId),
+          asc(benchmarkCases.id),
+        ],
         with: {
           promptVersion: {
             with: {
@@ -611,21 +650,26 @@ export const benchmarkAdminRouter = createTRPCRouter({
             company: benchmarkCase.modelSnapshot.company,
           },
           result: benchmarkCase.results[0]
-            ? {
-                id: benchmarkCase.results[0].id,
-                status: benchmarkCase.results[0].status,
-                errorMessage: benchmarkCase.results[0].errorMessage,
-                returnedModelId: benchmarkCase.results[0].returnedModelId,
-                createdAt: benchmarkCase.results[0].createdAt,
-                decisions: benchmarkCase.results[0].decisions.map((decision) => ({
-                  id: decision.id,
-                  decisionType: decision.decisionType,
-                  resolutionStatus: decision.resolutionStatus,
-                  rawToolName: decision.rawToolName,
-                  categoryName: decision.category.name,
-                  toolName: decision.tool?.name ?? null,
-                })),
-              }
+            ? (() => {
+                const normalized = normalizeLegacyCaseResultPresentation(benchmarkCase.results[0])
+                return {
+                  id: benchmarkCase.results[0].id,
+                  status: benchmarkCase.results[0].status,
+                  errorMessage: benchmarkCase.results[0].errorMessage,
+                  returnedModelId: benchmarkCase.results[0].returnedModelId,
+                  startedAt: normalized.startedAt,
+                  completedAt: normalized.completedAt,
+                  attemptCount: normalized.attemptCount,
+                  decisions: benchmarkCase.results[0].decisions.map((decision) => ({
+                    id: decision.id,
+                    decisionType: decision.decisionType,
+                    resolutionStatus: decision.resolutionStatus,
+                    rawToolName: decision.rawToolName,
+                    categoryName: decision.category.name,
+                    toolName: decision.tool?.name ?? null,
+                  })),
+                }
+              })()
             : null,
         })),
       }
@@ -711,6 +755,10 @@ export const benchmarkAdminRouter = createTRPCRouter({
           snapshotCaseIds = [...new Set(resultCaseRows.map((r) => r.caseId))]
         }
 
+        if (!snapshotCaseIds || snapshotCaseIds.length === 0) {
+          snapshotCaseIds = await loadSeasonCaseSnapshotIds(tx, run.seasonId)
+        }
+
         const retryableRows = await tx
           .select({ id: benchmarkCaseResults.id })
           .from(benchmarkCaseResults)
@@ -721,10 +769,40 @@ export const benchmarkAdminRouter = createTRPCRouter({
             ),
           )
 
+        if (retryableRows.length > 0) {
+          await tx.delete(benchmarkCaseDecisions).where(
+            inArray(
+              benchmarkCaseDecisions.caseResultId,
+              retryableRows.map((row) => row.id),
+            ),
+          )
+
+          await tx
+            .update(benchmarkCaseResults)
+            .set({
+              status: 'pending',
+              claimToken: null,
+              startedAt: null,
+              completedAt: null,
+              attemptCount: 0,
+              naturalResponse: null,
+              appendixRaw: null,
+              appendixJson: null,
+              errorMessage: null,
+            })
+            .where(
+              inArray(
+                benchmarkCaseResults.id,
+                retryableRows.map((row) => row.id),
+              ),
+            )
+        }
+
         const [updated] = await tx
           .update(benchmarkRuns)
           .set({
             status: 'pending',
+            startedAt: null,
             completedAt: null,
             completedCaseCount: null,
             failedCaseCount: null,
