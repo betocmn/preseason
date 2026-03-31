@@ -32,7 +32,8 @@ type Props = {
 }
 
 export default async function RankingsPage({ searchParams }: Props) {
-  const { category, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
+  const { category: rawCategory, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
+  const category = rawCategory ?? 'devtools'
   const caller = await api()
   const [categoryGroups, modelFiltersData] = await Promise.all([
     caller.category.listGroups(),
