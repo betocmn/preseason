@@ -42,6 +42,8 @@ type Props = {
       name: string
     } | null
   }>
+  /** When true, opens directly in "create new tool" mode, hiding the search/link section */
+  createMode?: boolean
 }
 
 export function ApproveCandidateDialog({
@@ -52,6 +54,7 @@ export function ApproveCandidateDialog({
   suggestionReason,
   canAutoApprove = false,
   categories,
+  createMode = false,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -107,72 +110,83 @@ export function ApproveCandidateDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">Approve</Button>
+        <Button size="sm" variant={createMode ? 'secondary' : 'default'}>
+          {createMode ? 'Create New' : 'Approve'}
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Approve: {candidateName}</DialogTitle>
+          <DialogTitle>
+            {createMode ? 'Create New Tool' : 'Approve'}: {candidateName}
+          </DialogTitle>
           <DialogDescription>
-            Link this candidate to an existing tool or create a new one. Approval also creates a
-            tool alias and resolves any unresolved decisions.
+            {createMode
+              ? 'Create a brand-new canonical tool for this candidate. This also creates a tool alias and resolves any unresolved decisions.'
+              : 'Link this candidate to an existing tool or create a new one. Approval also creates a tool alias and resolves any unresolved decisions.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-medium">Link Existing Tool</h3>
-              <p className="text-muted-foreground text-xs">Search and select a canonical tool.</p>
-            </div>
-            {suggestedTool && suggestionReason && (
-              <div className="bg-muted/50 flex items-center justify-between rounded-md border p-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">{suggestedTool.name}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {suggestionReason} · {suggestedTool.slug}
-                  </p>
+          {!createMode && (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium">Link Existing Tool</h3>
+                <p className="text-muted-foreground text-xs">Search and select a canonical tool.</p>
+              </div>
+              {suggestedTool && suggestionReason && (
+                <div className="bg-muted/50 flex items-center justify-between rounded-md border p-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{suggestedTool.name}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {suggestionReason} · {suggestedTool.slug}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={isPending || !canAutoApprove}
+                    onClick={() =>
+                      approveMutation.mutate({ candidateId, toolId: suggestedTool.id })
+                    }
+                  >
+                    {canAutoApprove ? 'Approve Suggested Match' : 'Review Suggested Match'}
+                  </Button>
                 </div>
-                <Button
-                  size="sm"
-                  disabled={isPending || !canAutoApprove}
-                  onClick={() => approveMutation.mutate({ candidateId, toolId: suggestedTool.id })}
-                >
-                  {canAutoApprove ? 'Approve Suggested Match' : 'Review Suggested Match'}
-                </Button>
+              )}
+              <Input
+                placeholder="Search tools..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+
+              <div className="max-h-60 space-y-1 overflow-y-auto">
+                {searchResults?.map((tool) => (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    className="hover:bg-muted w-full rounded-md px-3 py-2 text-left text-sm"
+                    disabled={isPending}
+                    onClick={() => approveMutation.mutate({ candidateId, toolId: tool.id })}
+                  >
+                    <span className="font-medium">{tool.name}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{tool.slug}</span>
+                  </button>
+                ))}
+                {searchResults?.length === 0 && (
+                  <p className="text-muted-foreground py-4 text-center text-sm">No tools found</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className={createMode ? 'space-y-3' : 'space-y-3 border-t pt-4'}>
+            {!createMode && (
+              <div>
+                <h3 className="text-sm font-medium">Create New Tool</h3>
+                <p className="text-muted-foreground text-xs">
+                  Use this when the candidate should become a new canonical tool.
+                </p>
               </div>
             )}
-            <Input
-              placeholder="Search tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-
-            <div className="max-h-60 space-y-1 overflow-y-auto">
-              {searchResults?.map((tool) => (
-                <button
-                  key={tool.id}
-                  type="button"
-                  className="hover:bg-muted w-full rounded-md px-3 py-2 text-left text-sm"
-                  disabled={isPending}
-                  onClick={() => approveMutation.mutate({ candidateId, toolId: tool.id })}
-                >
-                  <span className="font-medium">{tool.name}</span>
-                  <span className="text-muted-foreground ml-2 text-xs">{tool.slug}</span>
-                </button>
-              ))}
-              {searchResults?.length === 0 && (
-                <p className="text-muted-foreground py-4 text-center text-sm">No tools found</p>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t pt-4">
-            <div>
-              <h3 className="text-sm font-medium">Create New Tool</h3>
-              <p className="text-muted-foreground text-xs">
-                Use this when the candidate should become a new canonical tool.
-              </p>
-            </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Input

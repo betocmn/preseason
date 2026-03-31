@@ -87,7 +87,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
               <TableHead>Status</TableHead>
               <TableHead>Suggested Match</TableHead>
               <TableHead>Resolved To</TableHead>
-              <TableHead className="w-40">Actions</TableHead>
+              <TableHead className="w-56">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -134,6 +134,13 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
                         suggestionReason={candidate.suggestionReason}
                         canAutoApprove={candidate.canAutoApprove}
                         categories={categories}
+                      />
+                      <ApproveCandidateDialog
+                        candidateId={candidate.id}
+                        candidateName={candidate.rawName}
+                        suggestedCategoryId={candidate.suggestedCategoryId}
+                        categories={categories}
+                        createMode
                       />
                       <RejectCandidateDialog
                         candidateId={candidate.id}
