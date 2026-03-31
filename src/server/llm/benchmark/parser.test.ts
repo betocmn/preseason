@@ -55,6 +55,17 @@ describe('parseBenchmarkResponse', () => {
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
+  it('should treat stray opening-tag mentions as unrecoverable invalid output', () => {
+    const result = parseBenchmarkResponse(
+      'Do not literally print <preseason_benchmark_json> in prose.',
+      ELIGIBLE,
+    )
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('without JSON appendix')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(false)
+  })
+
   it('should ignore closing tag mentions in the natural-language preamble', () => {
     const json = buildValidAppendix([
       { slug: 'auth', decision: 'tool', tool: 'Clerk' },
@@ -286,7 +297,7 @@ describe('parseBenchmarkResponse', () => {
 
     expect(result.status).toBe('invalid_output')
     if (result.status !== 'invalid_output') return
-    expect(result.reason).toContain('JSON must start immediately')
+    expect(result.reason).toContain('without JSON appendix')
   })
 
   it('should extract the natural response from the appendix block that was actually parsed', () => {

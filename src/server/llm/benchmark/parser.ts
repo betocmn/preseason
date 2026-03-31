@@ -10,7 +10,6 @@ export type ParseResult =
   | { status: 'invalid_output'; reason: string }
 
 const REPAIRABLE_INVALID_OUTPUT_PATTERNS = [
-  /^Empty <preseason_benchmark_json> block$/u,
   /^Truncated <preseason_benchmark_json> block:/u,
   /^Malformed <preseason_benchmark_json> block/u,
   /^Malformed JSON:/u,
@@ -54,17 +53,16 @@ function explainMissingAppendixReason(rawContent: string) {
   }
 
   const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
-  if (contentStart === -1) {
-    return 'Empty <preseason_benchmark_json> block'
+  if (
+    contentStart === -1 ||
+    (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[')
+  ) {
+    return 'Opening <preseason_benchmark_json> tag without JSON appendix'
   }
 
   const closeIdx = rawContent.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length)
   if (closeIdx === -1) {
     return 'Truncated <preseason_benchmark_json> block: missing closing tag'
-  }
-
-  if (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[') {
-    return 'Malformed <preseason_benchmark_json> block: JSON must start immediately after opening tag'
   }
 
   return 'Malformed <preseason_benchmark_json> block'

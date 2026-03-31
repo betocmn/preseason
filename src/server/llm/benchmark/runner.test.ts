@@ -578,6 +578,33 @@ describe('runBenchmark', () => {
     ).toHaveLength(0)
   })
 
+  it('should not repair stray appendix-tag mentions into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(
+        'Do not literally print <preseason_benchmark_json> in prose.',
+        request,
+      ),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.completedCases).toBe(0)
+    expect(summary.invalidOutputCases).toBe(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(0)
+  })
+
   it('should repair truncated benchmark appendices with a secondary extraction pass', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
