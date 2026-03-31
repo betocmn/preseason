@@ -22,7 +22,7 @@ These points are already true in the current codebase:
   - Overlapping cron or manual invocations safely claim different cases from the
     same run.
   - Stale case recovery uses an `11` minute threshold.
-  - `/api/cron/benchmark-run` exports `maxDuration = 600`.
+  - `/api/cron/benchmark-run` exports `maxDuration = 800`.
 - Match cron already exists.
   - `vercel.json` runs `/api/cron/match-run` every `15` minutes.
   - `vercel.json` runs `/api/cron/tool-candidate-review` every `30` minutes.

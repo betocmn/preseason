@@ -6,7 +6,7 @@ import { claimNextMatchBatchExecution } from '~/server/llm/match/batches'
 import { runMatchBatch } from '~/server/llm/match/runner'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 600
+export const maxDuration = 800
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

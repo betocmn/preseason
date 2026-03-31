@@ -56,7 +56,7 @@ describe('GET /api/cron/benchmark-run', () => {
   })
 
   it('exports the expected maxDuration for one-case benchmark workers', () => {
-    expect(maxDuration).toBe(600)
+    expect(maxDuration).toBe(800)
   })
 
   it('returns 500 when CRON_SECRET is not configured', async () => {

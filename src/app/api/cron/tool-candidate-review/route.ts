@@ -5,7 +5,7 @@ import { db } from '~/server/db'
 import { reviewPendingToolCandidates } from '~/server/llm/benchmark/tool-candidate-reviewer'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 600
+export const maxDuration = 800
 
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
