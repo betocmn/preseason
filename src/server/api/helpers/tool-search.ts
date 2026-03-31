@@ -261,7 +261,7 @@ export function buildToolReviewShortlist(
 ): ToolReviewShortlistEntry[] {
   return rankToolSearchCatalog(catalog, {
     query: input.query,
-    limit: Math.max(input.limit * 3, input.limit),
+    limit: input.limit * 3,
     categoryId: input.categoryId,
   })
     .map((result) => ({

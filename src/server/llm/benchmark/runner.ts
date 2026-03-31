@@ -145,7 +145,9 @@ function getErrorMessage(error: unknown): string {
 function hasStoredInvalidOutputPayload(
   result: Pick<BenchmarkCaseResultRecord, 'rawResponse' | 'naturalResponse' | 'appendixJson'>,
 ) {
-  return result.rawResponse !== null && result.naturalResponse === null && result.appendixJson === null
+  return (
+    result.rawResponse !== null && result.naturalResponse === null && result.appendixJson === null
+  )
 }
 
 function isModelDriftInvalidOutput(
@@ -993,8 +995,7 @@ async function processClaimedBenchmarkCase(
             maxTokens: claimedCase.previousResult.maxTokens ?? modelSnapshot.maxTokens,
             parserVersion: recovered.parserVersion,
             promptHash: claimedCase.previousResult.promptHash ?? promptHash,
-            systemPromptSnapshot:
-              claimedCase.previousResult.systemPromptSnapshot ?? systemPrompt,
+            systemPromptSnapshot: claimedCase.previousResult.systemPromptSnapshot ?? systemPrompt,
             errorMessage: null,
           },
           recovered.appendix,
