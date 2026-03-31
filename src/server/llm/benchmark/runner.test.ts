@@ -419,19 +419,36 @@ describe('runBenchmark', () => {
     expect(run.qcStatus).toBe('passed')
   })
 
-  it('persists aggregate error summaries for qc_failed runs', async () => {
+  it('keeps retryable invalid outputs running until attempts exhaust', async () => {
     const db = getTestDb()
     const { season } = await seedBenchmarkPanel(db)
     const llmService = createMockLlmService(async (_provider, request) =>
       mockCompletionForRequest('Just a plain response with no appendix tags', request),
     )
 
-    const summary = await runBenchmark(season.id, '2026-03-10', {
+    const firstSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+    const secondSummary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+    const thirdSummary = await runBenchmark(season.id, '2026-03-10', {
       database: db,
       llmService,
     })
 
-    expect(summary.status).toBe('qc_failed')
+    expect(firstSummary.status).toBe('running')
+    expect(firstSummary.invalidOutputCases).toBe(15)
+    expect(firstSummary.remainingCases).toBe(15)
+    expect(firstSummary.hasRemainingWork).toBe(true)
+    expect(secondSummary.status).toBe('running')
+    expect(secondSummary.remainingCases).toBe(15)
+    expect(secondSummary.hasRemainingWork).toBe(true)
+    expect(thirdSummary.status).toBe('qc_failed')
+    expect(thirdSummary.remainingCases).toBe(0)
+    expect(thirdSummary.hasRemainingWork).toBe(false)
 
     const run = await findRun(db, season.id, '2026-03-10')
     expect(run.errorLog).toContain('[invalid_output x15] Missing <preseason_benchmark_json> tags')

@@ -88,6 +88,9 @@ type RunMetrics = {
   completedCases: number
   failedCases: number
   invalidOutputCases: number
+  pendingCases: number
+  runningCases: number
+  retryableTerminalCases: number
   unresolvedToolCount: number
   qc: QcCheckResult
 }
@@ -278,8 +281,7 @@ function normalizeMaxCases(maxCases: number | undefined): number | null {
 }
 
 function calculateRemainingCases(metrics: RunMetrics): number {
-  const processed = metrics.completedCases + metrics.failedCases + metrics.invalidOutputCases
-  return Math.max(metrics.totalCases - processed, 0)
+  return metrics.pendingCases + metrics.runningCases + metrics.retryableTerminalCases
 }
 
 function getRunCaseSnapshot(
@@ -351,9 +353,27 @@ async function calculateRunMetrics(
     .groupBy(benchmarkCaseResults.status)
 
   const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
+  const pendingCases = countByStatus.get('pending') ?? 0
+  const runningCases = countByStatus.get('running') ?? 0
   const completedCases = countByStatus.get('completed') ?? 0
   const failedCases = countByStatus.get('failed') ?? 0
   const invalidOutputCases = countByStatus.get('invalid_output') ?? 0
+  let retryableTerminalCases = 0
+
+  if (failedCases > 0 || invalidOutputCases > 0) {
+    const [retryableTerminalRow] = await database
+      .select({ cnt: count() })
+      .from(benchmarkCaseResults)
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+        ),
+      )
+
+    retryableTerminalCases = Number(retryableTerminalRow?.cnt ?? 0)
+  }
 
   let unresolvedToolCount = 0
   let totalToolDecisions = 0
@@ -420,6 +440,9 @@ async function calculateRunMetrics(
     completedCases,
     failedCases,
     invalidOutputCases,
+    pendingCases,
+    runningCases,
+    retryableTerminalCases,
     unresolvedToolCount,
     qc,
   }
@@ -1156,7 +1179,7 @@ async function finalizeRunIfExhausted(
     // Check whether any cases are still claimable (pending, retryable under the retry cap,
     // or running under the retry cap). Cases that exhausted attempts will never be reclaimed.
     let hasClaimableWork = pendingCases > 0
-    if (!hasClaimableWork && (runningCases > 0 || failedCases > 0)) {
+    if (!hasClaimableWork) {
       const [claimableRow] = await tx
         .select({ cnt: count() })
         .from(benchmarkCaseResults)
