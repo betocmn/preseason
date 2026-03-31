@@ -23,6 +23,7 @@ import {
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+import { PARSER_VERSION } from './parser'
 import { REPAIR_PARSER_VERSION } from './repair'
 import { runBenchmark } from './runner'
 
@@ -511,10 +512,10 @@ describe('runBenchmark', () => {
     expect(secondSummary.invalidOutputCases).toBe(15)
     expect(secondSummary.hasRemainingWork).toBe(false)
     expect(secondSummary.remainingCases).toBe(0)
-    expect(llmService.complete).toHaveBeenCalledTimes(20)
+    expect(llmService.complete).toHaveBeenCalledTimes(45)
   })
 
-  it('should not repair schema-validity failures into completed benchmark results', async () => {
+  it('should repair schema-validity failures into completed benchmark results', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
 
@@ -531,35 +532,113 @@ describe('runBenchmark', () => {
       ],
     })
 
-    const llmService = createMockLlmService(async (_provider, request) =>
-      mockCompletionForRequest(
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest(
         `Use Clerk for auth.\n\n<preseason_benchmark_json>\n${semanticallyInvalidAppendix}\n</preseason_benchmark_json>`,
         request,
-      ),
-    )
+      )
+    })
 
     const summary = await runBenchmark(season.id, '2026-03-10', {
       database: db,
       llmService,
     })
 
-    expect(summary.status).toBe('qc_failed')
-    expect(summary.completedCases).toBe(0)
-    expect(summary.invalidOutputCases).toBe(15)
-    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
     expect(
       llmService.complete.mock.calls.filter(
         ([, request]) => request.model === 'openai/gpt-5.4-mini',
       ),
-    ).toHaveLength(0)
+    ).toHaveLength(15)
   })
 
-  it('should not repair tagless outputs into completed benchmark results', async () => {
+  it('should repair tagless outputs into completed benchmark results', async () => {
+    const db = getTestDb()
+    const { season } = await seedFullPanel(db)
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      return mockCompletionForRequest('Use Clerk for auth and Supabase for the database.', request)
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+    })
+
+    expect(summary.status).toBe('published')
+    expect(summary.completedCases).toBe(15)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
+    expect(
+      llmService.complete.mock.calls.filter(
+        ([, request]) => request.model === 'openai/gpt-5.4-mini',
+      ),
+    ).toHaveLength(15)
+  })
+
+  it('should keep blank outputs invalid without attempting repair', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
 
     const llmService = createMockLlmService(async (_provider, request) =>
-      mockCompletionForRequest('Use Clerk for auth.', request),
+      mockCompletionForRequest('   \n\t', request),
     )
 
     const summary = await runBenchmark(season.id, '2026-03-10', {
@@ -736,6 +815,168 @@ describe('runBenchmark', () => {
     )
   })
 
+  it('should recover stored invalid outputs before making a fresh benchmark call', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedFullPanel(db)
+    const benchmarkCase = first(caseRows)
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'manual',
+        status: 'pending',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const storedRawResponse = 'Use Clerk for auth and Supabase for the database.'
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'invalid_output',
+      rawResponse: storedRawResponse,
+      requestedModelId: 'anthropic/claude-opus',
+      returnedModelId: 'anthropic/claude-opus',
+      provider: 'anthropic',
+      finishReason: 'stop',
+      promptTokens: 100,
+      completionTokens: 200,
+      totalTokens: 300,
+      latencyMs: 1500,
+      temperature: 0.2,
+      topP: 1,
+      maxTokens: 4096,
+      parserVersion: 'strict-v3',
+      systemPromptSnapshot: 'You are a pragmatic assistant.',
+      errorMessage: 'Missing <preseason_benchmark_json> tags',
+    })
+
+    const repairedAppendix = JSON.stringify({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'tool',
+          tool: 'Clerk',
+          reasoning: 'Good fit',
+          confidence: 0.9,
+        },
+        {
+          category_slug: 'database',
+          decision: 'tool',
+          tool: 'Supabase',
+          reasoning: 'Good fit',
+          confidence: 0.8,
+        },
+      ],
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-5.4-mini') {
+        return mockCompletionForRequest(repairedAppendix, request, {
+          provider: 'openai',
+          returnedModel: 'openai/gpt-5.4-mini',
+        })
+      }
+
+      throw new Error('Fresh benchmark call should not run')
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+    })
+
+    expect(summary.completedCases).toBe(1)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    const recoveredResult = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, run.id),
+    })
+
+    expect(recoveredResult?.status).toBe('completed')
+    expect(recoveredResult?.parserVersion).toBe(REPAIR_PARSER_VERSION)
+    expect(recoveredResult?.rawResponse).toBe(storedRawResponse)
+  })
+
+  it('should skip stored-output recovery for model drift invalid outputs', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedFullPanel(db)
+    const benchmarkCase = first(caseRows)
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'manual',
+        status: 'pending',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const driftedRawResponse = buildValidResponse(['auth', 'database'])
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'invalid_output',
+      rawResponse: driftedRawResponse,
+      requestedModelId: 'anthropic/claude-opus-20260301',
+      returnedModelId: 'anthropic/claude-sonnet-4',
+      provider: 'anthropic',
+      finishReason: 'stop',
+      promptTokens: 100,
+      completionTokens: 200,
+      totalTokens: 300,
+      latencyMs: 1500,
+      temperature: 0.2,
+      topP: 1,
+      maxTokens: 4096,
+      parserVersion: PARSER_VERSION,
+      systemPromptSnapshot: 'You are a pragmatic assistant.',
+      errorMessage:
+        'Model drift detected: requested anthropic/claude-opus-20260301, got anthropic/claude-sonnet-4',
+    })
+
+    const freshRawResponse = buildValidResponse(['auth', 'database'])
+    const llmService = createMockLlmService(async (_provider, request) => {
+      if (request.userPrompt.startsWith('Repair or reconstruct the benchmark appendix')) {
+        throw new Error('Repair call should not run for stored model drift rows')
+      }
+
+      return mockCompletionForRequest(freshRawResponse, request)
+    })
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+    })
+
+    expect(summary.completedCases).toBe(1)
+    expect(summary.invalidOutputCases).toBe(0)
+    expect(llmService.complete).toHaveBeenCalledTimes(1)
+
+    const result = await db.query.benchmarkCaseResults.findFirst({
+      where: eq(benchmarkCaseResults.runId, run.id),
+    })
+
+    expect(result?.status).toBe('completed')
+    expect(result?.parserVersion).toBe(PARSER_VERSION)
+    expect(result?.rawResponse).toBe(freshRawResponse)
+  })
+
   it('should return the persisted summary for an already published run', async () => {
     const db = getTestDb()
     const { season } = await seedFullPanel(db)
@@ -769,7 +1010,7 @@ describe('runBenchmark', () => {
     expect(summary1.status).toBe('qc_failed')
     expect(summary2.status).toBe('qc_failed')
     expect(summary2.invalidOutputCases).toBe(15)
-    expect(llmService.complete).toHaveBeenCalledTimes(15)
+    expect(llmService.complete).toHaveBeenCalledTimes(30)
   })
 
   it('should not execute duplicate LLM calls while the same run is already running', async () => {
@@ -1151,7 +1392,7 @@ describe('runBenchmark', () => {
     expect(reclaimedSummary.status).toBe('published')
     expect(reclaimedSummary.completedCases).toBe(15)
     expect(reclaimedSummary.invalidOutputCases).toBe(0)
-    expect(staleWorkerService.complete).toHaveBeenCalledTimes(1)
+    expect(staleWorkerService.complete).toHaveBeenCalledTimes(2)
     expect(staleSummary.runId).toBe(reclaimedSummary.runId)
 
     const invalidResults = await db

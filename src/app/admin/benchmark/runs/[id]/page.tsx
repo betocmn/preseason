@@ -49,6 +49,9 @@ export default async function RunDetailPage({ params }: PageProps) {
     ((run.status === 'completed' || run.status === 'published') && hasFailures) ||
     run.status === 'qc_failed' ||
     run.status === 'failed'
+  const retryNote = canRetry
+    ? 'Repair and Retry Cases preserves invalid outputs so stored raw responses can be repaired before any fresh benchmark call.'
+    : null
   const publicationNote = canPublish
     ? 'This completed run predates auto-publish. Use Publish Legacy Run only to backfill it.'
     : run.status === 'published' && run.qcStatus === 'passed'
@@ -78,6 +81,7 @@ export default async function RunDetailPage({ params }: PageProps) {
           {publicationNote && (
             <p className="text-muted-foreground mt-2 text-sm">{publicationNote}</p>
           )}
+          {retryNote && <p className="text-muted-foreground mt-2 text-sm">{retryNote}</p>}
         </div>
         <div className="flex items-center gap-3">
           <Badge

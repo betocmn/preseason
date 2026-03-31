@@ -31,6 +31,23 @@ import { LlmService } from '~/server/llm/service'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
+type BenchmarkCaseResultRecord = typeof benchmarkCaseResults.$inferSelect
+type BenchmarkCaseResultWriteMetadata = Pick<
+  BenchmarkCaseResultRecord,
+  | 'rawResponse'
+  | 'requestedModelId'
+  | 'returnedModelId'
+  | 'provider'
+  | 'finishReason'
+  | 'promptTokens'
+  | 'completionTokens'
+  | 'totalTokens'
+  | 'latencyMs'
+  | 'temperature'
+  | 'topP'
+  | 'maxTokens'
+  | 'systemPromptSnapshot'
+>
 
 export type BenchmarkRunOptions = {
   database?: DatabaseClient
@@ -74,6 +91,20 @@ type RunMetrics = {
   unresolvedToolCount: number
   qc: QcCheckResult
 }
+
+type ResolvedBenchmarkOutput =
+  | {
+      status: 'completed'
+      appendix: BenchmarkAppendix
+      rawAppendix: string
+      naturalResponse: string
+      parserVersion: string
+    }
+  | {
+      status: 'invalid_output'
+      invalidReason: string
+      parserVersion: string
+    }
 // Resumable runs stash their frozen case ids here until a terminal QC payload replaces it.
 type RunCaseSnapshot = {
   snapshotCaseIds: string[]
@@ -83,9 +114,183 @@ type RunCaseSnapshot = {
 
 const RUN_STALE_AFTER_MS = serverSettings.benchmark.staleRunThresholdMs
 const RUN_HEARTBEAT_INTERVAL_MS = serverSettings.benchmark.heartbeatIntervalMs
+const MODEL_DRIFT_ERROR_PREFIX = 'Model drift detected:'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
+}
+
+function isModelDriftInvalidOutput(result: BenchmarkCaseResultRecord) {
+  if (result.status !== 'invalid_output') {
+    return false
+  }
+
+  if (result.errorMessage?.startsWith(MODEL_DRIFT_ERROR_PREFIX)) {
+    return true
+  }
+
+  if (result.requestedModelId && result.returnedModelId) {
+    return checkModelDrift(result.requestedModelId, result.returnedModelId).hasDrift
+  }
+
+  return false
+}
+
+function shouldAttemptStoredInvalidOutputRecovery(result: BenchmarkCaseResultRecord) {
+  return result.status === 'invalid_output' && !isModelDriftInvalidOutput(result)
+}
+
+async function resolveBenchmarkOutput(
+  llmService: LlmService,
+  options: {
+    promptContentMd: string
+    rawResponse: string
+    eligibleCategorySlugs: string[]
+  },
+): Promise<ResolvedBenchmarkOutput> {
+  const parseResult = parseBenchmarkResponse(options.rawResponse, options.eligibleCategorySlugs)
+
+  if (parseResult.status === 'ok') {
+    return {
+      status: 'completed',
+      appendix: parseResult.appendix,
+      rawAppendix: parseResult.rawAppendix,
+      naturalResponse: parseResult.naturalResponse,
+      parserVersion: PARSER_VERSION,
+    }
+  }
+
+  const originalParseReason = parseResult.reason
+  if (!shouldRepairBenchmarkParseFailure(parseResult)) {
+    return {
+      status: 'invalid_output',
+      invalidReason: originalParseReason,
+      parserVersion: PARSER_VERSION,
+    }
+  }
+
+  try {
+    const repaired = await repairBenchmarkResponse(llmService, {
+      promptContentMd: options.promptContentMd,
+      parseFailureReason: originalParseReason,
+      rawResponse: options.rawResponse,
+      repairBoundaryIdx: parseResult.repairBoundaryIdx,
+      eligibleCategorySlugs: options.eligibleCategorySlugs,
+    })
+
+    if (repaired.status === 'recovered') {
+      return {
+        status: 'completed',
+        appendix: repaired.appendix,
+        rawAppendix: repaired.rawAppendix,
+        naturalResponse: repaired.naturalResponse,
+        parserVersion: REPAIR_PARSER_VERSION,
+      }
+    }
+
+    return {
+      status: 'invalid_output',
+      invalidReason: `${originalParseReason}; ${repaired.reason}`,
+      parserVersion: PARSER_VERSION,
+    }
+  } catch (error) {
+    return {
+      status: 'invalid_output',
+      invalidReason: `${originalParseReason}; Repair attempt failed: ${getErrorMessage(error)}`,
+      parserVersion: PARSER_VERSION,
+    }
+  }
+}
+
+async function insertCompletedBenchmarkCaseResult(
+  tx: DatabaseClient,
+  options: {
+    seasonId: string
+    runId: string
+    caseId: string
+    appendix: BenchmarkAppendix
+    rawAppendix: string
+    naturalResponse: string
+    parserVersion: string
+    metadata: BenchmarkCaseResultWriteMetadata
+    categoryIdBySlug: Map<string, string>
+    toolIndex: Awaited<ReturnType<typeof buildToolResolutionIndex>>
+  },
+) {
+  const [insertedCaseResult] = await tx
+    .insert(benchmarkCaseResults)
+    .values({
+      seasonId: options.seasonId,
+      runId: options.runId,
+      caseId: options.caseId,
+      status: 'completed',
+      naturalResponse: options.naturalResponse,
+      appendixRaw: options.rawAppendix,
+      appendixJson: options.appendix,
+      rawResponse: options.metadata.rawResponse,
+      requestedModelId: options.metadata.requestedModelId,
+      returnedModelId: options.metadata.returnedModelId,
+      provider: options.metadata.provider,
+      finishReason: options.metadata.finishReason,
+      promptTokens: options.metadata.promptTokens,
+      completionTokens: options.metadata.completionTokens,
+      totalTokens: options.metadata.totalTokens,
+      latencyMs: options.metadata.latencyMs,
+      temperature: options.metadata.temperature,
+      topP: options.metadata.topP,
+      maxTokens: options.metadata.maxTokens,
+      parserVersion: options.parserVersion,
+      systemPromptSnapshot: options.metadata.systemPromptSnapshot,
+      errorMessage: null,
+    })
+    .onConflictDoNothing()
+    .returning()
+
+  if (!insertedCaseResult) return null
+
+  for (const decision of options.appendix.categories) {
+    const categoryId = options.categoryIdBySlug.get(decision.category_slug)
+    if (!categoryId) continue
+
+    if (decision.decision === 'tool' && decision.tool) {
+      const resolved = await resolveToolWithCandidateQueue(
+        tx,
+        decision.tool,
+        options.toolIndex,
+        categoryId,
+      )
+
+      await tx
+        .insert(benchmarkCaseDecisions)
+        .values({
+          caseResultId: insertedCaseResult.id,
+          categoryId,
+          decisionType: 'tool',
+          toolId: resolved.status === 'resolved' ? resolved.toolId : null,
+          rawToolName: decision.tool,
+          reasoning: decision.reasoning,
+          selfReportedConfidence: decision.confidence,
+          resolutionStatus: resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
+        })
+        .onConflictDoNothing()
+    } else {
+      await tx
+        .insert(benchmarkCaseDecisions)
+        .values({
+          caseResultId: insertedCaseResult.id,
+          categoryId,
+          decisionType: 'none',
+          toolId: null,
+          rawToolName: null,
+          reasoning: decision.reasoning,
+          selfReportedConfidence: decision.confidence,
+          resolutionStatus: 'resolved',
+        })
+        .onConflictDoNothing()
+    }
+  }
+
+  return insertedCaseResult
 }
 
 function normalizeSummaryStatus(status: BenchmarkRunRecord['status']): BenchmarkRunSummaryStatus {
@@ -704,16 +909,19 @@ async function executeRun(
     const categorySlugById = new Map(allSubcategories.map((s) => [s.id, s.slug]))
 
     const existingResults = await database
-      .select({ caseId: benchmarkCaseResults.caseId, status: benchmarkCaseResults.status })
+      .select()
       .from(benchmarkCaseResults)
       .where(eq(benchmarkCaseResults.runId, run.id))
 
+    const existingResultByCaseId = new Map(existingResults.map((result) => [result.caseId, result]))
     const completedCaseIds = new Set(
-      existingResults.filter((r) => r.status === 'completed').map((r) => r.caseId),
+      existingResults
+        .filter((result) => result.status === 'completed')
+        .map((result) => result.caseId),
     )
     const retryableCaseIds = existingResults
-      .filter((r) => r.status === 'failed' || r.status === 'invalid_output')
-      .map((r) => r.caseId)
+      .filter((result) => result.status === 'failed' || result.status === 'invalid_output')
+      .map((result) => result.caseId)
     const retryableCaseIdSet = new Set(retryableCaseIds)
     const untouchedCases = allCases.filter(
       (benchmarkCase) =>
@@ -724,32 +932,6 @@ async function executeRun(
     )
     const pendingCases = [...untouchedCases, ...retryableCases]
     const casesToProcess = maxCases == null ? pendingCases : pendingCases.slice(0, maxCases)
-
-    const retryableCaseIdsToRetry = casesToProcess
-      .filter((benchmarkCase) => retryableCaseIdSet.has(benchmarkCase.id))
-      .map((benchmarkCase) => benchmarkCase.id)
-
-    if (retryableCaseIdsToRetry.length > 0) {
-      try {
-        await database.transaction(async (tx) => {
-          await verifyRunOwnershipForUpdate(tx, run)
-          await tx
-            .delete(benchmarkCaseResults)
-            .where(
-              and(
-                eq(benchmarkCaseResults.runId, run.id),
-                inArray(benchmarkCaseResults.caseId, retryableCaseIdsToRetry),
-              ),
-            )
-        })
-      } catch (error) {
-        if (error instanceof OwnershipLostError) {
-          const latestRun = await findRunById(database, run.id)
-          return await buildRunSummary(database, latestRun, seasonId)
-        }
-        throw error
-      }
-    }
 
     const toolIndex = await buildToolResolutionIndex(database)
 
@@ -768,6 +950,7 @@ async function executeRun(
 
       try {
         const { promptVersion, modelSnapshot } = benchmarkCase
+        const existingResult = existingResultByCaseId.get(benchmarkCase.id)
 
         const eligibleCategorySlugs = promptVersion.categories
           .map((c) => categorySlugById.get(c.categoryId))
@@ -777,10 +960,75 @@ async function executeRun(
           throw new Error('No eligible category slugs found for prompt version')
         }
 
-        const userPrompt = buildBenchmarkPrompt(
-          promptVersion.contentMd ?? '',
-          eligibleCategorySlugs,
+        const promptContentMd = promptVersion.contentMd ?? ''
+        const categoryIdBySlug = new Map(
+          promptVersion.categories.flatMap((category) => {
+            const slug = categorySlugById.get(category.categoryId)
+            return slug ? ([[slug, category.categoryId]] as const) : []
+          }),
         )
+
+        if (existingResult && shouldAttemptStoredInvalidOutputRecovery(existingResult)) {
+          const recovered = await resolveBenchmarkOutput(llmService, {
+            promptContentMd,
+            rawResponse: existingResult.rawResponse ?? '',
+            eligibleCategorySlugs,
+          })
+
+          if (recovered.status === 'completed') {
+            const restoredCaseResult = await database.transaction(async (tx) => {
+              await verifyRunOwnershipForUpdate(tx, run)
+              await tx
+                .delete(benchmarkCaseResults)
+                .where(eq(benchmarkCaseResults.id, existingResult.id))
+
+              return await insertCompletedBenchmarkCaseResult(tx, {
+                seasonId,
+                runId: run.id,
+                caseId: benchmarkCase.id,
+                appendix: recovered.appendix,
+                rawAppendix: recovered.rawAppendix,
+                naturalResponse: recovered.naturalResponse,
+                parserVersion: recovered.parserVersion,
+                metadata: {
+                  rawResponse: existingResult.rawResponse,
+                  requestedModelId: existingResult.requestedModelId,
+                  returnedModelId: existingResult.returnedModelId,
+                  provider: existingResult.provider,
+                  finishReason: existingResult.finishReason,
+                  promptTokens: existingResult.promptTokens,
+                  completionTokens: existingResult.completionTokens,
+                  totalTokens: existingResult.totalTokens,
+                  latencyMs: existingResult.latencyMs,
+                  temperature: existingResult.temperature,
+                  topP: existingResult.topP,
+                  maxTokens: existingResult.maxTokens,
+                  systemPromptSnapshot: existingResult.systemPromptSnapshot,
+                },
+                categoryIdBySlug,
+                toolIndex,
+              })
+            })
+
+            if (!restoredCaseResult) continue
+            processedThisInvocation += 1
+            continue
+          }
+        }
+
+        if (
+          existingResult &&
+          (existingResult.status === 'failed' || existingResult.status === 'invalid_output')
+        ) {
+          await database.transaction(async (tx) => {
+            await verifyRunOwnershipForUpdate(tx, run)
+            await tx
+              .delete(benchmarkCaseResults)
+              .where(eq(benchmarkCaseResults.id, existingResult.id))
+          })
+        }
+
+        const userPrompt = buildBenchmarkPrompt(promptContentMd, eligibleCategorySlugs)
         const systemPrompt =
           promptVersion.systemPromptSnapshot ??
           buildGenerationSystemPrompt(promptVersion.level as PromptLevel)
@@ -836,62 +1084,24 @@ async function executeRun(
           continue
         }
 
-        const parseResult = parseBenchmarkResponse(completion.content, eligibleCategorySlugs)
-        const originalParseReason =
-          parseResult.status === 'invalid_output' ? parseResult.reason : 'Unknown invalid output'
-        let appendix: BenchmarkAppendix | null = null
-        let rawAppendix: string | null = null
-        let naturalResponse: string | null = null
-        let parserVersion = PARSER_VERSION
-        let invalidReason: string | null = null
+        const resolvedOutput = await resolveBenchmarkOutput(llmService, {
+          promptContentMd,
+          rawResponse: completion.content,
+          eligibleCategorySlugs,
+        })
 
-        if (parseResult.status === 'ok') {
-          appendix = parseResult.appendix
-          rawAppendix = parseResult.rawAppendix
-          naturalResponse = parseResult.naturalResponse
-        } else {
-          invalidReason = originalParseReason
-
-          if (shouldRepairBenchmarkParseFailure(parseResult)) {
-            try {
-              const repaired = await repairBenchmarkResponse(llmService, {
-                promptContentMd: promptVersion.contentMd ?? '',
-                rawResponse: completion.content,
-                appendixOpenIdx: parseResult.appendixOpenIdx,
-                eligibleCategorySlugs,
-              })
-
-              if (repaired.status === 'recovered') {
-                appendix = repaired.appendix
-                rawAppendix = repaired.rawAppendix
-                naturalResponse = repaired.naturalResponse
-                parserVersion = REPAIR_PARSER_VERSION
-              } else {
-                invalidReason = `${originalParseReason}; ${repaired.reason}`
-              }
-            } catch (error) {
-              invalidReason = `${originalParseReason}; Repair attempt failed: ${getErrorMessage(error)}`
-            }
-          }
-        }
-
-        if (appendix && rawAppendix !== null && naturalResponse !== null) {
-          const categoryIdBySlug = new Map(
-            promptVersion.categories.map((c) => [categorySlugById.get(c.categoryId), c.categoryId]),
-          )
-
+        if (resolvedOutput.status === 'completed') {
           const caseResult = await database.transaction(async (tx) => {
             await verifyRunOwnershipForUpdate(tx, run)
-            const [insertedCaseResult] = await tx
-              .insert(benchmarkCaseResults)
-              .values({
-                seasonId,
-                runId: run.id,
-                caseId: benchmarkCase.id,
-                status: 'completed',
-                naturalResponse,
-                appendixRaw: rawAppendix,
-                appendixJson: appendix,
+            return await insertCompletedBenchmarkCaseResult(tx, {
+              seasonId,
+              runId: run.id,
+              caseId: benchmarkCase.id,
+              appendix: resolvedOutput.appendix,
+              rawAppendix: resolvedOutput.rawAppendix,
+              naturalResponse: resolvedOutput.naturalResponse,
+              parserVersion: resolvedOutput.parserVersion,
+              metadata: {
                 rawResponse: completion.content,
                 requestedModelId: modelSnapshot.requestedModelId,
                 returnedModelId: completion.returnedModel,
@@ -904,59 +1114,11 @@ async function executeRun(
                 temperature: modelSnapshot.temperature,
                 topP: modelSnapshot.topP,
                 maxTokens: modelSnapshot.maxTokens,
-                parserVersion,
                 systemPromptSnapshot: systemPrompt,
-                errorMessage: null,
-              })
-              .onConflictDoNothing()
-              .returning()
-
-            if (!insertedCaseResult) return null
-
-            for (const decision of appendix.categories) {
-              const categoryId = categoryIdBySlug.get(decision.category_slug)
-              if (!categoryId) continue
-
-              if (decision.decision === 'tool' && decision.tool) {
-                const resolved = await resolveToolWithCandidateQueue(
-                  tx,
-                  decision.tool,
-                  toolIndex,
-                  categoryId,
-                )
-
-                await tx
-                  .insert(benchmarkCaseDecisions)
-                  .values({
-                    caseResultId: insertedCaseResult.id,
-                    categoryId,
-                    decisionType: 'tool',
-                    toolId: resolved.status === 'resolved' ? resolved.toolId : null,
-                    rawToolName: decision.tool,
-                    reasoning: decision.reasoning,
-                    selfReportedConfidence: decision.confidence,
-                    resolutionStatus:
-                      resolved.status === 'resolved' ? 'resolved' : 'unresolved_tool',
-                  })
-                  .onConflictDoNothing()
-              } else {
-                await tx
-                  .insert(benchmarkCaseDecisions)
-                  .values({
-                    caseResultId: insertedCaseResult.id,
-                    categoryId,
-                    decisionType: 'none',
-                    toolId: null,
-                    rawToolName: null,
-                    reasoning: decision.reasoning,
-                    selfReportedConfidence: decision.confidence,
-                    resolutionStatus: 'resolved',
-                  })
-                  .onConflictDoNothing()
-              }
-            }
-
-            return insertedCaseResult
+              },
+              categoryIdBySlug,
+              toolIndex,
+            })
           })
 
           if (!caseResult) continue
@@ -988,7 +1150,7 @@ async function executeRun(
                 maxTokens: modelSnapshot.maxTokens,
                 parserVersion: PARSER_VERSION,
                 systemPromptSnapshot: systemPrompt,
-                errorMessage: invalidReason ?? originalParseReason,
+                errorMessage: resolvedOutput.invalidReason,
               })
               .onConflictDoNothing()
               .returning()
@@ -997,9 +1159,7 @@ async function executeRun(
 
           if (!caseResult) continue
           processedThisInvocation += 1
-          errors.push(
-            `[case ${benchmarkCase.id}] Invalid output: ${invalidReason ?? originalParseReason}`,
-          )
+          errors.push(`[case ${benchmarkCase.id}] Invalid output: ${resolvedOutput.invalidReason}`)
         }
       } catch (error) {
         if (error instanceof OwnershipLostError) {

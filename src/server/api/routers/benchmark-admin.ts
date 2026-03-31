@@ -700,7 +700,8 @@ export const benchmarkAdminRouter = createTRPCRouter({
       // case IDs from the results that were actually produced for this run.
       let snapshotCaseIds = extractSnapshotCaseIds(run.qcSummaryJson)
 
-      // Atomically delete failed results and reset the run with a status guard.
+      // Preserve retryable rows so the runner can attempt repair from stored
+      // invalid responses before falling back to fresh model calls.
       const result = await ctx.db.transaction(async (tx) => {
         if (!snapshotCaseIds) {
           const resultCaseRows = await tx
@@ -710,15 +711,15 @@ export const benchmarkAdminRouter = createTRPCRouter({
           snapshotCaseIds = [...new Set(resultCaseRows.map((r) => r.caseId))]
         }
 
-        const deleted = await tx
-          .delete(benchmarkCaseResults)
+        const retryableRows = await tx
+          .select({ id: benchmarkCaseResults.id })
+          .from(benchmarkCaseResults)
           .where(
             and(
               eq(benchmarkCaseResults.runId, input.runId),
               inArray(benchmarkCaseResults.status, ['failed', 'invalid_output']),
             ),
           )
-          .returning({ id: benchmarkCaseResults.id })
 
         const [updated] = await tx
           .update(benchmarkRuns)
@@ -746,7 +747,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
           })
         }
 
-        return { retriedCount: deleted.length }
+        return { retriedCount: retryableRows.length }
       })
 
       return result

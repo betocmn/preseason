@@ -445,13 +445,13 @@ describe('benchmarkAdminRouter', () => {
 
     const [benchmarkCase] = await db.select().from(benchmarkCases)
     if (!benchmarkCase) throw new Error('No case found')
-
     await db.insert(benchmarkCaseResults).values({
       seasonId: season.id,
       runId: run.id,
       caseId: benchmarkCase.id,
-      status: 'failed',
-      errorMessage: 'Timed out',
+      status: 'invalid_output',
+      rawResponse: 'Use Clerk for auth.',
+      errorMessage: 'Missing <preseason_benchmark_json> tags',
     })
 
     const result = await caller.benchmarkAdmin.retryFailedCases({ runId: run.id })
@@ -462,6 +462,12 @@ describe('benchmarkAdminRouter', () => {
     })
     expect(updatedRun?.status).toBe('pending')
     expect(updatedRun?.qcStatus).toBeNull()
+
+    const preservedResults = await db
+      .select({ status: benchmarkCaseResults.status })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+    expect(preservedResults.map((row) => row.status)).toEqual(['invalid_output'])
   })
 
   // ---------------------------------------------------------------------------
