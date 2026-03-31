@@ -8,11 +8,12 @@ const benchmarkCategoryDecisionSchema = z
     reasoning: z.string().min(1),
     confidence: z
       .number()
-      .min(0)
-      .max(1)
       .nullable()
       .optional()
-      .transform((value) => value ?? null),
+      .transform((value) => {
+        if (value == null) return null
+        return value >= 0 && value <= 1 ? value : null
+      }),
   })
   .refine(
     (d) => {

@@ -20,7 +20,7 @@ export function RetryFailedButton({ runId }: { runId: string }) {
   const router = useRouter()
   const mutation = api.benchmarkAdmin.retryFailedCases.useMutation({
     onSuccess: (result) => {
-      toast.success(`${result.retriedCount} failed cases cleared for retry`)
+      toast.success(`${result.retriedCount} cases queued for repair and retry`)
       router.refresh()
     },
     onError: (err) => toast.error(err.message),
@@ -29,14 +29,15 @@ export function RetryFailedButton({ runId }: { runId: string }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline">Retry Failed Cases</Button>
+        <Button variant="outline">Repair and Retry Cases</Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Retry failed cases?</AlertDialogTitle>
+          <AlertDialogTitle>Repair and retry cases?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will delete failed and invalid case results, then reset the run to pending so the
-            runner can re-execute them.
+            This will reset the run to pending and preserve failed and invalid results so the runner
+            can repair stored invalid outputs before re-executing cases that still need a fresh
+            model call.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -45,7 +46,7 @@ export function RetryFailedButton({ runId }: { runId: string }) {
             onClick={() => mutation.mutate({ runId })}
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? 'Retrying...' : 'Retry'}
+            {mutation.isPending ? 'Queueing...' : 'Queue Retry'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -36,13 +36,19 @@ describe('buildBenchmarkPrompt', () => {
 
   it('should instruct models to keep the natural-language answer brief', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
-    expect(result).toContain('Keep the natural-language answer brief')
-    expect(result).toContain('at most 3 short sentences')
+    expect(result).toContain('exactly 1 sentence maximum')
+    expect(result).toContain('start the appendix immediately')
   })
 
   it('should forbid omitting the closing tag', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('Do not omit the closing tag')
+  })
+
+  it('should warn that alternate tags are forbidden and bad appendices are discarded', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('alternate tags are forbidden')
+    expect(result).toContain('response will be discarded')
   })
 
   it('should start with the original content', () => {

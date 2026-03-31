@@ -65,7 +65,7 @@ describe('benchmarkAppendixSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('should reject confidence below 0', () => {
+  it('should coerce confidence below 0 to null', () => {
     const result = benchmarkAppendixSchema.safeParse({
       schema_version: 'benchmark-v1',
       categories: [
@@ -77,10 +77,12 @@ describe('benchmarkAppendixSchema', () => {
         },
       ],
     })
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.categories[0]?.confidence).toBeNull()
   })
 
-  it('should reject confidence above 1', () => {
+  it('should coerce confidence above 1 to null', () => {
     const result = benchmarkAppendixSchema.safeParse({
       schema_version: 'benchmark-v1',
       categories: [
@@ -89,6 +91,23 @@ describe('benchmarkAppendixSchema', () => {
           decision: 'none',
           reasoning: 'No tool needed',
           confidence: 1.1,
+        },
+      ],
+    })
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.categories[0]?.confidence).toBeNull()
+  })
+
+  it('should reject non-numeric confidence values', () => {
+    const result = benchmarkAppendixSchema.safeParse({
+      schema_version: 'benchmark-v1',
+      categories: [
+        {
+          category_slug: 'auth',
+          decision: 'none',
+          reasoning: 'No tool needed',
+          confidence: '0.8',
         },
       ],
     })
