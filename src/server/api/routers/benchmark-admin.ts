@@ -949,7 +949,22 @@ export const benchmarkAdminRouter = createTRPCRouter({
           })
         }
 
-        return updated
+        // Replay decisions within the same transaction to avoid race conditions
+        const replayedDecisions = await tx
+          .update(benchmarkCaseDecisions)
+          .set({
+            toolId: approvedToolId,
+            resolutionStatus: 'resolved',
+          })
+          .where(
+            and(
+              eq(benchmarkCaseDecisions.resolutionStatus, 'unresolved_tool'),
+              sql`lower(trim(${benchmarkCaseDecisions.rawToolName})) = ${candidate.normalizedName}`,
+            ),
+          )
+          .returning({ id: benchmarkCaseDecisions.id })
+
+        return { candidate: updated, replayedCount: replayedDecisions.length }
       })
     }),
 
