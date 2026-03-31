@@ -220,7 +220,17 @@ function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
   return null
 }
 
-function findTagBoundaryIndex(rawContent: string, openTag: string) {
+function startsStructuredAppendixBlock(rawContent: string, openIdx: number, openTag: string) {
+  const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + openTag.length)
+  return (
+    contentStart !== -1 &&
+    (rawContent[contentStart] === '{' ||
+      rawContent[contentStart] === '[' ||
+      rawContent.startsWith('```', contentStart))
+  )
+}
+
+function findStructuredTagBoundaryIndex(rawContent: string, openTag: string) {
   let searchFrom = rawContent.length
 
   while (searchFrom >= 0) {
@@ -229,13 +239,46 @@ function findTagBoundaryIndex(rawContent: string, openTag: string) {
       return null
     }
 
+    if (startsStructuredAppendixBlock(rawContent, openIdx, openTag)) {
+      return openIdx
+    }
+
+    searchFrom = openIdx - 1
+  }
+
+  return null
+}
+
+function isStandaloneTagLine(rawContent: string, openIdx: number, openTag: string) {
+  const lineStartIdx = rawContent.lastIndexOf('\n', openIdx - 1) + 1
+  if (rawContent.slice(lineStartIdx, openIdx).trim().length > 0) {
+    return false
+  }
+
+  const tagLineEndIdx = rawContent.indexOf('\n', openIdx + openTag.length)
+  const lineRemainder =
+    tagLineEndIdx === -1
+      ? rawContent.slice(openIdx + openTag.length)
+      : rawContent.slice(openIdx + openTag.length, tagLineEndIdx)
+
+  return lineRemainder.trim().length === 0
+}
+
+function findAliasTagBoundaryIndex(rawContent: string, openTag: string) {
+  let searchFrom = rawContent.length
+
+  while (searchFrom >= 0) {
+    const openIdx = rawContent.lastIndexOf(openTag, searchFrom)
+    if (openIdx === -1) {
+      return null
+    }
+
+    if (startsStructuredAppendixBlock(rawContent, openIdx, openTag)) {
+      return openIdx
+    }
+
     const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + openTag.length)
-    if (
-      contentStart !== -1 &&
-      (rawContent[contentStart] === '{' ||
-        rawContent[contentStart] === '[' ||
-        rawContent.startsWith('```', contentStart))
-    ) {
+    if (contentStart !== -1 && isStandaloneTagLine(rawContent, openIdx, openTag)) {
       return openIdx
     }
 
@@ -248,8 +291,13 @@ function findTagBoundaryIndex(rawContent: string, openTag: string) {
 function findLikelyRepairBoundaryIndex(rawContent: string) {
   let boundaryIdx: number | null = null
 
-  for (const tag of [OPEN_TAG, ...ALIAS_OPEN_TAGS]) {
-    const tagBoundary = findTagBoundaryIndex(rawContent, tag)
+  const exactTagBoundary = findStructuredTagBoundaryIndex(rawContent, OPEN_TAG)
+  if (exactTagBoundary != null) {
+    boundaryIdx = exactTagBoundary
+  }
+
+  for (const tag of ALIAS_OPEN_TAGS) {
+    const tagBoundary = findAliasTagBoundaryIndex(rawContent, tag)
     if (tagBoundary != null && (boundaryIdx == null || tagBoundary > boundaryIdx)) {
       boundaryIdx = tagBoundary
     }

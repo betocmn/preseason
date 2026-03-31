@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
+import { parseBenchmarkResponse } from './parser'
 import { REPAIR_PARSER_VERSION, repairBenchmarkResponse } from './repair'
 
 function createMockLlmService(content: string) {
@@ -244,6 +245,47 @@ describe('repairBenchmarkResponse', () => {
     expect(result.status).toBe('recovered')
     if (result.status !== 'recovered') return
     expect(result.naturalResponse).toBe('Use Clerk for auth and Supabase for the database.')
+  })
+
+  it('should strip malformed alias appendix text from recovered natural responses', async () => {
+    const llmService = createMockLlmService(
+      JSON.stringify({
+        schema_version: 'benchmark-v1',
+        categories: [
+          {
+            category_slug: 'auth',
+            decision: 'tool',
+            tool: 'Clerk',
+            reasoning: 'Good fit',
+            confidence: 0.9,
+          },
+          {
+            category_slug: 'database',
+            decision: 'none',
+            reasoning: 'No database tool needed',
+            confidence: 0.4,
+          },
+        ],
+      }),
+    )
+
+    const rawResponse = ['Use Clerk for auth.', '', '<appendix>', 'INVALID'].join('\n')
+    const parseResult = parseBenchmarkResponse(rawResponse, ['auth', 'database'])
+
+    expect(parseResult.status).toBe('invalid_output')
+    if (parseResult.status !== 'invalid_output') return
+
+    const result = await repairBenchmarkResponse(llmService, {
+      promptContentMd: '# Build a SaaS app',
+      parseFailureReason: parseResult.reason,
+      rawResponse,
+      repairBoundaryIdx: parseResult.repairBoundaryIdx,
+      eligibleCategorySlugs: ['auth', 'database'],
+    })
+
+    expect(result.status).toBe('recovered')
+    if (result.status !== 'recovered') return
+    expect(result.naturalResponse).toBe('Use Clerk for auth.')
   })
 
   it('should skip repair for blank responses', async () => {

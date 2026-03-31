@@ -414,6 +414,17 @@ describe('parseBenchmarkResponse', () => {
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
+  it('should preserve the alias boundary when the alias appendix payload is malformed', () => {
+    const raw = ['Use Clerk for auth.', '', '<appendix>', 'INVALID'].join('\n')
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.code).toBe('missing_appendix_tags')
+    expect(result.repairBoundaryIdx).toBe(raw.indexOf('<appendix>'))
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+  })
+
   it('should extract natural response before alias appendix tags', () => {
     const raw = [
       'Use Clerk for auth and Supabase for the database.',
@@ -425,6 +436,16 @@ describe('parseBenchmarkResponse', () => {
     expect(extractBenchmarkNaturalResponse(raw)).toBe(
       'Use Clerk for auth and Supabase for the database.',
     )
+  })
+
+  it('should ignore alias-tag mentions that stay embedded in prose', () => {
+    const raw = 'Use Clerk for auth, but do not literally print <appendix> in the answer.'
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.repairBoundaryIdx).toBeUndefined()
+    expect(extractBenchmarkNaturalResponse(raw)).toBe(raw)
   })
 
   it('should extract an empty natural response when raw content starts with JSON', () => {
