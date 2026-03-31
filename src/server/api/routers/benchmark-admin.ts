@@ -1027,7 +1027,22 @@ export const benchmarkAdminRouter = createTRPCRouter({
           })
         }
 
-        return updated
+        // Replay decisions within the same transaction to avoid race conditions
+        const replayedDecisions = await tx
+          .update(benchmarkCaseDecisions)
+          .set({
+            toolId: approvedToolId,
+            resolutionStatus: 'resolved',
+          })
+          .where(
+            and(
+              eq(benchmarkCaseDecisions.resolutionStatus, 'unresolved_tool'),
+              sql`lower(trim(${benchmarkCaseDecisions.rawToolName})) = ${candidate.normalizedName}`,
+            ),
+          )
+          .returning({ id: benchmarkCaseDecisions.id })
+
+        return { candidate: updated, replayedCount: replayedDecisions.length }
       })
     }),
 
@@ -1106,6 +1121,77 @@ export const benchmarkAdminRouter = createTRPCRouter({
         .returning({ id: benchmarkCaseDecisions.id })
 
       return { updatedCount: updated.length }
+    }),
+
+  resetCandidate: protectedProcedure
+    .input(z.object({ candidateId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const candidate = await ctx.db.query.toolCandidates.findFirst({
+        where: eq(toolCandidates.id, input.candidateId),
+      })
+      if (!candidate) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Candidate not found' })
+      }
+      if (candidate.status === 'pending') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Candidate is already pending',
+        })
+      }
+
+      return await ctx.db.transaction(async (tx) => {
+        const candidateApprovalAlias =
+          candidate.status === 'approved' && candidate.approvedToolId
+            ? await tx.query.toolAliases.findFirst({
+                where: and(
+                  eq(toolAliases.normalizedAlias, candidate.normalizedName),
+                  eq(toolAliases.toolId, candidate.approvedToolId),
+                  eq(toolAliases.source, 'candidate_approval'),
+                ),
+              })
+            : null
+
+        // Only undo decisions when this approval still owns the alias that resolved them.
+        if (candidateApprovalAlias && candidate.status === 'approved' && candidate.approvedToolId) {
+          await tx
+            .update(benchmarkCaseDecisions)
+            .set({ toolId: null, resolutionStatus: 'unresolved_tool' })
+            .where(
+              and(
+                eq(benchmarkCaseDecisions.toolId, candidate.approvedToolId),
+                eq(benchmarkCaseDecisions.resolutionStatus, 'resolved'),
+                sql`lower(trim(${benchmarkCaseDecisions.rawToolName})) = ${candidate.normalizedName}`,
+              ),
+            )
+        }
+
+        if (candidateApprovalAlias) {
+          await tx.delete(toolAliases).where(eq(toolAliases.id, candidateApprovalAlias.id))
+        }
+
+        // Reset candidate back to pending
+        const [updated] = await tx
+          .update(toolCandidates)
+          .set({ status: 'pending', approvedToolId: null, notes: null })
+          .where(
+            and(
+              eq(toolCandidates.id, input.candidateId),
+              eq(toolCandidates.status, candidate.status),
+            ),
+          )
+          .returning()
+
+        if (!updated) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Candidate status changed; refresh and try again',
+          })
+        }
+
+        return updated
+      })
     }),
 
   // ---------------------------------------------------------------------------
