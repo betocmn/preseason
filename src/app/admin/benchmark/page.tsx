@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 import { Eye, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Badge } from '~/components/ui/badge'

@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 import { Eye } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'

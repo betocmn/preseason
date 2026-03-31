@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -15,13 +14,13 @@ import {
 } from '~/components/ui/alert-dialog'
 import { Button } from '~/components/ui/button'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 export function PublishRunButton({ runId }: { runId: string }) {
-  const router = useRouter()
   const mutation = api.benchmarkAdmin.publishRun.useMutation({
     onSuccess: () => {
       toast.success('Legacy run published')
-      router.refresh()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => toast.error(err.message),
   })

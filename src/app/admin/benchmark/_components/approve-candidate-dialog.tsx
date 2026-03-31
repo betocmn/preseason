@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '~/components/ui/button'
@@ -23,6 +22,7 @@ import {
 } from '~/components/ui/select'
 import { slugify } from '~/lib/slug'
 import { api } from '~/trpc/react'
+import { loadFreshBenchmarkAdminPage } from './navigation'
 
 type Props = {
   candidateId: string
@@ -53,7 +53,6 @@ export function ApproveCandidateDialog({
   canAutoApprove = false,
   categories,
 }: Props) {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState(candidateName)
   const [newToolName, setNewToolName] = useState(candidateName)
@@ -80,7 +79,7 @@ export function ApproveCandidateDialog({
     onSuccess: (result) => {
       toast.success(`Approved. ${result.updatedCount} decisions resolved.`)
       setOpen(false)
-      router.refresh()
+      loadFreshBenchmarkAdminPage()
     },
     onError: (err) => {
       toast.error(`Approved but replay failed: ${err.message}. You can retry from here.`)
@@ -217,7 +216,7 @@ export function ApproveCandidateDialog({
             variant="outline"
             onClick={() => {
               setOpen(false)
-              if (replayMutation.isError) router.refresh()
+              if (replayMutation.isError) loadFreshBenchmarkAdminPage()
             }}
           >
             {replayMutation.isError ? 'Close' : 'Cancel'}
