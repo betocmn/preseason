@@ -7,6 +7,7 @@ import {
   eq,
   inArray,
   isNull,
+  lt,
   lte,
   notInArray,
   or,
@@ -130,6 +131,7 @@ type CaseProcessingResult = {
 }
 
 const CASE_CLAIM_STALE_AFTER_MS = serverSettings.benchmark.caseClaimStaleAfterMs
+const MAX_CASE_ATTEMPTS = serverSettings.benchmark.maxCaseAttempts
 const BENCHMARK_RUN_LOCK_NAMESPACE = 41_027
 const TERMINAL_RUN_STATUSES = ['completed', 'published', 'qc_failed'] as const
 const RETRYABLE_CASE_RESULT_STATUSES: Array<BenchmarkCaseResultRecord['status']> = [
@@ -725,6 +727,7 @@ async function claimNextBenchmarkCase(
             isNull(benchmarkCaseResults.startedAt),
             lte(benchmarkCaseResults.startedAt, staleBefore),
           ),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
           excludedClause,
         ),
         [
@@ -752,6 +755,7 @@ async function claimNextBenchmarkCase(
         and(
           eq(benchmarkCaseResults.runId, runId),
           inArray(benchmarkCaseResults.status, RETRYABLE_CASE_RESULT_STATUSES),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
           excludedClause,
         ),
         [
@@ -1149,7 +1153,24 @@ async function finalizeRunIfExhausted(
     const completedCases = countByStatus.get('completed') ?? 0
     const failedCases = countByStatus.get('failed') ?? 0
 
-    if (pendingCases > 0 || runningCases > 0) {
+    // Check whether any pending/running cases are still claimable (under the retry cap).
+    // Running cases with exhausted attempts will never be reclaimed, so treat them as terminal.
+    let hasClaimableWork = pendingCases > 0
+    if (!hasClaimableWork && runningCases > 0) {
+      const [claimableRow] = await tx
+        .select({ cnt: count() })
+        .from(benchmarkCaseResults)
+        .where(
+          and(
+            eq(benchmarkCaseResults.runId, runId),
+            eq(benchmarkCaseResults.status, 'running'),
+            lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+          ),
+        )
+      hasClaimableWork = Number(claimableRow?.cnt ?? 0) > 0
+    }
+
+    if (hasClaimableWork) {
       const [updatedRun] = await tx
         .update(benchmarkRuns)
         .set({
@@ -1164,6 +1185,22 @@ async function finalizeRunIfExhausted(
 
       return updatedRun ?? run
     }
+
+    // Mark any running cases that exhausted their retry budget as failed so metrics are accurate.
+    await tx
+      .update(benchmarkCaseResults)
+      .set({
+        status: 'failed',
+        claimToken: null,
+        completedAt: currentTime,
+        errorMessage: `Exhausted ${MAX_CASE_ATTEMPTS} attempts`,
+      })
+      .where(
+        and(
+          eq(benchmarkCaseResults.runId, runId),
+          inArray(benchmarkCaseResults.status, ['running', 'pending']),
+        ),
+      )
 
     const metrics = await calculateRunMetrics(tx, runId, totalCases)
     const finalStatus = metrics.qc.passed ? 'published' : 'qc_failed'

@@ -16,6 +16,8 @@ export const serverSettings = {
     // Bound benchmark cron work so each invocation stays short and resumable.
     cronMaxDurationSeconds: benchmarkCronMaxDurationSeconds,
     casesPerCronInvocation: 1,
+    // Stop retrying a case after this many attempts to avoid burning API credits.
+    maxCaseAttempts: 3,
     // Do not reclaim an in-flight case before the benchmark worker itself can time out.
     caseClaimStaleAfterMs:
       benchmarkCronMaxDurationSeconds * 1000 + benchmarkCaseClaimSafetyBufferMs,
