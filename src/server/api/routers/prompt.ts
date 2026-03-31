@@ -378,24 +378,26 @@ export const promptRouter = createTRPCRouter({
         decisionsByPv.set(row.promptVersionId, list)
       }
 
-      return promptVersionRows.map((pv) => {
-        const toolDecisions = decisionsByPv.get(pv.pvId) ?? []
-        const totalCount = toolDecisions.reduce((sum, d) => sum + d.count, 0)
-        const topTools = toolDecisions.slice(0, 4).map((d) => ({
-          tool: d.tool,
-          rate: totalCount > 0 ? d.count / totalCount : 0,
-          count: d.count,
-        }))
+      return promptVersionRows
+        .map((pv) => {
+          const toolDecisions = decisionsByPv.get(pv.pvId) ?? []
+          const totalCount = toolDecisions.reduce((sum, d) => sum + d.count, 0)
+          const topTools = toolDecisions.slice(0, 4).map((d) => ({
+            tool: d.tool,
+            rate: totalCount > 0 ? d.count / totalCount : 0,
+            count: d.count,
+          }))
 
-        return {
-          id: pv.pvId,
-          title: pv.promptTitle,
-          slug: pv.slug,
-          content: pv.contentMd,
-          description: pv.promptDescription,
-          level: pv.level,
-          topTools,
-        }
-      })
+          return {
+            id: pv.pvId,
+            title: pv.promptTitle,
+            slug: pv.slug,
+            content: pv.contentMd,
+            description: pv.promptDescription,
+            level: pv.level,
+            topTools,
+          }
+        })
+        .filter((p) => p.topTools.length > 0)
     }),
 })
