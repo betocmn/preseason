@@ -63,10 +63,24 @@ function explainMissingAppendixReason(rawContent: string): InvalidOutputParseRes
     }
 
     const contentStart = findFirstNonWhitespaceIndex(rawContent, openIdx + OPEN_TAG.length)
-    if (
-      contentStart === -1 ||
-      (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[')
-    ) {
+    if (contentStart === -1) {
+      return {
+        status: 'invalid_output',
+        reason: 'Truncated <preseason_benchmark_json> block: missing JSON appendix',
+        appendixOpenIdx: openIdx,
+      }
+    }
+
+    if (rawContent.startsWith('```', contentStart)) {
+      return {
+        status: 'invalid_output',
+        reason:
+          'Malformed <preseason_benchmark_json> block: JSON must not be wrapped in a code fence',
+        appendixOpenIdx: openIdx,
+      }
+    }
+
+    if (rawContent[contentStart] !== '{' && rawContent[contentStart] !== '[') {
       foundOpeningTagWithoutJson = true
       searchFrom = openIdx - 1
       continue

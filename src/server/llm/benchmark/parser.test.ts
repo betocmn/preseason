@@ -55,6 +55,32 @@ describe('parseBenchmarkResponse', () => {
     expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
   })
 
+  it('should treat a bare opening tag without appendix content as repairable truncation', () => {
+    const raw = 'Use Clerk for auth.\n\n<preseason_benchmark_json>\n'
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('missing JSON appendix')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+  })
+
+  it('should treat code-fenced appendix starts as repairable malformed output', () => {
+    const raw = [
+      'Use Clerk for auth.',
+      '',
+      '<preseason_benchmark_json>',
+      '```json',
+      '{"schema_version":"benchmark-v1"',
+    ].join('\n')
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+    expect(result.status).toBe('invalid_output')
+    if (result.status !== 'invalid_output') return
+    expect(result.reason).toContain('code fence')
+    expect(shouldRepairBenchmarkParseFailure(result)).toBe(true)
+    expect(result.appendixOpenIdx).toBe(raw.indexOf('<preseason_benchmark_json>'))
+  })
+
   it('should treat stray opening-tag mentions as unrecoverable invalid output', () => {
     const result = parseBenchmarkResponse(
       'Do not literally print <preseason_benchmark_json> in prose.',
