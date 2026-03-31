@@ -68,6 +68,23 @@ function normalizeLegacyCaseResultPresentation(result: typeof benchmarkCaseResul
   }
 }
 
+async function loadSeasonCaseSnapshotIds(
+  database: Parameters<typeof requireRole>[0],
+  seasonId: string,
+) {
+  const caseRows = await database
+    .select({ id: benchmarkCases.id })
+    .from(benchmarkCases)
+    .where(eq(benchmarkCases.seasonId, seasonId))
+    .orderBy(
+      asc(benchmarkCases.promptVersionId),
+      asc(benchmarkCases.modelSnapshotId),
+      asc(benchmarkCases.id),
+    )
+
+  return caseRows.map((row) => row.id)
+}
+
 const createToolForCandidateSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(1).max(255),
@@ -747,6 +764,10 @@ export const benchmarkAdminRouter = createTRPCRouter({
           snapshotCaseIds = [...new Set(resultCaseRows.map((r) => r.caseId))]
         }
 
+        if (!snapshotCaseIds || snapshotCaseIds.length === 0) {
+          snapshotCaseIds = await loadSeasonCaseSnapshotIds(tx, run.seasonId)
+        }
+
         const retryableRows = await tx
           .select({ id: benchmarkCaseResults.id })
           .from(benchmarkCaseResults)
@@ -795,7 +816,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
             failedCaseCount: null,
             errorLog: null,
             qcStatus: null,
-            qcSummaryJson: { snapshotCaseIds },
+            qcSummaryJson: snapshotCaseIds.length > 0 ? { snapshotCaseIds } : null,
           })
           .where(
             and(
