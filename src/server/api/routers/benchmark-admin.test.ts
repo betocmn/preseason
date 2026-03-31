@@ -609,6 +609,245 @@ describe('benchmarkAdminRouter', () => {
     expect(toolCategory?.categoryId).toBe(category.id)
   })
 
+  it('resets approval-owned aliases and replayed decisions', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+    const protocol = await seedProtocol()
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-reset-owned-alias',
+      name: 'Season Reset Owned Alias',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const tool = await caller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Failed to create tool')
+
+    const db = getTestDb()
+    const [testCase] = await db.select().from(benchmarkCases)
+    if (!testCase) throw new Error('No case found')
+
+    const [candidate] = await db
+      .insert(toolCandidates)
+      .values({
+        rawName: 'clerk.dev',
+        normalizedName: 'clerk.dev',
+        seenCount: 2,
+      })
+      .returning()
+    if (!candidate) throw new Error('Failed to create candidate')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+      })
+      .returning()
+    if (!run) throw new Error('Failed to create run')
+
+    const [caseResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: testCase.id,
+        status: 'completed',
+      })
+      .returning()
+    if (!caseResult) throw new Error('Failed to create case result')
+
+    const [decision] = await db
+      .insert(benchmarkCaseDecisions)
+      .values({
+        caseResultId: caseResult.id,
+        categoryId: category.id,
+        decisionType: 'tool',
+        rawToolName: candidate.rawName,
+        resolutionStatus: 'unresolved_tool',
+      })
+      .returning()
+    if (!decision) throw new Error('Failed to create decision')
+
+    await caller.benchmarkAdmin.approveCandidate({
+      candidateId: candidate.id,
+      toolId: tool.id,
+    })
+
+    const alias = await db.query.toolAliases.findFirst({
+      where: eq(toolAliases.normalizedAlias, candidate.normalizedName),
+    })
+    expect(alias?.source).toBe('candidate_approval')
+
+    const approvedDecision = await db.query.benchmarkCaseDecisions.findFirst({
+      where: eq(benchmarkCaseDecisions.id, decision.id),
+    })
+    expect(approvedDecision?.toolId).toBe(tool.id)
+    expect(approvedDecision?.resolutionStatus).toBe('resolved')
+
+    const reset = await caller.benchmarkAdmin.resetCandidate({ candidateId: candidate.id })
+    expect(reset.status).toBe('pending')
+    expect(reset.approvedToolId).toBeNull()
+
+    const aliasAfterReset = await db.query.toolAliases.findFirst({
+      where: eq(toolAliases.normalizedAlias, candidate.normalizedName),
+    })
+    expect(aliasAfterReset).toBeUndefined()
+
+    const revertedDecision = await db.query.benchmarkCaseDecisions.findFirst({
+      where: eq(benchmarkCaseDecisions.id, decision.id),
+    })
+    expect(revertedDecision?.toolId).toBeNull()
+    expect(revertedDecision?.resolutionStatus).toBe('unresolved_tool')
+  })
+
+  it('keeps pre-existing aliases and their resolved decisions when resetting', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const { category } = await seedPromptAndCategory(caller)
+    const protocol = await seedProtocol()
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-reset-existing-alias',
+      name: 'Season Reset Existing Alias',
+    })
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+
+    const tool = await caller.tool.create({
+      name: 'Clerk',
+      slug: 'clerk',
+      categoryIds: [category.id],
+    })
+    if (!tool) throw new Error('Failed to create tool')
+
+    const db = getTestDb()
+    await db.insert(toolAliases).values({
+      toolId: tool.id,
+      alias: 'clerk.dev',
+      normalizedAlias: 'clerk.dev',
+      source: 'admin',
+    })
+
+    const [testCase] = await db.select().from(benchmarkCases)
+    if (!testCase) throw new Error('No case found')
+
+    const [candidate] = await db
+      .insert(toolCandidates)
+      .values({
+        rawName: 'clerk.dev',
+        normalizedName: 'clerk.dev',
+        seenCount: 2,
+      })
+      .returning()
+    if (!candidate) throw new Error('Failed to create candidate')
+
+    const [replayRun] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-01',
+        trigger: 'manual',
+        status: 'completed',
+      })
+      .returning()
+    if (!replayRun) throw new Error('Failed to create replay run')
+
+    const [replayCaseResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: replayRun.id,
+        caseId: testCase.id,
+        status: 'completed',
+      })
+      .returning()
+    if (!replayCaseResult) throw new Error('Failed to create replay case result')
+
+    const [replayedDecision] = await db
+      .insert(benchmarkCaseDecisions)
+      .values({
+        caseResultId: replayCaseResult.id,
+        categoryId: category.id,
+        decisionType: 'tool',
+        rawToolName: candidate.rawName,
+        resolutionStatus: 'unresolved_tool',
+      })
+      .returning()
+    if (!replayedDecision) throw new Error('Failed to create replay decision')
+
+    const result = await caller.benchmarkAdmin.approveCandidate({
+      candidateId: candidate.id,
+      toolId: tool.id,
+    })
+    expect(result.replayedCount).toBe(1)
+
+    const [resolvedRun] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-02',
+        trigger: 'manual',
+        status: 'completed',
+      })
+      .returning()
+    if (!resolvedRun) throw new Error('Failed to create resolved run')
+
+    const [resolvedCaseResult] = await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: resolvedRun.id,
+        caseId: testCase.id,
+        status: 'completed',
+      })
+      .returning()
+    if (!resolvedCaseResult) throw new Error('Failed to create resolved case result')
+
+    const [aliasBackedDecision] = await db
+      .insert(benchmarkCaseDecisions)
+      .values({
+        caseResultId: resolvedCaseResult.id,
+        categoryId: category.id,
+        decisionType: 'tool',
+        rawToolName: candidate.rawName,
+        toolId: tool.id,
+        resolutionStatus: 'resolved',
+      })
+      .returning()
+    if (!aliasBackedDecision) throw new Error('Failed to create alias-backed decision')
+
+    const reset = await caller.benchmarkAdmin.resetCandidate({ candidateId: candidate.id })
+    expect(reset.status).toBe('pending')
+    expect(reset.approvedToolId).toBeNull()
+
+    const aliasAfterReset = await db.query.toolAliases.findFirst({
+      where: eq(toolAliases.normalizedAlias, candidate.normalizedName),
+    })
+    expect(aliasAfterReset?.source).toBe('admin')
+    expect(aliasAfterReset?.toolId).toBe(tool.id)
+
+    const replayedDecisionAfterReset = await db.query.benchmarkCaseDecisions.findFirst({
+      where: eq(benchmarkCaseDecisions.id, replayedDecision.id),
+    })
+    expect(replayedDecisionAfterReset?.toolId).toBe(tool.id)
+    expect(replayedDecisionAfterReset?.resolutionStatus).toBe('resolved')
+
+    const aliasBackedDecisionAfterReset = await db.query.benchmarkCaseDecisions.findFirst({
+      where: eq(benchmarkCaseDecisions.id, aliasBackedDecision.id),
+    })
+    expect(aliasBackedDecisionAfterReset?.toolId).toBe(tool.id)
+    expect(aliasBackedDecisionAfterReset?.resolutionStatus).toBe('resolved')
+  })
+
   it('returns unique candidate suggestions for likely matches', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

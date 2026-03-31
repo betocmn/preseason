@@ -46,7 +46,7 @@ export function ResetCandidateDialog({ candidateId, candidateName, currentStatus
           <AlertDialogDescription>
             This will reset the candidate back to pending.
             {currentStatus === 'approved' &&
-              ' Any alias created during approval will be removed and resolved benchmark decisions will revert to unresolved.'}
+              ' Any alias still owned by this approval will be removed and its matching benchmark decisions will revert to unresolved.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

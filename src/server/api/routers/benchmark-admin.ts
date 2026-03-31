@@ -1064,8 +1064,19 @@ export const benchmarkAdminRouter = createTRPCRouter({
       }
 
       return await ctx.db.transaction(async (tx) => {
-        // Revert resolved decisions back to unresolved_tool
-        if (candidate.status === 'approved' && candidate.approvedToolId) {
+        const candidateApprovalAlias =
+          candidate.status === 'approved' && candidate.approvedToolId
+            ? await tx.query.toolAliases.findFirst({
+                where: and(
+                  eq(toolAliases.normalizedAlias, candidate.normalizedName),
+                  eq(toolAliases.toolId, candidate.approvedToolId),
+                  eq(toolAliases.source, 'candidate_approval'),
+                ),
+              })
+            : null
+
+        // Only undo decisions when this approval still owns the alias that resolved them.
+        if (candidateApprovalAlias && candidate.status === 'approved' && candidate.approvedToolId) {
           await tx
             .update(benchmarkCaseDecisions)
             .set({ toolId: null, resolutionStatus: 'unresolved_tool' })
@@ -1078,15 +1089,9 @@ export const benchmarkAdminRouter = createTRPCRouter({
             )
         }
 
-        // Remove tool alias created during approval
-        await tx
-          .delete(toolAliases)
-          .where(
-            and(
-              eq(toolAliases.normalizedAlias, candidate.normalizedName),
-              eq(toolAliases.source, 'candidate_approval'),
-            ),
-          )
+        if (candidateApprovalAlias) {
+          await tx.delete(toolAliases).where(eq(toolAliases.id, candidateApprovalAlias.id))
+        }
 
         // Reset candidate back to pending
         const [updated] = await tx
