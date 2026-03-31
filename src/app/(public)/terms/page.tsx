@@ -2,12 +2,15 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Terms & Conditions',
-  description: 'Basic terms for using Preseason.',
-  openGraph: { title: 'Terms & Conditions', description: 'Basic terms for using Preseason.' },
+  description: 'Basic terms for using Preseason by HL Tech Consulting.',
+  openGraph: {
+    title: 'Terms & Conditions',
+    description: 'Basic terms for using Preseason by HL Tech Consulting.',
+  },
   twitter: {
     card: 'summary_large_image',
     title: 'Terms & Conditions',
-    description: 'Basic terms for using Preseason.',
+    description: 'Basic terms for using Preseason by HL Tech Consulting.',
   },
 }
 
@@ -40,6 +43,7 @@ export default function TermsPage() {
             By accessing or using Preseason, you agree to these Terms. If you do not agree, do not
             use the service.
           </P>
+          <P>Preseason is operated by HL Tech Consulting, an Australian company.</P>
         </Section>
 
         <Section title="2. Use of the Service">
@@ -79,17 +83,24 @@ export default function TermsPage() {
           </P>
         </Section>
 
-        <Section title="7. Changes and Termination">
+        <Section title="7. Governing Law">
+          <P>
+            These Terms are governed by the laws of Queensland, Australia, without regard to
+            conflict of law principles.
+          </P>
+        </Section>
+
+        <Section title="8. Changes and Termination">
           <P>
             We may update these Terms or suspend access to the service at any time. Continued use
             after updates means you accept the revised Terms.
           </P>
         </Section>
 
-        <Section title="8. Contact">
+        <Section title="9. Contact">
           <P>
-            Questions about these Terms can be sent to the Preseason team through our official
-            product channels.
+            Questions about these Terms can be sent to HL Tech Consulting through official Preseason
+            support channels.
           </P>
         </Section>
       </div>

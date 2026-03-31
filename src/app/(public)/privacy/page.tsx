@@ -2,15 +2,15 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How Preseason collects, uses, and protects your information.',
+  description: 'How HL Tech Consulting collects, uses, and protects your information.',
   openGraph: {
     title: 'Privacy Policy',
-    description: 'How Preseason collects, uses, and protects your information.',
+    description: 'How HL Tech Consulting collects, uses, and protects your information.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Privacy Policy',
-    description: 'How Preseason collects, uses, and protects your information.',
+    description: 'How HL Tech Consulting collects, uses, and protects your information.',
   },
 }
 
@@ -39,6 +39,7 @@ export default function PrivacyPage() {
 
       <div className="space-y-8">
         <Section title="1. Information We Collect">
+          <P>Preseason is operated by HL Tech Consulting, an Australian company.</P>
           <P>
             We collect information you provide directly, such as your email and profile details when
             you create an account.
@@ -51,15 +52,15 @@ export default function PrivacyPage() {
 
         <Section title="2. How We Use Information">
           <P>
-            We use your information to operate the product, authenticate access, maintain security,
-            improve features, and communicate important service updates.
+            HL Tech Consulting uses your information to operate Preseason, authenticate access,
+            maintain security, improve features, and communicate important service updates.
           </P>
         </Section>
 
         <Section title="3. Sharing of Information">
           <P>
             We do not sell your personal information. We may share data with trusted service
-            providers who help us host and operate Preseason, or when required by law.
+            providers who help us host and operate Preseason, or when required by applicable law.
           </P>
         </Section>
 
@@ -90,8 +91,8 @@ export default function PrivacyPage() {
 
         <Section title="7. Contact">
           <P>
-            If you have privacy questions, contact the Preseason team through our official product
-            channels.
+            If you have privacy questions, contact HL Tech Consulting through official Preseason
+            support channels.
           </P>
         </Section>
       </div>
