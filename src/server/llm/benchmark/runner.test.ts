@@ -905,6 +905,149 @@ describe('runBenchmark', () => {
     expect(run.status).toBe('qc_failed')
   })
 
+  it('does not reclaim pending rows that already exhausted max attempts', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })
+    const benchmarkCase = caseRows[0]
+    if (!benchmarkCase) throw new Error('Expected a case')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'cron',
+        status: 'pending',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Expected run')
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'pending',
+      attemptCount: 3,
+    })
+
+    const llmService = createMockLlmService(async (_provider, request) =>
+      mockCompletionForRequest(buildValidResponse(['auth', 'database']), request),
+    )
+
+    const summary = await runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+
+    expect(summary.status).toBe('qc_failed')
+    expect(summary.processedThisInvocation).toBe(0)
+    expect(summary.remainingCases).toBe(0)
+    expect(summary.hasRemainingWork).toBe(false)
+    expect(llmService.complete).not.toHaveBeenCalled()
+
+    const [result] = await db
+      .select({
+        status: benchmarkCaseResults.status,
+        attemptCount: benchmarkCaseResults.attemptCount,
+        errorMessage: benchmarkCaseResults.errorMessage,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+
+    expect(result?.status).toBe('failed')
+    expect(result?.attemptCount).toBe(3)
+    expect(result?.errorMessage).toBe('Exhausted 3 attempts')
+  })
+
+  it('preserves stored invalid output payload on a claimed retry until terminal write', async () => {
+    const db = getTestDb()
+    const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })
+    const benchmarkCase = caseRows[0]
+    if (!benchmarkCase) throw new Error('Expected a case')
+
+    const [run] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-10',
+        trigger: 'cron',
+        status: 'running',
+        expectedCaseCount: 1,
+        qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
+      })
+      .returning()
+    if (!run) throw new Error('Expected run')
+
+    const originalRawResponse = 'Model drift output that should stay on the row while retrying'
+
+    await db.insert(benchmarkCaseResults).values({
+      seasonId: season.id,
+      runId: run.id,
+      caseId: benchmarkCase.id,
+      status: 'invalid_output',
+      attemptCount: 1,
+      completedAt: new Date('2026-03-09T00:05:00.000Z'),
+      rawResponse: originalRawResponse,
+      requestedModelId: 'anthropic/claude-3-opus-20240229',
+      returnedModelId: 'openai/gpt-4o',
+      errorMessage:
+        'Model drift detected: requested anthropic/claude-3-opus-20240229, got openai/gpt-4o',
+    })
+
+    const releaseCall = createDeferred()
+    const llmCallStarted = createDeferred()
+    const completionContent = buildValidResponse(['auth', 'database'])
+    const llmService = createMockLlmService(async (_provider, request) => {
+      llmCallStarted.resolve()
+      await releaseCall.promise
+      return mockCompletionForRequest(completionContent, request)
+    })
+
+    const runPromise = runBenchmark(season.id, '2026-03-10', {
+      database: db,
+      llmService,
+      maxCases: 1,
+      caseClaimStaleAfterMs: 0,
+    })
+
+    await llmCallStarted.promise
+
+    const [inFlightResult] = await db
+      .select({
+        status: benchmarkCaseResults.status,
+        attemptCount: benchmarkCaseResults.attemptCount,
+        rawResponse: benchmarkCaseResults.rawResponse,
+        errorMessage: benchmarkCaseResults.errorMessage,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+
+    expect(inFlightResult?.status).toBe('running')
+    expect(inFlightResult?.attemptCount).toBe(2)
+    expect(inFlightResult?.rawResponse).toBe(originalRawResponse)
+    expect(inFlightResult?.errorMessage).toBeNull()
+
+    releaseCall.resolve()
+    const summary = await runPromise
+
+    expect(summary.processedThisInvocation).toBe(1)
+
+    const [finalResult] = await db
+      .select({
+        status: benchmarkCaseResults.status,
+        rawResponse: benchmarkCaseResults.rawResponse,
+      })
+      .from(benchmarkCaseResults)
+      .where(eq(benchmarkCaseResults.runId, run.id))
+
+    expect(finalResult?.status).toBe('completed')
+    expect(finalResult?.rawResponse).toBe(completionContent)
+  })
+
   it('keeps a fresh final-attempt worker in flight during overlapping invocations', async () => {
     const db = getTestDb()
     const { season, caseRows } = await seedBenchmarkPanel(db, { promptCount: 1, modelCount: 1 })

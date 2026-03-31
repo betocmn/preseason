@@ -342,6 +342,21 @@ async function getRunTotalCases(
   return Number(row?.cnt ?? 0)
 }
 
+async function countClaimablePendingCases(database: DatabaseClient, runId: string) {
+  const [row] = await database
+    .select({ cnt: count() })
+    .from(benchmarkCaseResults)
+    .where(
+      and(
+        eq(benchmarkCaseResults.runId, runId),
+        eq(benchmarkCaseResults.status, 'pending'),
+        lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
+      ),
+    )
+
+  return Number(row?.cnt ?? 0)
+}
+
 async function calculateRunMetrics(
   database: DatabaseClient,
   runId: string,
@@ -354,7 +369,8 @@ async function calculateRunMetrics(
     .groupBy(benchmarkCaseResults.status)
 
   const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
-  const pendingCases = countByStatus.get('pending') ?? 0
+  const rawPendingCases = countByStatus.get('pending') ?? 0
+  const pendingCases = rawPendingCases > 0 ? await countClaimablePendingCases(database, runId) : 0
   const runningCases = countByStatus.get('running') ?? 0
   const completedCases = countByStatus.get('completed') ?? 0
   const failedCases = countByStatus.get('failed') ?? 0
@@ -644,24 +660,11 @@ function buildClaimResetValues(currentTime: Date, claimToken: string) {
     startedAt: currentTime,
     completedAt: null,
     attemptCount: sql<number>`${benchmarkCaseResults.attemptCount} + 1`,
+    // Keep the prior raw completion payload until a new terminal write lands so
+    // retries can still recover from stored invalid output after a crash.
     naturalResponse: null,
     appendixRaw: null,
     appendixJson: null,
-    rawResponse: null,
-    requestedModelId: null,
-    returnedModelId: null,
-    provider: null,
-    finishReason: null,
-    promptTokens: null,
-    completionTokens: null,
-    totalTokens: null,
-    latencyMs: null,
-    temperature: null,
-    topP: null,
-    maxTokens: null,
-    parserVersion: null,
-    promptHash: null,
-    systemPromptSnapshot: null,
     errorMessage: null,
   }
 }
@@ -766,6 +769,7 @@ async function claimNextBenchmarkCase(
         and(
           eq(benchmarkCaseResults.runId, runId),
           eq(benchmarkCaseResults.status, 'pending'),
+          lt(benchmarkCaseResults.attemptCount, MAX_CASE_ATTEMPTS),
           excludedClause,
         ),
         [
@@ -1173,7 +1177,8 @@ async function finalizeRunIfExhausted(
       .groupBy(benchmarkCaseResults.status)
 
     const countByStatus = new Map(statusCounts.map((row) => [row.status, Number(row.cnt)]))
-    const pendingCases = countByStatus.get('pending') ?? 0
+    const rawPendingCases = countByStatus.get('pending') ?? 0
+    const pendingCases = rawPendingCases > 0 ? await countClaimablePendingCases(tx, runId) : 0
     const completedCases = countByStatus.get('completed') ?? 0
     const failedCases = countByStatus.get('failed') ?? 0
     const staleBefore = new Date(currentTime.getTime() - staleAfterMs)
