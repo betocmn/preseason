@@ -8,7 +8,7 @@ const envMock = vi.hoisted(
   }),
 )
 const serverSettingsMock = vi.hoisted(() => ({
-  benchmark: { casesPerCronInvocation: 1 },
+  benchmark: { cronMaxDurationSeconds: 800, casesPerCronInvocation: 1 },
 }))
 const dbMock = vi.hoisted(() => ({ __db: true }))
 const resolveBenchmarkCronRunTargetMock = vi.hoisted(() => vi.fn())

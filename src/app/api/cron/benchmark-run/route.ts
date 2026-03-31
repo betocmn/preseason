@@ -7,7 +7,7 @@ import { db } from '~/server/db'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 800
+export const maxDuration = serverSettings.benchmark.cronMaxDurationSeconds
 
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
