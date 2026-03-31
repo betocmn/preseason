@@ -5,7 +5,10 @@ export type DriftCheckResult = {
 }
 
 const SNAPSHOT_SUFFIX_PATTERN = /(?:[-_](?:\d{4}-\d{2}-\d{2}|(?:19|20)\d{6}|\d{4,8}))$/u
-const LLAMA_ALIAS_SUFFIX_PATTERN = /(?:-\d+b(?:-\d+e)?-instruct)$/u
+const LLAMA_OPENROUTER_ALIAS_PATTERNS = [
+  { pattern: /^llama-4-maverick-\d+b-\d+e-instruct$/u, canonical: 'llama-4-maverick' },
+  { pattern: /^llama-4-scout-\d+b-\d+e-instruct$/u, canonical: 'llama-4-scout' },
+] as const
 
 function normalizeForComparison(id: string): string {
   const parts = id.split('/')
@@ -30,7 +33,13 @@ function stripTrailingSnapshotSuffixes(name: string): string {
 }
 
 function stripKnownAliasDecorators(name: string) {
-  return name.replace(LLAMA_ALIAS_SUFFIX_PATTERN, '')
+  for (const alias of LLAMA_OPENROUTER_ALIAS_PATTERNS) {
+    if (alias.pattern.test(name)) {
+      return alias.canonical
+    }
+  }
+
+  return name
 }
 
 function canonicalizeAlias(name: string): string {

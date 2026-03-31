@@ -284,4 +284,29 @@ describe('parseBenchmarkResponse', () => {
     if (result.status !== 'invalid_output') return
     expect(result.reason).toContain('JSON must start immediately')
   })
+
+  it('should extract the natural response from the appendix block that was actually parsed', () => {
+    const validJson = buildValidAppendix([
+      { slug: 'auth', decision: 'tool', tool: 'Clerk' },
+      { slug: 'database', decision: 'none' },
+    ])
+    const raw = [
+      'Answer first.',
+      '',
+      '<preseason_benchmark_json>',
+      validJson,
+      '</preseason_benchmark_json>',
+      '',
+      'Trailing junk after a valid appendix.',
+      '<preseason_benchmark_json>',
+      '{"schema_version":"benchmark-v1"',
+    ].join('\n')
+
+    const result = parseBenchmarkResponse(raw, ELIGIBLE)
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.naturalResponse).toBe('Answer first.')
+    expect(result.rawAppendix).toBe(validJson)
+  })
 })

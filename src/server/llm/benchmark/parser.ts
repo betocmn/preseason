@@ -132,8 +132,8 @@ function findJsonTerminatedCloseTag(rawContent: string, contentStart: number) {
   return null
 }
 
-export function extractBenchmarkNaturalResponse(rawContent: string) {
-  const openIdx = rawContent.lastIndexOf(OPEN_TAG)
+export function extractBenchmarkNaturalResponse(rawContent: string, appendixOpenIdx?: number) {
+  const openIdx = appendixOpenIdx ?? rawContent.lastIndexOf(OPEN_TAG)
   if (openIdx === -1) {
     return rawContent.trim()
   }
@@ -154,7 +154,7 @@ export function parseBenchmarkResponse(
   }
 
   const rawAppendix = rawContent.slice(openIdx + OPEN_TAG.length, closeIdx).trim()
-  const naturalResponse = extractBenchmarkNaturalResponse(rawContent)
+  const naturalResponse = extractBenchmarkNaturalResponse(rawContent, openIdx)
 
   let parsed: unknown
   try {
