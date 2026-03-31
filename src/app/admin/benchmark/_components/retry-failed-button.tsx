@@ -35,9 +35,9 @@ export function RetryFailedButton({ runId }: { runId: string }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Repair and retry cases?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will reset the run to pending and preserve failed and invalid results so the
-            runner can repair stored invalid outputs before re-executing cases that still need a
-            fresh model call.
+            This will reset the run to pending and preserve failed and invalid results so the runner
+            can repair stored invalid outputs before re-executing cases that still need a fresh
+            model call.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

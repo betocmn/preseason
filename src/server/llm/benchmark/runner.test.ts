@@ -830,6 +830,7 @@ describe('runBenchmark', () => {
         qcSummaryJson: { snapshotCaseIds: [benchmarkCase.id] },
       })
       .returning()
+    if (!run) throw new Error('Failed to create run')
 
     const storedRawResponse = 'Use Clerk for auth and Supabase for the database.'
 

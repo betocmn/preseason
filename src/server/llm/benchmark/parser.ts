@@ -277,7 +277,9 @@ export function extractBenchmarkNaturalResponse(rawContent: string, repairBounda
 }
 
 export function shouldRepairBenchmarkParseFailure(parseResult: ParseResult) {
-  return parseResult.status === 'invalid_output' && REPAIRABLE_INVALID_OUTPUT_CODES.has(parseResult.code)
+  return (
+    parseResult.status === 'invalid_output' && REPAIRABLE_INVALID_OUTPUT_CODES.has(parseResult.code)
+  )
 }
 
 export function parseBenchmarkResponse(

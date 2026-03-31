@@ -894,7 +894,9 @@ async function executeRun(
 
     const existingResultByCaseId = new Map(existingResults.map((result) => [result.caseId, result]))
     const completedCaseIds = new Set(
-      existingResults.filter((result) => result.status === 'completed').map((result) => result.caseId),
+      existingResults
+        .filter((result) => result.status === 'completed')
+        .map((result) => result.caseId),
     )
     const retryableCaseIds = existingResults
       .filter((result) => result.status === 'failed' || result.status === 'invalid_output')
@@ -993,10 +995,15 @@ async function executeRun(
           }
         }
 
-        if (existingResult && (existingResult.status === 'failed' || existingResult.status === 'invalid_output')) {
+        if (
+          existingResult &&
+          (existingResult.status === 'failed' || existingResult.status === 'invalid_output')
+        ) {
           await database.transaction(async (tx) => {
             await verifyRunOwnershipForUpdate(tx, run)
-            await tx.delete(benchmarkCaseResults).where(eq(benchmarkCaseResults.id, existingResult.id))
+            await tx
+              .delete(benchmarkCaseResults)
+              .where(eq(benchmarkCaseResults.id, existingResult.id))
           })
         }
 

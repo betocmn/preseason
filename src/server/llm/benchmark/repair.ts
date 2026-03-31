@@ -160,7 +160,10 @@ export async function repairBenchmarkResponse(
     status: 'recovered',
     appendix: validation.data,
     rawAppendix,
-    naturalResponse: extractBenchmarkNaturalResponse(options.rawResponse, options.repairBoundaryIdx),
+    naturalResponse: extractBenchmarkNaturalResponse(
+      options.rawResponse,
+      options.repairBoundaryIdx,
+    ),
     repairModel: completion.returnedModel,
   }
 }
