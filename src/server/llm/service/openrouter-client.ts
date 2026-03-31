@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { serverSettings } from '~/constants/server-settings'
 import { env } from '~/env'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -30,6 +31,11 @@ export type OpenRouterCompletionResponse = {
 }
 
 let client: OpenAI | null = null
+
+type RetryOptions = {
+  maxAttempts?: number
+  baseDelayMs?: number
+}
 
 function resolveHttpReferer() {
   const raw =
@@ -95,38 +101,88 @@ function getErrorMessage(error: unknown) {
   return 'Unknown OpenRouter error'
 }
 
+function getErrorStatus(error: unknown) {
+  return typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof error.status === 'number'
+    ? error.status
+    : null
+}
+
+function isRetryableTransportError(error: unknown) {
+  const status = getErrorStatus(error)
+  if (status !== null && (status === 408 || status === 409 || status === 429 || status >= 500)) {
+    return true
+  }
+
+  const message = getErrorMessage(error).toLowerCase()
+
+  return [
+    'terminated',
+    'unexpected end of json input',
+    'fetch failed',
+    'network',
+    'socket hang up',
+    'econnreset',
+    'etimedout',
+    'timeout',
+    'body terminated',
+    'connection error',
+  ].some((pattern) => message.includes(pattern))
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function complete(
   model: string,
   messages: OpenRouterMessage[],
   params?: OpenRouterInferenceParams,
+  retryOptions?: RetryOptions,
 ): Promise<OpenRouterCompletionResponse> {
   const startedAt = Date.now()
+  const maxAttempts = retryOptions?.maxAttempts ?? serverSettings.openRouter.transportRetryAttempts
+  const baseDelayMs =
+    retryOptions?.baseDelayMs ?? serverSettings.openRouter.transportRetryBaseDelayMs
+  let lastError: unknown = null
 
-  try {
-    const response = await getClient().chat.completions.create({
-      model,
-      messages,
-      ...(params?.temperature !== undefined && { temperature: params.temperature }),
-      ...(params?.top_p !== undefined && { top_p: params.top_p }),
-      ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
-      ...(params?.seed !== undefined && { seed: params.seed }),
-    })
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await getClient().chat.completions.create({
+        model,
+        messages,
+        ...(params?.temperature !== undefined && { temperature: params.temperature }),
+        ...(params?.top_p !== undefined && { top_p: params.top_p }),
+        ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
+        ...(params?.seed !== undefined && { seed: params.seed }),
+      })
 
-    const firstChoice = response.choices[0]
+      const firstChoice = response.choices[0]
 
-    return {
-      content: getContent(firstChoice),
-      requestedModel: model,
-      returnedModel: response.model,
-      finishReason: firstChoice?.finish_reason ?? 'unknown',
-      usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0,
-      },
-      latencyMs: Date.now() - startedAt,
+      return {
+        content: getContent(firstChoice),
+        requestedModel: model,
+        returnedModel: response.model,
+        finishReason: firstChoice?.finish_reason ?? 'unknown',
+        usage: {
+          promptTokens: response.usage?.prompt_tokens ?? 0,
+          completionTokens: response.usage?.completion_tokens ?? 0,
+          totalTokens: response.usage?.total_tokens ?? 0,
+        },
+        latencyMs: Date.now() - startedAt,
+      }
+    } catch (error) {
+      lastError = error
+
+      if (attempt >= maxAttempts || !isRetryableTransportError(error)) {
+        break
+      }
+
+      await sleep(baseDelayMs * attempt)
     }
-  } catch (error) {
-    throw new Error(`OpenRouter completion failed: ${getErrorMessage(error)}`)
   }
+
+  throw new Error(`OpenRouter completion failed: ${getErrorMessage(lastError)}`)
 }
