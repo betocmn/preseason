@@ -14,6 +14,17 @@ export const serverSettings = {
     casesPerCronInvocation: 4,
     staleRunThresholdMs: 15 * 60 * 1000,
     heartbeatIntervalMs: 5 * 60 * 1000,
+    modelDefaults: {
+      temperature: 0.2,
+      topP: 1,
+      maxTokens: 2000,
+    },
+    outputRepair: {
+      modelProvider: 'openai',
+      modelId: 'openai/gpt-5.4-mini',
+      temperature: 0,
+      maxTokens: 700,
+    },
   },
   toolCandidateReview: {
     cronBatchSize: 8,

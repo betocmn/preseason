@@ -34,6 +34,16 @@ describe('buildBenchmarkPrompt', () => {
     expect(result).toContain('"none"')
   })
 
+  it('should instruct models to keep the natural-language answer brief', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Keep the natural-language answer brief')
+  })
+
+  it('should forbid omitting the closing tag', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Do not omit the closing tag')
+  })
+
   it('should start with the original content', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result.startsWith(contentMd)).toBe(true)

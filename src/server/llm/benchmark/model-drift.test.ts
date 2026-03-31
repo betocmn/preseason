@@ -32,6 +32,23 @@ describe('checkModelDrift', () => {
     expect(
       checkModelDrift('qwen/qwen3-coder-next', 'qwen/qwen3-coder-next-2025-02-03').hasDrift,
     ).toBe(false)
+    expect(
+      checkModelDrift(
+        'meta-llama/llama-4-maverick',
+        'meta-llama/llama-4-maverick-17b-128e-instruct',
+      ).hasDrift,
+    ).toBe(false)
+    expect(
+      checkModelDrift('meta-llama/llama-4-scout', 'meta-llama/llama-4-scout-17b-16e-instruct')
+        .hasDrift,
+    ).toBe(false)
+  })
+
+  it('preserves drift detection across materially different llama sizes', () => {
+    expect(
+      checkModelDrift('meta-llama/llama-3.1-8b-instruct', 'meta-llama/llama-3.1-70b-instruct')
+        .hasDrift,
+    ).toBe(true)
   })
 
   it('returns hasDrift=true when model families differ', () => {
