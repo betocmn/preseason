@@ -9,7 +9,8 @@ describe('buildGenerationSystemPrompt', () => {
 
   it('biases recommendations toward major tool decisions', () => {
     const result = buildGenerationSystemPrompt('advanced')
-    expect(result).toContain('Bias toward high-leverage choices')
+    expect(result).toContain('Recommend the major best-fit tools for the job')
+    expect(result).toContain('Prefer high-leverage, category-defining choices')
     expect(result).toContain('materially shape the build')
   })
 
