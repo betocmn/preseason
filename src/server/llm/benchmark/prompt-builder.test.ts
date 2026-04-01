@@ -34,6 +34,12 @@ describe('buildBenchmarkPrompt', () => {
     expect(result).toContain('"none"')
   })
 
+  it('should require reasoning and confidence for none decisions too', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Every category entry must include both "reasoning" and "confidence"')
+    expect(result).toContain('including "none" decisions')
+  })
+
   it('should steer recommendations toward major tool choices', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('Favor major, category-defining tool choices')
@@ -50,6 +56,8 @@ describe('buildBenchmarkPrompt', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('exactly 1 sentence maximum')
     expect(result).toContain('start the appendix immediately')
+    expect(result).toContain('Do not end the response after the prose sentence')
+    expect(result).toContain('you may omit prose entirely')
   })
 
   it('should forbid omitting the closing tag', () => {

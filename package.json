@@ -18,6 +18,7 @@
     "evals:export": "dotenv -e .env.local -- tsx src/server/llm/evals/export-promptfoo.ts",
     "evals:major-tools:prepare": "dotenv -e .env.local -- tsx src/server/llm/evals/write-major-tool-eval-fixtures.ts",
     "evals:major-tools": "pnpm run evals:major-tools:prepare && npx promptfoo@0.120.19 eval -c promptfooconfig.major-tools.yaml -t .context/promptfoo/major-tool-tests.json --env-path .env.local -j 1 --no-share -o .context/promptfoo/major-tool-results.json -o .context/promptfoo/major-tool-results.html",
+    "evals:major-tools:broad": "pnpm run evals:major-tools:prepare && npx promptfoo@0.120.19 eval -c promptfooconfig.major-tools-broad.yaml -t .context/promptfoo/major-tool-tests.json --env-path .env.local -j 1 --no-share -o .context/promptfoo/major-tool-broad-results.json -o .context/promptfoo/major-tool-broad-results.html",
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

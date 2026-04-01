@@ -23,6 +23,17 @@ export const MAJOR_TOOL_EVAL_PROVIDER_IDS = [
   'openrouter:openai/gpt-5.4-mini',
   'openrouter:anthropic/claude-haiku-4.5',
   'openrouter:google/gemini-2.5-flash',
+  'openrouter:meta-llama/llama-4-scout',
+  'openrouter:mistralai/mistral-small-2603',
+  'openrouter:mistralai/devstral-2512',
+  'openrouter:deepseek/deepseek-v3.2',
+  'openrouter:qwen/qwen3-coder-next',
+] as const
+
+export const MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS = [
+  ...MAJOR_TOOL_EVAL_PROVIDER_IDS,
+  'openrouter:z-ai/glm-5-turbo',
+  'openrouter:moonshotai/kimi-k2.5',
 ] as const
 
 const BLOCKED_EXACT_PHRASES = [
@@ -270,6 +281,7 @@ export async function writeMajorToolEvalFixtures(repoRoot = process.cwd()) {
       expectedCategories: prompt.expectedCategories,
     })),
     providerIds: MAJOR_TOOL_EVAL_PROVIDER_IDS,
+    broadProviderIds: MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS,
     testsPath,
     promptsPath,
     toolCatalogPath: catalogPath,

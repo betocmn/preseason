@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMajorToolCatalog,
   buildMajorToolEvalTests,
+  MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS,
+  MAJOR_TOOL_EVAL_PROVIDER_IDS,
   selectMajorToolEvalPrompts,
 } from './write-major-tool-eval-fixtures'
 
@@ -82,5 +84,15 @@ describe('buildMajorToolEvalTests', () => {
       '/repo/.context/promptfoo/major-tool-tool-catalog.json',
     )
     expect(result[0]?.assert.some((assertion) => assertion.type === 'javascript')).toBe(true)
+  })
+})
+
+describe('provider matrices', () => {
+  it('keeps the broad matrix as a strict superset of the stable matrix', () => {
+    expect(MAJOR_TOOL_EVAL_PROVIDER_IDS).toHaveLength(8)
+    expect(MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS).toHaveLength(10)
+    expect(
+      MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS.slice(0, MAJOR_TOOL_EVAL_PROVIDER_IDS.length),
+    ).toEqual(MAJOR_TOOL_EVAL_PROVIDER_IDS)
   })
 })

@@ -1,4 +1,4 @@
-description: Preseason major tool regression evals
+description: Preseason major tool broad regression evals
 prompts:
   - "{{prompt_text}}"
 providers:
@@ -10,3 +10,5 @@ providers:
   - openrouter:mistralai/devstral-2512
   - openrouter:deepseek/deepseek-v3.2
   - openrouter:qwen/qwen3-coder-next
+  - openrouter:z-ai/glm-5-turbo
+  - openrouter:moonshotai/kimi-k2.5

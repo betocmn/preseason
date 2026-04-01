@@ -2,12 +2,16 @@
 
 ## Overview
 
-Promptfoo is still a local-only development tool, but the repo now ships one
-checked-in regression suite for the benchmark prompt contract:
+Promptfoo is still a local-only development tool, but the repo now ships two
+checked-in regression suites for the benchmark prompt contract:
 
 - `promptfooconfig.major-tools.yaml` exercises a few representative prompts
 - `pnpm run evals:major-tools` prepares fixtures under `.context/promptfoo/`
-  and runs Promptfoo against OpenRouter models using `.env.local`
+  and runs the default 8-model coverage matrix against OpenRouter using `.env.local`
+- `promptfooconfig.major-tools-broad.yaml` extends that matrix with more
+  exploratory providers that are useful for coverage, but may be less reliable
+  on strict appendix compliance
+- `pnpm run evals:major-tools:broad` runs the broader matrix
 - `pnpm run evals:export` still exports the full DB-backed prompt corpus for
   ad hoc Promptfoo work outside the built-in regression suite
 
@@ -26,7 +30,10 @@ This suite is targeted at the prompt behavior we care about after tightening
 the system prompt: recommend major, category-defining tools and avoid generic
 phrases, plugins/themes, and custom-built pseudo-tools.
 
-Run it with:
+It intentionally includes a few smaller models, so failures can reflect a real
+prompt-contract weakness in addition to a model limitation.
+
+Run the default suite with:
 
 ```bash
 pnpm run evals:major-tools
@@ -42,6 +49,11 @@ What it does:
    - `openrouter:openai/gpt-5.4-mini`
    - `openrouter:anthropic/claude-haiku-4.5`
    - `openrouter:google/gemini-2.5-flash`
+   - `openrouter:meta-llama/llama-4-scout`
+   - `openrouter:mistralai/mistral-small-2603`
+   - `openrouter:mistralai/devstral-2512`
+   - `openrouter:deepseek/deepseek-v3.2`
+   - `openrouter:qwen/qwen3-coder-next`
 4. Saves results to:
    - `.context/promptfoo/major-tool-results.json`
    - `.context/promptfoo/major-tool-results.html`
@@ -69,6 +81,20 @@ Prepare fixtures without running Promptfoo:
 ```bash
 pnpm run evals:major-tools:prepare
 ```
+
+Run the broader exploratory provider matrix:
+
+```bash
+pnpm run evals:major-tools:broad
+```
+
+This adds:
+
+- `openrouter:z-ai/glm-5-turbo`
+- `openrouter:moonshotai/kimi-k2.5`
+
+Use it when you want extra provider diversity and are specifically looking for
+contract-compliance issues in weaker models.
 
 Re-run Promptfoo manually against the prepared fixtures:
 
