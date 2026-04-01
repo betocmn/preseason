@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
@@ -11,9 +12,16 @@ import { api } from '~/trpc/server'
 
 export default async function HomePage() {
   const caller = await api()
+  const today = new Date().toISOString().slice(0, 10)
 
-  const [promptsWithTools, featuredMatchups, recentComments] = await Promise.all([
-    caller.prompt.listWithTopTools({ limit: 5 }),
+  const getCachedPrompts = unstable_cache(
+    async () => caller.prompt.listWithTopTools({ limit: 5, offset: 0 }),
+    ['homepage-prompts', today],
+    { revalidate: 3600 },
+  )
+
+  const [promptsResult, featuredMatchups, recentComments] = await Promise.all([
+    getCachedPrompts(),
     caller.benchmarkMatch.listFeatured({ limit: 6 }),
     caller.comment.listRecent({ limit: 5 }),
   ])
@@ -33,8 +41,11 @@ export default async function HomePage() {
             </p>
           </div>
 
-          {promptsWithTools.length > 0 ? (
-            <PromptCarousel prompts={promptsWithTools} />
+          {promptsResult.items.length > 0 ? (
+            <PromptCarousel
+              initialPrompts={promptsResult.items}
+              initialHasMore={promptsResult.hasMore}
+            />
           ) : (
             <EmptyState
               title="No prompts yet"

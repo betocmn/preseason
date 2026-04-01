@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { ToolBadge } from '~/components/public/tool-badge'
@@ -8,6 +8,7 @@ import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { formatPromptLevel } from '~/lib/prompt-levels'
 import { cn } from '~/lib/utils'
+import { api } from '~/trpc/react'
 
 type PromptWithTools = {
   id: string
@@ -23,16 +24,46 @@ type PromptWithTools = {
   }[]
 }
 
+const PAGE_SIZE = 5
+
 type PromptCarouselProps = {
-  prompts: PromptWithTools[]
+  initialPrompts: PromptWithTools[]
+  initialHasMore: boolean
 }
 
-export function PromptCarousel({ prompts }: PromptCarouselProps) {
+export function PromptCarousel({ initialPrompts, initialHasMore }: PromptCarouselProps) {
+  const [prompts, setPrompts] = useState<PromptWithTools[]>(initialPrompts)
+  const [hasMore, setHasMore] = useState(initialHasMore)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-  const goNext = useCallback(() => {
-    setCurrentIndex((i) => Math.min(i + 1, prompts.length - 1))
-  }, [prompts.length])
+  const utils = api.useUtils()
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoadingMore) return
+    setIsLoadingMore(true)
+    try {
+      const result = await utils.prompt.listWithTopTools.fetch({
+        limit: PAGE_SIZE,
+        offset: prompts.length,
+      })
+      setPrompts((prev) => [...prev, ...result.items])
+      setHasMore(result.hasMore)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [hasMore, isLoadingMore, prompts.length, utils])
+
+  const goNext = useCallback(async () => {
+    const nextIndex = currentIndex + 1
+    if (nextIndex < prompts.length) {
+      setCurrentIndex(nextIndex)
+    }
+    // Pre-fetch next page when nearing the end of loaded prompts
+    if (nextIndex >= prompts.length - 2 && hasMore && !isLoadingMore) {
+      await loadMore()
+    }
+  }, [currentIndex, prompts.length, hasMore, isLoadingMore, loadMore])
 
   const goPrev = useCallback(() => {
     setCurrentIndex((i) => Math.max(i - 1, 0))
@@ -41,7 +72,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
   if (prompts.length === 0) return null
 
   const hasPrev = currentIndex > 0
-  const hasNext = currentIndex < prompts.length - 1
+  const canGoNext = currentIndex < prompts.length - 1 || hasMore
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
@@ -68,9 +99,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                     >
                       {formatPromptLevel(prompt.level)}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {currentIndex + 1} of {prompts.length}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{currentIndex + 1}</span>
                   </div>
                   <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
                     {prompt.title}
@@ -145,7 +174,7 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
       </div>
 
       {/* Navigation: arrows around dots */}
-      {prompts.length > 1 && (
+      {(prompts.length > 1 || hasMore) && (
         <div className="flex items-center justify-between border-t px-5 py-3">
           <div className="flex items-center gap-2">
             <Button
@@ -171,15 +200,20 @@ export function PromptCarousel({ prompts }: PromptCarouselProps) {
                   )}
                 />
               ))}
+              {hasMore && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/10" />}
             </div>
             <Button
               variant="ghost"
               size="icon"
-              disabled={!hasNext}
+              disabled={!canGoNext || isLoadingMore}
               onClick={goNext}
               className="h-6 w-6 text-muted-foreground"
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              {isLoadingMore ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
             </Button>
           </div>
           <Link href="/prompts" className="text-xs text-muted-foreground/70 hover:text-foreground">
