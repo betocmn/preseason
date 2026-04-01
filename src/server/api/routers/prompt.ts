@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
 import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
@@ -289,6 +290,15 @@ export const promptRouter = createTRPCRouter({
         }[]
       }
 
+      type PromptVersionRow = {
+        pv_id: string
+        slug: string
+        level: PromptLevel
+        content_md: string | null
+        prompt_title: string
+        prompt_description: string | null
+      }
+
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db)
       if (!seasonId) return { items: [] as PromptWithTopTools[], hasMore: false }
 
@@ -301,27 +311,19 @@ export const promptRouter = createTRPCRouter({
       const runIds = publishedRuns.map((r) => r.id)
       if (runIds.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
 
-      // Phase 1: Get deduplicated prompt versions (one per prompt) with daily-shuffled order.
-      // Uses DISTINCT ON to pick the latest version per prompt, EXISTS to ensure tool decisions
-      // exist, and md5 hash for deterministic daily ordering.
-      const promptVersionRows = await ctx.db.execute<{
-        pv_id: string
-        prompt_id: string
-        slug: string
-        level: PromptLevel
-        content_md: string
-        prompt_title: string
-        prompt_description: string | null
-      }>(sql`
-        WITH unique_pvs AS (
-          SELECT DISTINCT ON (p.id)
+      const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
+      const anchorDate = new Date().toISOString().slice(0, 10)
+
+      const orderedCandidatesSql = sql`
+        WITH eligible_candidates AS (
+          SELECT DISTINCT
             bpv.id AS pv_id,
-            p.id AS prompt_id,
-            bpv.slug,
+            p.slug,
             bpv.level,
             bpv.content_md,
             p.title AS prompt_title,
-            p.description AS prompt_description
+            p.description AS prompt_description,
+            bpv.created_at
           FROM preseason_benchmark_case bc
           JOIN preseason_benchmark_prompt_version bpv ON bc.prompt_version_id = bpv.id
           JOIN preseason_prompt p ON bpv.prompt_id = p.id
@@ -336,14 +338,89 @@ export const promptRouter = createTRPCRouter({
                 AND cr.run_id = ANY(${runIds})
                 AND d.decision_type = 'tool'
             )
-          ORDER BY p.id, bpv.created_at DESC
+        ),
+        ordered_candidates AS (
+          SELECT
+            pv_id,
+            slug,
+            level,
+            content_md,
+            prompt_title,
+            prompt_description,
+            created_at,
+            md5(slug || ${anchorDate}) AS day_key
+          FROM eligible_candidates
         )
-        SELECT *
-        FROM unique_pvs
-        ORDER BY md5(prompt_id::text || date_trunc('day', now())::text)
-        LIMIT ${input.limit + 1}
-        OFFSET ${input.offset}
-      `)
+      `
+
+      let promptVersionRows: PromptVersionRow[]
+
+      if (input.offset === 0) {
+        promptVersionRows = await ctx.db.execute<PromptVersionRow>(sql`
+          ${orderedCandidatesSql}
+          SELECT
+            pv_id,
+            slug,
+            level,
+            content_md,
+            prompt_title,
+            prompt_description
+          FROM (
+            SELECT DISTINCT ON (slug)
+              pv_id,
+              slug,
+              level,
+              content_md,
+              prompt_title,
+              prompt_description,
+              created_at,
+              day_key
+            FROM ordered_candidates
+            ORDER BY slug, day_key, created_at DESC, pv_id DESC
+          ) first_page
+          ORDER BY day_key, created_at DESC, pv_id DESC
+          LIMIT ${input.limit + 1}
+        `)
+      } else {
+        const firstPageRows = await ctx.db.execute<{ pv_id: string }>(sql`
+          ${orderedCandidatesSql}
+          SELECT pv_id
+          FROM (
+            SELECT DISTINCT ON (slug)
+              pv_id,
+              slug,
+              created_at,
+              day_key
+            FROM ordered_candidates
+            ORDER BY slug, day_key, created_at DESC, pv_id DESC
+          ) first_page
+          ORDER BY day_key, created_at DESC, pv_id DESC
+          LIMIT ${homepagePageSize}
+        `)
+
+        const excludedPromptVersionIds = firstPageRows.map((row) => row.pv_id)
+        const exclusionClause =
+          excludedPromptVersionIds.length > 0
+            ? sql`WHERE pv_id <> ALL(${excludedPromptVersionIds})`
+            : sql``
+        const remainingOffset = Math.max(input.offset - homepagePageSize, 0)
+
+        promptVersionRows = await ctx.db.execute<PromptVersionRow>(sql`
+          ${orderedCandidatesSql}
+          SELECT
+            pv_id,
+            slug,
+            level,
+            content_md,
+            prompt_title,
+            prompt_description
+          FROM ordered_candidates
+          ${exclusionClause}
+          ORDER BY day_key, created_at DESC, pv_id DESC
+          LIMIT ${input.limit + 1}
+          OFFSET ${remainingOffset}
+        `)
+      }
 
       const hasMore = promptVersionRows.length > input.limit
       const rows = promptVersionRows.slice(0, input.limit)
