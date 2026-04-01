@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPromptfooRunConfig,
   extractPromptfooFailureSummaries,
+  getPromptfooFailedTestExitCode,
   parseArgs,
   resolvePromptfooExitCode,
 } from './run-major-tool-eval'
@@ -66,6 +67,18 @@ describe('extractPromptfooFailureSummaries', () => {
 })
 
 describe('resolvePromptfooExitCode', () => {
+  it('uses the default Promptfoo failed-test exit code when no override is configured', () => {
+    expect(getPromptfooFailedTestExitCode({})).toBe(100)
+  })
+
+  it('ignores invalid Promptfoo failed-test exit code overrides', () => {
+    expect(
+      getPromptfooFailedTestExitCode({
+        PROMPTFOO_FAILED_TEST_EXIT_CODE: 'not-a-number',
+      }),
+    ).toBe(100)
+  })
+
   it('keeps the strict suite blocking on assertion failures', () => {
     expect(
       resolvePromptfooExitCode({
@@ -75,6 +88,19 @@ describe('resolvePromptfooExitCode', () => {
         hasResults: true,
       }),
     ).toBe(100)
+  })
+
+  it('honors Promptfoo failed-test exit code overrides for broad assertion failures', () => {
+    expect(getPromptfooFailedTestExitCode({ PROMPTFOO_FAILED_TEST_EXIT_CODE: '1' })).toBe(1)
+    expect(
+      resolvePromptfooExitCode({
+        mode: 'broad',
+        promptfooExitCode: 1,
+        stats: { successes: 23, failures: 7, errors: 0 },
+        hasResults: true,
+        failedTestExitCode: 1,
+      }),
+    ).toBe(0)
   })
 
   it('lets the broad suite stay non-blocking on assertion-only failures', () => {

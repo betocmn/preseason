@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { writeMajorToolEvalFixtures } from './write-major-tool-eval-fixtures'
 
 const PROMPTFOO_VERSION = '0.120.19'
+const DEFAULT_PROMPTFOO_FAILED_TEST_EXIT_CODE = 100
 
 type PromptfooRunMode = 'default' | 'broad'
 
@@ -113,18 +114,39 @@ export function extractPromptfooFailureSummaries(document: PromptfooResultDocume
     })
 }
 
+export function getPromptfooFailedTestExitCode(
+  env?: Readonly<Record<string, string | undefined>>,
+): number {
+  const configuredExitCode = (
+    env ?? (process.env as Readonly<Record<string, string | undefined>>)
+  ).PROMPTFOO_FAILED_TEST_EXIT_CODE?.trim()
+  if (!configuredExitCode) {
+    return DEFAULT_PROMPTFOO_FAILED_TEST_EXIT_CODE
+  }
+
+  const parsedExitCode = Number(configuredExitCode)
+  if (!Number.isInteger(parsedExitCode) || parsedExitCode < 0) {
+    return DEFAULT_PROMPTFOO_FAILED_TEST_EXIT_CODE
+  }
+
+  return parsedExitCode
+}
+
 export function resolvePromptfooExitCode(input: {
   mode: PromptfooRunMode
   promptfooExitCode: number
   stats: PromptfooRunStats | null
   hasResults: boolean
+  failedTestExitCode?: number
 }): number {
+  const failedTestExitCode = input.failedTestExitCode ?? getPromptfooFailedTestExitCode()
+
   if (
     input.mode === 'broad' &&
-    input.promptfooExitCode === 100 &&
+    input.promptfooExitCode === failedTestExitCode &&
     input.hasResults &&
-    input.stats?.failures &&
-    input.stats?.errors === 0
+    (input.stats?.failures ?? 0) > 0 &&
+    (input.stats?.errors ?? 0) === 0
   ) {
     return 0
   }
@@ -191,6 +213,7 @@ export async function runMajorToolEval(mode: PromptfooRunMode, repoRoot = proces
     promptfooExitCode: promptfooResult.status ?? 1,
     stats: document?.results?.stats ?? null,
     hasResults: document !== null,
+    failedTestExitCode: getPromptfooFailedTestExitCode(),
   })
   process.exitCode = exitCode
 }
