@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
@@ -390,6 +390,7 @@ export const promptRouter = createTRPCRouter({
               eq(benchmarkCases.seasonId, seasonId),
               inArray(benchmarkCaseResults.runId, runIds),
               eq(benchmarkCaseDecisions.decisionType, 'tool'),
+              isNotNull(benchmarkCaseDecisions.toolId),
               eq(prompts.isActive, true),
               eq(benchmarkPromptVersions.isActive, true),
             ),
@@ -425,6 +426,7 @@ export const promptRouter = createTRPCRouter({
             inArray(benchmarkCaseResults.runId, runIds),
             inArray(benchmarkCases.promptVersionId, pvIds),
             eq(benchmarkCaseDecisions.decisionType, 'tool'),
+            isNotNull(benchmarkCaseDecisions.toolId),
           ),
         )
         .groupBy(

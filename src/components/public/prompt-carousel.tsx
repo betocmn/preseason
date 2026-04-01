@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   getNextPromptIndexAfterLoad,
   shouldPrefetchPromptPage,
@@ -36,6 +36,11 @@ type PromptCarouselProps = {
   anchorDate: string
 }
 
+type PromptPageResult = {
+  items: PromptWithTools[]
+  hasMore: boolean
+}
+
 export function PromptCarousel({
   initialPrompts,
   initialHasMore,
@@ -45,13 +50,19 @@ export function PromptCarousel({
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const inFlightLoadRef = useRef<Promise<PromptPageResult | undefined> | null>(null)
 
   const utils = api.useUtils()
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || isLoadingMore) return
+    if (inFlightLoadRef.current) {
+      return inFlightLoadRef.current
+    }
+
+    if (!hasMore) return
+
     setIsLoadingMore(true)
-    try {
+    const request = (async () => {
       const result = await utils.prompt.listWithTopTools.fetch({
         limit: PAGE_SIZE,
         offset: prompts.length,
@@ -60,10 +71,19 @@ export function PromptCarousel({
       setPrompts((prev) => [...prev, ...result.items])
       setHasMore(result.hasMore)
       return result
-    } finally {
+    })()
+
+    inFlightLoadRef.current = request
+
+    void request.finally(() => {
+      if (inFlightLoadRef.current === request) {
+        inFlightLoadRef.current = null
+      }
       setIsLoadingMore(false)
-    }
-  }, [anchorDate, hasMore, isLoadingMore, prompts.length, utils])
+    })
+
+    return request
+  }, [anchorDate, hasMore, prompts.length, utils])
 
   const goNext = useCallback(async () => {
     const nextIndex = currentIndex + 1

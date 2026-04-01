@@ -33,6 +33,7 @@ type HomepagePromptSeed = {
   slug: string
   level: PromptLevel
   createdAt: Date
+  resolutionStatus?: 'resolved' | 'unresolved_tool'
 }
 
 type SeededPromptVersion = HomepagePromptSeed & {
@@ -122,6 +123,30 @@ function findDifferentAnchorDate(promptVersions: SeededPromptVersion[], anchorDa
   }
 
   throw new Error('Expected to find an anchorDate with a different prompt order')
+}
+
+function findAnchorDateWherePromptAppearsOnFirstPage(
+  promptVersions: SeededPromptVersion[],
+  slug: string,
+  firstPageSize: number,
+  anchorDate: string,
+) {
+  for (let dayOffset = 0; dayOffset <= 31; dayOffset++) {
+    const nextDate = new Date(`${anchorDate}T00:00:00.000Z`)
+    nextDate.setUTCDate(nextDate.getUTCDate() + dayOffset)
+    const candidateAnchorDate = nextDate.toISOString().slice(0, 10)
+    const firstPage = buildExpectedPromptDisplayOrder(
+      promptVersions,
+      candidateAnchorDate,
+      firstPageSize,
+    ).firstPage
+
+    if (firstPage.some((promptVersion) => promptVersion.slug === slug)) {
+      return candidateAnchorDate
+    }
+  }
+
+  throw new Error(`Expected to find an anchorDate where ${slug} appears on the first page`)
 }
 
 function createUniquePromptSeeds(count: number): HomepagePromptSeed[] {
@@ -291,8 +316,9 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
       caseResultId: caseResult.id,
       categoryId: category.id,
       decisionType: 'tool',
-      toolId: tool.id,
-      resolutionStatus: 'resolved',
+      toolId: entry.resolutionStatus === 'unresolved_tool' ? null : tool.id,
+      rawToolName: entry.resolutionStatus === 'unresolved_tool' ? `${entry.title} Tool` : null,
+      resolutionStatus: entry.resolutionStatus ?? 'resolved',
     })
 
     promptVersions.push({
@@ -658,6 +684,42 @@ describe('promptRouter', () => {
       expectedOrder.remaining.slice(0, 5).map((item) => item.id),
     )
     expect(secondPage.hasMore).toBe(false)
+  })
+
+  it('excludes unresolved tool decisions from homepage prompt candidates', async () => {
+    const caller = createTestCaller(null)
+    const unresolvedSlug = 'unresolved-prompt'
+    const fixture = await seedPromptTopToolFixture([
+      {
+        title: 'Unresolved Prompt',
+        slug: unresolvedSlug,
+        level: 'beginner',
+        createdAt: new Date('2026-03-01T00:00:00.000Z'),
+        resolutionStatus: 'unresolved_tool',
+      },
+      ...createUniquePromptSeeds(5),
+    ])
+    const anchorDate = findAnchorDateWherePromptAppearsOnFirstPage(
+      fixture.promptVersions,
+      unresolvedSlug,
+      5,
+      '2026-04-01',
+    )
+    const expectedOrder = buildExpectedPromptDisplayOrder(
+      fixture.promptVersions.filter((promptVersion) => promptVersion.slug !== unresolvedSlug),
+      anchorDate,
+      5,
+    )
+
+    const result = await caller.prompt.listWithTopTools({ limit: 5, offset: 0, anchorDate })
+
+    expect(result.items).toHaveLength(5)
+    expect(result.items.every((item) => item.topTools.length > 0)).toBe(true)
+    expect(result.items.some((item) => item.slug === unresolvedSlug)).toBe(false)
+    expect(result.items.map((item) => item.id)).toEqual(
+      expectedOrder.firstPage.map((item) => item.id),
+    )
+    expect(result.hasMore).toBe(false)
   })
 
   it('computes hasMore for later pages from the non-deduped remainder', async () => {
