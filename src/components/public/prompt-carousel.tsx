@@ -34,17 +34,25 @@ type PromptCarouselProps = {
   initialPrompts: PromptWithTools[]
   initialHasMore: boolean
   anchorDate: string
+  snapshot: PromptListSnapshot
+}
+
+type PromptListSnapshot = {
+  seasonId: string
+  publishedRunIds: string[]
 }
 
 type PromptPageResult = {
   items: PromptWithTools[]
   hasMore: boolean
+  snapshot: PromptListSnapshot | null
 }
 
 export function PromptCarousel({
   initialPrompts,
   initialHasMore,
   anchorDate,
+  snapshot,
 }: PromptCarouselProps) {
   const [prompts, setPrompts] = useState<PromptWithTools[]>(initialPrompts)
   const [hasMore, setHasMore] = useState(initialHasMore)
@@ -67,6 +75,7 @@ export function PromptCarousel({
         limit: PAGE_SIZE,
         offset: prompts.length,
         anchorDate,
+        snapshot,
       })
       setPrompts((prev) => [...prev, ...result.items])
       setHasMore(result.hasMore)
@@ -83,7 +92,7 @@ export function PromptCarousel({
     })
 
     return request
-  }, [anchorDate, hasMore, prompts.length, utils])
+  }, [anchorDate, hasMore, prompts.length, snapshot, utils])
 
   const goNext = useCallback(async () => {
     const nextIndex = currentIndex + 1

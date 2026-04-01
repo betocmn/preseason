@@ -42,6 +42,16 @@ type SeededPromptVersion = HomepagePromptSeed & {
 
 type DisplayPromptVersion = Pick<SeededPromptVersion, 'id' | 'slug' | 'level'>
 
+type HomepagePromptFixtureContext = {
+  seasonId: string
+  categoryId: string
+  toolId: string
+  modelSnapshotId: string
+  requestedModelId: string
+  provider: string
+  publishedRunIds: string[]
+}
+
 function getDailySlugKey(slug: string, anchorDate: string) {
   return createHash('md5').update(`${slug}${anchorDate}`).digest('hex')
 }
@@ -330,7 +340,120 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
     })
   }
 
-  return { promptVersions }
+  return {
+    promptVersions,
+    context: {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolId: tool.id,
+      modelSnapshotId: modelSnapshot.id,
+      requestedModelId: llm.modelId,
+      provider: llm.provider,
+      publishedRunIds: [run.id],
+    } satisfies HomepagePromptFixtureContext,
+  }
+}
+
+async function addPublishedPromptTopToolEntry(
+  context: HomepagePromptFixtureContext,
+  entry: HomepagePromptSeed,
+  scheduledFor: string,
+) {
+  const db = getTestDb()
+  const prompt = first(
+    await db
+      .insert(prompts)
+      .values({
+        title: entry.title,
+        slug: entry.slug,
+        level: entry.level,
+        description: `${entry.title} description`,
+        contentMd: `# ${entry.title} ${entry.level}`,
+        isActive: true,
+      })
+      .returning(),
+  )
+
+  const promptVersion = first(
+    await db
+      .insert(benchmarkPromptVersions)
+      .values({
+        promptId: prompt.id,
+        slug: entry.slug,
+        level: entry.level,
+        version: 1,
+        contentMd: prompt.contentMd ?? `# ${entry.title}`,
+        contentHash: createHash('sha256').update(`${entry.slug}:${entry.level}`).digest('hex'),
+        promptContractVersion: '1.0',
+        isActive: true,
+        createdAt: entry.createdAt,
+      })
+      .returning(),
+  )
+
+  await db.insert(benchmarkSeasonPrompts).values({
+    seasonId: context.seasonId,
+    promptVersionId: promptVersion.id,
+  })
+
+  const benchmarkCase = first(
+    await db
+      .insert(benchmarkCases)
+      .values({
+        seasonId: context.seasonId,
+        promptVersionId: promptVersion.id,
+        modelSnapshotId: context.modelSnapshotId,
+      })
+      .returning(),
+  )
+
+  const run = first(
+    await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: context.seasonId,
+        scheduledFor,
+        status: 'published',
+        qcStatus: 'passed',
+      })
+      .returning(),
+  )
+
+  const caseResult = first(
+    await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: context.seasonId,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'completed',
+        requestedModelId: context.requestedModelId,
+        returnedModelId: context.requestedModelId,
+        provider: context.provider,
+        parserVersion: 'strict-v1',
+      })
+      .returning(),
+  )
+
+  await db.insert(benchmarkCaseDecisions).values({
+    caseResultId: caseResult.id,
+    categoryId: context.categoryId,
+    decisionType: 'tool',
+    toolId: entry.resolutionStatus === 'unresolved_tool' ? null : context.toolId,
+    rawToolName: entry.resolutionStatus === 'unresolved_tool' ? `${entry.title} Tool` : null,
+    resolutionStatus: entry.resolutionStatus ?? 'resolved',
+  })
+
+  context.publishedRunIds.push(run.id)
+
+  return {
+    id: promptVersion.id,
+    title: entry.title,
+    slug: entry.slug,
+    level: entry.level,
+    createdAt: entry.createdAt,
+    resolutionStatus: entry.resolutionStatus,
+  } satisfies SeededPromptVersion
 }
 
 describe('promptRouter', () => {
@@ -720,6 +843,68 @@ describe('promptRouter', () => {
       expectedOrder.firstPage.map((item) => item.id),
     )
     expect(result.hasMore).toBe(false)
+  })
+
+  it('keeps later pages pinned to the first-page snapshot when new runs publish', async () => {
+    const caller = createTestCaller(null)
+    const fixture = await seedPromptTopToolFixture(createUniquePromptSeeds(6))
+    const newPromptEntry: HomepagePromptSeed = {
+      title: 'Shifted Prompt',
+      slug: 'shifted-prompt',
+      level: 'beginner',
+      createdAt: new Date('2026-03-07T00:00:00.000Z'),
+    }
+    const anchorDate = findAnchorDateWherePromptAppearsOnFirstPage(
+      [
+        ...fixture.promptVersions,
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          ...newPromptEntry,
+        },
+      ],
+      newPromptEntry.slug,
+      5,
+      '2026-04-01',
+    )
+    const expectedBefore = buildExpectedPromptDisplayOrder(fixture.promptVersions, anchorDate, 5)
+
+    const firstPage = await caller.prompt.listWithTopTools({ limit: 5, offset: 0, anchorDate })
+    if (!firstPage.snapshot) {
+      throw new Error('Expected first page to include a prompt snapshot')
+    }
+    expect(firstPage.snapshot).toEqual({
+      seasonId: fixture.context.seasonId,
+      publishedRunIds: fixture.context.publishedRunIds,
+    })
+
+    const insertedPromptVersion = await addPublishedPromptTopToolEntry(
+      fixture.context,
+      newPromptEntry,
+      '2026-03-21',
+    )
+    const liveExpected = buildExpectedPromptDisplayOrder(
+      [...fixture.promptVersions, insertedPromptVersion],
+      anchorDate,
+      5,
+    )
+
+    const snapshotSecondPage = await caller.prompt.listWithTopTools({
+      limit: 5,
+      offset: 5,
+      anchorDate,
+      snapshot: firstPage.snapshot,
+    })
+    const liveSecondPage = await caller.prompt.listWithTopTools({ limit: 5, offset: 5, anchorDate })
+
+    expect(snapshotSecondPage.items.map((item) => item.id)).toEqual(
+      expectedBefore.remaining.slice(0, 5).map((item) => item.id),
+    )
+    expect(liveSecondPage.items.map((item) => item.id)).toEqual(
+      liveExpected.remaining.slice(0, 5).map((item) => item.id),
+    )
+    expect(liveSecondPage.items.map((item) => item.id)).not.toEqual(
+      snapshotSecondPage.items.map((item) => item.id),
+    )
   })
 
   it('computes hasMore for later pages from the non-deduped remainder', async () => {

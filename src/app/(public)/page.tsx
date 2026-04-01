@@ -43,11 +43,12 @@ export default async function HomePage() {
             </p>
           </div>
 
-          {promptsResult.items.length > 0 ? (
+          {promptsResult.items.length > 0 && promptsResult.snapshot ? (
             <PromptCarousel
               initialPrompts={promptsResult.items}
               initialHasMore={promptsResult.hasMore}
               anchorDate={today}
+              snapshot={promptsResult.snapshot}
             />
           ) : (
             <EmptyState

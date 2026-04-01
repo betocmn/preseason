@@ -58,6 +58,14 @@ const updatePromptInput = z
     },
   )
 
+const promptListSnapshotSchema = z.object({
+  seasonId: z.string().uuid(),
+  publishedRunIds: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(serverSettings.homepage.promptCarouselSnapshotMaxRunIds),
+})
+
 type PromptWithTopTools = {
   id: string
   title: string
@@ -81,6 +89,8 @@ type PromptCandidateRow = {
   promptDescription: string | null
   createdAt: Date
 }
+
+type PromptListSnapshot = z.infer<typeof promptListSnapshotSchema>
 
 function getDailySlugKey(slug: string, anchorDate: string) {
   return createHash('md5').update(`${slug}${anchorDate}`).digest('hex')
@@ -345,23 +355,37 @@ export const promptRouter = createTRPCRouter({
         limit: z.number().int().min(1).max(20).default(5),
         offset: z.number().int().min(0).default(0),
         anchorDate: anchorDateSchema.optional(),
+        snapshot: promptListSnapshotSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
 
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return { items: [] as PromptWithTopTools[], hasMore: false }
+      let seasonId = input.snapshot?.seasonId ?? null
+      let runIds = input.snapshot?.publishedRunIds ?? []
 
-      // Get published run IDs for the season
-      const publishedRuns = await ctx.db
-        .select({ id: benchmarkRuns.id })
-        .from(benchmarkRuns)
-        .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
+      if (!seasonId) {
+        seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+        if (!seasonId) {
+          return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
+        }
 
-      const runIds = publishedRuns.map((r) => r.id)
-      if (runIds.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
+        // Get published run IDs for the season in a deterministic order so the snapshot is stable.
+        const publishedRuns = await ctx.db
+          .select({ id: benchmarkRuns.id })
+          .from(benchmarkRuns)
+          .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
+          .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.id))
+
+        runIds = publishedRuns.map((r) => r.id)
+      }
+
+      if (runIds.length === 0) {
+        return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
+      }
+
+      const snapshot: PromptListSnapshot = input.snapshot ?? { seasonId, publishedRunIds: runIds }
 
       const orderedCandidates = (
         await ctx.db
@@ -400,7 +424,9 @@ export const promptRouter = createTRPCRouter({
       const displayOrder = buildPromptDisplayOrder(orderedCandidates, homepagePageSize)
       const rows = displayOrder.slice(input.offset, input.offset + input.limit)
       const hasMore = input.offset + input.limit < displayOrder.length
-      if (rows.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
+      if (rows.length === 0) {
+        return { items: [] as PromptWithTopTools[], hasMore: false, snapshot }
+      }
 
       const pvIds = rows.map((row) => row.pvId)
 
@@ -481,6 +507,6 @@ export const promptRouter = createTRPCRouter({
         }
       })
 
-      return { items, hasMore }
+      return { items, hasMore, snapshot }
     }),
 })

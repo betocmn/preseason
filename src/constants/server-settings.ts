@@ -15,6 +15,7 @@ export const serverSettings = {
   homepage: {
     promptCarouselPageSize: 5,
     promptCarouselRevalidateSeconds: 3_600,
+    promptCarouselSnapshotMaxRunIds: 1_000,
   },
   benchmark: {
     // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
