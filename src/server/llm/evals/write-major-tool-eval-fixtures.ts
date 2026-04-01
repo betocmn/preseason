@@ -6,9 +6,8 @@ import { TOOLS } from '~/server/db/seed'
 import type { PromptLevel } from '~/server/llm/prompts'
 import {
   buildPromptfooExportDocument,
-  exportPromptfooPrompts,
   type PromptfooPromptExport,
-} from './export-promptfoo'
+} from './promptfoo-export-document'
 
 export const MAJOR_TOOL_EVAL_PROMPT_SELECTIONS = [
   { slug: 'saas-application', level: 'intermediate' },
@@ -110,7 +109,7 @@ type ErrorLike = {
   cause?: unknown
 }
 
-const CONNECTIVITY_ERROR_CODES = new Set([
+const EXPORTER_UNAVAILABLE_ERROR_CODES = new Set([
   '08000',
   '08001',
   '08003',
@@ -130,7 +129,7 @@ const CONNECTIVITY_ERROR_CODES = new Set([
   'ETIMEDOUT',
 ])
 
-const CONNECTIVITY_ERROR_PATTERNS = [
+const EXPORTER_CONNECTIVITY_ERROR_PATTERNS = [
   /connect econnrefused/iu,
   /connect etimedout/iu,
   /connection terminated unexpectedly/iu,
@@ -141,6 +140,17 @@ const CONNECTIVITY_ERROR_PATTERNS = [
   /terminating connection/iu,
   /timeout expired/iu,
   /write connection ended/iu,
+] as const
+
+const EXPORTER_ENV_ERROR_PATTERNS = [
+  /invalid environment variables/iu,
+  /environment variable/iu,
+] as const
+
+const EXPORTER_ENV_ERROR_TOKENS = [
+  'DATABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
 ] as const
 
 function normalizeToolText(value: string): string {
@@ -175,7 +185,7 @@ function buildPromptCorpusExports(): PromptfooPromptExport[] {
   ).prompts
 }
 
-export function isPromptExportConnectivityError(error: unknown): boolean {
+export function isPromptExporterUnavailableError(error: unknown): boolean {
   const visited = new Set<unknown>()
   let current: unknown = error
 
@@ -190,14 +200,23 @@ export function isPromptExportConnectivityError(error: unknown): boolean {
     if (
       codes.some(
         (code) =>
-          CONNECTIVITY_ERROR_CODES.has(code) || (code.length === 5 && code.startsWith('08')),
+          EXPORTER_UNAVAILABLE_ERROR_CODES.has(code) ||
+          (code.length === 5 && code.startsWith('08')),
       )
     ) {
       return true
     }
 
     const message = typeof candidate.message === 'string' ? candidate.message : null
-    if (message && CONNECTIVITY_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+    if (message && EXPORTER_CONNECTIVITY_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+      return true
+    }
+
+    if (
+      message &&
+      EXPORTER_ENV_ERROR_PATTERNS.some((pattern) => pattern.test(message)) &&
+      EXPORTER_ENV_ERROR_TOKENS.some((token) => message.includes(token))
+    ) {
       return true
     }
 
@@ -213,6 +232,7 @@ export async function loadPromptExports(): Promise<{
   warning: string | null
 }> {
   try {
+    const { exportPromptfooPrompts } = await import('./export-promptfoo')
     const document = await exportPromptfooPrompts({ activeOnly: true })
     return {
       prompts: document.prompts,
@@ -220,7 +240,7 @@ export async function loadPromptExports(): Promise<{
       warning: null,
     }
   } catch (error) {
-    if (!isPromptExportConnectivityError(error)) {
+    if (!isPromptExporterUnavailableError(error)) {
       throw error
     }
 

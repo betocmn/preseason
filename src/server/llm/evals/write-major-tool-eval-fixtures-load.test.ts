@@ -32,6 +32,25 @@ describe('loadPromptExports', () => {
     expect(result.prompts.length).toBeGreaterThan(0)
   })
 
+  it('falls back when the DB exporter cannot initialize because required env is missing', async () => {
+    vi.doMock('./export-promptfoo', () => {
+      return {
+        get exportPromptfooPrompts() {
+          throw new Error(
+            'Invalid environment variables: DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY',
+          )
+        },
+      }
+    })
+
+    const { loadPromptExports } = await importSubject()
+    const result = await loadPromptExports()
+
+    expect(result.source).toBe('prompt-corpus-fallback')
+    expect(result.warning).toContain('DATABASE_URL')
+    expect(result.prompts.length).toBeGreaterThan(0)
+  })
+
   it('rethrows prompt validation failures from the active database export', async () => {
     vi.doMock('./export-promptfoo', async () => {
       const actual =
