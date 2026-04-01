@@ -56,6 +56,8 @@ describe('buildBenchmarkPrompt', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('exactly 1 sentence maximum')
     expect(result).toContain('start the appendix immediately')
+    expect(result).toContain('a prose-only answer is invalid')
+    expect(result).toContain('very next non-whitespace character must be "<"')
     expect(result).toContain('Do not end the response after the prose sentence')
     expect(result).toContain('you may omit prose entirely')
   })
@@ -69,6 +71,12 @@ describe('buildBenchmarkPrompt', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('alternate tags are forbidden')
     expect(result).toContain('response will be discarded')
+  })
+
+  it('should forbid scratchpad output and renamed JSON keys', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Do not think step-by-step out loud')
+    expect(result).toContain('Do not rename, translate, or misspell any keys')
   })
 
   it('should start with the original content', () => {

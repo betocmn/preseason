@@ -12,6 +12,8 @@ checked-in regression suites for the benchmark prompt contract:
   exploratory providers that are useful for coverage, but may be less reliable
   on strict appendix compliance
 - `pnpm run evals:major-tools:broad` runs the broader matrix
+  and keeps a zero exit code when it records assertion failures without runtime
+  errors, so you can review exploratory misses without breaking the shell flow
 - `pnpm run evals:export` still exports the full DB-backed prompt corpus for
   ad hoc Promptfoo work outside the built-in regression suite
 
@@ -57,6 +59,7 @@ What it does:
 4. Saves results to:
    - `.context/promptfoo/major-tool-results.json`
    - `.context/promptfoo/major-tool-results.html`
+5. Exits non-zero if any default-suite case fails
 
 The suite contains deterministic assertions that:
 
@@ -95,6 +98,10 @@ This adds:
 
 Use it when you want extra provider diversity and are specifically looking for
 contract-compliance issues in weaker models.
+
+The broad command still writes the full Promptfoo results and failure summary,
+but it only exits non-zero for runtime/configuration errors. Assertion failures
+remain visible in the output and result files.
 
 Re-run Promptfoo manually against the prepared fixtures:
 
