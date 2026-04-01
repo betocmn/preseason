@@ -34,6 +34,18 @@ describe('buildBenchmarkPrompt', () => {
     expect(result).toContain('"none"')
   })
 
+  it('should steer recommendations toward major tool choices', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Favor major, category-defining tool choices')
+    expect(result).toContain('materially affect architecture or workflow')
+  })
+
+  it('should tell models to use none for low-signal tool mentions', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Use "none" instead of naming generic technologies')
+    expect(result).toContain('custom-built/internal systems')
+  })
+
   it('should instruct models to keep the natural-language answer brief', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('exactly 1 sentence maximum')

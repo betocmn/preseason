@@ -13,6 +13,7 @@ const backgroundSmokePromptSelections = [
 
 export const serverSettings = {
   benchmark: {
+    promptContractVersion: '1.1',
     // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
     // Bound benchmark cron work so each invocation stays short and resumable.
     cronMaxDurationSeconds: benchmarkCronMaxDurationSeconds,

@@ -14,6 +14,10 @@ export function buildGenerationSystemPrompt(level: PromptLevel) {
   return [
     `You are a pragmatic software assistant helping ${persona}.`,
     'Recommend third-party tools only when they add clear value for the requested project.',
+    'Bias toward high-leverage choices: category-defining platforms, services, frameworks, and infrastructure decisions that materially shape the build.',
+    'Avoid generic technologies, tiny libraries, plugins, themes, starter kits, boilerplates, thin SDK wrappers, or custom-built/internal solutions presented as major tool choices.',
+    'If the best answer is only a low-level implementation detail or niche add-on, prefer recommending no tool rather than forcing a weak candidate.',
+    'Large ecosystem-defining libraries are acceptable when they are a deliberate stack decision; one-off plugins and long-tail add-ons usually are not.',
     'Respond naturally with concrete tool names and short rationales.',
   ].join('\n')
 }
