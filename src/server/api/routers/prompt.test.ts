@@ -64,19 +64,34 @@ function buildExpectedPromptDisplayOrder(
 
   const seenSlugs = new Set<string>()
   const firstPage: DisplayPromptVersion[] = []
+  const firstPageIds = new Set<string>()
   for (const promptVersion of ordered) {
     if (firstPage.length >= firstPageSize) break
     if (seenSlugs.has(promptVersion.slug)) continue
 
     seenSlugs.add(promptVersion.slug)
-    firstPage.push({
+    const displayPrompt = {
       id: promptVersion.id,
       slug: promptVersion.slug,
       level: promptVersion.level,
-    })
+    }
+    firstPage.push(displayPrompt)
+    firstPageIds.add(displayPrompt.id)
   }
 
-  const firstPageIds = new Set(firstPage.map((promptVersion) => promptVersion.id))
+  for (const promptVersion of ordered) {
+    if (firstPage.length >= Math.min(firstPageSize, ordered.length)) break
+    if (firstPageIds.has(promptVersion.id)) continue
+
+    const displayPrompt = {
+      id: promptVersion.id,
+      slug: promptVersion.slug,
+      level: promptVersion.level,
+    }
+    firstPage.push(displayPrompt)
+    firstPageIds.add(displayPrompt.id)
+  }
+
   const remaining = ordered
     .filter((promptVersion) => !firstPageIds.has(promptVersion.id))
     .map((promptVersion) => ({
@@ -584,6 +599,64 @@ describe('promptRouter', () => {
         firstPage.items.some((firstItem) => firstItem.id === item.id),
       ),
     ).toBe(false)
+    expect(secondPage.hasMore).toBe(false)
+  })
+
+  it('backfills the first page with repeated families when unique slugs run short', async () => {
+    const caller = createTestCaller(null)
+    const anchorDate = '2026-04-01'
+    const fixture = await seedPromptTopToolFixture([
+      {
+        title: 'Documentation Site',
+        slug: 'documentation-site',
+        level: 'intermediate',
+        createdAt: new Date('2026-03-01T00:00:00.000Z'),
+      },
+      {
+        title: 'Documentation Site',
+        slug: 'documentation-site',
+        level: 'advanced',
+        createdAt: new Date('2026-03-02T00:00:00.000Z'),
+      },
+      {
+        title: 'Task Manager',
+        slug: 'task-manager',
+        level: 'intermediate',
+        createdAt: new Date('2026-03-03T00:00:00.000Z'),
+      },
+      {
+        title: 'Task Manager',
+        slug: 'task-manager',
+        level: 'advanced',
+        createdAt: new Date('2026-03-04T00:00:00.000Z'),
+      },
+      {
+        title: 'Portfolio Site',
+        slug: 'portfolio-site',
+        level: 'beginner',
+        createdAt: new Date('2026-03-05T00:00:00.000Z'),
+      },
+      {
+        title: 'Portfolio Site',
+        slug: 'portfolio-site',
+        level: 'intermediate',
+        createdAt: new Date('2026-03-06T00:00:00.000Z'),
+      },
+    ])
+
+    const firstPage = await caller.prompt.listWithTopTools({ limit: 5, offset: 0, anchorDate })
+    const secondPage = await caller.prompt.listWithTopTools({ limit: 5, offset: 5, anchorDate })
+    const expectedOrder = buildExpectedPromptDisplayOrder(fixture.promptVersions, anchorDate, 5)
+
+    expect(firstPage.items).toHaveLength(5)
+    expect(new Set(firstPage.items.map((item) => item.slug)).size).toBe(3)
+    expect(firstPage.items.map((item) => item.id)).toEqual(
+      expectedOrder.firstPage.map((item) => item.id),
+    )
+    expect(firstPage.hasMore).toBe(true)
+    expect(secondPage.items.map((item) => item.id)).toEqual(
+      expectedOrder.remaining.slice(0, 5).map((item) => item.id),
+    )
     expect(secondPage.hasMore).toBe(false)
   })
 

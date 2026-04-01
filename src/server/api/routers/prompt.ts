@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -56,6 +57,73 @@ const updatePromptInput = z
       path: ['id'],
     },
   )
+
+type PromptWithTopTools = {
+  id: string
+  title: string
+  slug: string
+  content: string | null
+  description: string | null
+  level: PromptLevel
+  topTools: {
+    tool: { id: string; name: string; slug: string; logoUrl: string | null }
+    rate: number
+    count: number
+  }[]
+}
+
+type PromptCandidateRow = {
+  pvId: string
+  slug: string
+  level: PromptLevel
+  contentMd: string | null
+  promptTitle: string
+  promptDescription: string | null
+  createdAt: Date
+}
+
+function getDailySlugKey(slug: string, anchorDate: string) {
+  return createHash('md5').update(`${slug}${anchorDate}`).digest('hex')
+}
+
+function comparePromptCandidates(a: PromptCandidateRow, b: PromptCandidateRow, anchorDate: string) {
+  const keyComparison = getDailySlugKey(a.slug, anchorDate).localeCompare(
+    getDailySlugKey(b.slug, anchorDate),
+  )
+  if (keyComparison !== 0) return keyComparison
+
+  const createdAtComparison = b.createdAt.getTime() - a.createdAt.getTime()
+  if (createdAtComparison !== 0) return createdAtComparison
+
+  return b.pvId.localeCompare(a.pvId)
+}
+
+function buildPromptDisplayOrder(candidates: PromptCandidateRow[], firstPageSize: number) {
+  const targetFirstPageSize = Math.min(firstPageSize, candidates.length)
+  const firstPage: PromptCandidateRow[] = []
+  const firstPageIds = new Set<string>()
+  const seenSlugs = new Set<string>()
+
+  for (const candidate of candidates) {
+    if (firstPage.length >= targetFirstPageSize) break
+    if (seenSlugs.has(candidate.slug)) continue
+
+    seenSlugs.add(candidate.slug)
+    firstPage.push(candidate)
+    firstPageIds.add(candidate.pvId)
+  }
+
+  for (const candidate of candidates) {
+    if (firstPage.length >= targetFirstPageSize) break
+    if (firstPageIds.has(candidate.pvId)) continue
+
+    firstPage.push(candidate)
+    firstPageIds.add(candidate.pvId)
+  }
+
+  const remaining = candidates.filter((candidate) => !firstPageIds.has(candidate.pvId))
+  return [...firstPage, ...remaining]
+}
 
 export const promptRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -280,30 +348,10 @@ export const promptRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      type PromptWithTopTools = {
-        id: string
-        title: string
-        slug: string
-        content: string | null
-        description: string | null
-        level: PromptLevel
-        topTools: {
-          tool: { id: string; name: string; slug: string; logoUrl: string | null }
-          rate: number
-          count: number
-        }[]
-      }
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
 
-      type PromptVersionRow = {
-        pv_id: string
-        slug: string
-        level: PromptLevel
-        content_md: string | null
-        prompt_title: string
-        prompt_description: string | null
-      }
-
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db)
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
       if (!seasonId) return { items: [] as PromptWithTopTools[], hasMore: false }
 
       // Get published run IDs for the season
@@ -315,122 +363,45 @@ export const promptRouter = createTRPCRouter({
       const runIds = publishedRuns.map((r) => r.id)
       if (runIds.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
 
-      const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
-      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const orderedCandidates = (
+        await ctx.db
+          .selectDistinct({
+            pvId: benchmarkPromptVersions.id,
+            slug: benchmarkPromptVersions.slug,
+            level: benchmarkPromptVersions.level,
+            contentMd: benchmarkPromptVersions.contentMd,
+            promptTitle: prompts.title,
+            promptDescription: prompts.description,
+            createdAt: benchmarkPromptVersions.createdAt,
+          })
+          .from(benchmarkCaseDecisions)
+          .innerJoin(
+            benchmarkCaseResults,
+            eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+          )
+          .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+          .innerJoin(
+            benchmarkPromptVersions,
+            eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+          )
+          .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
+          .where(
+            and(
+              eq(benchmarkCases.seasonId, seasonId),
+              inArray(benchmarkCaseResults.runId, runIds),
+              eq(benchmarkCaseDecisions.decisionType, 'tool'),
+              eq(prompts.isActive, true),
+              eq(benchmarkPromptVersions.isActive, true),
+            ),
+          )
+      ).sort((a, b) => comparePromptCandidates(a, b, anchorDate))
 
-      const orderedCandidatesSql = sql`
-        WITH eligible_candidates AS (
-          SELECT DISTINCT
-            bpv.id AS pv_id,
-            p.slug,
-            bpv.level,
-            bpv.content_md,
-            p.title AS prompt_title,
-            p.description AS prompt_description,
-            bpv.created_at
-          FROM preseason_benchmark_case bc
-          JOIN preseason_benchmark_prompt_version bpv ON bc.prompt_version_id = bpv.id
-          JOIN preseason_prompt p ON bpv.prompt_id = p.id
-          WHERE bc.season_id = ${seasonId}
-            AND p.is_active = true
-            AND bpv.is_active = true
-            AND EXISTS (
-              SELECT 1
-              FROM preseason_benchmark_case_decision d
-              JOIN preseason_benchmark_case_result cr ON d.case_result_id = cr.id
-              WHERE cr.case_id = bc.id
-                AND cr.run_id = ANY(${runIds})
-                AND d.decision_type = 'tool'
-            )
-        ),
-        ordered_candidates AS (
-          SELECT
-            pv_id,
-            slug,
-            level,
-            content_md,
-            prompt_title,
-            prompt_description,
-            created_at,
-            md5(slug || ${anchorDate}) AS day_key
-          FROM eligible_candidates
-        )
-      `
-
-      let promptVersionRows: PromptVersionRow[]
-
-      if (input.offset === 0) {
-        promptVersionRows = await ctx.db.execute<PromptVersionRow>(sql`
-          ${orderedCandidatesSql}
-          SELECT
-            pv_id,
-            slug,
-            level,
-            content_md,
-            prompt_title,
-            prompt_description
-          FROM (
-            SELECT DISTINCT ON (slug)
-              pv_id,
-              slug,
-              level,
-              content_md,
-              prompt_title,
-              prompt_description,
-              created_at,
-              day_key
-            FROM ordered_candidates
-            ORDER BY slug, day_key, created_at DESC, pv_id DESC
-          ) first_page
-          ORDER BY day_key, created_at DESC, pv_id DESC
-          LIMIT ${input.limit + 1}
-        `)
-      } else {
-        const firstPageRows = await ctx.db.execute<{ pv_id: string }>(sql`
-          ${orderedCandidatesSql}
-          SELECT pv_id
-          FROM (
-            SELECT DISTINCT ON (slug)
-              pv_id,
-              slug,
-              created_at,
-              day_key
-            FROM ordered_candidates
-            ORDER BY slug, day_key, created_at DESC, pv_id DESC
-          ) first_page
-          ORDER BY day_key, created_at DESC, pv_id DESC
-          LIMIT ${homepagePageSize}
-        `)
-
-        const excludedPromptVersionIds = firstPageRows.map((row) => row.pv_id)
-        const exclusionClause =
-          excludedPromptVersionIds.length > 0
-            ? sql`WHERE pv_id <> ALL(${excludedPromptVersionIds})`
-            : sql``
-        const remainingOffset = Math.max(input.offset - homepagePageSize, 0)
-
-        promptVersionRows = await ctx.db.execute<PromptVersionRow>(sql`
-          ${orderedCandidatesSql}
-          SELECT
-            pv_id,
-            slug,
-            level,
-            content_md,
-            prompt_title,
-            prompt_description
-          FROM ordered_candidates
-          ${exclusionClause}
-          ORDER BY day_key, created_at DESC, pv_id DESC
-          LIMIT ${input.limit + 1}
-          OFFSET ${remainingOffset}
-        `)
-      }
-
-      const hasMore = promptVersionRows.length > input.limit
-      const rows = promptVersionRows.slice(0, input.limit)
+      const displayOrder = buildPromptDisplayOrder(orderedCandidates, homepagePageSize)
+      const rows = displayOrder.slice(input.offset, input.offset + input.limit)
+      const hasMore = input.offset + input.limit < displayOrder.length
       if (rows.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
 
-      const pvIds = rows.map((r) => r.pv_id)
+      const pvIds = rows.map((row) => row.pvId)
 
       // Phase 2: Get top tools per prompt version from benchmark decisions
       const decisionRows = await ctx.db
@@ -489,7 +460,7 @@ export const promptRouter = createTRPCRouter({
       }
 
       const items = rows.map((pv) => {
-        const toolDecisions = decisionsByPv.get(pv.pv_id) ?? []
+        const toolDecisions = decisionsByPv.get(pv.pvId) ?? []
         const totalCount = toolDecisions.reduce((sum, d) => sum + d.count, 0)
         const topTools = toolDecisions.slice(0, 4).map((d) => ({
           tool: d.tool,
@@ -498,11 +469,11 @@ export const promptRouter = createTRPCRouter({
         }))
 
         return {
-          id: pv.pv_id,
-          title: pv.prompt_title,
+          id: pv.pvId,
+          title: pv.promptTitle,
           slug: pv.slug,
-          content: pv.content_md,
-          description: pv.prompt_description,
+          content: pv.contentMd,
+          description: pv.promptDescription,
           level: pv.level,
           topTools,
         }
