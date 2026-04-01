@@ -103,6 +103,46 @@ type EvalTestCase = {
   assert: Array<Record<string, unknown>>
 }
 
+type ErrorLike = {
+  code?: string | number
+  errno?: string | number
+  message?: string
+  cause?: unknown
+}
+
+const CONNECTIVITY_ERROR_CODES = new Set([
+  '08000',
+  '08001',
+  '08003',
+  '08004',
+  '08006',
+  '08007',
+  '08P01',
+  '57P01',
+  '57P02',
+  '57P03',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
+])
+
+const CONNECTIVITY_ERROR_PATTERNS = [
+  /connect econnrefused/iu,
+  /connect etimedout/iu,
+  /connection terminated unexpectedly/iu,
+  /database system is shutting down/iu,
+  /database system is starting up/iu,
+  /getaddrinfo enotfound/iu,
+  /socket hang up/iu,
+  /terminating connection/iu,
+  /timeout expired/iu,
+  /write connection ended/iu,
+] as const
+
 function normalizeToolText(value: string): string {
   return value.toLowerCase().trim()
 }
@@ -135,7 +175,39 @@ function buildPromptCorpusExports(): PromptfooPromptExport[] {
   ).prompts
 }
 
-async function loadPromptExports(): Promise<{
+export function isPromptExportConnectivityError(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  let current: unknown = error
+
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current)
+
+    const candidate = current as ErrorLike
+    const codes = [candidate.code, candidate.errno]
+      .map((value) => (value == null ? null : String(value).toUpperCase()))
+      .filter((value): value is string => value !== null)
+
+    if (
+      codes.some(
+        (code) =>
+          CONNECTIVITY_ERROR_CODES.has(code) || (code.length === 5 && code.startsWith('08')),
+      )
+    ) {
+      return true
+    }
+
+    const message = typeof candidate.message === 'string' ? candidate.message : null
+    if (message && CONNECTIVITY_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+      return true
+    }
+
+    current = candidate.cause
+  }
+
+  return false
+}
+
+export async function loadPromptExports(): Promise<{
   prompts: PromptfooPromptExport[]
   source: 'database' | 'prompt-corpus-fallback'
   warning: string | null
@@ -148,6 +220,10 @@ async function loadPromptExports(): Promise<{
       warning: null,
     }
   } catch (error) {
+    if (!isPromptExportConnectivityError(error)) {
+      throw error
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error'
     return {
       prompts: buildPromptCorpusExports(),
