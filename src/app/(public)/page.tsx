@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
@@ -7,13 +8,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
+import { serverSettings } from '~/constants/server-settings'
 import { api } from '~/trpc/server'
 
 export default async function HomePage() {
   const caller = await api()
+  const today = new Date().toISOString().slice(0, 10)
+  const pageSize = serverSettings.homepage.promptCarouselPageSize
 
-  const [promptsWithTools, featuredMatchups, recentComments] = await Promise.all([
-    caller.prompt.listWithTopTools({ limit: 5 }),
+  const getCachedPrompts = unstable_cache(
+    async () => caller.prompt.listWithTopTools({ limit: pageSize, offset: 0, anchorDate: today }),
+    ['homepage-prompts', today],
+    { revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds },
+  )
+
+  const [promptsResult, featuredMatchups, recentComments] = await Promise.all([
+    getCachedPrompts(),
     caller.benchmarkMatch.listFeatured({ limit: 6 }),
     caller.comment.listRecent({ limit: 5 }),
   ])
@@ -33,8 +43,13 @@ export default async function HomePage() {
             </p>
           </div>
 
-          {promptsWithTools.length > 0 ? (
-            <PromptCarousel prompts={promptsWithTools} />
+          {promptsResult.items.length > 0 && promptsResult.snapshot ? (
+            <PromptCarousel
+              initialPrompts={promptsResult.items}
+              initialHasMore={promptsResult.hasMore}
+              anchorDate={today}
+              snapshot={promptsResult.snapshot}
+            />
           ) : (
             <EmptyState
               title="No prompts yet"

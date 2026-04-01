@@ -12,6 +12,11 @@ const backgroundSmokePromptSelections = [
 }[]
 
 export const serverSettings = {
+  homepage: {
+    promptCarouselPageSize: 5,
+    promptCarouselRevalidateSeconds: 3_600,
+    promptCarouselSnapshotMaxRunIds: 1_000,
+  },
   benchmark: {
     // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
     // Bound benchmark cron work so each invocation stays short and resumable.
