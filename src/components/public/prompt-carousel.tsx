@@ -3,6 +3,10 @@
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useState } from 'react'
+import {
+  getNextPromptIndexAfterLoad,
+  shouldPrefetchPromptPage,
+} from '~/components/public/prompt-carousel-state'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -55,6 +59,7 @@ export function PromptCarousel({
       })
       setPrompts((prev) => [...prev, ...result.items])
       setHasMore(result.hasMore)
+      return result
     } finally {
       setIsLoadingMore(false)
     }
@@ -62,14 +67,53 @@ export function PromptCarousel({
 
   const goNext = useCallback(async () => {
     const nextIndex = currentIndex + 1
+
     if (nextIndex < prompts.length) {
       setCurrentIndex(nextIndex)
+
+      if (
+        shouldPrefetchPromptPage({
+          nextIndex,
+          loadedPromptCount: prompts.length,
+          hasMore,
+          isLoadingMore,
+        })
+      ) {
+        void loadMore()
+      }
+
+      return
     }
-    // Pre-fetch next page when nearing the end of loaded prompts
-    if (nextIndex >= prompts.length - 2 && hasMore && !isLoadingMore) {
-      await loadMore()
-    }
+
+    const result = await loadMore()
+    if (!result) return
+
+    setCurrentIndex(
+      getNextPromptIndexAfterLoad({
+        currentIndex,
+        loadedPromptCount: prompts.length,
+        fetchedPromptCount: result.items.length,
+      }),
+    )
   }, [currentIndex, prompts.length, hasMore, isLoadingMore, loadMore])
+
+  const goToIndex = useCallback(
+    (index: number) => {
+      setCurrentIndex(index)
+
+      if (
+        shouldPrefetchPromptPage({
+          nextIndex: index,
+          loadedPromptCount: prompts.length,
+          hasMore,
+          isLoadingMore,
+        })
+      ) {
+        void loadMore()
+      }
+    },
+    [hasMore, isLoadingMore, loadMore, prompts.length],
+  )
 
   const goPrev = useCallback(() => {
     setCurrentIndex((i) => Math.max(i - 1, 0))
@@ -197,7 +241,7 @@ export function PromptCarousel({
                 <button
                   type="button"
                   key={prompts[i]?.id ?? i}
-                  onClick={() => setCurrentIndex(i)}
+                  onClick={() => goToIndex(i)}
                   className={cn(
                     'h-1.5 rounded-full transition-all',
                     i === currentIndex
