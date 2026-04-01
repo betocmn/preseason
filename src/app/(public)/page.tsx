@@ -8,16 +8,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
+import { serverSettings } from '~/constants/server-settings'
 import { api } from '~/trpc/server'
 
 export default async function HomePage() {
   const caller = await api()
   const today = new Date().toISOString().slice(0, 10)
+  const pageSize = serverSettings.homepage.promptCarouselPageSize
 
   const getCachedPrompts = unstable_cache(
-    async () => caller.prompt.listWithTopTools({ limit: 5, offset: 0 }),
+    async () => caller.prompt.listWithTopTools({ limit: pageSize, offset: 0, anchorDate: today }),
     ['homepage-prompts', today],
-    { revalidate: 3600 },
+    { revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds },
   )
 
   const [promptsResult, featuredMatchups, recentComments] = await Promise.all([
@@ -45,6 +47,7 @@ export default async function HomePage() {
             <PromptCarousel
               initialPrompts={promptsResult.items}
               initialHasMore={promptsResult.hasMore}
+              anchorDate={today}
             />
           ) : (
             <EmptyState

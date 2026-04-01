@@ -29,9 +29,14 @@ const PAGE_SIZE = 5
 type PromptCarouselProps = {
   initialPrompts: PromptWithTools[]
   initialHasMore: boolean
+  anchorDate: string
 }
 
-export function PromptCarousel({ initialPrompts, initialHasMore }: PromptCarouselProps) {
+export function PromptCarousel({
+  initialPrompts,
+  initialHasMore,
+  anchorDate,
+}: PromptCarouselProps) {
   const [prompts, setPrompts] = useState<PromptWithTools[]>(initialPrompts)
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -46,13 +51,14 @@ export function PromptCarousel({ initialPrompts, initialHasMore }: PromptCarouse
       const result = await utils.prompt.listWithTopTools.fetch({
         limit: PAGE_SIZE,
         offset: prompts.length,
+        anchorDate,
       })
       setPrompts((prev) => [...prev, ...result.items])
       setHasMore(result.hasMore)
     } finally {
       setIsLoadingMore(false)
     }
-  }, [hasMore, isLoadingMore, prompts.length, utils])
+  }, [anchorDate, hasMore, isLoadingMore, prompts.length, utils])
 
   const goNext = useCallback(async () => {
     const nextIndex = currentIndex + 1

@@ -3,7 +3,10 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
-import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
+import {
+  anchorDateSchema,
+  findLatestPublishedBenchmarkSeasonId,
+} from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import {
   benchmarkCaseDecisions,
@@ -273,6 +276,7 @@ export const promptRouter = createTRPCRouter({
       z.object({
         limit: z.number().int().min(1).max(20).default(5),
         offset: z.number().int().min(0).default(0),
+        anchorDate: anchorDateSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -312,7 +316,7 @@ export const promptRouter = createTRPCRouter({
       if (runIds.length === 0) return { items: [] as PromptWithTopTools[], hasMore: false }
 
       const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
-      const anchorDate = new Date().toISOString().slice(0, 10)
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
 
       const orderedCandidatesSql = sql`
         WITH eligible_candidates AS (
