@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useCallback, useRef, useState } from 'react'
 import {
   getNextPromptIndexAfterLoad,
+  getPromptNextButtonState,
   shouldPrefetchPromptPage,
 } from '~/components/public/prompt-carousel-state'
 import { ToolBadge } from '~/components/public/tool-badge'
@@ -151,7 +152,12 @@ export function PromptCarousel({
   if (prompts.length === 0) return null
 
   const hasPrev = currentIndex > 0
-  const canGoNext = currentIndex < prompts.length - 1 || hasMore
+  const nextButtonState = getPromptNextButtonState({
+    currentIndex,
+    loadedPromptCount: prompts.length,
+    hasMore,
+    isLoadingMore,
+  })
 
   return (
     <div className="flex flex-col rounded-lg border bg-card">
@@ -284,11 +290,11 @@ export function PromptCarousel({
             <Button
               variant="ghost"
               size="icon"
-              disabled={!canGoNext || isLoadingMore}
+              disabled={nextButtonState.disabled}
               onClick={goNext}
               className="h-6 w-6 text-muted-foreground"
             >
-              {isLoadingMore ? (
+              {nextButtonState.showLoadingState ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5" />

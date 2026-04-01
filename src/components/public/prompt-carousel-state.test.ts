@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getNextPromptIndexAfterLoad, shouldPrefetchPromptPage } from './prompt-carousel-state'
+import {
+  getNextPromptIndexAfterLoad,
+  getPromptNextButtonState,
+  shouldPrefetchPromptPage,
+} from './prompt-carousel-state'
 
 describe('getNextPromptIndexAfterLoad', () => {
   it('advances within already loaded prompts', () => {
@@ -65,5 +69,49 @@ describe('shouldPrefetchPromptPage', () => {
         isLoadingMore: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe('getPromptNextButtonState', () => {
+  it('keeps next enabled while a background prefetch runs and a loaded prompt remains', () => {
+    expect(
+      getPromptNextButtonState({
+        currentIndex: 3,
+        loadedPromptCount: 5,
+        hasMore: true,
+        isLoadingMore: true,
+      }),
+    ).toEqual({
+      disabled: false,
+      showLoadingState: false,
+    })
+  })
+
+  it('shows loading state only when the next prompt depends on the in-flight page', () => {
+    expect(
+      getPromptNextButtonState({
+        currentIndex: 4,
+        loadedPromptCount: 5,
+        hasMore: true,
+        isLoadingMore: true,
+      }),
+    ).toEqual({
+      disabled: false,
+      showLoadingState: true,
+    })
+  })
+
+  it('disables next once no loaded prompts or later pages remain', () => {
+    expect(
+      getPromptNextButtonState({
+        currentIndex: 4,
+        loadedPromptCount: 5,
+        hasMore: false,
+        isLoadingMore: false,
+      }),
+    ).toEqual({
+      disabled: true,
+      showLoadingState: false,
+    })
   })
 })

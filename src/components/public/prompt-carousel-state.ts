@@ -11,6 +11,13 @@ type PromptPrefetchParams = {
   isLoadingMore: boolean
 }
 
+type PromptNextButtonStateParams = {
+  currentIndex: number
+  loadedPromptCount: number
+  hasMore: boolean
+  isLoadingMore: boolean
+}
+
 const PROMPT_PREFETCH_THRESHOLD = 2
 
 export function getNextPromptIndexAfterLoad({
@@ -34,4 +41,18 @@ export function shouldPrefetchPromptPage({
   isLoadingMore,
 }: PromptPrefetchParams) {
   return hasMore && !isLoadingMore && nextIndex >= loadedPromptCount - PROMPT_PREFETCH_THRESHOLD
+}
+
+export function getPromptNextButtonState({
+  currentIndex,
+  loadedPromptCount,
+  hasMore,
+  isLoadingMore,
+}: PromptNextButtonStateParams) {
+  const hasLoadedNextPrompt = currentIndex < loadedPromptCount - 1
+
+  return {
+    disabled: !hasLoadedNextPrompt && !hasMore,
+    showLoadingState: hasMore && isLoadingMore && !hasLoadedNextPrompt,
+  }
 }
