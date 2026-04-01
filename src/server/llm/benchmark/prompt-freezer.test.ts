@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkPromptVersionCategories,
   benchmarkPromptVersions,
@@ -10,6 +10,7 @@ import {
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { freezePromptVersion } from './prompt-freezer'
+import { buildBenchmarkPromptVersionHash } from './prompt-version-hash'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -81,9 +82,14 @@ describe('freezePromptVersion', () => {
 
     const version = await freezePromptVersion(db, prompt.id, { categoryIds })
 
-    const expectedHash = createHash('sha256')
-      .update(`${prompt.contentMd ?? ''}:${prompt.level}`)
-      .digest('hex')
+    const expectedHash = buildBenchmarkPromptVersionHash({
+      contentMd: prompt.contentMd ?? '',
+      level: prompt.level,
+      systemPromptSnapshot:
+        version.systemPromptSnapshot ??
+        'Expected freezePromptVersion to snapshot the system prompt',
+      promptContractVersion: serverSettings.benchmark.promptContractVersion,
+    })
     expect(version.contentHash).toBe(expectedHash)
     expect(version.version).toBe(1)
     expect(version.contentMd).toBe(prompt.contentMd)
@@ -212,6 +218,53 @@ describe('freezePromptVersion', () => {
     expect(v2.id).not.toBe(v1.id)
     expect(v2.level).toBe('advanced')
     expect(v2.version).toBe(2)
+  })
+
+  it('should create a new version when the prompt contract metadata changes', async () => {
+    const db = getTestDb()
+    const prompt = await seedPromptWithContent(db)
+    const categoryIds = await seedCategories(db, 2)
+
+    const legacySystemPromptSnapshot = 'You are a pragmatic software assistant helping a builder.'
+    const legacyHash = buildBenchmarkPromptVersionHash({
+      contentMd: prompt.contentMd ?? '',
+      level: prompt.level,
+      systemPromptSnapshot: legacySystemPromptSnapshot,
+      promptContractVersion: '1.0',
+    })
+
+    const [legacyVersion] = await db
+      .insert(benchmarkPromptVersions)
+      .values({
+        promptId: prompt.id,
+        slug: prompt.slug,
+        level: prompt.level,
+        version: 1,
+        contentMd: prompt.contentMd ?? '',
+        contentHash: legacyHash,
+        systemPromptSnapshot: legacySystemPromptSnapshot,
+        promptContractVersion: '1.0',
+      })
+      .returning()
+
+    if (!legacyVersion) {
+      throw new Error('Expected legacy benchmark prompt version to be created')
+    }
+
+    await db.insert(benchmarkPromptVersionCategories).values(
+      categoryIds.map((categoryId, index) => ({
+        promptVersionId: legacyVersion.id,
+        categoryId,
+        displayOrder: index + 1,
+      })),
+    )
+
+    const nextVersion = await freezePromptVersion(db, prompt.id, { categoryIds })
+
+    expect(nextVersion.id).not.toBe(legacyVersion.id)
+    expect(nextVersion.version).toBe(2)
+    expect(nextVersion.promptContractVersion).toBe(serverSettings.benchmark.promptContractVersion)
+    expect(nextVersion.systemPromptSnapshot).not.toBe(legacySystemPromptSnapshot)
   })
 
   it('should throw when prompt has no contentMd', async () => {

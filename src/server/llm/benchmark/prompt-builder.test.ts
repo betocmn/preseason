@@ -34,10 +34,32 @@ describe('buildBenchmarkPrompt', () => {
     expect(result).toContain('"none"')
   })
 
+  it('should require reasoning and confidence for none decisions too', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Every category entry must include both "reasoning" and "confidence"')
+    expect(result).toContain('including "none" decisions')
+  })
+
+  it('should steer recommendations toward major tool choices', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Favor major, category-defining tool choices')
+    expect(result).toContain('materially affect architecture or workflow')
+  })
+
+  it('should tell models to use none for low-signal tool mentions', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Use "none" instead of naming generic technologies')
+    expect(result).toContain('custom-built/internal systems')
+  })
+
   it('should instruct models to keep the natural-language answer brief', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('exactly 1 sentence maximum')
     expect(result).toContain('start the appendix immediately')
+    expect(result).toContain('a prose-only answer is invalid')
+    expect(result).toContain('very next non-whitespace character must be "<"')
+    expect(result).toContain('Do not end the response after the prose sentence')
+    expect(result).toContain('you may omit prose entirely')
   })
 
   it('should forbid omitting the closing tag', () => {
@@ -49,6 +71,12 @@ describe('buildBenchmarkPrompt', () => {
     const result = buildBenchmarkPrompt(contentMd, categories)
     expect(result).toContain('alternate tags are forbidden')
     expect(result).toContain('response will be discarded')
+  })
+
+  it('should forbid scratchpad output and renamed JSON keys', () => {
+    const result = buildBenchmarkPrompt(contentMd, categories)
+    expect(result).toContain('Do not think step-by-step out loud')
+    expect(result).toContain('Do not rename, translate, or misspell any keys')
   })
 
   it('should start with the original content', () => {

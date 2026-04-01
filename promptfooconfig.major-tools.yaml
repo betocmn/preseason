@@ -1,0 +1,12 @@
+description: Preseason major tool regression evals
+prompts:
+  - "{{prompt_text}}"
+providers:
+  - openrouter:openai/gpt-5.4-mini
+  - openrouter:anthropic/claude-haiku-4.5
+  - openrouter:google/gemini-2.5-flash
+  - openrouter:meta-llama/llama-4-scout
+  - openrouter:mistralai/mistral-small-2603
+  - openrouter:mistralai/devstral-2512
+  - openrouter:deepseek/deepseek-v3.2
+  - openrouter:qwen/qwen3-coder-next

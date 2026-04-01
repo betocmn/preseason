@@ -4,87 +4,35 @@ import { fileURLToPath } from 'node:url'
 import { asc, eq } from 'drizzle-orm'
 import { db } from '~/server/db'
 import { prompts } from '~/server/db/schema'
-import { buildBenchmarkPrompt } from '~/server/llm/benchmark/prompt-builder'
-
-type PromptRow = Pick<
-  typeof prompts.$inferSelect,
-  'id' | 'title' | 'slug' | 'level' | 'contentMd' | 'expectedCategories' | 'isActive'
->
-
-export type PromptfooPromptExport = {
-  id: string
-  title: string
-  slug: string
-  level: PromptRow['level']
-  isActive: boolean
-  expectedCategories: string[]
-  rawPrompt: string
-  benchmarkPrompt: string
-}
-
-export type PromptfooExportDocument = {
-  generatedAt: string
-  promptCount: number
-  prompts: PromptfooPromptExport[]
-}
+import {
+  buildPromptfooExportDocument,
+  type PromptfooExportDocument,
+  type PromptfooPromptRow,
+  toPromptfooPromptExport,
+} from './promptfoo-export-document'
 
 type CliOptions = {
   activeOnly: boolean
   outputPath?: string
 }
 
-export function toPromptfooPromptExport(prompt: PromptRow): PromptfooPromptExport {
-  const rawPrompt = prompt.contentMd?.trim()
-  if (!rawPrompt) {
-    throw new Error(`Prompt ${prompt.slug} (${prompt.level}) is missing content_md`)
-  }
+type PromptRow = Pick<
+  typeof prompts.$inferSelect,
+  'id' | 'title' | 'slug' | 'level' | 'contentMd' | 'expectedCategories' | 'isActive'
+>
 
-  const expectedCategories =
-    prompt.expectedCategories?.filter((value) => value.trim().length > 0) ?? []
-  if (expectedCategories.length === 0) {
-    throw new Error(`Prompt ${prompt.slug} (${prompt.level}) is missing expected_categories`)
-  }
+export { buildPromptfooExportDocument, toPromptfooPromptExport }
+export type { PromptfooExportDocument, PromptfooPromptExport } from './promptfoo-export-document'
 
-  return {
-    id: prompt.id,
-    title: prompt.title,
-    slug: prompt.slug,
-    level: prompt.level,
-    isActive: prompt.isActive,
-    expectedCategories,
-    rawPrompt,
-    benchmarkPrompt: buildBenchmarkPrompt(rawPrompt, expectedCategories),
-  }
-}
-
-export function buildPromptfooExportDocument(
-  promptRows: PromptRow[],
-  generatedAt = new Date().toISOString(),
-): PromptfooExportDocument {
-  const exportedPrompts = [...promptRows]
-    .sort((a, b) => {
-      const byTitle = a.title.localeCompare(b.title)
-      if (byTitle !== 0) return byTitle
-
-      const bySlug = a.slug.localeCompare(b.slug)
-      if (bySlug !== 0) return bySlug
-
-      return a.level.localeCompare(b.level)
-    })
-    .map(toPromptfooPromptExport)
-
-  return {
-    generatedAt,
-    promptCount: exportedPrompts.length,
-    prompts: exportedPrompts,
-  }
-}
-
-function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = { activeOnly: true }
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
+
+    if (arg === '--') {
+      continue
+    }
 
     if (arg === '--all') {
       options.activeOnly = false
@@ -127,7 +75,7 @@ async function loadPrompts(activeOnly: boolean): Promise<PromptRow[]> {
 export async function exportPromptfooPrompts(
   options: CliOptions,
 ): Promise<PromptfooExportDocument> {
-  const promptRows = await loadPrompts(options.activeOnly)
+  const promptRows: PromptfooPromptRow[] = await loadPrompts(options.activeOnly)
   return buildPromptfooExportDocument(promptRows)
 }
 

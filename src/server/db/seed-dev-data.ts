@@ -11,11 +11,13 @@
  * All operations are idempotent (safe to run multiple times).
  */
 
-import { createHash } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { serverSettings } from '~/constants/server-settings'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
+import { buildBenchmarkPromptVersionHash } from '~/server/llm/benchmark/prompt-version-hash'
+import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
 import * as schema from './schema'
 
@@ -176,7 +178,7 @@ async function seedBenchmarkData() {
       mode: 'benchmark',
       parserVersion: '1.0',
       scoringVersion: '1.0',
-      promptContractVersion: '1.0',
+      promptContractVersion: serverSettings.benchmark.promptContractVersion,
     })
     .onConflictDoNothing()
     .returning()
@@ -239,16 +241,28 @@ async function seedBenchmarkData() {
   const allSubcategories = await db.select().from(schema.subcategories)
   const subcatMap = new Map(allSubcategories.map((s) => [s.slug, s.id]))
 
-  const promptVersionValues = allPrompts.map((p) => ({
-    promptId: p.id,
-    slug: p.slug,
-    level: p.level as 'beginner' | 'intermediate' | 'advanced',
-    version: 1,
-    contentMd: p.contentMd ?? p.description ?? '',
-    contentHash: createHash('sha256').update(`${p.slug}-${p.level}-v1`).digest('hex'),
-    promptContractVersion: '1.0',
-    isActive: true,
-  }))
+  const promptVersionValues = allPrompts.map((p) => {
+    const level = p.level as 'beginner' | 'intermediate' | 'advanced'
+    const contentMd = p.contentMd ?? p.description ?? ''
+    const systemPromptSnapshot = buildGenerationSystemPrompt(level)
+
+    return {
+      promptId: p.id,
+      slug: p.slug,
+      level,
+      version: 1,
+      contentMd,
+      contentHash: buildBenchmarkPromptVersionHash({
+        contentMd,
+        level,
+        systemPromptSnapshot,
+        promptContractVersion: serverSettings.benchmark.promptContractVersion,
+      }),
+      systemPromptSnapshot,
+      promptContractVersion: serverSettings.benchmark.promptContractVersion,
+      isActive: true,
+    }
+  })
 
   await db.insert(schema.benchmarkPromptVersions).values(promptVersionValues).onConflictDoNothing()
   const allPromptVersions = await db.select().from(schema.benchmarkPromptVersions)
