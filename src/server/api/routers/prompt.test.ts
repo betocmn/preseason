@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { TRPCError } from '@trpc/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkCaseDecisions,
   benchmarkCaseResults,
@@ -47,6 +48,7 @@ type HomepagePromptFixtureContext = {
   categoryId: string
   toolId: string
   modelSnapshotId: string
+  primaryCaseId: string
   requestedModelId: string
   provider: string
   publishedRunIds: string[]
@@ -258,6 +260,7 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
   )
 
   const promptVersions: SeededPromptVersion[] = []
+  let primaryCaseId: string | null = null
   for (const entry of entries) {
     const prompt = first(
       await db
@@ -305,6 +308,7 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
         })
         .returning(),
     )
+    primaryCaseId ??= benchmarkCase.id
 
     const caseResult = first(
       await db
@@ -347,6 +351,11 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
       categoryId: category.id,
       toolId: tool.id,
       modelSnapshotId: modelSnapshot.id,
+      primaryCaseId:
+        primaryCaseId ??
+        (() => {
+          throw new Error('Expected homepage prompt fixture to create a benchmark case')
+        })(),
       requestedModelId: llm.modelId,
       provider: llm.provider,
       publishedRunIds: [run.id],
@@ -354,10 +363,11 @@ async function seedPromptTopToolFixture(entries: HomepagePromptSeed[]) {
   }
 }
 
-async function addPublishedPromptTopToolEntry(
+async function addPromptTopToolEntry(
   context: HomepagePromptFixtureContext,
   entry: HomepagePromptSeed,
   scheduledFor: string,
+  runStatus: 'published' | 'completed' = 'published',
 ) {
   const db = getTestDb()
   const prompt = first(
@@ -413,7 +423,7 @@ async function addPublishedPromptTopToolEntry(
       .values({
         seasonId: context.seasonId,
         scheduledFor,
-        status: 'published',
+        status: runStatus,
         qcStatus: 'passed',
       })
       .returning(),
@@ -444,7 +454,9 @@ async function addPublishedPromptTopToolEntry(
     resolutionStatus: entry.resolutionStatus ?? 'resolved',
   })
 
-  context.publishedRunIds.push(run.id)
+  if (runStatus === 'published') {
+    context.publishedRunIds.push(run.id)
+  }
 
   return {
     id: promptVersion.id,
@@ -453,7 +465,54 @@ async function addPublishedPromptTopToolEntry(
     level: entry.level,
     createdAt: entry.createdAt,
     resolutionStatus: entry.resolutionStatus,
-  } satisfies SeededPromptVersion
+    runId: run.id,
+  } satisfies SeededPromptVersion & { runId: string }
+}
+
+async function addPublishedRunsForPrimaryPrompt(
+  context: HomepagePromptFixtureContext,
+  scheduledForDates: string[],
+) {
+  const db = getTestDb()
+  const runs = await db
+    .insert(benchmarkRuns)
+    .values(
+      scheduledForDates.map((scheduledFor) => ({
+        seasonId: context.seasonId,
+        scheduledFor,
+        status: 'published' as const,
+        qcStatus: 'passed' as const,
+      })),
+    )
+    .returning()
+
+  const caseResults = await db
+    .insert(benchmarkCaseResults)
+    .values(
+      runs.map((run) => ({
+        seasonId: context.seasonId,
+        runId: run.id,
+        caseId: context.primaryCaseId,
+        status: 'completed' as const,
+        requestedModelId: context.requestedModelId,
+        returnedModelId: context.requestedModelId,
+        provider: context.provider,
+        parserVersion: 'strict-v1',
+      })),
+    )
+    .returning()
+
+  await db.insert(benchmarkCaseDecisions).values(
+    caseResults.map((caseResult) => ({
+      caseResultId: caseResult.id,
+      categoryId: context.categoryId,
+      decisionType: 'tool' as const,
+      toolId: context.toolId,
+      resolutionStatus: 'resolved' as const,
+    })),
+  )
+
+  context.publishedRunIds.push(...runs.map((run) => run.id))
 }
 
 describe('promptRouter', () => {
@@ -877,7 +936,7 @@ describe('promptRouter', () => {
       publishedRunIds: fixture.context.publishedRunIds,
     })
 
-    const insertedPromptVersion = await addPublishedPromptTopToolEntry(
+    const insertedPromptVersion = await addPromptTopToolEntry(
       fixture.context,
       newPromptEntry,
       '2026-03-21',
@@ -905,6 +964,93 @@ describe('promptRouter', () => {
     expect(liveSecondPage.items.map((item) => item.id)).not.toEqual(
       snapshotSecondPage.items.map((item) => item.id),
     )
+  })
+
+  it('revalidates snapshot run IDs against published runs before querying prompts', async () => {
+    const caller = createTestCaller(null)
+    const fixture = await seedPromptTopToolFixture(createUniquePromptSeeds(5))
+    const hiddenPrompt: HomepagePromptSeed = {
+      title: 'Hidden Prompt',
+      slug: 'hidden-prompt',
+      level: 'beginner',
+      createdAt: new Date('2026-03-07T00:00:00.000Z'),
+    }
+    const anchorDate = findAnchorDateWherePromptAppearsOnFirstPage(
+      [
+        ...fixture.promptVersions,
+        {
+          id: '00000000-0000-0000-0000-000000000002',
+          ...hiddenPrompt,
+        },
+      ],
+      hiddenPrompt.slug,
+      5,
+      '2026-04-01',
+    )
+    const unpublishedPromptVersion = await addPromptTopToolEntry(
+      fixture.context,
+      hiddenPrompt,
+      '2026-03-21',
+      'completed',
+    )
+
+    const result = await caller.prompt.listWithTopTools({
+      limit: 5,
+      offset: 0,
+      anchorDate,
+      snapshot: {
+        seasonId: fixture.context.seasonId,
+        publishedRunIds: [...fixture.context.publishedRunIds, unpublishedPromptVersion.runId],
+      },
+    })
+
+    expect(result.snapshot).toEqual({
+      seasonId: fixture.context.seasonId,
+      publishedRunIds: fixture.context.publishedRunIds,
+    })
+    expect(result.items.map((item) => item.id)).toEqual(
+      buildExpectedPromptDisplayOrder(fixture.promptVersions, anchorDate, 5).firstPage.map(
+        (item) => item.id,
+      ),
+    )
+    expect(result.items.some((item) => item.id === unpublishedPromptVersion.id)).toBe(false)
+  })
+
+  it('caps first-page snapshots to the supported run ID limit', async () => {
+    const caller = createTestCaller(null)
+    const fixture = await seedPromptTopToolFixture(createUniquePromptSeeds(1))
+    const maxSnapshotRunIds = serverSettings.homepage.promptCarouselSnapshotMaxRunIds
+    const scheduledForDates = Array.from({ length: maxSnapshotRunIds + 5 }, (_, index) => {
+      const nextDate = new Date('2026-03-21T00:00:00.000Z')
+      nextDate.setUTCDate(nextDate.getUTCDate() + index)
+      return nextDate.toISOString().slice(0, 10)
+    })
+
+    await addPublishedRunsForPrimaryPrompt(fixture.context, scheduledForDates)
+
+    const firstPage = await caller.prompt.listWithTopTools({
+      limit: 5,
+      offset: 0,
+      anchorDate: '2030-01-01',
+    })
+    if (!firstPage.snapshot) {
+      throw new Error('Expected first page to include a prompt snapshot')
+    }
+
+    expect(firstPage.snapshot).toEqual({
+      seasonId: fixture.context.seasonId,
+      publishedRunIds: fixture.context.publishedRunIds.slice(-maxSnapshotRunIds),
+    })
+
+    const secondPage = await caller.prompt.listWithTopTools({
+      limit: 5,
+      offset: 5,
+      anchorDate: '2030-01-01',
+      snapshot: firstPage.snapshot,
+    })
+
+    expect(secondPage.items).toHaveLength(0)
+    expect(secondPage.snapshot).toEqual(firstPage.snapshot)
   })
 
   it('computes hasMore for later pages from the non-deduped remainder', async () => {

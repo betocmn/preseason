@@ -96,6 +96,38 @@ function getDailySlugKey(slug: string, anchorDate: string) {
   return createHash('md5').update(`${slug}${anchorDate}`).digest('hex')
 }
 
+async function getPublishedPromptSnapshotRunIds(
+  db: Parameters<typeof findLatestPublishedBenchmarkSeasonId>[0],
+  seasonId: string,
+  requestedRunIds?: string[],
+) {
+  if (requestedRunIds) {
+    const validatedRuns = await db
+      .select({ id: benchmarkRuns.id })
+      .from(benchmarkRuns)
+      .where(
+        and(
+          eq(benchmarkRuns.seasonId, seasonId),
+          eq(benchmarkRuns.status, 'published'),
+          inArray(benchmarkRuns.id, requestedRunIds),
+        ),
+      )
+      .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.id))
+
+    return validatedRuns.map((run) => run.id)
+  }
+
+  const recentPublishedRuns = await db
+    .select({ id: benchmarkRuns.id })
+    .from(benchmarkRuns)
+    .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
+    .orderBy(desc(benchmarkRuns.scheduledFor), desc(benchmarkRuns.id))
+    .limit(serverSettings.homepage.promptCarouselSnapshotMaxRunIds)
+
+  // Keep the newest bounded snapshot, but return it oldest-to-newest for a stable canonical shape.
+  return recentPublishedRuns.map((run) => run.id).reverse()
+}
+
 function comparePromptCandidates(a: PromptCandidateRow, b: PromptCandidateRow, anchorDate: string) {
   const keyComparison = getDailySlugKey(a.slug, anchorDate).localeCompare(
     getDailySlugKey(b.slug, anchorDate),
@@ -363,29 +395,24 @@ export const promptRouter = createTRPCRouter({
       const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
 
       let seasonId = input.snapshot?.seasonId ?? null
-      let runIds = input.snapshot?.publishedRunIds ?? []
 
       if (!seasonId) {
         seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
         if (!seasonId) {
           return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
         }
-
-        // Get published run IDs for the season in a deterministic order so the snapshot is stable.
-        const publishedRuns = await ctx.db
-          .select({ id: benchmarkRuns.id })
-          .from(benchmarkRuns)
-          .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
-          .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.id))
-
-        runIds = publishedRuns.map((r) => r.id)
       }
 
+      const runIds = await getPublishedPromptSnapshotRunIds(
+        ctx.db,
+        seasonId,
+        input.snapshot?.publishedRunIds,
+      )
       if (runIds.length === 0) {
         return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
       }
 
-      const snapshot: PromptListSnapshot = input.snapshot ?? { seasonId, publishedRunIds: runIds }
+      const snapshot: PromptListSnapshot = { seasonId, publishedRunIds: runIds }
 
       const orderedCandidates = (
         await ctx.db
