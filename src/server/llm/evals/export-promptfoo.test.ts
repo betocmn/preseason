@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPromptfooExportDocument,
+  parseArgs,
   toPromptfooPromptExport,
 } from '~/server/llm/evals/export-promptfoo'
 
@@ -82,5 +83,13 @@ describe('buildPromptfooExportDocument', () => {
     expect(result.generatedAt).toBe('2026-03-12T00:00:00.000Z')
     expect(result.promptCount).toBe(2)
     expect(result.prompts.map((prompt) => prompt.slug)).toEqual(['alpha', 'zeta'])
+  })
+})
+
+describe('exportPromptfooPrompts CLI argument parsing', () => {
+  it('ignores a leading npm separator token', async () => {
+    expect(parseArgs(['--', '--all'])).toEqual({
+      activeOnly: false,
+    })
   })
 })

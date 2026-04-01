@@ -40,6 +40,7 @@
       "!!**/.next",
       "!!**/dist",
       "!!**/build",
+      "!!**/.context",
       "!!**/.git",
       "!!**/drizzle"
     ]

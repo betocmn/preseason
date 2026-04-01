@@ -124,6 +124,7 @@ pnpm run test           # Run the test suite once
 pnpm run build          # Verify production build
 pnpm run format         # Format all files with Biome
 pnpm run evals:export   # Export DB-backed prompts for external Promptfoo usage
+pnpm run evals:major-tools  # Run major-tool Promptfoo regression evals
 ```
 
 ## Guides

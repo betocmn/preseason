@@ -80,11 +80,15 @@ export function buildPromptfooExportDocument(
   }
 }
 
-function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = { activeOnly: true }
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
+
+    if (arg === '--') {
+      continue
+    }
 
     if (arg === '--all') {
       options.activeOnly = false
