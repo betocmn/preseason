@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { PROMPT_CORPUS } from '~/server/db/prompt-corpus'
 import { TOOLS } from '~/server/db/seed'
 import type { PromptLevel } from '~/server/llm/prompts'
@@ -301,17 +301,26 @@ export function buildMajorToolCatalog() {
   }
 }
 
+function buildPromptfooScriptReference(repoRoot: string, scriptPath: string): string {
+  const relativePath = path.relative(repoRoot, scriptPath)
+  const normalizedRelativePath = relativePath.split(path.sep).join('/')
+
+  return `file://${normalizedRelativePath}`
+}
+
 export function buildMajorToolEvalTests(
   prompts: PromptfooPromptExport[],
   repoRoot: string,
   toolCatalogPath: string,
 ): EvalTestCase[] {
-  const appendixAssertionPath = pathToFileURL(
+  const appendixAssertionPath = buildPromptfooScriptReference(
+    repoRoot,
     path.join(repoRoot, 'src/server/llm/evals/assertions/benchmark-appendix.js'),
-  ).toString()
-  const majorToolAssertionPath = pathToFileURL(
+  )
+  const majorToolAssertionPath = buildPromptfooScriptReference(
+    repoRoot,
     path.join(repoRoot, 'src/server/llm/evals/assertions/major-tool-signal.js'),
-  ).toString()
+  )
 
   return prompts.map((prompt) => ({
     description: `${prompt.slug}/${prompt.level}`,

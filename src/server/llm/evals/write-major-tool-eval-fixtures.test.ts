@@ -67,7 +67,7 @@ describe('buildMajorToolCatalog', () => {
 })
 
 describe('buildMajorToolEvalTests', () => {
-  it('builds strict regression tests with external javascript assertions', () => {
+  it('builds strict regression tests with portable javascript assertion paths', () => {
     const result = buildMajorToolEvalTests(
       selectMajorToolEvalPrompts(samplePrompts),
       '/repo',
@@ -83,7 +83,14 @@ describe('buildMajorToolEvalTests', () => {
     expect(result[0]?.vars.tool_catalog_path).toBe(
       '/repo/.context/promptfoo/major-tool-tool-catalog.json',
     )
-    expect(result[0]?.assert.some((assertion) => assertion.type === 'javascript')).toBe(true)
+    expect(result[0]?.assert).toContainEqual({
+      type: 'javascript',
+      value: 'file://src/server/llm/evals/assertions/benchmark-appendix.js',
+    })
+    expect(result[0]?.assert).toContainEqual({
+      type: 'javascript',
+      value: 'file://src/server/llm/evals/assertions/major-tool-signal.js',
+    })
   })
 })
 
