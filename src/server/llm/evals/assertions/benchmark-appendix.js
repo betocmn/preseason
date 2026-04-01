@@ -1,6 +1,5 @@
 // @ts-nocheck
-const OPEN_TAG = '<preseason_benchmark_json>'
-const CLOSE_TAG = '</preseason_benchmark_json>'
+const { parseAppendix } = require('./appendix-extractor')
 
 function fail(reason) {
   return {
@@ -15,19 +14,14 @@ module.exports = (output, { vars }) => {
     return fail('Model output is empty')
   }
 
-  const openIndex = output.lastIndexOf(OPEN_TAG)
-  const closeIndex = output.indexOf(CLOSE_TAG, openIndex + OPEN_TAG.length)
-  if (openIndex === -1 || closeIndex === -1 || closeIndex <= openIndex) {
-    return fail('Missing preseason benchmark appendix tags')
-  }
-
-  const rawJson = output.slice(openIndex + OPEN_TAG.length, closeIndex).trim()
   let parsed
   try {
-    parsed = JSON.parse(rawJson)
+    parsed = parseAppendix(output)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error'
-    return fail(`Appendix JSON is invalid: ${message}`)
+    return message === 'Missing preseason benchmark appendix tags'
+      ? fail(message)
+      : fail(`Appendix JSON is invalid: ${message}`)
   }
 
   if (parsed?.schema_version !== 'benchmark-v1') {

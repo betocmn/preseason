@@ -1,8 +1,6 @@
 // @ts-nocheck
 const fs = require('node:fs')
-
-const OPEN_TAG = '<preseason_benchmark_json>'
-const CLOSE_TAG = '</preseason_benchmark_json>'
+const { parseAppendix } = require('./appendix-extractor')
 const COMMON_HOST_SUFFIXES = new Set([
   'ai',
   'app',
@@ -87,16 +85,6 @@ function fingerprintToolText(value) {
     .trim()
 }
 
-function extractAppendix(output) {
-  const openIndex = output.lastIndexOf(OPEN_TAG)
-  const closeIndex = output.indexOf(CLOSE_TAG, openIndex + OPEN_TAG.length)
-  if (openIndex === -1 || closeIndex === -1 || closeIndex <= openIndex) {
-    throw new Error('Missing preseason benchmark appendix tags')
-  }
-
-  return JSON.parse(output.slice(openIndex + OPEN_TAG.length, closeIndex).trim())
-}
-
 function loadCatalog(catalogPath) {
   if (!catalogPath) {
     throw new Error('tool_catalog_path is required')
@@ -159,7 +147,7 @@ module.exports = (output, { vars }) => {
 
   let appendix
   try {
-    appendix = extractAppendix(output)
+    appendix = parseAppendix(output)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error'
     return fail(message)
