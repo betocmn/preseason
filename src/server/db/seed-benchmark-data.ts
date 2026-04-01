@@ -10,11 +10,12 @@
  * Idempotent: deletes previous benchmark data then re-creates.
  */
 
-import crypto from 'node:crypto'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { serverSettings } from '~/constants/server-settings'
 import { cleanBenchmarkData } from '~/server/db/benchmark-cleanup'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
+import { buildBenchmarkPromptVersionHash } from '~/server/llm/benchmark/prompt-version-hash'
 import { isPromptLevel } from '~/server/llm/prompts'
 import { buildGenerationSystemPrompt } from '~/server/llm/service/system-prompt'
 
@@ -136,7 +137,7 @@ async function seedBenchmarkData() {
       mode: 'benchmark',
       parserVersion: '1.0',
       scoringVersion: '1.0',
-      promptContractVersion: '1.0',
+      promptContractVersion: serverSettings.benchmark.promptContractVersion,
     })
     .returning()
   if (!protocol) throw new Error('Failed to insert protocol')
@@ -191,8 +192,13 @@ async function seedBenchmarkData() {
 
     const contentMd = prompt.contentMd ?? prompt.description ?? `Prompt: ${prompt.title}`
     const level = isPromptLevel(prompt.level) ? prompt.level : 'beginner'
-    const contentHash = crypto.createHash('sha256').update(`${contentMd}:${level}`).digest('hex')
     const systemPromptSnapshot = buildGenerationSystemPrompt(level)
+    const contentHash = buildBenchmarkPromptVersionHash({
+      contentMd,
+      level,
+      systemPromptSnapshot,
+      promptContractVersion: serverSettings.benchmark.promptContractVersion,
+    })
 
     const [pv] = await db
       .insert(schema.benchmarkPromptVersions)
@@ -204,7 +210,7 @@ async function seedBenchmarkData() {
         contentMd,
         contentHash,
         systemPromptSnapshot,
-        promptContractVersion: '1.0',
+        promptContractVersion: serverSettings.benchmark.promptContractVersion,
         isActive: true,
       })
       .returning()

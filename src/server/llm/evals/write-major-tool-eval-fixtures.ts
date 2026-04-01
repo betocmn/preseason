@@ -1,0 +1,423 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { PROMPT_CORPUS } from '~/server/db/prompt-corpus'
+import { TOOLS } from '~/server/db/seed'
+import type { PromptLevel } from '~/server/llm/prompts'
+import {
+  buildPromptfooExportDocument,
+  type PromptfooPromptExport,
+} from './promptfoo-export-document'
+
+export const MAJOR_TOOL_EVAL_PROMPT_SELECTIONS = [
+  { slug: 'saas-application', level: 'intermediate' },
+  { slug: 'real-estate-website', level: 'intermediate' },
+  { slug: 'blog-platform-cms', level: 'advanced' },
+] as const satisfies ReadonlyArray<{
+  slug: string
+  level: PromptLevel
+}>
+
+export const MAJOR_TOOL_EVAL_PROVIDER_IDS = [
+  'openrouter:openai/gpt-5.4-mini',
+  'openrouter:anthropic/claude-haiku-4.5',
+  'openrouter:google/gemini-2.5-flash',
+  'openrouter:meta-llama/llama-4-scout',
+  'openrouter:mistralai/mistral-small-2603',
+  'openrouter:mistralai/devstral-2512',
+  'openrouter:deepseek/deepseek-v3.2',
+  'openrouter:qwen/qwen3-coder-next',
+] as const
+
+export const MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS = [
+  ...MAJOR_TOOL_EVAL_PROVIDER_IDS,
+  'openrouter:z-ai/glm-5-turbo',
+  'openrouter:moonshotai/kimi-k2.5',
+] as const
+
+const BLOCKED_EXACT_PHRASES = [
+  'custom editorial application',
+  'docs ui styling stack',
+  'headless cms',
+  'job hosting',
+  'managed search service',
+  'object storage',
+  'orm',
+  'paas',
+  'search indexing',
+  'transactional email',
+  'utility-first styling system',
+  'utility first styling system',
+]
+
+const BLOCKED_SINGLE_TOKENS = ['edition', 'git', 'orm', 'paas', 'plugin', 'theme']
+const BLOCKED_TOKENS = [
+  'boilerplate',
+  'custom',
+  'internal',
+  'plugin',
+  'starter',
+  'template',
+  'theme',
+]
+const GENERIC_VOCABULARY = [
+  'application',
+  'auth',
+  'builder',
+  'cms',
+  'custom',
+  'database',
+  'docs',
+  'editorial',
+  'email',
+  'headless',
+  'hosting',
+  'job',
+  'managed',
+  'object',
+  'orm',
+  'platform',
+  'search',
+  'service',
+  'stack',
+  'storage',
+  'styling',
+  'system',
+  'transactional',
+  'ui',
+  'utility',
+]
+
+type EvalTestCase = {
+  description: string
+  metadata: Record<string, string>
+  threshold: number
+  vars: {
+    expected_categories: string
+    prompt_level: PromptLevel
+    prompt_slug: string
+    prompt_text: string
+    tool_catalog_path: string
+  }
+  assert: Array<Record<string, unknown>>
+}
+
+type ErrorLike = {
+  code?: string | number
+  errno?: string | number
+  message?: string
+  cause?: unknown
+}
+
+const EXPORTER_UNAVAILABLE_ERROR_CODES = new Set([
+  '08000',
+  '08001',
+  '08003',
+  '08004',
+  '08006',
+  '08007',
+  '08P01',
+  '57P01',
+  '57P02',
+  '57P03',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
+])
+
+const EXPORTER_CONNECTIVITY_ERROR_PATTERNS = [
+  /connect econnrefused/iu,
+  /connect etimedout/iu,
+  /connection terminated unexpectedly/iu,
+  /database system is shutting down/iu,
+  /database system is starting up/iu,
+  /getaddrinfo enotfound/iu,
+  /socket hang up/iu,
+  /terminating connection/iu,
+  /timeout expired/iu,
+  /write connection ended/iu,
+] as const
+
+const EXPORTER_ENV_ERROR_PATTERNS = [
+  /invalid environment variables/iu,
+  /environment variable/iu,
+] as const
+
+const EXPORTER_ENV_ERROR_TOKENS = [
+  'DATABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+] as const
+
+function normalizeToolText(value: string): string {
+  return value.toLowerCase().trim()
+}
+
+function fingerprintToolText(value: string): string {
+  return normalizeToolText(value)
+    .replace(/^https?:\/\//u, '')
+    .replace(/^www\./u, '')
+    .replace(/[/?#].*$/u, '')
+    .replace(/\([^)]*\)/gu, ' ')
+    .replace(/[+/_-]+/gu, ' ')
+    .replace(/\./gu, ' ')
+    .replace(/&/gu, ' and ')
+    .replace(/[^a-z0-9\s]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function buildPromptCorpusExports(): PromptfooPromptExport[] {
+  return buildPromptfooExportDocument(
+    PROMPT_CORPUS.map((prompt) => ({
+      id: `${prompt.slug}:${prompt.level}`,
+      title: prompt.title,
+      slug: prompt.slug,
+      level: prompt.level,
+      contentMd: prompt.contentMd,
+      expectedCategories: prompt.expectedCategories,
+      isActive: prompt.isActive,
+    })),
+  ).prompts
+}
+
+export function isPromptExporterUnavailableError(error: unknown): boolean {
+  const visited = new Set<unknown>()
+  let current: unknown = error
+
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current)
+
+    const candidate = current as ErrorLike
+    const codes = [candidate.code, candidate.errno]
+      .map((value) => (value == null ? null : String(value).toUpperCase()))
+      .filter((value): value is string => value !== null)
+
+    if (
+      codes.some(
+        (code) =>
+          EXPORTER_UNAVAILABLE_ERROR_CODES.has(code) ||
+          (code.length === 5 && code.startsWith('08')),
+      )
+    ) {
+      return true
+    }
+
+    const message = typeof candidate.message === 'string' ? candidate.message : null
+    if (message && EXPORTER_CONNECTIVITY_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+      return true
+    }
+
+    if (
+      message &&
+      EXPORTER_ENV_ERROR_PATTERNS.some((pattern) => pattern.test(message)) &&
+      EXPORTER_ENV_ERROR_TOKENS.some((token) => message.includes(token))
+    ) {
+      return true
+    }
+
+    current = candidate.cause
+  }
+
+  return false
+}
+
+export async function loadPromptExports(): Promise<{
+  prompts: PromptfooPromptExport[]
+  source: 'database' | 'prompt-corpus-fallback'
+  warning: string | null
+}> {
+  try {
+    const { exportPromptfooPrompts } = await import('./export-promptfoo')
+    const document = await exportPromptfooPrompts({ activeOnly: true })
+    return {
+      prompts: document.prompts,
+      source: 'database',
+      warning: null,
+    }
+  } catch (error) {
+    if (!isPromptExporterUnavailableError(error)) {
+      throw error
+    }
+
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return {
+      prompts: buildPromptCorpusExports(),
+      source: 'prompt-corpus-fallback',
+      warning: `Fell back to prompt corpus export: ${message}`,
+    }
+  }
+}
+
+export function selectMajorToolEvalPrompts(
+  prompts: PromptfooPromptExport[],
+): PromptfooPromptExport[] {
+  return MAJOR_TOOL_EVAL_PROMPT_SELECTIONS.map(({ slug, level }) => {
+    const prompt = prompts.find((candidate) => candidate.slug === slug && candidate.level === level)
+    if (!prompt) {
+      throw new Error(`Missing selected eval prompt: ${slug}/${level}`)
+    }
+
+    return prompt
+  })
+}
+
+export function buildMajorToolCatalog() {
+  const knownTerms = new Set<string>()
+  const knownFingerprints = new Set<string>()
+  const knownBrandTokens = new Set<string>()
+
+  for (const tool of TOOLS) {
+    for (const term of [tool.name, tool.slug, ...(tool.aliases ?? [])]) {
+      const normalized = normalizeToolText(term)
+      const fingerprint = fingerprintToolText(term)
+      if (normalized.length === 0 || fingerprint.length === 0) {
+        continue
+      }
+
+      knownTerms.add(normalized)
+      knownFingerprints.add(fingerprint)
+
+      for (const token of fingerprint.split(' ')) {
+        if (token.length >= 4 && !GENERIC_VOCABULARY.includes(token)) {
+          knownBrandTokens.add(token)
+        }
+      }
+    }
+  }
+
+  return {
+    knownNormalizedTerms: [...knownTerms].sort(),
+    knownFingerprints: [...knownFingerprints].sort(),
+    knownBrandTokens: [...knownBrandTokens].sort(),
+    blockedExactPhrases: [...BLOCKED_EXACT_PHRASES].sort(),
+    blockedSingleTokens: [...BLOCKED_SINGLE_TOKENS].sort(),
+    blockedTokens: [...BLOCKED_TOKENS].sort(),
+    genericVocabulary: [...GENERIC_VOCABULARY].sort(),
+  }
+}
+
+function buildPromptfooScriptReference(repoRoot: string, scriptPath: string): string {
+  const relativePath = path.relative(repoRoot, scriptPath)
+  const normalizedRelativePath = relativePath.split(path.sep).join('/')
+
+  return `file://${normalizedRelativePath}`
+}
+
+export function buildMajorToolEvalTests(
+  prompts: PromptfooPromptExport[],
+  repoRoot: string,
+  toolCatalogPath: string,
+): EvalTestCase[] {
+  const appendixAssertionPath = buildPromptfooScriptReference(
+    repoRoot,
+    path.join(repoRoot, 'src/server/llm/evals/assertions/benchmark-appendix.js'),
+  )
+  const majorToolAssertionPath = buildPromptfooScriptReference(
+    repoRoot,
+    path.join(repoRoot, 'src/server/llm/evals/assertions/major-tool-signal.js'),
+  )
+
+  return prompts.map((prompt) => ({
+    description: `${prompt.slug}/${prompt.level}`,
+    metadata: {
+      promptSlug: prompt.slug,
+      promptLevel: prompt.level,
+    },
+    threshold: 1,
+    vars: {
+      expected_categories: JSON.stringify(prompt.expectedCategories),
+      prompt_level: prompt.level,
+      prompt_slug: prompt.slug,
+      prompt_text: prompt.benchmarkPrompt,
+      tool_catalog_path: toolCatalogPath,
+    },
+    assert: [
+      {
+        type: 'contains',
+        value: '<preseason_benchmark_json>',
+      },
+      {
+        type: 'contains',
+        value: '</preseason_benchmark_json>',
+      },
+      {
+        type: 'javascript',
+        value: appendixAssertionPath,
+      },
+      {
+        type: 'javascript',
+        value: majorToolAssertionPath,
+      },
+    ],
+  }))
+}
+
+async function writeJsonFile(outputPath: string, value: unknown): Promise<void> {
+  await writeFile(outputPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+}
+
+export async function writeMajorToolEvalFixtures(repoRoot = process.cwd()) {
+  const outputDir = path.join(repoRoot, '.context/promptfoo')
+  const testsPath = path.join(outputDir, 'major-tool-tests.json')
+  const promptsPath = path.join(outputDir, 'major-tool-prompts.json')
+  const catalogPath = path.join(outputDir, 'major-tool-tool-catalog.json')
+  const manifestPath = path.join(outputDir, 'major-tool-manifest.json')
+  const loaded = await loadPromptExports()
+  const selectedPrompts = selectMajorToolEvalPrompts(loaded.prompts)
+  const toolCatalog = buildMajorToolCatalog()
+  const tests = buildMajorToolEvalTests(selectedPrompts, repoRoot, catalogPath)
+
+  await mkdir(outputDir, { recursive: true })
+  await writeJsonFile(promptsPath, selectedPrompts)
+  await writeJsonFile(catalogPath, toolCatalog)
+  await writeJsonFile(testsPath, tests)
+  await writeJsonFile(manifestPath, {
+    generatedAt: new Date().toISOString(),
+    promptSource: loaded.source,
+    promptWarning: loaded.warning,
+    selectedPrompts: selectedPrompts.map((prompt) => ({
+      slug: prompt.slug,
+      level: prompt.level,
+      expectedCategories: prompt.expectedCategories,
+    })),
+    providerIds: MAJOR_TOOL_EVAL_PROVIDER_IDS,
+    broadProviderIds: MAJOR_TOOL_EVAL_BROAD_PROVIDER_IDS,
+    testsPath,
+    promptsPath,
+    toolCatalogPath: catalogPath,
+  })
+
+  process.stdout.write(`Wrote major tool eval fixtures to ${outputDir}\n`)
+  if (loaded.warning) {
+    process.stdout.write(`${loaded.warning}\n`)
+  }
+
+  return {
+    outputDir,
+    testsPath,
+    promptsPath,
+    catalogPath,
+    manifestPath,
+    promptSource: loaded.source,
+    warning: loaded.warning,
+  }
+}
+
+async function main() {
+  await writeMajorToolEvalFixtures()
+}
+
+const entrypointPath = process.argv[1] ? path.resolve(process.argv[1]) : null
+
+if (entrypointPath && fileURLToPath(import.meta.url) === entrypointPath) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    process.stderr.write(`${message}\n`)
+    process.exitCode = 1
+  })
+}
