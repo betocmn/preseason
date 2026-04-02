@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
@@ -24,11 +24,12 @@ export type MatchBatchRunOptions = {
   llmService?: LlmService
   now?: () => Date
   heartbeatIntervalMs?: number
+  maxEvaluations?: number
 }
 
 export type MatchBatchRunSummary = {
   batchId: string
-  status: 'completed' | 'failed' | 'ownership_lost'
+  status: 'pending' | 'completed' | 'failed' | 'ownership_lost'
   totalEvaluations: number
   completedEvaluations: number
   failedEvaluations: number
@@ -41,6 +42,29 @@ class OwnershipLostError extends Error {
   constructor() {
     super('Batch ownership lost')
     this.name = 'OwnershipLostError'
+  }
+}
+
+type MatchEvaluationCounts = {
+  totalCount: number
+  pendingCount: number
+  completedCount: number
+  failedCount: number
+  invalidCount: number
+}
+
+function buildSummary(
+  batchId: string,
+  status: MatchBatchRunSummary['status'],
+  counts: MatchEvaluationCounts,
+): MatchBatchRunSummary {
+  return {
+    batchId,
+    status,
+    totalEvaluations: counts.totalCount,
+    completedEvaluations: counts.completedCount,
+    failedEvaluations: counts.failedCount,
+    invalidOutputEvaluations: counts.invalidCount,
   }
 }
 
@@ -175,6 +199,11 @@ export async function runMatchBatch(
   const llmService = options.llmService ?? new LlmService()
   const now = options.now ?? (() => new Date())
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
+  const maxEvaluations = options.maxEvaluations ?? null
+
+  if (maxEvaluations != null && maxEvaluations < 1) {
+    throw new Error('maxEvaluations must be at least 1')
+  }
 
   // Load batch
   const batch = await database.query.matchBatches.findFirst({
@@ -196,7 +225,12 @@ export async function runMatchBatch(
     const errorMessage = `Unsupported template schema version "${template.schemaVersion}" — expected "${SUPPORTED_SCHEMA_VERSION}"`
     await database
       .update(matchBatches)
-      .set({ status: 'failed', completedAt: now() })
+      .set({
+        status: 'failed',
+        claimToken: null,
+        lastHeartbeatAt: null,
+        completedAt: now(),
+      })
       .where(getOwnershipClause(batchId, claimToken))
     throw new Error(errorMessage)
   }
@@ -221,247 +255,279 @@ export async function runMatchBatch(
   const heartbeat = startHeartbeat(database, batchId, claimToken, now, heartbeatIntervalMs)
 
   try {
-    // Load materialized evaluation rows
-    const evaluations = await database.query.matchEvaluations.findMany({
-      where: eq(matchEvaluations.batchId, batchId),
-      with: { modelSnapshot: true },
-    })
-
-    // Filter to retryable
-    const retryable = evaluations.filter(
-      (e) => e.status === 'pending' || e.status === 'failed' || e.status === 'invalid_output',
-    )
-
-    for (const evaluation of retryable) {
-      // Abort early if heartbeat detected ownership loss or write failure
-      if (heartbeat.failed()) {
-        break
-      }
-
-      const { modelSnapshot } = evaluation
-
-      // Determine presentation order names
-      const promptToolAName = evaluation.presentationOrder === 'a_first' ? toolAName : toolBName
-      const promptToolBName = evaluation.presentationOrder === 'a_first' ? toolBName : toolAName
-
-      const userPrompt = buildMatchPrompt({
-        templateMd: template.templateMd,
-        toolAName: promptToolAName,
-        toolBName: promptToolBName,
-        categoryName: category.name,
+    try {
+      // Load materialized evaluation rows
+      const evaluations = await database.query.matchEvaluations.findMany({
+        where: eq(matchEvaluations.batchId, batchId),
+        orderBy: [asc(matchEvaluations.modelSnapshotId), asc(matchEvaluations.presentationOrder)],
+        with: { modelSnapshot: true },
       })
 
-      const systemPrompt = template.systemPromptSnapshot ?? 'You are a helpful assistant.'
-      const promptHash = createHash('sha256').update(userPrompt).digest('hex').slice(0, 64)
+      const pendingEvaluations = evaluations.filter((evaluation) => evaluation.status === 'pending')
+      const processableEvaluations =
+        maxEvaluations == null ? pendingEvaluations : pendingEvaluations.slice(0, maxEvaluations)
 
-      try {
-        const completion = await llmService.complete(modelSnapshot.provider, {
-          model: modelSnapshot.requestedModelId,
-          systemPrompt,
-          userPrompt,
-          temperature: modelSnapshot.temperature ?? undefined,
-          topP: modelSnapshot.topP ?? undefined,
-          maxTokens: modelSnapshot.maxTokens ?? undefined,
-          seed: modelSnapshot.seed ?? undefined,
-        })
-
-        const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
-
-        if (drift.hasDrift) {
-          await database.transaction(async (tx) => {
-            await verifyOwnership(tx, batchId, claimToken)
-            await tx
-              .update(matchEvaluations)
-              .set({
-                status: 'invalid_output',
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                seed: modelSnapshot.seed,
-                parserVersion: MATCH_PARSER_VERSION,
-                renderedUserPrompt: userPrompt,
-                promptHash,
-                systemPromptSnapshot: systemPrompt,
-                errorMessage: `Model drift: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
-              })
-              .where(eq(matchEvaluations.id, evaluation.id))
-          })
-          continue
-        }
-
-        const parseResult = parseMatchResponse(completion.content)
-
-        if (parseResult.status === 'ok') {
-          const remapped = remapMatchResult(
-            parseResult.response,
-            evaluation.presentationOrder,
-            batch.toolAId,
-            batch.toolBId,
-          )
-
-          await database.transaction(async (tx) => {
-            await verifyOwnership(tx, batchId, claimToken)
-            await tx
-              .update(matchEvaluations)
-              .set({
-                status: 'completed',
-                winnerDecision: remapped.winnerDecision,
-                winnerId: remapped.winnerId,
-                comparisonSummary: remapped.comparisonSummary,
-                toolAPros: remapped.toolAPros,
-                toolACons: remapped.toolACons,
-                toolBPros: remapped.toolBPros,
-                toolBCons: remapped.toolBCons,
-                confidence: remapped.confidence,
-                naturalResponse: parseResult.naturalResponse,
-                appendixRaw: parseResult.rawAppendix,
-                appendixJson: parseResult.response,
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                seed: modelSnapshot.seed,
-                parserVersion: MATCH_PARSER_VERSION,
-                renderedUserPrompt: userPrompt,
-                promptHash,
-                systemPromptSnapshot: systemPrompt,
-                errorMessage: null,
-              })
-              .where(eq(matchEvaluations.id, evaluation.id))
-          })
-        } else {
-          await database.transaction(async (tx) => {
-            await verifyOwnership(tx, batchId, claimToken)
-            await tx
-              .update(matchEvaluations)
-              .set({
-                status: 'invalid_output',
-                rawResponse: completion.content,
-                requestedModelId: modelSnapshot.requestedModelId,
-                returnedModelId: completion.returnedModel,
-                provider: completion.provider,
-                finishReason: completion.finishReason,
-                promptTokens: completion.usage.promptTokens,
-                completionTokens: completion.usage.completionTokens,
-                totalTokens: completion.usage.totalTokens,
-                latencyMs: completion.latencyMs,
-                temperature: modelSnapshot.temperature,
-                topP: modelSnapshot.topP,
-                maxTokens: modelSnapshot.maxTokens,
-                seed: modelSnapshot.seed,
-                parserVersion: MATCH_PARSER_VERSION,
-                renderedUserPrompt: userPrompt,
-                promptHash,
-                systemPromptSnapshot: systemPrompt,
-                errorMessage: parseResult.reason,
-              })
-              .where(eq(matchEvaluations.id, evaluation.id))
-          })
-        }
-      } catch (error) {
-        if (error instanceof OwnershipLostError) {
+      for (const evaluation of processableEvaluations) {
+        // Abort early if heartbeat detected ownership loss or write failure
+        if (heartbeat.failed()) {
           break
         }
 
-        const message = error instanceof Error ? error.message : 'Unknown error'
+        const { modelSnapshot } = evaluation
+
+        // Determine presentation order names
+        const promptToolAName = evaluation.presentationOrder === 'a_first' ? toolAName : toolBName
+        const promptToolBName = evaluation.presentationOrder === 'a_first' ? toolBName : toolAName
+
+        const userPrompt = buildMatchPrompt({
+          templateMd: template.templateMd,
+          toolAName: promptToolAName,
+          toolBName: promptToolBName,
+          categoryName: category.name,
+        })
+
+        const systemPrompt = template.systemPromptSnapshot ?? 'You are a helpful assistant.'
+        const promptHash = createHash('sha256').update(userPrompt).digest('hex').slice(0, 64)
+
         try {
-          await database.transaction(async (tx) => {
-            await verifyOwnership(tx, batchId, claimToken)
-            await tx
-              .update(matchEvaluations)
-              .set({
-                status: 'failed',
-                errorMessage: message,
-                parserVersion: MATCH_PARSER_VERSION,
-                renderedUserPrompt: userPrompt,
-                promptHash,
-                systemPromptSnapshot: systemPrompt,
-              })
-              .where(eq(matchEvaluations.id, evaluation.id))
+          const completion = await llmService.complete(modelSnapshot.provider, {
+            model: modelSnapshot.requestedModelId,
+            systemPrompt,
+            userPrompt,
+            temperature: modelSnapshot.temperature ?? undefined,
+            topP: modelSnapshot.topP ?? undefined,
+            maxTokens: modelSnapshot.maxTokens ?? undefined,
+            seed: modelSnapshot.seed ?? undefined,
           })
-        } catch (innerError) {
-          if (innerError instanceof OwnershipLostError) break
-          throw innerError
+
+          const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
+
+          if (drift.hasDrift) {
+            await database.transaction(async (tx) => {
+              await verifyOwnership(tx, batchId, claimToken)
+              await tx
+                .update(matchEvaluations)
+                .set({
+                  status: 'invalid_output',
+                  rawResponse: completion.content,
+                  requestedModelId: modelSnapshot.requestedModelId,
+                  returnedModelId: completion.returnedModel,
+                  provider: completion.provider,
+                  finishReason: completion.finishReason,
+                  promptTokens: completion.usage.promptTokens,
+                  completionTokens: completion.usage.completionTokens,
+                  totalTokens: completion.usage.totalTokens,
+                  latencyMs: completion.latencyMs,
+                  temperature: modelSnapshot.temperature,
+                  topP: modelSnapshot.topP,
+                  maxTokens: modelSnapshot.maxTokens,
+                  seed: modelSnapshot.seed,
+                  parserVersion: MATCH_PARSER_VERSION,
+                  renderedUserPrompt: userPrompt,
+                  promptHash,
+                  systemPromptSnapshot: systemPrompt,
+                  errorMessage: `Model drift: requested ${drift.requestedModel}, got ${drift.returnedModel}`,
+                })
+                .where(eq(matchEvaluations.id, evaluation.id))
+            })
+            continue
+          }
+
+          const parseResult = parseMatchResponse(completion.content)
+
+          if (parseResult.status === 'ok') {
+            const remapped = remapMatchResult(
+              parseResult.response,
+              evaluation.presentationOrder,
+              batch.toolAId,
+              batch.toolBId,
+            )
+
+            await database.transaction(async (tx) => {
+              await verifyOwnership(tx, batchId, claimToken)
+              await tx
+                .update(matchEvaluations)
+                .set({
+                  status: 'completed',
+                  winnerDecision: remapped.winnerDecision,
+                  winnerId: remapped.winnerId,
+                  comparisonSummary: remapped.comparisonSummary,
+                  toolAPros: remapped.toolAPros,
+                  toolACons: remapped.toolACons,
+                  toolBPros: remapped.toolBPros,
+                  toolBCons: remapped.toolBCons,
+                  confidence: remapped.confidence,
+                  naturalResponse: parseResult.naturalResponse,
+                  appendixRaw: parseResult.rawAppendix,
+                  appendixJson: parseResult.response,
+                  rawResponse: completion.content,
+                  requestedModelId: modelSnapshot.requestedModelId,
+                  returnedModelId: completion.returnedModel,
+                  provider: completion.provider,
+                  finishReason: completion.finishReason,
+                  promptTokens: completion.usage.promptTokens,
+                  completionTokens: completion.usage.completionTokens,
+                  totalTokens: completion.usage.totalTokens,
+                  latencyMs: completion.latencyMs,
+                  temperature: modelSnapshot.temperature,
+                  topP: modelSnapshot.topP,
+                  maxTokens: modelSnapshot.maxTokens,
+                  seed: modelSnapshot.seed,
+                  parserVersion: MATCH_PARSER_VERSION,
+                  renderedUserPrompt: userPrompt,
+                  promptHash,
+                  systemPromptSnapshot: systemPrompt,
+                  errorMessage: null,
+                })
+                .where(eq(matchEvaluations.id, evaluation.id))
+            })
+          } else {
+            await database.transaction(async (tx) => {
+              await verifyOwnership(tx, batchId, claimToken)
+              await tx
+                .update(matchEvaluations)
+                .set({
+                  status: 'invalid_output',
+                  rawResponse: completion.content,
+                  requestedModelId: modelSnapshot.requestedModelId,
+                  returnedModelId: completion.returnedModel,
+                  provider: completion.provider,
+                  finishReason: completion.finishReason,
+                  promptTokens: completion.usage.promptTokens,
+                  completionTokens: completion.usage.completionTokens,
+                  totalTokens: completion.usage.totalTokens,
+                  latencyMs: completion.latencyMs,
+                  temperature: modelSnapshot.temperature,
+                  topP: modelSnapshot.topP,
+                  maxTokens: modelSnapshot.maxTokens,
+                  seed: modelSnapshot.seed,
+                  parserVersion: MATCH_PARSER_VERSION,
+                  renderedUserPrompt: userPrompt,
+                  promptHash,
+                  systemPromptSnapshot: systemPrompt,
+                  errorMessage: parseResult.reason,
+                })
+                .where(eq(matchEvaluations.id, evaluation.id))
+            })
+          }
+        } catch (error) {
+          if (error instanceof OwnershipLostError) {
+            break
+          }
+
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          try {
+            await database.transaction(async (tx) => {
+              await verifyOwnership(tx, batchId, claimToken)
+              await tx
+                .update(matchEvaluations)
+                .set({
+                  status: 'failed',
+                  errorMessage: message,
+                  parserVersion: MATCH_PARSER_VERSION,
+                  renderedUserPrompt: userPrompt,
+                  promptHash,
+                  systemPromptSnapshot: systemPrompt,
+                })
+                .where(eq(matchEvaluations.id, evaluation.id))
+            })
+          } catch (innerError) {
+            if (innerError instanceof OwnershipLostError) break
+            throw innerError
+          }
         }
       }
+    } finally {
+      await heartbeat.stop().catch(() => undefined)
     }
 
-    // Finalize batch
-    return await finalizeBatch(database, batchId, claimToken, now)
-  } finally {
-    await heartbeat.stop()
+    if (heartbeat.failed()) {
+      return await buildOwnershipLostSummary(database, batchId)
+    }
+
+    return await syncBatchState(database, batchId, claimToken, now)
+  } catch (error) {
+    if (error instanceof OwnershipLostError) {
+      return await buildOwnershipLostSummary(database, batchId)
+    }
+
+    await database
+      .update(matchBatches)
+      .set({
+        status: 'failed',
+        claimToken: null,
+        lastHeartbeatAt: null,
+        completedAt: now(),
+      })
+      .where(
+        and(
+          eq(matchBatches.id, batchId),
+          inArray(matchBatches.status, ['pending', 'failed', 'running']),
+        ),
+      )
+
+    throw error
   }
 }
 
-async function finalizeBatch(
+async function getEvaluationCounts(
   database: DatabaseClient,
   batchId: string,
-  claimToken: string,
-  now: () => Date,
-): Promise<MatchBatchRunSummary> {
-  // Count evaluation statuses
+): Promise<MatchEvaluationCounts> {
   const allEvals = await database.query.matchEvaluations.findMany({
     where: eq(matchEvaluations.batchId, batchId),
     columns: { status: true },
   })
 
-  const completedCount = allEvals.filter((e) => e.status === 'completed').length
-  const failedCount = allEvals.filter((e) => e.status === 'failed').length
-  const invalidCount = allEvals.filter((e) => e.status === 'invalid_output').length
-  const totalCount = allEvals.length
+  return {
+    totalCount: allEvals.length,
+    pendingCount: allEvals.filter((evaluation) => evaluation.status === 'pending').length,
+    completedCount: allEvals.filter((evaluation) => evaluation.status === 'completed').length,
+    failedCount: allEvals.filter((evaluation) => evaluation.status === 'failed').length,
+    invalidCount: allEvals.filter((evaluation) => evaluation.status === 'invalid_output').length,
+  }
+}
 
-  const finalStatus = completedCount === totalCount ? 'completed' : 'failed'
+async function buildOwnershipLostSummary(
+  database: DatabaseClient,
+  batchId: string,
+): Promise<MatchBatchRunSummary> {
+  const counts = await getEvaluationCounts(database, batchId)
+  return buildSummary(batchId, 'ownership_lost', counts)
+}
+
+async function syncBatchState(
+  database: DatabaseClient,
+  batchId: string,
+  claimToken: string,
+  now: () => Date,
+): Promise<MatchBatchRunSummary> {
+  const counts = await getEvaluationCounts(database, batchId)
+  const hasRemainingWork = counts.pendingCount > 0
+  const finalStatus =
+    counts.completedCount === counts.totalCount && counts.pendingCount === 0
+      ? 'completed'
+      : 'failed'
+  const nextStatus = hasRemainingWork ? 'pending' : finalStatus
 
   const [updated] = await database
     .update(matchBatches)
     .set({
-      status: finalStatus,
-      completedEvaluations: completedCount,
-      failedEvaluations: failedCount,
-      invalidOutputEvaluations: invalidCount,
-      completedAt: now(),
+      status: nextStatus,
+      completedEvaluations: counts.completedCount,
+      failedEvaluations: counts.failedCount,
+      invalidOutputEvaluations: counts.invalidCount,
+      startedAt: hasRemainingWork ? null : undefined,
+      claimToken: null,
+      lastHeartbeatAt: null,
+      completedAt: hasRemainingWork ? null : now(),
     })
     .where(getOwnershipClause(batchId, claimToken))
     .returning()
 
   if (!updated) {
-    // Ownership lost during finalization
-    const latestBatch = await database.query.matchBatches.findFirst({
-      where: eq(matchBatches.id, batchId),
-    })
-    return {
-      batchId,
-      status: 'ownership_lost',
-      totalEvaluations: latestBatch?.totalEvaluations ?? totalCount,
-      completedEvaluations: completedCount,
-      failedEvaluations: failedCount,
-      invalidOutputEvaluations: invalidCount,
-    }
+    return buildSummary(batchId, 'ownership_lost', counts)
   }
 
-  return {
-    batchId,
-    status: finalStatus,
-    totalEvaluations: totalCount,
-    completedEvaluations: completedCount,
-    failedEvaluations: failedCount,
-    invalidOutputEvaluations: invalidCount,
-  }
+  return buildSummary(batchId, nextStatus, counts)
 }

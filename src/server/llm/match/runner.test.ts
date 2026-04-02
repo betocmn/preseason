@@ -378,6 +378,43 @@ describe('runMatchBatch', () => {
     expect(mockLlm.complete).toHaveBeenCalledTimes(1)
   })
 
+  it('should release a partially processed batch back to pending when capped', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    const mockLlm = createMockLlmService(async (_provider, request) =>
+      mockCompletion(wrapResponse(buildValidMatchResponse()), request.model),
+    )
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+      maxEvaluations: 1,
+    })
+
+    expect(summary.status).toBe('pending')
+    expect(summary.completedEvaluations).toBe(1)
+    expect(summary.failedEvaluations).toBe(0)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('pending')
+    expect(batchAfter?.claimToken).toBeNull()
+    expect(batchAfter?.lastHeartbeatAt).toBeNull()
+    expect(batchAfter?.completedAt).toBeNull()
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    expect(evals.filter((evaluation) => evaluation.status === 'completed')).toHaveLength(1)
+    expect(evals.filter((evaluation) => evaluation.status === 'pending')).toHaveLength(1)
+  })
+
   it('should finalize batch as failed when some evaluations fail', async () => {
     const db = getTestDb()
     const fixture = await seedRunnerFixture()
@@ -401,6 +438,47 @@ describe('runMatchBatch', () => {
     expect(summary.status).toBe('failed')
     expect(summary.completedEvaluations).toBe(1)
     expect(summary.failedEvaluations).toBe(1)
+  })
+
+  it('should not retry failed evaluations on an explicit rerun', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    let callCount = 0
+    const failingLlm = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+      }
+      throw new Error('Transport error')
+    })
+
+    const firstSummary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: failingLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    expect(firstSummary.status).toBe('failed')
+    expect(callCount).toBe(2)
+
+    const reclaim = await claimMatchBatchExecution(db, batch.id)
+    expect(reclaim.execute).toBe(true)
+    if (!reclaim.claimToken) throw new Error('Expected claim token on explicit rerun')
+
+    const retryLlm = createMockLlmService(async (_provider, request) => {
+      throw new Error(`Unexpected retry for ${request.model}`)
+    })
+
+    const secondSummary = await runMatchBatch(batch.id, reclaim.claimToken, {
+      database: db,
+      llmService: retryLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    expect(secondSummary.status).toBe('failed')
+    expect(retryLlm.complete).not.toHaveBeenCalled()
   })
 
   it('should fail fast when template schema version is unsupported', async () => {

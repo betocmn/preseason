@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const claimNextMatchBatchExecutionMock = vi.hoisted(() => vi.fn())
 const runMatchBatchMock = vi.hoisted(() => vi.fn())
+const serverSettingsMock = vi.hoisted(() => ({
+  match: { cronEvaluationsPerInvocation: 4 },
+}))
 
 vi.mock('~/env', () => ({
   env: {
@@ -11,6 +14,10 @@ vi.mock('~/env', () => ({
 
 vi.mock('~/server/db', () => ({
   db: {},
+}))
+
+vi.mock('~/constants/server-settings', () => ({
+  serverSettings: serverSettingsMock,
 }))
 
 vi.mock('~/server/llm/match/batches', () => ({
@@ -35,6 +42,7 @@ describe('GET /api/cron/match-run', () => {
   beforeEach(() => {
     claimNextMatchBatchExecutionMock.mockReset()
     runMatchBatchMock.mockReset()
+    serverSettingsMock.match.cronEvaluationsPerInvocation = 4
   })
 
   it('returns 400 for non-UUID seasonId input', async () => {
@@ -86,6 +94,9 @@ describe('GET /api/cron/match-run', () => {
     expect(claimNextMatchBatchExecutionMock).toHaveBeenCalledWith(expect.anything(), {
       seasonId: batchId,
     })
-    expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', expect.any(Object))
+    expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', {
+      database: expect.anything(),
+      maxEvaluations: 4,
+    })
   })
 })
