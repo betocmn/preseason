@@ -580,6 +580,41 @@ describe('runMatchBatch', () => {
     expect(evals.filter((evaluation) => evaluation.status === 'pending')).toHaveLength(1)
   })
 
+  it('should release a batch back to pending when runtime budget gets too low', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+    let currentTimeMs = Date.UTC(2026, 0, 1)
+
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      currentTimeMs += 250
+      return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+      maxRuntimeMs: 1_000,
+      minRemainingRuntimeMs: 800,
+      now: () => new Date(currentTimeMs),
+    })
+
+    expect(summary.status).toBe('pending')
+    expect(summary.completedEvaluations).toBe(1)
+    expect(summary.failedEvaluations).toBe(0)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('pending')
+    expect(batchAfter?.claimToken).toBeNull()
+    expect(batchAfter?.lastHeartbeatAt).toBeNull()
+    expect(batchAfter?.completedAt).toBeNull()
+  })
+
   it('should finalize batch state after a heartbeat write failure', async () => {
     const db = getTestDb()
     const fixture = await seedRunnerFixture()

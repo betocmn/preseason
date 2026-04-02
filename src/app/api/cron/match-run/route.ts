@@ -11,6 +11,13 @@ export const maxDuration = 800
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+function getMaxSingleEvaluationRuntimeMs() {
+  const attempts = serverSettings.openRouter.transportRetryAttempts
+  const retryDelayMs =
+    (serverSettings.openRouter.transportRetryBaseDelayMs * ((attempts - 1) * attempts)) / 2
+  return serverSettings.openRouter.requestTimeoutMs * attempts + retryDelayMs
+}
+
 export async function GET(request: Request) {
   if (!env.CRON_SECRET) {
     return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
@@ -35,6 +42,8 @@ export async function GET(request: Request) {
     const summary = await runMatchBatch(claim.batch.id, claim.claimToken, {
       database: db,
       maxEvaluations: serverSettings.match.cronEvaluationsPerInvocation,
+      maxRuntimeMs: maxDuration * 1000 - serverSettings.match.cronInvocationSafetyBufferMs,
+      minRemainingRuntimeMs: getMaxSingleEvaluationRuntimeMs(),
       retryTerminalEvaluations: false,
     })
 

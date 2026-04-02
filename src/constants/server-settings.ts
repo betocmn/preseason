@@ -2,6 +2,8 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
+const matchCronInvocationSafetyBufferMs = 60 * 1000
+const openRouterRequestTimeoutMs = 5 * 60 * 1000
 
 const backgroundSmokePromptSelections = [
   { slug: 'real-estate-website', level: 'beginner' },
@@ -44,10 +46,14 @@ export const serverSettings = {
     // Match batches can fan out to one LLM call per model/presentation order pair.
     // Keep cron work bounded so a single invocation never attempts a whole batch.
     cronEvaluationsPerInvocation: 4,
+    // Leave time for batch cleanup before the route itself hits the platform limit.
+    cronInvocationSafetyBufferMs: matchCronInvocationSafetyBufferMs,
   },
   openRouter: {
-    transportRetryAttempts: 3,
+    // Retry transport failures once while keeping the whole evaluation bounded.
+    transportRetryAttempts: 2,
     transportRetryBaseDelayMs: 1_000,
+    requestTimeoutMs: openRouterRequestTimeoutMs,
   },
   toolCandidateReview: {
     cronBatchSize: 8,

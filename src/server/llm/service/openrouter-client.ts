@@ -87,6 +87,13 @@ function getContent(choice: OpenAI.Chat.Completions.ChatCompletion.Choice | unde
   return typeof content === 'string' ? content : ''
 }
 
+function getRequestOptions() {
+  return {
+    maxRetries: 0,
+    timeout: serverSettings.openRouter.requestTimeoutMs,
+  }
+}
+
 function getErrorMessage(error: unknown) {
   if (!error || typeof error !== 'object') {
     return 'Unknown OpenRouter error'
@@ -150,14 +157,17 @@ export async function complete(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await getClient().chat.completions.create({
-        model,
-        messages,
-        ...(params?.temperature !== undefined && { temperature: params.temperature }),
-        ...(params?.top_p !== undefined && { top_p: params.top_p }),
-        ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
-        ...(params?.seed !== undefined && { seed: params.seed }),
-      })
+      const response = await getClient().chat.completions.create(
+        {
+          model,
+          messages,
+          ...(params?.temperature !== undefined && { temperature: params.temperature }),
+          ...(params?.top_p !== undefined && { top_p: params.top_p }),
+          ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
+          ...(params?.seed !== undefined && { seed: params.seed }),
+        },
+        getRequestOptions(),
+      )
 
       const firstChoice = response.choices[0]
 

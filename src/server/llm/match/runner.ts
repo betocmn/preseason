@@ -25,6 +25,8 @@ export type MatchBatchRunOptions = {
   now?: () => Date
   heartbeatIntervalMs?: number
   maxEvaluations?: number
+  maxRuntimeMs?: number
+  minRemainingRuntimeMs?: number
   retryTerminalEvaluations?: boolean
 }
 
@@ -205,7 +207,10 @@ export async function runMatchBatch(
   const now = options.now ?? (() => new Date())
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
   const maxEvaluations = options.maxEvaluations ?? null
+  const maxRuntimeMs = options.maxRuntimeMs ?? null
+  const minRemainingRuntimeMs = options.minRemainingRuntimeMs ?? 0
   const retryTerminalEvaluations = options.retryTerminalEvaluations ?? true
+  const startedAtMs = now().getTime()
 
   if (maxEvaluations != null && maxEvaluations < 1) {
     throw new Error('maxEvaluations must be at least 1')
@@ -285,6 +290,14 @@ export async function runMatchBatch(
         // Abort early if heartbeat detected ownership loss or write failure
         if (heartbeat.failed()) {
           break
+        }
+
+        if (maxRuntimeMs != null) {
+          const elapsedMs = now().getTime() - startedAtMs
+          const remainingMs = maxRuntimeMs - elapsedMs
+          if (remainingMs <= minRemainingRuntimeMs) {
+            break
+          }
         }
 
         const { modelSnapshot } = evaluation

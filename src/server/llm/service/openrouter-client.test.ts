@@ -57,6 +57,16 @@ describe('openrouter-client', () => {
       finishReason: 'stop',
     })
     expect(createMock).toHaveBeenCalledTimes(2)
+    expect(createMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        model: 'openai/gpt-5.4-pro',
+      }),
+      expect.objectContaining({
+        maxRetries: 0,
+        timeout: 300_000,
+      }),
+    )
   })
 
   it('retries transient truncated json parse errors and then throws after max attempts', async () => {

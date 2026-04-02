@@ -18,4 +18,17 @@ describe('serverSettings.match', () => {
     expect(serverSettings.match.cronEvaluationsPerInvocation).toBeGreaterThan(0)
     expect(serverSettings.match.cronEvaluationsPerInvocation).toBeLessThanOrEqual(4)
   })
+
+  it('keeps a cleanup buffer before the route max duration', () => {
+    expect(serverSettings.match.cronInvocationSafetyBufferMs).toBeGreaterThan(0)
+    expect(serverSettings.match.cronInvocationSafetyBufferMs).toBeLessThan(800 * 1000)
+  })
+})
+
+describe('serverSettings.openRouter', () => {
+  it('bounds request retries tightly enough for serverless routes', () => {
+    expect(serverSettings.openRouter.transportRetryAttempts).toBeGreaterThan(0)
+    expect(serverSettings.openRouter.transportRetryAttempts).toBeLessThanOrEqual(2)
+    expect(serverSettings.openRouter.requestTimeoutMs).toBeGreaterThan(0)
+  })
 })
