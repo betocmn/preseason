@@ -1,4 +1,5 @@
 import type { TRPCError } from '@trpc/server'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   benchmarkModelSnapshots,
@@ -120,7 +121,7 @@ async function seedMatchRouterFixture() {
       .returning(),
   )
 
-  return { category, toolA, toolB, season, template }
+  return { category, toolA, toolB, season, template, protocol, snapshot }
 }
 
 describe('matchRouter', () => {
@@ -237,6 +238,114 @@ describe('matchRouter', () => {
     expect(disabled.isActive).toBe(false)
   })
 
+  it('returns admin launch context for the latest active season and eligible categories', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const ineligibleCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ name: 'Analytics', slug: 'analytics', categoryId: fixture.category.categoryId })
+        .returning(),
+    )
+
+    const loneTool = first(
+      await db.insert(tools).values({ name: 'Solo Tool', slug: 'solo-tool' }).returning(),
+    )
+    await db.insert(toolCategories).values({
+      toolId: loneTool.id,
+      categoryId: ineligibleCategory.id,
+    })
+
+    const latestSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: fixture.protocol.id,
+          slug: 'season-2',
+          name: 'Season 2',
+          status: 'active',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: latestSeason.id,
+      modelSnapshotId: fixture.snapshot.id,
+    })
+
+    const context = await caller.match.getAdminLaunchContext()
+
+    expect(context.season).toEqual({
+      id: latestSeason.id,
+      name: 'Season 2',
+      slug: 'season-2',
+      modelCount: 1,
+    })
+    expect(context.promptTemplate).toMatchObject({
+      id: fixture.template.id,
+      name: fixture.template.name,
+      slug: fixture.template.slug,
+    })
+    expect(context.categories).toEqual([
+      {
+        id: fixture.category.id,
+        name: fixture.category.name,
+        slug: fixture.category.slug,
+        toolCount: 2,
+      },
+    ])
+  })
+
+  it('errors when no active benchmark season exists for admin launch context', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+
+    await expect(caller.match.getAdminLaunchContext()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No active benchmark season found',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('errors when no active match prompt template exists for admin launch context', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    await db
+      .update(matchPromptTemplates)
+      .set({ isActive: false })
+      .where(eq(matchPromptTemplates.id, fixture.template.id))
+
+    await expect(caller.match.getAdminLaunchContext()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Active match prompt template not found',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('lists launchable tools sorted by name', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const extraTool = first(
+      await db.insert(tools).values({ name: 'Aardvark Auth', slug: 'aardvark-auth' }).returning(),
+    )
+    await db.insert(toolCategories).values({
+      toolId: extraTool.id,
+      categoryId: fixture.category.id,
+    })
+
+    const toolsForCategory = await caller.match.listLaunchableTools({
+      categoryId: fixture.category.id,
+    })
+
+    expect(toolsForCategory.map((tool) => tool.name)).toEqual(['Aardvark Auth', 'Auth0', 'Clerk'])
+  })
+
   it('should create a batch and get it', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
@@ -255,6 +364,204 @@ describe('matchRouter', () => {
 
     const fetched = await caller.match.getBatch({ batchId: batch.id })
     expect(fetched.evaluations).toHaveLength(2)
+  })
+
+  it('creates manual batches for unique queued entries', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const category = first(
+      await db
+        .insert(subcategories)
+        .values({ name: 'Billing', slug: 'billing', categoryId: fixture.category.categoryId })
+        .returning(),
+    )
+    const toolC = first(
+      await db.insert(tools).values({ name: 'Stripe', slug: 'stripe' }).returning(),
+    )
+    const toolD = first(
+      await db.insert(tools).values({ name: 'Paddle', slug: 'paddle' }).returning(),
+    )
+    await db.insert(toolCategories).values([
+      { toolId: toolC.id, categoryId: category.id },
+      { toolId: toolD.id, categoryId: category.id },
+    ])
+
+    const result = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId: crypto.randomUUID(),
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+        {
+          categoryId: category.id,
+          toolAId: toolC.id,
+          toolBId: toolD.id,
+        },
+      ],
+    })
+
+    expect(result.createdCount).toBe(2)
+    expect(result.batches).toHaveLength(2)
+    expect(result.batches.every((batch) => batch.status === 'pending')).toBe(true)
+    expect(result.batches.map((batch) => batch.totalEvaluations)).toEqual([2, 2])
+  })
+
+  it('canonicalizes tool order when creating manual batches', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+
+    const result = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId: crypto.randomUUID(),
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolB.id,
+          toolBId: fixture.toolA.id,
+        },
+      ],
+    })
+
+    expect(result.batches).toHaveLength(1)
+    expect(result.batches[0]).toMatchObject({
+      toolAId: fixture.toolA.id,
+      toolBId: fixture.toolB.id,
+    })
+  })
+
+  it('uses the active prompt template when creating manual batches', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+
+    const result = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId: crypto.randomUUID(),
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    const batchId = result.batches[0]?.id
+    if (!batchId) throw new Error('Expected manual batch to be created')
+
+    const batch = await caller.match.getBatch({ batchId })
+    expect(batch.promptTemplateId).toBe(fixture.template.id)
+  })
+
+  it('rejects duplicate normalized manual match rows in the same request', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+
+    await expect(
+      caller.match.createManualBatches({
+        seasonId: fixture.season.id,
+        submissionId: crypto.randomUUID(),
+        entries: [
+          {
+            categoryId: fixture.category.id,
+            toolAId: fixture.toolA.id,
+            toolBId: fixture.toolB.id,
+          },
+          {
+            categoryId: fixture.category.id,
+            toolAId: fixture.toolB.id,
+            toolBId: fixture.toolA.id,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Duplicate match rows are not allowed',
+    } satisfies Partial<TRPCError>)
+  })
+
+  it('is idempotent when retrying the same manual batch submission', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const submissionId = crypto.randomUUID()
+
+    const firstResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId,
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    const secondResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId,
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    expect(firstResult.createdCount).toBe(1)
+    expect(secondResult.createdCount).toBe(0)
+    expect(secondResult.batches).toHaveLength(1)
+    expect(secondResult.batches[0]?.id).toBe(firstResult.batches[0]?.id)
+  })
+
+  it('rejects manual batch submissions for a non-active season', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const latestSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: fixture.protocol.id,
+          slug: 'season-2',
+          name: 'Season 2',
+          status: 'active',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: latestSeason.id,
+      modelSnapshotId: fixture.snapshot.id,
+    })
+
+    await expect(
+      caller.match.createManualBatches({
+        seasonId: fixture.season.id,
+        submissionId: crypto.randomUUID(),
+        entries: [
+          {
+            categoryId: fixture.category.id,
+            toolAId: fixture.toolA.id,
+            toolBId: fixture.toolB.id,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Manual matches can only be created for the current active benchmark season',
+    } satisfies Partial<TRPCError>)
   })
 
   it('should map createBatch foreign key violations to BAD_REQUEST', async () => {

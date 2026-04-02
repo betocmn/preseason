@@ -1,14 +1,20 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole } from '~/server/api/helpers/auth'
+import { findLatestActiveBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import { paginationInputSchema } from '~/server/api/helpers/pagination'
 import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc'
 import {
+  benchmarkSeasonModels,
+  benchmarkSeasons,
   matchBatches,
   matchConfigs,
+  matchEvaluations,
   matchPromptTemplates,
+  subcategories,
   toolCategories,
+  tools,
 } from '~/server/db/schema'
 import { createMatchBatch } from '~/server/llm/match/batches'
 
@@ -62,7 +68,152 @@ const createBatchInputSchema = z
     }
   })
 
+const createManualBatchesInputSchema = z.object({
+  seasonId: z.string().uuid(),
+  submissionId: z.string().uuid(),
+  entries: z
+    .array(
+      z.object({
+        categoryId: z.string().uuid(),
+        toolAId: z.string().uuid(),
+        toolBId: z.string().uuid(),
+      }),
+    )
+    .min(1)
+    .max(50),
+})
+
+function normalizeManualBatchEntryKey(categoryId: string, toolAId: string, toolBId: string) {
+  const [normalizedToolAId, normalizedToolBId] = canonicalizeToolOrder(toolAId, toolBId)
+  return `${categoryId}:${normalizedToolAId}:${normalizedToolBId}`
+}
+
+function buildManualBatchIdempotencyKey(
+  seasonId: string,
+  submissionId: string,
+  promptTemplateId: string,
+  categoryId: string,
+  toolAId: string,
+  toolBId: string,
+) {
+  const [normalizedToolAId, normalizedToolBId] = canonicalizeToolOrder(toolAId, toolBId)
+  return [
+    'manual-match',
+    submissionId,
+    seasonId,
+    promptTemplateId,
+    categoryId,
+    normalizedToolAId,
+    normalizedToolBId,
+  ].join(':')
+}
+
 export const matchRouter = createTRPCRouter({
+  getAdminLaunchContext: protectedProcedure.query(async ({ ctx }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    const seasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
+    if (!seasonId) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'No active benchmark season found',
+      })
+    }
+
+    const season = await ctx.db.query.benchmarkSeasons.findFirst({
+      where: eq(benchmarkSeasons.id, seasonId),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    })
+    if (!season) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Active benchmark season not found',
+      })
+    }
+
+    const promptTemplate = await ctx.db.query.matchPromptTemplates.findFirst({
+      where: eq(matchPromptTemplates.isActive, true),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    })
+    if (!promptTemplate) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Active match prompt template not found',
+      })
+    }
+
+    const [modelCountRow] = await ctx.db
+      .select({ cnt: count() })
+      .from(benchmarkSeasonModels)
+      .where(eq(benchmarkSeasonModels.seasonId, seasonId))
+
+    const categoryCounts = await ctx.db
+      .select({
+        categoryId: toolCategories.categoryId,
+        cnt: count(),
+      })
+      .from(toolCategories)
+      .groupBy(toolCategories.categoryId)
+
+    const eligibleCategoryIds = categoryCounts
+      .filter((row) => Number(row.cnt) >= 2)
+      .map((row) => row.categoryId)
+
+    const categoryCountById = new Map(
+      categoryCounts.map((row) => [row.categoryId, Number(row.cnt)]),
+    )
+
+    const categoriesForLaunch =
+      eligibleCategoryIds.length > 0
+        ? await ctx.db.query.subcategories.findMany({
+            where: inArray(subcategories.id, eligibleCategoryIds),
+            columns: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+          })
+        : []
+
+    return {
+      season: {
+        ...season,
+        modelCount: Number(modelCountRow?.cnt ?? 0),
+      },
+      promptTemplate,
+      categories: categoriesForLaunch.map((category) => ({
+        ...category,
+        toolCount: categoryCountById.get(category.id) ?? 0,
+      })),
+    }
+  }),
+
+  listLaunchableTools: protectedProcedure
+    .input(z.object({ categoryId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      return await ctx.db
+        .select({
+          id: tools.id,
+          name: tools.name,
+          slug: tools.slug,
+        })
+        .from(toolCategories)
+        .innerJoin(tools, eq(toolCategories.toolId, tools.id))
+        .where(eq(toolCategories.categoryId, input.categoryId))
+        .orderBy(asc(tools.name))
+    }),
+
   configureMatch: protectedProcedure
     .input(
       z.object({
@@ -215,6 +366,138 @@ export const matchRouter = createTRPCRouter({
     }
   }),
 
+  createManualBatches: protectedProcedure
+    .input(createManualBatchesInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const activeSeasonId = await findLatestActiveBenchmarkSeasonId(ctx.db)
+      if (!activeSeasonId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No active benchmark season found',
+        })
+      }
+
+      if (input.seasonId !== activeSeasonId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Manual matches can only be created for the current active benchmark season',
+        })
+      }
+
+      const promptTemplate = await ctx.db.query.matchPromptTemplates.findFirst({
+        where: eq(matchPromptTemplates.isActive, true),
+        columns: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      })
+      if (!promptTemplate) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Active match prompt template not found',
+        })
+      }
+
+      const seenKeys = new Set<string>()
+      for (const entry of input.entries) {
+        if (entry.toolAId.toLowerCase() === entry.toolBId.toLowerCase()) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Tool A and Tool B must be different',
+          })
+        }
+
+        const entryKey = normalizeManualBatchEntryKey(
+          entry.categoryId,
+          entry.toolAId,
+          entry.toolBId,
+        )
+        if (seenKeys.has(entryKey)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Duplicate match rows are not allowed',
+          })
+        }
+        seenKeys.add(entryKey)
+      }
+
+      let createdCount = 0
+      const batches: Array<{
+        id: string
+        status: 'pending'
+        categoryId: string
+        toolAId: string
+        toolBId: string
+        totalEvaluations: number
+      }> = []
+
+      for (const entry of input.entries) {
+        const idempotencyKey = buildManualBatchIdempotencyKey(
+          input.seasonId,
+          input.submissionId,
+          promptTemplate.id,
+          entry.categoryId,
+          entry.toolAId,
+          entry.toolBId,
+        )
+
+        const existingBatch = await ctx.db.query.matchBatches.findFirst({
+          where: eq(matchBatches.idempotencyKey, idempotencyKey),
+          columns: { id: true },
+        })
+
+        try {
+          const batch = await createMatchBatch(ctx.db, {
+            seasonId: input.seasonId,
+            categoryId: entry.categoryId,
+            toolAId: entry.toolAId,
+            toolBId: entry.toolBId,
+            promptTemplateId: promptTemplate.id,
+            triggerMode: 'manual',
+            idempotencyKey,
+            triggeredBy: ctx.user.id,
+          })
+
+          if (!existingBatch) {
+            createdCount += 1
+          }
+
+          batches.push({
+            id: batch.id,
+            status: 'pending',
+            categoryId: batch.categoryId,
+            toolAId: batch.toolAId,
+            toolBId: batch.toolBId,
+            totalEvaluations: batch.totalEvaluations,
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          if (
+            message.includes('Both tools must belong') ||
+            message.includes('Season has no frozen') ||
+            message.includes('benchmarkRunId')
+          ) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message })
+          }
+          if (isForeignKeyViolation(error)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'One or more referenced IDs were not found or are incompatible',
+            })
+          }
+          throw error
+        }
+      }
+
+      return {
+        createdCount,
+        batches,
+      }
+    }),
+
   listBatches: protectedProcedure
     .input(
       z.object({
@@ -259,6 +542,10 @@ export const matchRouter = createTRPCRouter({
           promptTemplate: true,
           season: true,
           evaluations: {
+            orderBy: [
+              asc(matchEvaluations.modelSnapshotId),
+              asc(matchEvaluations.presentationOrder),
+            ],
             with: { modelSnapshot: true },
           },
         },
