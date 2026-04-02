@@ -405,7 +405,7 @@ async function seedPublishedRun(
 describe('computeCategoryRanking', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
@@ -916,7 +916,7 @@ describe('computeCategoryRanking', () => {
 describe('computeHeadToHead', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

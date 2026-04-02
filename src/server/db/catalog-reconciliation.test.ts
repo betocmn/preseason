@@ -43,7 +43,7 @@ function first<T>(rows: T[]): T {
 describe('ensureCanonicalToolReconciliation', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

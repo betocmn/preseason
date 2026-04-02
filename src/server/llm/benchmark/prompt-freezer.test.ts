@@ -65,7 +65,7 @@ async function seedCategories(db: ReturnType<typeof getTestDb>, count: number) {
 describe('freezePromptVersion', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

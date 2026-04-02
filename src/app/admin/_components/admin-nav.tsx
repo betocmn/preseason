@@ -1,16 +1,17 @@
 'use client'
 
-import { Brain, FlaskConical, MessageSquare, UserCheck, Wrench } from 'lucide-react'
+import { Brain, FlaskConical, MessageSquare, Scale, UserCheck, Wrench } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '~/lib/utils'
 
-const navItems = [
+export const adminNavItems = [
   { href: '/beto-admin/tools', label: 'Tools', icon: Wrench },
   { href: '/beto-admin/llms', label: 'LLMs', icon: Brain },
   { href: '/beto-admin/prompts', label: 'Prompts', icon: MessageSquare },
   { href: '/beto-admin/critics', label: 'Critics', icon: UserCheck },
   { href: '/beto-admin/benchmark', label: 'Benchmark', icon: FlaskConical },
+  { href: '/beto-admin/matches', label: 'Matches', icon: Scale },
 ]
 
 export function AdminNav() {
@@ -18,7 +19,7 @@ export function AdminNav() {
 
   return (
     <nav className="flex-1 space-y-1 p-4">
-      {navItems.map((item) => {
+      {adminNavItems.map((item) => {
         const isActive = pathname.startsWith(item.href)
         return (
           <Link

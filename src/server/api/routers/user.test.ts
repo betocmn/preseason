@@ -6,7 +6,7 @@ import { createAuthUser, createTestCaller, seedUser } from '~/test/trpc'
 describe('userRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

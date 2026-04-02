@@ -15,7 +15,7 @@ import { createTestCaller, seedUser } from '~/test/trpc'
 describe('commentRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

@@ -40,7 +40,7 @@ function first<T>(rows: T[]): T {
 describe('cleanBenchmarkData', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
