@@ -431,12 +431,12 @@ describe('matchRouter', () => {
     })
 
     expect(result.createdCount).toBe(1)
-    expect(result.batches[0]).toMatchObject({
-      categoryId: fixture.category.id,
-      toolAId: fixture.toolA.id,
-      toolBId: fixture.toolB.id,
-      status: 'pending',
-    })
+    const batch = result.batches[0]!
+    expect(batch.categoryId).toBe(fixture.category.id)
+    expect(batch.status).toBe('pending')
+    expect(new Set([batch.toolAId, batch.toolBId])).toEqual(
+      new Set([fixture.toolA.id, fixture.toolB.id]),
+    )
   })
 
   it('canonicalizes tool order when creating manual batches', async () => {
