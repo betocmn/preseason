@@ -381,6 +381,71 @@ export const promptRouter = createTRPCRouter({
       return updated[0]
     }),
 
+  getTopToolsBySlug: publicProcedure
+    .input(
+      z.object({
+        slug: z.string().min(1).max(255),
+        level: promptLevelSchema.default('beginner'),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+      if (!seasonId) return []
+
+      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
+      if (runIds.length === 0) return []
+
+      const pv = await ctx.db.query.benchmarkPromptVersions.findFirst({
+        where: (table, { and: allOf, eq: equals }) =>
+          allOf(
+            equals(table.slug, input.slug),
+            equals(table.level, input.level),
+            equals(table.isActive, true),
+          ),
+        columns: { id: true },
+      })
+      if (!pv) return []
+
+      const decisionRows = await ctx.db
+        .select({
+          toolId: benchmarkCaseDecisions.toolId,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(benchmarkCaseDecisions)
+        .innerJoin(
+          benchmarkCaseResults,
+          eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+        )
+        .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+        .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
+        .where(
+          and(
+            inArray(benchmarkCaseResults.runId, runIds),
+            eq(benchmarkCases.promptVersionId, pv.id),
+            eq(benchmarkCaseDecisions.decisionType, 'tool'),
+            isNotNull(benchmarkCaseDecisions.toolId),
+          ),
+        )
+        .groupBy(benchmarkCaseDecisions.toolId, tools.name, tools.slug, tools.logoUrl)
+        .orderBy(desc(sql`count(*)`))
+
+      const totalCount = decisionRows.reduce((sum, d) => sum + d.count, 0)
+      return decisionRows.slice(0, 4).map((d) => ({
+        tool: {
+          id: d.toolId as string,
+          name: d.toolName,
+          slug: d.toolSlug,
+          logoUrl: d.toolLogoUrl,
+        },
+        rate: totalCount > 0 ? d.count / totalCount : 0,
+        count: d.count,
+      }))
+    }),
+
   listWithTopTools: publicProcedure
     .input(
       z.object({

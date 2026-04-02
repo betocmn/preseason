@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { CommentList } from '~/components/public/comment-list'
 import { EmptyState } from '~/components/public/empty-state'
+import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { formatPromptLevel } from '~/lib/prompt-levels'
@@ -48,10 +49,13 @@ export default async function PromptDetailPage({ params }: Props) {
     }
   })()
 
-  const promptComments = await caller.comment.listByTarget({
-    targetType: 'prompt',
-    targetId: prompt.id,
-  })
+  const [promptComments, topTools] = await Promise.all([
+    caller.comment.listByTarget({
+      targetType: 'prompt',
+      targetId: prompt.id,
+    }),
+    caller.prompt.getTopToolsBySlug({ slug, level }),
+  ])
 
   return (
     <div className="container max-w-4xl py-8">
@@ -74,6 +78,44 @@ export default async function PromptDetailPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      {topTools.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Top Recommendations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {topTools.map(({ tool, rate }) => {
+                const pct = rate * 100
+                return (
+                  <div key={tool.id} className="flex items-center gap-3">
+                    <div className="w-32 shrink-0">
+                      <ToolBadge
+                        name={tool.name}
+                        slug={tool.slug}
+                        logoUrl={tool.logoUrl}
+                        size="sm"
+                      />
+                    </div>
+                    <div className="flex flex-1 items-center gap-2">
+                      <div className="h-1.5 w-full max-w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-muted-foreground/30 transition-all"
+                          style={{ width: `${Math.max(pct, 3)}%` }}
+                        />
+                      </div>
+                      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {prompt.description && (
         <Card className="mb-6">
