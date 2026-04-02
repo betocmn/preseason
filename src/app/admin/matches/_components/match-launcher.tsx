@@ -17,20 +17,13 @@ import type { RouterOutputs } from '~/trpc/react'
 import { api } from '~/trpc/react'
 import { loadFreshAdminPage } from '../../_components/navigation'
 import {
+  createClientUuid,
   type MatchLaunchRow,
   stripMatchLaunchRows,
   validateMatchLaunchRows,
 } from './match-launcher-state'
 
 type MatchLaunchContext = RouterOutputs['match']['getAdminLaunchContext']
-
-function createClientUuid() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
 
 function createEmptyRow(): MatchLaunchRow {
   return {
@@ -169,6 +162,7 @@ function MatchLauncherRowFields({
 
 export function MatchLauncher({ launchContext }: { launchContext: MatchLaunchContext }) {
   const [rows, setRows] = useState<MatchLaunchRow[]>(() => [createEmptyRow()])
+  const [submissionId, setSubmissionId] = useState(() => createClientUuid())
   const validation = useMemo(() => validateMatchLaunchRows(rows), [rows])
 
   const queueMutation = api.match.createManualBatches.useMutation({
@@ -187,10 +181,12 @@ export function MatchLauncher({ launchContext }: { launchContext: MatchLaunchCon
     setRows((currentRows) =>
       currentRows.map((row) => (row.id === rowId ? { ...row, ...updates } : row)),
     )
+    setSubmissionId(createClientUuid())
   }
 
   function addRow() {
     setRows((currentRows) => [...currentRows, createEmptyRow()])
+    setSubmissionId(createClientUuid())
   }
 
   function removeRow(rowId: string) {
@@ -201,6 +197,7 @@ export function MatchLauncher({ launchContext }: { launchContext: MatchLaunchCon
 
       return currentRows.filter((row) => row.id !== rowId)
     })
+    setSubmissionId(createClientUuid())
   }
 
   function queueMatches(event: React.FormEvent<HTMLFormElement>) {
@@ -212,7 +209,7 @@ export function MatchLauncher({ launchContext }: { launchContext: MatchLaunchCon
 
     queueMutation.mutate({
       seasonId: launchContext.season.id,
-      submissionId: createClientUuid(),
+      submissionId,
       entries: stripMatchLaunchRows(rows),
     })
   }

@@ -5,12 +5,70 @@ export type MatchLaunchRow = {
   toolBId: string
 }
 
+type ClientCryptoLike = {
+  randomUUID?: () => string
+  getRandomValues?: (array: Uint8Array) => Uint8Array
+}
+
 export type MatchLaunchRowErrors = Partial<{
   categoryId: string
   toolAId: string
   toolBId: string
   duplicate: string
 }>
+
+function getClientCrypto(): ClientCryptoLike | undefined {
+  if (typeof globalThis.crypto !== 'object' || globalThis.crypto === null) {
+    return undefined
+  }
+
+  return {
+    randomUUID:
+      typeof globalThis.crypto.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
+        : undefined,
+    getRandomValues:
+      typeof globalThis.crypto.getRandomValues === 'function'
+        ? globalThis.crypto.getRandomValues.bind(globalThis.crypto)
+        : undefined,
+  }
+}
+
+function formatUuidFromBytes(bytes: Uint8Array) {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`
+}
+
+function getRandomUuidBytes(cryptoLike?: ClientCryptoLike | null) {
+  const bytes = new Uint8Array(16)
+
+  if (cryptoLike?.getRandomValues) {
+    cryptoLike.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+
+  const versionByte = bytes[6] ?? 0
+  const variantByte = bytes[8] ?? 0
+
+  bytes[6] = (versionByte & 0x0f) | 0x40
+  bytes[8] = (variantByte & 0x3f) | 0x80
+
+  return bytes
+}
+
+export function createClientUuid(
+  cryptoLike: ClientCryptoLike | null | undefined = getClientCrypto(),
+) {
+  if (cryptoLike?.randomUUID) {
+    return cryptoLike.randomUUID()
+  }
+
+  return formatUuidFromBytes(getRandomUuidBytes(cryptoLike))
+}
 
 export function canonicalizeMatchLaunchKey(categoryId: string, toolAId: string, toolBId: string) {
   const normalizedToolAId = toolAId.toLowerCase()

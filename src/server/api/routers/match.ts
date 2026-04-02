@@ -31,6 +31,31 @@ type DatabaseErrorLike = {
   message?: string
 }
 
+function toMatchBatchError(error: unknown): TRPCError | null {
+  const message = error instanceof Error ? error.message : 'Unknown error'
+
+  if (
+    message.includes('Both tools must belong') ||
+    message.includes('Season has no frozen') ||
+    message.includes('benchmarkRunId')
+  ) {
+    return new TRPCError({ code: 'BAD_REQUEST', message })
+  }
+
+  if (message.includes('Idempotency key conflict')) {
+    return new TRPCError({ code: 'CONFLICT', message })
+  }
+
+  if (isForeignKeyViolation(error)) {
+    return new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'One or more referenced IDs were not found or are incompatible',
+    })
+  }
+
+  return null
+}
+
 function isForeignKeyViolation(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const dbError = error as DatabaseErrorLike
@@ -345,22 +370,9 @@ export const matchRouter = createTRPCRouter({
         triggeredBy: ctx.user.id,
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      if (message.includes('Idempotency key conflict')) {
-        throw new TRPCError({ code: 'CONFLICT', message })
-      }
-      if (
-        message.includes('Both tools must belong') ||
-        message.includes('Season has no frozen') ||
-        message.includes('benchmarkRunId')
-      ) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message })
-      }
-      if (isForeignKeyViolation(error)) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'One or more referenced IDs were not found or are incompatible',
-        })
+      const mappedError = toMatchBatchError(error)
+      if (mappedError) {
+        throw mappedError
       }
       throw error
     }
@@ -424,78 +436,70 @@ export const matchRouter = createTRPCRouter({
         seenKeys.add(entryKey)
       }
 
-      let createdCount = 0
-      const batches: Array<{
-        id: string
-        status: 'pending'
-        categoryId: string
-        toolAId: string
-        toolBId: string
-        totalEvaluations: number
-      }> = []
+      return await ctx.db.transaction(async (tx) => {
+        let createdCount = 0
+        const batches: Array<{
+          id: string
+          status: 'pending'
+          categoryId: string
+          toolAId: string
+          toolBId: string
+          totalEvaluations: number
+        }> = []
 
-      for (const entry of input.entries) {
-        const idempotencyKey = buildManualBatchIdempotencyKey(
-          input.seasonId,
-          input.submissionId,
-          promptTemplate.id,
-          entry.categoryId,
-          entry.toolAId,
-          entry.toolBId,
-        )
+        for (const entry of input.entries) {
+          const idempotencyKey = buildManualBatchIdempotencyKey(
+            input.seasonId,
+            input.submissionId,
+            promptTemplate.id,
+            entry.categoryId,
+            entry.toolAId,
+            entry.toolBId,
+          )
 
-        const existingBatch = await ctx.db.query.matchBatches.findFirst({
-          where: eq(matchBatches.idempotencyKey, idempotencyKey),
-          columns: { id: true },
-        })
-
-        try {
-          const batch = await createMatchBatch(ctx.db, {
-            seasonId: input.seasonId,
-            categoryId: entry.categoryId,
-            toolAId: entry.toolAId,
-            toolBId: entry.toolBId,
-            promptTemplateId: promptTemplate.id,
-            triggerMode: 'manual',
-            idempotencyKey,
-            triggeredBy: ctx.user.id,
+          const existingBatch = await tx.query.matchBatches.findFirst({
+            where: eq(matchBatches.idempotencyKey, idempotencyKey),
+            columns: { id: true },
           })
 
-          if (!existingBatch) {
-            createdCount += 1
-          }
-
-          batches.push({
-            id: batch.id,
-            status: 'pending',
-            categoryId: batch.categoryId,
-            toolAId: batch.toolAId,
-            toolBId: batch.toolBId,
-            totalEvaluations: batch.totalEvaluations,
-          })
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error'
-          if (
-            message.includes('Both tools must belong') ||
-            message.includes('Season has no frozen') ||
-            message.includes('benchmarkRunId')
-          ) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message })
-          }
-          if (isForeignKeyViolation(error)) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'One or more referenced IDs were not found or are incompatible',
+          try {
+            const batch = await createMatchBatch(tx, {
+              seasonId: input.seasonId,
+              categoryId: entry.categoryId,
+              toolAId: entry.toolAId,
+              toolBId: entry.toolBId,
+              promptTemplateId: promptTemplate.id,
+              triggerMode: 'manual',
+              idempotencyKey,
+              triggeredBy: ctx.user.id,
             })
-          }
-          throw error
-        }
-      }
 
-      return {
-        createdCount,
-        batches,
-      }
+            if (!existingBatch) {
+              createdCount += 1
+            }
+
+            batches.push({
+              id: batch.id,
+              status: 'pending',
+              categoryId: batch.categoryId,
+              toolAId: batch.toolAId,
+              toolBId: batch.toolBId,
+              totalEvaluations: batch.totalEvaluations,
+            })
+          } catch (error) {
+            const mappedError = toMatchBatchError(error)
+            if (mappedError) {
+              throw mappedError
+            }
+            throw error
+          }
+        }
+
+        return {
+          createdCount,
+          batches,
+        }
+      })
     }),
 
   listBatches: protectedProcedure

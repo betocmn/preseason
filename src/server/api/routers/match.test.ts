@@ -8,6 +8,7 @@ import {
   benchmarkSeasons,
   categories,
   llms,
+  matchBatches,
   matchPromptTemplates,
   subcategories,
   toolCategories,
@@ -522,6 +523,46 @@ describe('matchRouter', () => {
     expect(secondResult.createdCount).toBe(0)
     expect(secondResult.batches).toHaveLength(1)
     expect(secondResult.batches[0]?.id).toBe(firstResult.batches[0]?.id)
+  })
+
+  it('rolls back manual batches when any queued row is invalid', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    const outsiderTool = first(
+      await db.insert(tools).values({ name: 'Outsider', slug: 'outsider' }).returning(),
+    )
+
+    await expect(
+      caller.match.createManualBatches({
+        seasonId: fixture.season.id,
+        submissionId: crypto.randomUUID(),
+        entries: [
+          {
+            categoryId: fixture.category.id,
+            toolAId: fixture.toolA.id,
+            toolBId: fixture.toolB.id,
+          },
+          {
+            categoryId: fixture.category.id,
+            toolAId: fixture.toolA.id,
+            toolBId: outsiderTool.id,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Both tools must belong to the selected category',
+    } satisfies Partial<TRPCError>)
+
+    const batches = await db
+      .select({ id: matchBatches.id })
+      .from(matchBatches)
+      .where(eq(matchBatches.seasonId, fixture.season.id))
+
+    expect(batches).toEqual([])
   })
 
   it('rejects manual batch submissions for a non-active season', async () => {
