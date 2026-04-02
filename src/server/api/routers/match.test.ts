@@ -551,6 +551,42 @@ describe('matchRouter', () => {
     expect(secondResult.batches[0]?.id).toBe(firstResult.batches[0]?.id)
   })
 
+  it('treats manual submission ids as case-insensitive for idempotent retries', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const submissionId = crypto.randomUUID()
+
+    const firstResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId,
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    const secondResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId: submissionId.toUpperCase(),
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    expect(firstResult.createdCount).toBe(1)
+    expect(secondResult.createdCount).toBe(0)
+    expect(secondResult.batches).toHaveLength(1)
+    expect(secondResult.batches[0]?.id).toBe(firstResult.batches[0]?.id)
+  })
+
   it('returns the persisted batch status for idempotent manual retries', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)

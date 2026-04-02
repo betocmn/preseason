@@ -127,11 +127,12 @@ function buildManualBatchIdempotencyKey(
   toolBId: string,
 ) {
   const normalizedSeasonId = normalizeUuid(seasonId)
+  const normalizedSubmissionId = normalizeUuid(submissionId)
   const normalizedCategoryId = normalizeUuid(categoryId)
   const [normalizedToolAId, normalizedToolBId] = canonicalizeToolOrder(toolAId, toolBId)
   return [
     'manual-match',
-    submissionId,
+    normalizedSubmissionId,
     normalizedSeasonId,
     promptTemplateId,
     normalizedCategoryId,
@@ -457,6 +458,10 @@ export const matchRouter = createTRPCRouter({
 
         for (const entry of input.entries) {
           const normalizedCategoryId = normalizeUuid(entry.categoryId)
+          const [normalizedToolAId, normalizedToolBId] = canonicalizeToolOrder(
+            entry.toolAId,
+            entry.toolBId,
+          )
           const idempotencyKey = buildManualBatchIdempotencyKey(
             normalizedSeasonId,
             input.submissionId,
@@ -491,8 +496,8 @@ export const matchRouter = createTRPCRouter({
               id: batch.id,
               status: batch.status,
               categoryId: batch.categoryId,
-              toolAId: batch.toolAId,
-              toolBId: batch.toolBId,
+              toolAId: normalizedToolAId,
+              toolBId: normalizedToolBId,
               totalEvaluations: batch.totalEvaluations,
             })
           } catch (error) {
