@@ -99,6 +99,7 @@ function startHeartbeat(
 ) {
   let inFlightHeartbeat = Promise.resolve()
   let failed = false
+  let ownershipLost = false
   let failureReason: string | undefined
 
   const timer = setInterval(() => {
@@ -114,11 +115,13 @@ function startHeartbeat(
           .returning({ id: matchBatches.id })
         if (!updated) {
           failed = true
+          ownershipLost = true
           failureReason = 'Batch ownership lost during heartbeat'
         }
       })
       .catch((error: unknown) => {
         failed = true
+        ownershipLost = false
         failureReason = error instanceof Error ? error.message : 'Heartbeat write failed'
       })
   }, intervalMs)
@@ -126,6 +129,7 @@ function startHeartbeat(
 
   return {
     failed: () => failed,
+    ownershipLost: () => ownershipLost,
     failureReason: () => failureReason,
     stop: async () => {
       clearInterval(timer)
@@ -451,7 +455,7 @@ export async function runMatchBatch(
       await heartbeat.stop().catch(() => undefined)
     }
 
-    if (heartbeat.failed()) {
+    if (heartbeat.failed() && heartbeat.ownershipLost()) {
       return await buildOwnershipLostSummary(database, batchId)
     }
 

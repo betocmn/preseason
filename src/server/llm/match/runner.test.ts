@@ -37,6 +37,10 @@ function first<T>(arr: T[]): T {
   return arr[0] as T
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function buildValidMatchResponse() {
   return JSON.stringify({
     schema_version: 'match-v2',
@@ -194,6 +198,84 @@ async function createAndClaimBatch(fixture: Awaited<ReturnType<typeof seedRunner
   const claim = await claimMatchBatchExecution(db, batch.id)
   if (!claim.claimToken) throw new Error('Expected claim token')
   return { batch: claim.batch, claimToken: claim.claimToken }
+}
+
+function createHeartbeatWriteFailingDb(database: ReturnType<typeof getTestDb>) {
+  let failedHeartbeat = false
+
+  return new Proxy(database, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver)
+
+      if (prop !== 'update' || typeof value !== 'function') {
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+
+      return (table: unknown) => {
+        const updateBuilder = value.call(target, table)
+
+        if (table !== matchBatches) {
+          return updateBuilder
+        }
+
+        return new Proxy(updateBuilder, {
+          get(updateTarget, updateProp, updateReceiver) {
+            const updateValue = Reflect.get(updateTarget, updateProp, updateReceiver)
+
+            if (updateProp !== 'set' || typeof updateValue !== 'function') {
+              return typeof updateValue === 'function'
+                ? updateValue.bind(updateTarget)
+                : updateValue
+            }
+
+            return (values: Record<string, unknown>) => {
+              const setBuilder = updateValue.call(updateTarget, values)
+              const isHeartbeatUpdate =
+                !failedHeartbeat &&
+                Object.keys(values).length === 1 &&
+                Object.hasOwn(values, 'lastHeartbeatAt')
+
+              if (!isHeartbeatUpdate) {
+                return setBuilder
+              }
+
+              failedHeartbeat = true
+
+              return new Proxy(setBuilder, {
+                get(setTarget, setProp, setReceiver) {
+                  const setValue = Reflect.get(setTarget, setProp, setReceiver)
+
+                  if (setProp !== 'where' || typeof setValue !== 'function') {
+                    return typeof setValue === 'function' ? setValue.bind(setTarget) : setValue
+                  }
+
+                  return (...args: unknown[]) => {
+                    const whereBuilder = setValue.call(setTarget, ...args)
+
+                    return new Proxy(whereBuilder, {
+                      get(whereTarget, whereProp, whereReceiver) {
+                        const whereValue = Reflect.get(whereTarget, whereProp, whereReceiver)
+
+                        if (whereProp !== 'returning' || typeof whereValue !== 'function') {
+                          return typeof whereValue === 'function'
+                            ? whereValue.bind(whereTarget)
+                            : whereValue
+                        }
+
+                        return async () => {
+                          throw new Error('Heartbeat write failed')
+                        }
+                      },
+                    })
+                  }
+                },
+              })
+            }
+          },
+        })
+      }
+    },
+  }) as ReturnType<typeof getTestDb>
 }
 
 describe('runMatchBatch', () => {
@@ -392,6 +474,44 @@ describe('runMatchBatch', () => {
       llmService: mockLlm,
       heartbeatIntervalMs: 999_999,
       maxEvaluations: 1,
+    })
+
+    expect(summary.status).toBe('pending')
+    expect(summary.completedEvaluations).toBe(1)
+    expect(summary.failedEvaluations).toBe(0)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('pending')
+    expect(batchAfter?.claimToken).toBeNull()
+    expect(batchAfter?.lastHeartbeatAt).toBeNull()
+    expect(batchAfter?.completedAt).toBeNull()
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    expect(evals.filter((evaluation) => evaluation.status === 'completed')).toHaveLength(1)
+    expect(evals.filter((evaluation) => evaluation.status === 'pending')).toHaveLength(1)
+  })
+
+  it('should finalize batch state after a heartbeat write failure', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+    const heartbeatFailingDb = createHeartbeatWriteFailingDb(db)
+
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      await sleep(20)
+      return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: heartbeatFailingDb,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 5,
     })
 
     expect(summary.status).toBe('pending')
