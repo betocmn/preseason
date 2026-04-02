@@ -396,17 +396,6 @@ export const promptRouter = createTRPCRouter({
       const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
       if (runIds.length === 0) return []
 
-      const pv = await ctx.db.query.benchmarkPromptVersions.findFirst({
-        where: (table, { and: allOf, eq: equals }) =>
-          allOf(
-            equals(table.slug, input.slug),
-            equals(table.level, input.level),
-            equals(table.isActive, true),
-          ),
-        columns: { id: true },
-      })
-      if (!pv) return []
-
       const decisionRows = await ctx.db
         .select({
           toolId: benchmarkCaseDecisions.toolId,
@@ -421,11 +410,17 @@ export const promptRouter = createTRPCRouter({
           eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
         )
         .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+        .innerJoin(
+          benchmarkPromptVersions,
+          eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+        )
         .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
         .where(
           and(
+            eq(benchmarkCases.seasonId, seasonId),
             inArray(benchmarkCaseResults.runId, runIds),
-            eq(benchmarkCases.promptVersionId, pv.id),
+            eq(benchmarkPromptVersions.slug, input.slug),
+            eq(benchmarkPromptVersions.level, input.level),
             eq(benchmarkCaseDecisions.decisionType, 'tool'),
             isNotNull(benchmarkCaseDecisions.toolId),
           ),
