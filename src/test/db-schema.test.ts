@@ -33,7 +33,7 @@ async function insertCategoryGroup(db: ReturnType<typeof getTestDb>) {
 describe('Database Schema', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

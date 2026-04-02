@@ -9,7 +9,7 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{js,ts}'],
     exclude: ['node_modules', '.next', 'dist'],
     testTimeout: 60000,
-    hookTimeout: 120000,
+    hookTimeout: 180000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

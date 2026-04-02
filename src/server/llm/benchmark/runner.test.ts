@@ -350,7 +350,7 @@ async function findRun(db: TestDb, seasonId: string, scheduledFor: string) {
 describe('runBenchmark', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

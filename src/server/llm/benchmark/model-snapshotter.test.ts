@@ -80,7 +80,7 @@ describe('computeSnapshotKey', () => {
 describe('getOrCreateModelSnapshot', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

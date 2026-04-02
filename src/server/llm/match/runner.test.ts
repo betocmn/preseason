@@ -199,7 +199,7 @@ async function createAndClaimBatch(fixture: Awaited<ReturnType<typeof seedRunner
 describe('runMatchBatch', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

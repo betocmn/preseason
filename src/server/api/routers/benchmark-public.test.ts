@@ -299,7 +299,7 @@ async function seedBenchmarkPublicFixture() {
 describe('benchmark public routers', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

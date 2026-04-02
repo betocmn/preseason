@@ -518,7 +518,7 @@ async function addPublishedRunsForPrimaryPrompt(
 describe('promptRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
