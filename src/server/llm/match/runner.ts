@@ -473,12 +473,7 @@ export async function runMatchBatch(
         lastHeartbeatAt: null,
         completedAt: now(),
       })
-      .where(
-        and(
-          eq(matchBatches.id, batchId),
-          inArray(matchBatches.status, ['pending', 'failed', 'running']),
-        ),
-      )
+      .where(getOwnershipClause(batchId, claimToken))
 
     throw error
   }

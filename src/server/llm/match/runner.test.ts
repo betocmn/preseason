@@ -274,6 +274,93 @@ function createHeartbeatWriteFailingDb(database: ReturnType<typeof getTestDb>) {
   }) as ReturnType<typeof getTestDb>
 }
 
+function createFatalFallbackRaceDb(database: ReturnType<typeof getTestDb>, batchId: string) {
+  const reclaimedClaimToken = '00000000-0000-0000-0000-000000000077'
+  let reclaimed = false
+
+  return {
+    reclaimedClaimToken,
+    database: new Proxy(database, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver)
+
+        if (prop !== 'update' || typeof value !== 'function') {
+          return typeof value === 'function' ? value.bind(target) : value
+        }
+
+        return (table: unknown) => {
+          const updateBuilder = value.call(target, table)
+
+          if (table !== matchBatches) {
+            return updateBuilder
+          }
+
+          return new Proxy(updateBuilder, {
+            get(updateTarget, updateProp, updateReceiver) {
+              const updateValue = Reflect.get(updateTarget, updateProp, updateReceiver)
+
+              if (updateProp !== 'set' || typeof updateValue !== 'function') {
+                return typeof updateValue === 'function'
+                  ? updateValue.bind(updateTarget)
+                  : updateValue
+              }
+
+              return (values: Record<string, unknown>) => {
+                const setBuilder = updateValue.call(updateTarget, values)
+                const isFatalFallbackUpdate =
+                  !reclaimed &&
+                  values.status === 'failed' &&
+                  values.claimToken === null &&
+                  values.lastHeartbeatAt === null
+
+                if (!isFatalFallbackUpdate) {
+                  return setBuilder
+                }
+
+                return new Proxy(setBuilder, {
+                  get(setTarget, setProp, setReceiver) {
+                    const setValue = Reflect.get(setTarget, setProp, setReceiver)
+
+                    if (setProp !== 'where' || typeof setValue !== 'function') {
+                      return typeof setValue === 'function' ? setValue.bind(setTarget) : setValue
+                    }
+
+                    return (...args: unknown[]) => {
+                      const whereBuilder = setValue.call(setTarget, ...args)
+
+                      return new Proxy(whereBuilder, {
+                        get(whereTarget, whereProp, whereReceiver) {
+                          const whereValue = Reflect.get(whereTarget, whereProp, whereReceiver)
+
+                          if (whereProp !== 'then' || typeof whereValue !== 'function') {
+                            return typeof whereValue === 'function'
+                              ? whereValue.bind(whereTarget)
+                              : whereValue
+                          }
+
+                          return (...thenArgs: unknown[]) => {
+                            reclaimed = true
+
+                            return database
+                              .update(matchBatches)
+                              .set({ claimToken: reclaimedClaimToken })
+                              .where(eq(matchBatches.id, batchId))
+                              .then(() => whereValue.call(whereTarget, ...thenArgs))
+                          }
+                        },
+                      })
+                    }
+                  },
+                })
+              }
+            },
+          })
+        }
+      },
+    }) as ReturnType<typeof getTestDb>,
+  }
+}
+
 describe('runMatchBatch', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -678,6 +765,32 @@ describe('runMatchBatch', () => {
     })
     expect(batchAfter?.status).toBe('failed')
     expect(batchAfter?.completedAt).not.toBeNull()
+  })
+
+  it('should not clobber a reclaimed running batch in fatal error fallback', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+    const { database: raceDb, reclaimedClaimToken } = createFatalFallbackRaceDb(db, batch.id)
+
+    await db
+      .update(matchPromptTemplates)
+      .set({ schemaVersion: 'match-v99' })
+      .where(eq(matchPromptTemplates.id, fixture.template.id))
+
+    await expect(
+      runMatchBatch(batch.id, claimToken, {
+        database: raceDb,
+        heartbeatIntervalMs: 999_999,
+      }),
+    ).rejects.toThrow('Unsupported template schema version')
+
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('running')
+    expect(batchAfter?.claimToken).toBe(reclaimedClaimToken)
+    expect(batchAfter?.completedAt).toBeNull()
   })
 
   it('should detect ownership loss via verifyOwnership when claim token changes', async () => {
