@@ -54,7 +54,7 @@ export default async function PromptDetailPage({ params }: Props) {
       targetType: 'prompt',
       targetId: prompt.id,
     }),
-    caller.prompt.getTopToolsBySlug({ slug, level }),
+    caller.prompt.getTopTools({ promptId: prompt.id }),
   ])
 
   return (

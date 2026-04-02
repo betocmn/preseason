@@ -381,11 +381,10 @@ export const promptRouter = createTRPCRouter({
       return updated[0]
     }),
 
-  getTopToolsBySlug: publicProcedure
+  getTopTools: publicProcedure
     .input(
       z.object({
-        slug: z.string().min(1).max(255),
-        level: promptLevelSchema.default('beginner'),
+        promptId: z.string().uuid(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -419,8 +418,7 @@ export const promptRouter = createTRPCRouter({
           and(
             eq(benchmarkCases.seasonId, seasonId),
             inArray(benchmarkCaseResults.runId, runIds),
-            eq(benchmarkPromptVersions.slug, input.slug),
-            eq(benchmarkPromptVersions.level, input.level),
+            eq(benchmarkPromptVersions.promptId, input.promptId),
             eq(benchmarkCaseDecisions.decisionType, 'tool'),
             isNotNull(benchmarkCaseDecisions.toolId),
           ),
