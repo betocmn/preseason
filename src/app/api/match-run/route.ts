@@ -44,7 +44,10 @@ export async function POST(request: Request) {
       })
     }
 
-    const summary = await runMatchBatch(batch.id, claimToken, { database: db })
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      retryTerminalEvaluations: true,
+    })
 
     return NextResponse.json({ ok: true, summary })
   } catch (error) {

@@ -40,6 +40,11 @@ export const serverSettings = {
       maxTokens: 700,
     },
   },
+  match: {
+    // Match batches can fan out to one LLM call per model/presentation order pair.
+    // Keep cron work bounded so a single invocation never attempts a whole batch.
+    cronEvaluationsPerInvocation: 4,
+  },
   openRouter: {
     transportRetryAttempts: 3,
     transportRetryBaseDelayMs: 1_000,
