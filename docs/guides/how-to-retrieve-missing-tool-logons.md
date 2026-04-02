@@ -15,6 +15,8 @@ Two batches were completed on April 2, 2026:
 
 - Batch 1: top ranked missing set (15 logos), commit `efb186f`
 - Batch 2: next ranked missing set (30 logos), commit `7eb70f0`
+- Color pass: recolored simple-icons and upgraded selected assets, commits
+  `df40939` and `183c90c`
 
 Batch 1 slugs:
 
@@ -46,9 +48,38 @@ Primary tables:
 Logo source priority:
 
 1. Existing file in `public/logos/<slug>.png`
-2. `simple-icons` CDN slug match
-3. Official brand assets or project repository logos
-4. Last resort: closest official parent-product logo (document this decision)
+2. Official brand/media-kit colored logo
+3. Official project repository colored logo
+4. `simple-icons` with explicit brand hex fill
+5. Last resort: closest official parent-product logo (document this decision)
+6. Monochrome-only logo when no trustworthy color asset exists
+
+## Color First Policy
+
+Always prefer multicolor brand assets when available.
+
+- Do not convert raw `simple-icons` SVG directly without setting fill color.
+- If using `simple-icons`, inject `fill="#<hex>"` from
+  `_data/simple-icons.json` before conversion.
+- Accept monochrome only when official and community sources do not provide a
+  reliable color variant.
+
+Known monochrome-by-default slugs as of April 2, 2026:
+
+- `next-js`
+- `flask`
+- `ghost`
+- `tremor`
+- `recharts`
+
+Useful colored-source examples from completed batches:
+
+- `react-native-paper` from
+  `https://raw.githubusercontent.com/callstack/react-native-paper/main/docs/static/images/paper-logo.svg`
+- `mux` from
+  `https://cdn.sanity.io/images/2ejqxsnu/production/3018ded4b1220fd0329c82e150fd22fcbd832ce3-280x48.png`
+- `opentelemetry` from
+  `https://opentelemetry.io/img/logos/opentelemetry-logo-nav.png`
 
 ## Ranking Query
 
@@ -104,8 +135,34 @@ done < /tmp/top50_next_sources.tsv
 ```
 
 5. Verify every target slug now has a file under `public/logos`.
-6. Commit assets.
-7. Generate SQL updates to run after deploying the branch.
+6. Run a quick color sanity check on new files and replace obvious unintended
+   monochrome outputs.
+7. Commit assets.
+8. Generate SQL updates to run after deploying the branch.
+
+Color sanity check example:
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+import colorsys
+for slug in ['react-native-paper', 'mux']:
+    img = Image.open(f'public/logos/{slug}.png').convert('RGBA')
+    sats = []
+    for r, g, b, a in img.getdata():
+        if a < 16:
+            continue
+        sats.append(colorsys.rgb_to_hsv(r/255, g/255, b/255)[1])
+    avg = sum(sats) / len(sats) if sats else 0
+    print(slug, round(avg, 3))
+PY
+```
+
+Interpretation:
+
+- `avg_sat` near `0.0` means likely monochrome.
+- Low saturation can still be valid for some brand palettes; verify manually
+  before replacing.
 
 ## SQL Generation
 
