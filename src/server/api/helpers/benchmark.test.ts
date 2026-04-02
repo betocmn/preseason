@@ -40,7 +40,7 @@ async function seedActiveBenchmarkSeason(db: TestDb) {
 describe('resolveBenchmarkCronRunTarget', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

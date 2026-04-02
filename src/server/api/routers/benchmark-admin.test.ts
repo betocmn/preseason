@@ -86,7 +86,7 @@ async function seedPromptAndCategory(adminCaller: ReturnType<typeof createTestCa
 describe('benchmarkAdminRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 180_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

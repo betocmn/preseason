@@ -128,7 +128,7 @@ async function seedMatchRouterFixture() {
 describe('matchRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

@@ -135,7 +135,7 @@ async function seedMatchFixture() {
 describe('createMatchBatch', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
@@ -362,7 +362,7 @@ describe('createMatchBatch', () => {
 describe('claimMatchBatchExecution', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
@@ -520,7 +520,7 @@ describe('claimMatchBatchExecution', () => {
 describe('claimNextMatchBatchExecution', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

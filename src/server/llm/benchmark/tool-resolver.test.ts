@@ -71,7 +71,7 @@ async function assignToolToCategory(
 describe('Tool Resolver', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

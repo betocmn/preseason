@@ -16,7 +16,7 @@ function createMockLlmService(completeFn: MockCompleteFn) {
 describe('reviewPendingToolCandidates', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()

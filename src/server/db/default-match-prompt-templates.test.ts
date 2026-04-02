@@ -9,7 +9,7 @@ import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase }
 describe('ensureDefaultMatchPromptTemplates', () => {
   beforeAll(async () => {
     await setupTestDatabase()
-  }, 120_000)
+  })
 
   afterAll(async () => {
     await teardownTestDatabase()
