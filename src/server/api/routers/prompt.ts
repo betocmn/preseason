@@ -429,7 +429,7 @@ export const promptRouter = createTRPCRouter({
               eq(benchmarkPromptVersions.isActive, true),
             ),
           )
-      ).sort((a, b) => comparePromptCandidates(a, b, anchorDate))
+      ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
       const pv = pvCandidates[0]
       if (!pv) return []
