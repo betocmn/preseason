@@ -623,7 +623,7 @@ describe('claimNextMatchBatchExecution', () => {
     expect(result.batch?.id).toBe(staleBatch.id)
   })
 
-  it('should prefer pending batches over older failed retries', async () => {
+  it('should ignore failed batches during cron dispatch', async () => {
     const db = getTestDb()
     const { season, category, toolA, toolB, template } = await seedMatchFixture()
 
@@ -665,6 +665,36 @@ describe('claimNextMatchBatchExecution', () => {
 
     expect(result.execute).toBe(true)
     expect(result.batch?.id).toBe(pendingBatch.id)
+  })
+
+  it('should return no work when only failed batches remain', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const failedBatch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    await db
+      .update(matchBatches)
+      .set({
+        status: 'failed',
+        completedAt: new Date('2026-01-01T00:01:00.000Z'),
+      })
+      .where(eq(matchBatches.id, failedBatch.id))
+
+    const result = await claimNextMatchBatchExecution(db)
+
+    expect(result).toEqual({
+      batch: null,
+      claimToken: null,
+      execute: false,
+    })
   })
 
   it('should scope dispatch selection to the requested season', async () => {

@@ -12,3 +12,10 @@ describe('serverSettings.benchmark', () => {
     expect(serverSettings.benchmark.maxCaseAttempts).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe('serverSettings.match', () => {
+  it('keeps the cron evaluation batch size small', () => {
+    expect(serverSettings.match.cronEvaluationsPerInvocation).toBeGreaterThan(0)
+    expect(serverSettings.match.cronEvaluationsPerInvocation).toBeLessThanOrEqual(4)
+  })
+})

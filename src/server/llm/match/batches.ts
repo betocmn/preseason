@@ -357,13 +357,7 @@ async function findNextDispatchableMatchBatchId(
     return pendingBatch.id
   }
 
-  const failedBatch = await database.query.matchBatches.findFirst({
-    where: and(seasonClause, eq(matchBatches.status, 'failed')),
-    orderBy: [asc(matchBatches.createdAt), asc(matchBatches.id)],
-    columns: { id: true },
-  })
-
-  return failedBatch?.id ?? null
+  return null
 }
 
 export async function claimNextMatchBatchExecution(

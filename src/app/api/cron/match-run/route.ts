@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { serverSettings } from '~/constants/server-settings'
 import { env } from '~/env'
 import { isCronRequestAuthorized } from '~/lib/cron-auth'
 import { db } from '~/server/db'
@@ -31,7 +32,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, message: 'No dispatchable match batch' })
     }
 
-    const summary = await runMatchBatch(claim.batch.id, claim.claimToken, { database: db })
+    const summary = await runMatchBatch(claim.batch.id, claim.claimToken, {
+      database: db,
+      maxEvaluations: serverSettings.match.cronEvaluationsPerInvocation,
+      retryTerminalEvaluations: false,
+    })
 
     return NextResponse.json({ ok: true, summary })
   } catch (error) {
