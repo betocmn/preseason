@@ -457,9 +457,13 @@ describe('matchRouter', () => {
     })
 
     expect(result.batches).toHaveLength(1)
+    const [expectedA, expectedB] =
+      fixture.toolA.id < fixture.toolB.id
+        ? [fixture.toolA.id, fixture.toolB.id]
+        : [fixture.toolB.id, fixture.toolA.id]
     expect(result.batches[0]).toMatchObject({
-      toolAId: fixture.toolA.id,
-      toolBId: fixture.toolB.id,
+      toolAId: expectedA,
+      toolBId: expectedB,
     })
   })
 
