@@ -381,6 +381,98 @@ export const promptRouter = createTRPCRouter({
       return updated[0]
     }),
 
+  getTopTools: publicProcedure
+    .input(
+      z.object({
+        promptId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+      if (!seasonId) return []
+
+      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
+      if (runIds.length === 0) return []
+
+      // Resolve the specific prompt version shown on the homepage:
+      // pick the latest active version that has decisions in the published runs.
+      const pvCandidates = (
+        await ctx.db
+          .selectDistinct({
+            pvId: benchmarkPromptVersions.id,
+            slug: benchmarkPromptVersions.slug,
+            level: benchmarkPromptVersions.level,
+            contentMd: benchmarkPromptVersions.contentMd,
+            promptTitle: prompts.title,
+            promptDescription: prompts.description,
+            createdAt: benchmarkPromptVersions.createdAt,
+          })
+          .from(benchmarkCaseDecisions)
+          .innerJoin(
+            benchmarkCaseResults,
+            eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+          )
+          .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+          .innerJoin(
+            benchmarkPromptVersions,
+            eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+          )
+          .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
+          .where(
+            and(
+              eq(benchmarkCases.seasonId, seasonId),
+              inArray(benchmarkCaseResults.runId, runIds),
+              eq(benchmarkCaseDecisions.decisionType, 'tool'),
+              isNotNull(benchmarkCaseDecisions.toolId),
+              eq(benchmarkPromptVersions.promptId, input.promptId),
+              eq(benchmarkPromptVersions.isActive, true),
+            ),
+          )
+      ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+
+      const pv = pvCandidates[0]
+      if (!pv) return []
+
+      const decisionRows = await ctx.db
+        .select({
+          toolId: benchmarkCaseDecisions.toolId,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(benchmarkCaseDecisions)
+        .innerJoin(
+          benchmarkCaseResults,
+          eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+        )
+        .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+        .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
+        .where(
+          and(
+            inArray(benchmarkCaseResults.runId, runIds),
+            eq(benchmarkCases.promptVersionId, pv.pvId),
+            eq(benchmarkCaseDecisions.decisionType, 'tool'),
+            isNotNull(benchmarkCaseDecisions.toolId),
+          ),
+        )
+        .groupBy(benchmarkCaseDecisions.toolId, tools.name, tools.slug, tools.logoUrl)
+        .orderBy(desc(sql`count(*)`))
+
+      const totalCount = decisionRows.reduce((sum, d) => sum + d.count, 0)
+      return decisionRows.slice(0, 4).map((d) => ({
+        tool: {
+          id: d.toolId as string,
+          name: d.toolName,
+          slug: d.toolSlug,
+          logoUrl: d.toolLogoUrl,
+        },
+        rate: totalCount > 0 ? d.count / totalCount : 0,
+        count: d.count,
+      }))
+    }),
+
   listWithTopTools: publicProcedure
     .input(
       z.object({
