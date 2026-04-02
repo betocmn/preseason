@@ -70,6 +70,9 @@ describe('POST /api/match-run', () => {
       summary: { batchId, processed: 1 },
     })
     expect(claimMatchBatchExecutionMock).toHaveBeenCalledOnce()
-    expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', expect.any(Object))
+    expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', {
+      database: expect.anything(),
+      retryTerminalEvaluations: true,
+    })
   })
 })

@@ -97,6 +97,7 @@ describe('GET /api/cron/match-run', () => {
     expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', {
       database: expect.anything(),
       maxEvaluations: 4,
+      retryTerminalEvaluations: false,
     })
   })
 })

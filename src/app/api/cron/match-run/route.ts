@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     const summary = await runMatchBatch(claim.batch.id, claim.claimToken, {
       database: db,
       maxEvaluations: serverSettings.match.cronEvaluationsPerInvocation,
+      retryTerminalEvaluations: false,
     })
 
     return NextResponse.json({ ok: true, summary })

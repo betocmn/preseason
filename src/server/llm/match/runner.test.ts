@@ -440,7 +440,7 @@ describe('runMatchBatch', () => {
     expect(summary.failedEvaluations).toBe(1)
   })
 
-  it('should not retry failed evaluations on an explicit rerun', async () => {
+  it('should retry failed evaluations on an explicit rerun', async () => {
     const db = getTestDb()
     const fixture = await seedRunnerFixture()
     const { batch, claimToken } = await createAndClaimBatch(fixture)
@@ -467,6 +467,48 @@ describe('runMatchBatch', () => {
     expect(reclaim.execute).toBe(true)
     if (!reclaim.claimToken) throw new Error('Expected claim token on explicit rerun')
 
+    const retryLlm = createMockLlmService(async (_provider, request) =>
+      mockCompletion(wrapResponse(buildValidMatchResponse()), request.model),
+    )
+
+    const secondSummary = await runMatchBatch(batch.id, reclaim.claimToken, {
+      database: db,
+      llmService: retryLlm,
+      heartbeatIntervalMs: 999_999,
+      retryTerminalEvaluations: true,
+    })
+
+    expect(secondSummary.status).toBe('completed')
+    expect(retryLlm.complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('should skip failed evaluations when terminal retries are disabled', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    let callCount = 0
+    const flakyLlm = createMockLlmService(async (_provider, request) => {
+      callCount++
+      if (callCount === 1) {
+        return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+      }
+      throw new Error('Transport error')
+    })
+
+    const firstSummary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: flakyLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    expect(firstSummary.status).toBe('failed')
+    expect(callCount).toBe(2)
+
+    const reclaim = await claimMatchBatchExecution(db, batch.id)
+    expect(reclaim.execute).toBe(true)
+    if (!reclaim.claimToken) throw new Error('Expected claim token on explicit rerun')
+
     const retryLlm = createMockLlmService(async (_provider, request) => {
       throw new Error(`Unexpected retry for ${request.model}`)
     })
@@ -475,6 +517,7 @@ describe('runMatchBatch', () => {
       database: db,
       llmService: retryLlm,
       heartbeatIntervalMs: 999_999,
+      retryTerminalEvaluations: false,
     })
 
     expect(secondSummary.status).toBe('failed')
