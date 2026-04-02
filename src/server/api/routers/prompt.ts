@@ -395,6 +395,45 @@ export const promptRouter = createTRPCRouter({
       const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
       if (runIds.length === 0) return []
 
+      // Resolve the specific prompt version shown on the homepage:
+      // pick the latest active version that has decisions in the published runs.
+      const pvCandidates = (
+        await ctx.db
+          .selectDistinct({
+            pvId: benchmarkPromptVersions.id,
+            slug: benchmarkPromptVersions.slug,
+            level: benchmarkPromptVersions.level,
+            contentMd: benchmarkPromptVersions.contentMd,
+            promptTitle: prompts.title,
+            promptDescription: prompts.description,
+            createdAt: benchmarkPromptVersions.createdAt,
+          })
+          .from(benchmarkCaseDecisions)
+          .innerJoin(
+            benchmarkCaseResults,
+            eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+          )
+          .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+          .innerJoin(
+            benchmarkPromptVersions,
+            eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+          )
+          .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
+          .where(
+            and(
+              eq(benchmarkCases.seasonId, seasonId),
+              inArray(benchmarkCaseResults.runId, runIds),
+              eq(benchmarkCaseDecisions.decisionType, 'tool'),
+              isNotNull(benchmarkCaseDecisions.toolId),
+              eq(benchmarkPromptVersions.promptId, input.promptId),
+              eq(benchmarkPromptVersions.isActive, true),
+            ),
+          )
+      ).sort((a, b) => comparePromptCandidates(a, b, anchorDate))
+
+      const pv = pvCandidates[0]
+      if (!pv) return []
+
       const decisionRows = await ctx.db
         .select({
           toolId: benchmarkCaseDecisions.toolId,
@@ -409,16 +448,11 @@ export const promptRouter = createTRPCRouter({
           eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
         )
         .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
-        .innerJoin(
-          benchmarkPromptVersions,
-          eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
-        )
         .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
         .where(
           and(
-            eq(benchmarkCases.seasonId, seasonId),
             inArray(benchmarkCaseResults.runId, runIds),
-            eq(benchmarkPromptVersions.promptId, input.promptId),
+            eq(benchmarkCases.promptVersionId, pv.pvId),
             eq(benchmarkCaseDecisions.decisionType, 'tool'),
             isNotNull(benchmarkCaseDecisions.toolId),
           ),
