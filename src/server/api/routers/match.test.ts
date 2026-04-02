@@ -413,6 +413,32 @@ describe('matchRouter', () => {
     expect(result.batches.map((batch) => batch.totalEvaluations)).toEqual([2, 2])
   })
 
+  it('accepts uppercase season ids for manual batch submissions', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+
+    const result = await caller.match.createManualBatches({
+      seasonId: fixture.season.id.toUpperCase(),
+      submissionId: crypto.randomUUID(),
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    expect(result.createdCount).toBe(1)
+    expect(result.batches[0]).toMatchObject({
+      categoryId: fixture.category.id,
+      toolAId: fixture.toolA.id,
+      toolBId: fixture.toolB.id,
+      status: 'pending',
+    })
+  })
+
   it('canonicalizes tool order when creating manual batches', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
@@ -523,6 +549,52 @@ describe('matchRouter', () => {
     expect(secondResult.createdCount).toBe(0)
     expect(secondResult.batches).toHaveLength(1)
     expect(secondResult.batches[0]?.id).toBe(firstResult.batches[0]?.id)
+  })
+
+  it('returns the persisted batch status for idempotent manual retries', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+    const submissionId = crypto.randomUUID()
+
+    const firstResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId,
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    const firstBatchId = firstResult.batches[0]?.id
+    if (!firstBatchId) throw new Error('Expected manual batch to be created')
+
+    await db
+      .update(matchBatches)
+      .set({ status: 'completed', completedAt: new Date() })
+      .where(eq(matchBatches.id, firstBatchId))
+
+    const secondResult = await caller.match.createManualBatches({
+      seasonId: fixture.season.id,
+      submissionId,
+      entries: [
+        {
+          categoryId: fixture.category.id,
+          toolAId: fixture.toolA.id,
+          toolBId: fixture.toolB.id,
+        },
+      ],
+    })
+
+    expect(secondResult.createdCount).toBe(0)
+    expect(secondResult.batches[0]).toMatchObject({
+      id: firstBatchId,
+      status: 'completed',
+    })
   })
 
   it('rolls back manual batches when any queued row is invalid', async () => {
