@@ -12,7 +12,7 @@ async function getLogoBase64() {
   return `data:image/png;base64,${buffer.toString('base64')}`
 }
 
-export async function createOgImage(title: string, subtitle?: string) {
+export async function createOgImage(title?: string, subtitle?: string) {
   const logoSrc = await getLogoBase64()
 
   return new ImageResponse(
@@ -55,18 +55,20 @@ export async function createOgImage(title: string, subtitle?: string) {
         <img src={logoSrc} width={290} height={80} alt="Preseason" />
 
         {/* Title */}
-        <div
-          style={{
-            fontSize: title.length > 40 ? 44 : 56,
-            fontWeight: 700,
-            color: '#f0f2f5',
-            textAlign: 'center',
-            lineHeight: 1.2,
-            maxWidth: '900px',
-          }}
-        >
-          {title}
-        </div>
+        {title && (
+          <div
+            style={{
+              fontSize: title.length > 40 ? 44 : 56,
+              fontWeight: 700,
+              color: '#f0f2f5',
+              textAlign: 'center',
+              lineHeight: 1.2,
+              maxWidth: '900px',
+            }}
+          >
+            {title}
+          </div>
+        )}
 
         {/* Subtitle */}
         {subtitle && (
