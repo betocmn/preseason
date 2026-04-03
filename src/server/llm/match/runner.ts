@@ -13,6 +13,7 @@ import {
 import { checkModelDrift } from '~/server/llm/benchmark/model-drift'
 import { MATCH_PARSER_VERSION, parseMatchResponse } from '~/server/llm/match/parser'
 import { buildMatchPrompt } from '~/server/llm/match/prompt-builder'
+import { MATCH_REPAIR_PARSER_VERSION, repairMatchResponse } from '~/server/llm/match/repair'
 import type { MatchResponse } from '~/server/llm/match/schema'
 import { SUPPORTED_SCHEMA_VERSION } from '~/server/llm/match/schema'
 import { LlmService } from '~/server/llm/service'
@@ -56,6 +57,30 @@ type MatchEvaluationCounts = {
   invalidCount: number
 }
 
+type StoredInvalidOutputEvaluation = Pick<
+  typeof matchEvaluations.$inferSelect,
+  | 'rawResponse'
+  | 'naturalResponse'
+  | 'appendixJson'
+  | 'errorMessage'
+  | 'requestedModelId'
+  | 'returnedModelId'
+>
+
+type ResolvedMatchOutput =
+  | {
+      status: 'completed'
+      response: MatchResponse
+      rawAppendix: string
+      naturalResponse: string
+      parserVersion: string
+    }
+  | {
+      status: 'invalid_output'
+      invalidReason: string
+      parserVersion: string
+    }
+
 function buildSummary(
   batchId: string,
   status: MatchBatchRunSummary['status'],
@@ -77,6 +102,87 @@ function getOwnershipClause(batchId: string, claimToken: string) {
     eq(matchBatches.status, 'running'),
     eq(matchBatches.claimToken, claimToken),
   )
+}
+
+function hasStoredInvalidOutputPayload(evaluation: StoredInvalidOutputEvaluation) {
+  return (
+    evaluation.rawResponse !== null &&
+    evaluation.naturalResponse === null &&
+    evaluation.appendixJson === null
+  )
+}
+
+function isModelDriftInvalidOutput(evaluation: StoredInvalidOutputEvaluation) {
+  if (!hasStoredInvalidOutputPayload(evaluation)) {
+    return false
+  }
+
+  if (evaluation.errorMessage?.startsWith('Model drift:')) {
+    return true
+  }
+
+  if (evaluation.requestedModelId && evaluation.returnedModelId) {
+    return checkModelDrift(evaluation.requestedModelId, evaluation.returnedModelId).hasDrift
+  }
+
+  return false
+}
+
+function shouldAttemptStoredInvalidOutputRecovery(evaluation: StoredInvalidOutputEvaluation) {
+  return hasStoredInvalidOutputPayload(evaluation) && !isModelDriftInvalidOutput(evaluation)
+}
+
+async function resolveMatchOutput(
+  llmService: LlmService,
+  options: {
+    promptContentMd: string
+    rawResponse: string
+  },
+): Promise<ResolvedMatchOutput> {
+  const parseResult = parseMatchResponse(options.rawResponse)
+
+  if (parseResult.status === 'ok') {
+    return {
+      status: 'completed',
+      response: parseResult.response,
+      rawAppendix: parseResult.rawAppendix,
+      naturalResponse: parseResult.naturalResponse,
+      parserVersion: MATCH_PARSER_VERSION,
+    }
+  }
+
+  const originalParseReason = parseResult.reason
+
+  try {
+    const repaired = await repairMatchResponse(llmService, {
+      promptContentMd: options.promptContentMd,
+      parseFailureReason: originalParseReason,
+      rawResponse: options.rawResponse,
+    })
+
+    if (repaired.status === 'recovered') {
+      return {
+        status: 'completed',
+        response: repaired.response,
+        rawAppendix: repaired.rawAppendix,
+        naturalResponse: repaired.naturalResponse,
+        parserVersion: MATCH_REPAIR_PARSER_VERSION,
+      }
+    }
+
+    return {
+      status: 'invalid_output',
+      invalidReason: `${originalParseReason}; ${repaired.reason}`,
+      parserVersion: MATCH_PARSER_VERSION,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return {
+      status: 'invalid_output',
+      invalidReason: `${originalParseReason}; Repair attempt failed: ${message}`,
+      parserVersion: MATCH_PARSER_VERSION,
+    }
+  }
 }
 
 async function verifyOwnership(
@@ -316,6 +422,52 @@ export async function runMatchBatch(
         const systemPrompt = template.systemPromptSnapshot ?? 'You are a helpful assistant.'
         const promptHash = createHash('sha256').update(userPrompt).digest('hex').slice(0, 64)
 
+        if (
+          evaluation.status === 'invalid_output' &&
+          shouldAttemptStoredInvalidOutputRecovery(evaluation)
+        ) {
+          const recovered = await resolveMatchOutput(llmService, {
+            promptContentMd: userPrompt,
+            rawResponse: evaluation.rawResponse ?? '',
+          })
+
+          if (recovered.status === 'completed') {
+            const remapped = remapMatchResult(
+              recovered.response,
+              evaluation.presentationOrder,
+              batch.toolAId,
+              batch.toolBId,
+            )
+
+            await database.transaction(async (tx) => {
+              await verifyOwnership(tx, batchId, claimToken)
+              await tx
+                .update(matchEvaluations)
+                .set({
+                  status: 'completed',
+                  winnerDecision: remapped.winnerDecision,
+                  winnerId: remapped.winnerId,
+                  comparisonSummary: remapped.comparisonSummary,
+                  toolAPros: remapped.toolAPros,
+                  toolACons: remapped.toolACons,
+                  toolBPros: remapped.toolBPros,
+                  toolBCons: remapped.toolBCons,
+                  confidence: remapped.confidence,
+                  naturalResponse: recovered.naturalResponse,
+                  appendixRaw: recovered.rawAppendix,
+                  appendixJson: recovered.response,
+                  parserVersion: recovered.parserVersion,
+                  renderedUserPrompt: userPrompt,
+                  promptHash,
+                  systemPromptSnapshot: systemPrompt,
+                  errorMessage: null,
+                })
+                .where(eq(matchEvaluations.id, evaluation.id))
+            })
+            continue
+          }
+        }
+
         try {
           const completion = await llmService.complete(modelSnapshot.provider, {
             model: modelSnapshot.requestedModelId,
@@ -360,11 +512,14 @@ export async function runMatchBatch(
             continue
           }
 
-          const parseResult = parseMatchResponse(completion.content)
+          const resolvedOutput = await resolveMatchOutput(llmService, {
+            promptContentMd: userPrompt,
+            rawResponse: completion.content,
+          })
 
-          if (parseResult.status === 'ok') {
+          if (resolvedOutput.status === 'completed') {
             const remapped = remapMatchResult(
-              parseResult.response,
+              resolvedOutput.response,
               evaluation.presentationOrder,
               batch.toolAId,
               batch.toolBId,
@@ -384,9 +539,9 @@ export async function runMatchBatch(
                   toolBPros: remapped.toolBPros,
                   toolBCons: remapped.toolBCons,
                   confidence: remapped.confidence,
-                  naturalResponse: parseResult.naturalResponse,
-                  appendixRaw: parseResult.rawAppendix,
-                  appendixJson: parseResult.response,
+                  naturalResponse: resolvedOutput.naturalResponse,
+                  appendixRaw: resolvedOutput.rawAppendix,
+                  appendixJson: resolvedOutput.response,
                   rawResponse: completion.content,
                   requestedModelId: modelSnapshot.requestedModelId,
                   returnedModelId: completion.returnedModel,
@@ -400,7 +555,7 @@ export async function runMatchBatch(
                   topP: modelSnapshot.topP,
                   maxTokens: modelSnapshot.maxTokens,
                   seed: modelSnapshot.seed,
-                  parserVersion: MATCH_PARSER_VERSION,
+                  parserVersion: resolvedOutput.parserVersion,
                   renderedUserPrompt: userPrompt,
                   promptHash,
                   systemPromptSnapshot: systemPrompt,
@@ -428,11 +583,11 @@ export async function runMatchBatch(
                   topP: modelSnapshot.topP,
                   maxTokens: modelSnapshot.maxTokens,
                   seed: modelSnapshot.seed,
-                  parserVersion: MATCH_PARSER_VERSION,
+                  parserVersion: resolvedOutput.parserVersion,
                   renderedUserPrompt: userPrompt,
                   promptHash,
                   systemPromptSnapshot: systemPrompt,
-                  errorMessage: parseResult.reason,
+                  errorMessage: resolvedOutput.invalidReason,
                 })
                 .where(eq(matchEvaluations.id, evaluation.id))
             })

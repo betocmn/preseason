@@ -48,6 +48,12 @@ export const serverSettings = {
     cronEvaluationsPerInvocation: 4,
     // Leave time for batch cleanup before the route itself hits the platform limit.
     cronInvocationSafetyBufferMs: matchCronInvocationSafetyBufferMs,
+    outputRepair: {
+      modelProvider: 'openai',
+      modelId: 'openai/gpt-5.4-mini',
+      temperature: 0,
+      maxTokens: 900,
+    },
   },
   openRouter: {
     // Retry transport failures once while keeping the whole evaluation bounded.

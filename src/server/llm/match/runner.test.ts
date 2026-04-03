@@ -453,6 +453,134 @@ describe('runMatchBatch', () => {
     expect(summary.invalidOutputEvaluations).toBe(2)
   })
 
+  it('should repair recoverable parse failures into completed evaluations', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-4o') {
+        return mockCompletion('Supabase is the stronger default here.', request.model)
+      }
+
+      return mockCompletion(
+        JSON.stringify({
+          schema_version: 'match-v2',
+          winner: 'tool_a',
+          comparison_summary: 'Tool A is the better fit.',
+          tool_a: {
+            pros: [
+              {
+                phrase: 'Faster setup',
+                evidence_sentence: 'Tool A is faster to configure.',
+              },
+            ],
+            cons: [],
+          },
+          tool_b: {
+            pros: [],
+            cons: [
+              {
+                phrase: 'More setup',
+                evidence_sentence: 'Tool B needs more configuration.',
+              },
+            ],
+          },
+          confidence: 0.82,
+        }),
+        request.model,
+      )
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    expect(summary.status).toBe('completed')
+    expect(summary.completedEvaluations).toBe(2)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(4)
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    expect(evals.every((evaluation) => evaluation.status === 'completed')).toBe(true)
+    expect(
+      evals.every((evaluation) => evaluation.parserVersion === 'match-repair-v2+repair-v1'),
+    ).toBe(true)
+  })
+
+  it('should recover stored invalid output before rerunning the original model', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    const firstEval = evals[0] as (typeof evals)[number]
+    const secondEval = evals[1] as (typeof evals)[number]
+
+    await db
+      .update(matchEvaluations)
+      .set({
+        status: 'invalid_output',
+        rawResponse: 'Clerk is easier to adopt for this use case.',
+        renderedUserPrompt: 'Compare Clerk vs Auth0 for Auth.',
+        requestedModelId: 'gpt-4o',
+        returnedModelId: 'gpt-4o',
+        provider: 'openai',
+        errorMessage: 'Missing <preseason_match_json> tags',
+      })
+      .where(eq(matchEvaluations.id, firstEval.id))
+
+    await db
+      .update(matchEvaluations)
+      .set({
+        status: 'completed',
+        winnerDecision: 'tool_a',
+      })
+      .where(eq(matchEvaluations.id, secondEval.id))
+
+    const mockLlm = createMockLlmService(async (_provider, request) =>
+      mockCompletion(
+        JSON.stringify({
+          schema_version: 'match-v2',
+          winner: 'tool_a',
+          comparison_summary: 'Tool A is the better fit.',
+          tool_a: {
+            pros: [{ phrase: 'Simple', evidence_sentence: 'Tool A is simpler.' }],
+            cons: [],
+          },
+          tool_b: { pros: [], cons: [] },
+          confidence: 0.74,
+        }),
+        request.model,
+      ),
+    )
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+      retryTerminalEvaluations: true,
+    })
+
+    expect(summary.status).toBe('completed')
+    expect(summary.completedEvaluations).toBe(2)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+    expect(mockLlm.complete.mock.calls[0]?.[1].model).toBe('openai/gpt-5.4-mini')
+
+    const recoveredEval = await db.query.matchEvaluations.findFirst({
+      where: eq(matchEvaluations.id, firstEval.id),
+    })
+    expect(recoveredEval?.status).toBe('completed')
+    expect(recoveredEval?.parserVersion).toBe('match-repair-v2+repair-v1')
+  })
+
   it('should handle transport error as failed', async () => {
     const db = getTestDb()
     const fixture = await seedRunnerFixture()

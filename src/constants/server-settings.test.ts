@@ -23,6 +23,12 @@ describe('serverSettings.match', () => {
     expect(serverSettings.match.cronInvocationSafetyBufferMs).toBeGreaterThan(0)
     expect(serverSettings.match.cronInvocationSafetyBufferMs).toBeLessThan(800 * 1000)
   })
+
+  it('configures a dedicated repair model for invalid match outputs', () => {
+    expect(serverSettings.match.outputRepair.modelProvider).toBe('openai')
+    expect(serverSettings.match.outputRepair.modelId).toContain('gpt-5.4-mini')
+    expect(serverSettings.match.outputRepair.maxTokens).toBeGreaterThan(0)
+  })
 })
 
 describe('serverSettings.openRouter', () => {
