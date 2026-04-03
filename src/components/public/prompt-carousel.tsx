@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useRef, useState } from 'react'
+import { getPromptTopToolSlots } from '~/components/public/prompt-carousel-layout'
 import {
   getNextPromptIndexAfterLoad,
   getPromptNextButtonState,
@@ -165,6 +166,7 @@ export function PromptCarousel({
       <div className="grid flex-1">
         {prompts.map((prompt, i) => {
           const isActive = i === currentIndex
+          const topToolSlots = getPromptTopToolSlots(prompt.topTools)
           return (
             <div
               key={prompt.id}
@@ -184,9 +186,9 @@ export function PromptCarousel({
                     >
                       {formatPromptLevel(prompt.level)}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">{currentIndex + 1}</span>
+                    <span className="text-xs text-muted-foreground">{i + 1}</span>
                   </div>
-                  <h3 className="line-clamp-2 text-sm font-medium leading-snug group-hover/prompt:text-foreground">
+                  <h3 className="line-clamp-2 min-h-10 text-sm font-medium leading-snug group-hover/prompt:text-foreground">
                     {prompt.title}
                   </h3>
                   {(() => {
@@ -214,33 +216,53 @@ export function PromptCarousel({
                     <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       Top recommendations
                     </p>
-                    {prompt.topTools.map(({ tool, rate }) => {
-                      const pct = rate * 100
+                    <div className="space-y-2.5">
+                      {topToolSlots.map((topTool, slotIndex) => {
+                        if (!topTool) {
+                          return (
+                            <div
+                              key={`empty-tool-slot-${prompt.id}-${slotIndex}`}
+                              aria-hidden="true"
+                              className="invisible flex min-h-5 items-center gap-3"
+                            >
+                              <div className="w-28 shrink-0">
+                                <div className="h-5" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-16 rounded-full bg-muted" />
+                                <div className="h-4 w-12 shrink-0" />
+                              </div>
+                            </div>
+                          )
+                        }
 
-                      return (
-                        <div key={tool.id} className="flex items-center gap-3">
-                          <div className="relative z-20 w-28 shrink-0">
-                            <ToolBadge
-                              name={tool.name}
-                              slug={tool.slug}
-                              logoUrl={tool.logoUrl}
-                              size="sm"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className="h-full rounded-full bg-muted-foreground/30 transition-all"
-                                style={{ width: `${Math.max(pct, 3)}%` }}
+                        const pct = topTool.rate * 100
+
+                        return (
+                          <div key={topTool.tool.id} className="flex min-h-5 items-center gap-3">
+                            <div className="relative z-20 w-28 shrink-0">
+                              <ToolBadge
+                                name={topTool.tool.name}
+                                slug={topTool.tool.slug}
+                                logoUrl={topTool.tool.logoUrl}
+                                size="sm"
                               />
                             </div>
-                            <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                              {pct.toFixed(1)}%
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-muted-foreground/30 transition-all"
+                                  style={{ width: `${Math.max(pct, 3)}%` }}
+                                />
+                              </div>
+                              <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

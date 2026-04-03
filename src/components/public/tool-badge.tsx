@@ -18,8 +18,9 @@ export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolB
   return (
     <Link
       href={`/tools/${slug}`}
+      title={name}
       className={cn(
-        'inline-flex items-center gap-1.5 font-medium hover:underline',
+        'inline-flex max-w-full min-w-0 items-center gap-1.5 font-medium hover:underline',
         textSize,
         className,
       )}
@@ -28,7 +29,7 @@ export function ToolBadge({ name, slug, logoUrl, size = 'md', className }: ToolB
         {logoUrl && <AvatarImage src={logoUrl} alt={name} size={avatarPx} />}
         <AvatarFallback className="text-[10px]">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
       </Avatar>
-      {name}
+      <span className="truncate">{name}</span>
     </Link>
   )
 }
