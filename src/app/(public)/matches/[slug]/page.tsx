@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { CommentList } from '~/components/public/comment-list'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
 import { Badge } from '~/components/ui/badge'
@@ -142,6 +143,11 @@ export default async function MatchDetailPage({ params }: Props) {
   }
 
   const { category, toolA, toolB, result } = data
+  const [toolAComments, toolBComments] = await Promise.all([
+    caller.comment.listByTarget({ targetType: 'tool', targetId: toolA.id }),
+    caller.comment.listByTarget({ targetType: 'tool', targetId: toolB.id }),
+  ])
+
   const hasResult = !!result
   const decisive = result?.decisiveCaseCount ?? 0
   const insufficient = hasResult && !result.meetsPublicationThreshold
@@ -207,78 +213,94 @@ export default async function MatchDetailPage({ params }: Props) {
         )}
       </div>
 
-      {/* Stats */}
-      {hasResult && (
-        <Card className="mb-8">
+      {/* Stats + Comments */}
+      <div className="mb-8 grid gap-6 lg:grid-cols-2">
+        {hasResult && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Statistics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Metric</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">{toolA.name} wins</TableCell>
+                      <TableCell className="font-mono-data text-right">{result.aWins}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">{toolB.name} wins</TableCell>
+                      <TableCell className="font-mono-data text-right">{result.bWins}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Abstains (no tool)</TableCell>
+                      <TableCell className="font-mono-data text-right">{result.abstains}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Other tool chosen</TableCell>
+                      <TableCell className="font-mono-data text-right">
+                        {result.otherToolCount}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Decisive cases</TableCell>
+                      <TableCell className="font-mono-data text-right">
+                        {result.decisiveCaseCount}
+                      </TableCell>
+                    </TableRow>
+                    {decisive > 0 && (
+                      <>
+                        <TableRow>
+                          <TableCell className="font-medium">
+                            {toolA.name} win rate (unweighted)
+                          </TableCell>
+                          <TableCell className="font-mono-data text-right">
+                            {(result.aWinRate * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">95% CI</TableCell>
+                          <TableCell className="font-mono-data text-right">
+                            {(result.ciLow * 100).toFixed(1)}% - {(result.ciHigh * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">
+                            {toolA.name} win rate (weighted)
+                          </TableCell>
+                          <TableCell className="font-mono-data text-right">
+                            {(result.weightedAWinRate * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className={!hasResult ? 'lg:col-span-2' : ''}>
           <CardHeader>
-            <CardTitle className="text-base">Statistics</CardTitle>
+            <CardTitle className="text-base">Comments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Metric</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">{toolA.name} wins</TableCell>
-                    <TableCell className="font-mono-data text-right">{result.aWins}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">{toolB.name} wins</TableCell>
-                    <TableCell className="font-mono-data text-right">{result.bWins}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Abstains (no tool)</TableCell>
-                    <TableCell className="font-mono-data text-right">{result.abstains}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Other tool chosen</TableCell>
-                    <TableCell className="font-mono-data text-right">
-                      {result.otherToolCount}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Decisive cases</TableCell>
-                    <TableCell className="font-mono-data text-right">
-                      {result.decisiveCaseCount}
-                    </TableCell>
-                  </TableRow>
-                  {decisive > 0 && (
-                    <>
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          {toolA.name} win rate (unweighted)
-                        </TableCell>
-                        <TableCell className="font-mono-data text-right">
-                          {(result.aWinRate * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">95% CI</TableCell>
-                        <TableCell className="font-mono-data text-right">
-                          {(result.ciLow * 100).toFixed(1)}% - {(result.ciHigh * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          {toolA.name} win rate (weighted)
-                        </TableCell>
-                        <TableCell className="font-mono-data text-right">
-                          {(result.weightedAWinRate * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                    </>
-                  )}
-                </TableBody>
-              </Table>
+            <div className="max-h-[28rem] overflow-y-auto">
+              <h4 className="mb-2 text-sm font-medium text-muted-foreground">{toolA.name}</h4>
+              <CommentList comments={toolAComments} />
+              <h4 className="mb-2 mt-4 text-sm font-medium text-muted-foreground">{toolB.name}</h4>
+              <CommentList comments={toolBComments} />
             </div>
           </CardContent>
         </Card>
-      )}
+      </div>
 
       {hasResult && (result.modelBreakdown.length > 0 || result.promptBreakdown.length > 0) && (
         <div className="grid gap-6 lg:grid-cols-2">
