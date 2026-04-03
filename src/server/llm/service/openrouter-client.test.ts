@@ -125,12 +125,9 @@ describe('openrouter-client', () => {
 
     const { complete } = await import('~/server/llm/service/openrouter-client')
 
-    await complete(
-      'openai/gpt-5.4-pro',
-      [{ role: 'user', content: 'hello' }],
-      undefined,
-      { timeoutMs: 123_000 },
-    )
+    await complete('openai/gpt-5.4-pro', [{ role: 'user', content: 'hello' }], undefined, {
+      timeoutMs: 123_000,
+    })
 
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'openai/gpt-5.4-pro' }),

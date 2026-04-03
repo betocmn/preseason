@@ -200,11 +200,8 @@ describe('llm providers', () => {
       timeoutMs: 123_000,
     })
 
-    expect(completeMock).toHaveBeenCalledWith(
-      'openai/gpt-4o',
-      expect.any(Array),
-      undefined,
-      { timeoutMs: 123_000 },
-    )
+    expect(completeMock).toHaveBeenCalledWith('openai/gpt-4o', expect.any(Array), undefined, {
+      timeoutMs: 123_000,
+    })
   })
 })
