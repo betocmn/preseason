@@ -58,20 +58,24 @@ export class OpenRouterProvider {
           }
         : undefined
 
-    const completion = await completeWithOpenRouter(
-      model,
-      [
-        {
-          role: 'system',
-          content: request.systemPrompt,
-        },
-        {
-          role: 'user',
-          content: request.userPrompt,
-        },
-      ],
-      inferenceParams,
-    )
+    const messages = [
+      {
+        role: 'system' as const,
+        content: request.systemPrompt,
+      },
+      {
+        role: 'user' as const,
+        content: request.userPrompt,
+      },
+    ]
+
+    const requestOptions =
+      request.timeoutMs === undefined ? undefined : { timeoutMs: request.timeoutMs }
+
+    const completion =
+      requestOptions === undefined
+        ? await completeWithOpenRouter(model, messages, inferenceParams)
+        : await completeWithOpenRouter(model, messages, inferenceParams, requestOptions)
 
     return {
       ...completion,

@@ -35,6 +35,7 @@ let client: OpenAI | null = null
 type RetryOptions = {
   maxAttempts?: number
   baseDelayMs?: number
+  timeoutMs?: number
 }
 
 function resolveHttpReferer() {
@@ -85,6 +86,13 @@ function getContent(choice: OpenAI.Chat.Completions.ChatCompletion.Choice | unde
 
   const content = choice.message.content
   return typeof content === 'string' ? content : ''
+}
+
+function getRequestOptions(timeoutMs?: number) {
+  return {
+    maxRetries: 0,
+    timeout: timeoutMs ?? serverSettings.openRouter.requestTimeoutMs,
+  }
 }
 
 function getErrorMessage(error: unknown) {
@@ -150,14 +158,17 @@ export async function complete(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await getClient().chat.completions.create({
-        model,
-        messages,
-        ...(params?.temperature !== undefined && { temperature: params.temperature }),
-        ...(params?.top_p !== undefined && { top_p: params.top_p }),
-        ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
-        ...(params?.seed !== undefined && { seed: params.seed }),
-      })
+      const response = await getClient().chat.completions.create(
+        {
+          model,
+          messages,
+          ...(params?.temperature !== undefined && { temperature: params.temperature }),
+          ...(params?.top_p !== undefined && { top_p: params.top_p }),
+          ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
+          ...(params?.seed !== undefined && { seed: params.seed }),
+        },
+        getRequestOptions(retryOptions?.timeoutMs),
+      )
 
       const firstChoice = response.choices[0]
 
