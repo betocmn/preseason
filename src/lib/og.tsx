@@ -7,9 +7,9 @@ export const OG_SIZE = { width: 1200, height: 630 }
 export const OG_CONTENT_TYPE = 'image/png'
 
 async function getLogoBase64() {
-  const logoPath = join(process.cwd(), 'public', 'preseason-brand', 'preseason-logo.svg')
+  const logoPath = join(process.cwd(), 'public', 'preseason-brand', 'preseason-logo-cropped.png')
   const buffer = await readFile(logoPath)
-  return `data:image/svg+xml;base64,${buffer.toString('base64')}`
+  return `data:image/png;base64,${buffer.toString('base64')}`
 }
 
 export async function createOgImage(title: string, subtitle?: string) {
