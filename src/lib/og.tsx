@@ -7,9 +7,9 @@ export const OG_SIZE = { width: 1200, height: 630 }
 export const OG_CONTENT_TYPE = 'image/png'
 
 async function getLogoBase64() {
-  const logoPath = join(process.cwd(), 'public', 'favicon', 'web-app-manifest-512x512.png')
+  const logoPath = join(process.cwd(), 'public', 'preseason-brand', 'preseason-logo.svg')
   const buffer = await readFile(logoPath)
-  return `data:image/png;base64,${buffer.toString('base64')}`
+  return `data:image/svg+xml;base64,${buffer.toString('base64')}`
 }
 
 export async function createOgImage(title: string, subtitle?: string) {
@@ -52,13 +52,7 @@ export async function createOgImage(title: string, subtitle?: string) {
       >
         {/* Logo — next/image cannot be used in OG image generation */}
         {/* biome-ignore lint/performance/noImgElement: OG images use Satori, not the browser */}
-        <img
-          src={logoSrc}
-          width={80}
-          height={80}
-          style={{ borderRadius: '20px' }}
-          alt="Preseason"
-        />
+        <img src={logoSrc} width={290} height={80} alt="Preseason" />
 
         {/* Title */}
         <div
