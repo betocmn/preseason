@@ -174,7 +174,7 @@ export function PromptCarousel({
               )}
             >
               {/* Two-column: prompt text left, recommendations right */}
-              <div className="relative z-0 grid gap-5 sm:grid-cols-2">
+              <div className="relative z-0 grid items-start gap-5 sm:grid-cols-2">
                 {/* Left: prompt content */}
                 <div className="min-w-0">
                   <div className="mb-2 flex items-center gap-2">
@@ -186,25 +186,24 @@ export function PromptCarousel({
                     </Badge>
                     <span className="text-xs text-muted-foreground">{currentIndex + 1}</span>
                   </div>
-                  <h3 className="text-sm font-medium leading-snug group-hover/prompt:text-foreground">
+                  <h3 className="line-clamp-2 text-sm font-medium leading-snug group-hover/prompt:text-foreground">
                     {prompt.title}
                   </h3>
                   {(() => {
                     const isPromptContent = !!prompt.content
                     const promptText = prompt.content ?? prompt.description
                     return (
-                      promptText && (
-                        <p
-                          className={cn(
-                            'mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground',
-                            isPromptContent && 'italic',
-                          )}
-                        >
-                          {isPromptContent && <>&ldquo;</>}
-                          {promptText}
-                          {isPromptContent && <>&rdquo;</>}
-                        </p>
-                      )
+                      <p
+                        className={cn(
+                          'mt-2 line-clamp-3 min-h-[3.75rem] text-sm leading-relaxed text-muted-foreground',
+                          isPromptContent && 'italic',
+                          !promptText && 'invisible',
+                        )}
+                      >
+                        {isPromptContent && <>&ldquo;</>}
+                        {promptText ?? '\u00A0'}
+                        {isPromptContent && <>&rdquo;</>}
+                      </p>
                     )
                   })()}
                 </div>
