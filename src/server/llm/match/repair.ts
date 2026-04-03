@@ -134,6 +134,7 @@ export async function repairMatchResponse(
     ),
     temperature: serverSettings.match.outputRepair.temperature,
     maxTokens: serverSettings.match.outputRepair.maxTokens,
+    timeoutMs: serverSettings.match.requestTimeoutMs,
   })
 
   const rawAppendix = stripJsonCodeFence(completion.content)

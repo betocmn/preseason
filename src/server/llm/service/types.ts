@@ -14,6 +14,7 @@ export type CompletionRequest = {
   model: string
   systemPrompt: string
   userPrompt: string
+  timeoutMs?: number
 } & InferenceParams
 
 export type CompletionResponse = {

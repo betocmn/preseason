@@ -35,6 +35,7 @@ let client: OpenAI | null = null
 type RetryOptions = {
   maxAttempts?: number
   baseDelayMs?: number
+  timeoutMs?: number
 }
 
 function resolveHttpReferer() {
@@ -87,10 +88,10 @@ function getContent(choice: OpenAI.Chat.Completions.ChatCompletion.Choice | unde
   return typeof content === 'string' ? content : ''
 }
 
-function getRequestOptions() {
+function getRequestOptions(timeoutMs?: number) {
   return {
     maxRetries: 0,
-    timeout: serverSettings.openRouter.requestTimeoutMs,
+    timeout: timeoutMs ?? serverSettings.openRouter.requestTimeoutMs,
   }
 }
 
@@ -166,7 +167,7 @@ export async function complete(
           ...(params?.max_tokens !== undefined && { max_tokens: params.max_tokens }),
           ...(params?.seed !== undefined && { seed: params.seed }),
         },
-        getRequestOptions(),
+        getRequestOptions(retryOptions?.timeoutMs),
       )
 
       const firstChoice = response.choices[0]

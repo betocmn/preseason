@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import type { LlmService } from '~/server/llm/service'
 import type { CompletionRequest, CompletionResponse } from '~/server/llm/service/types'
 import { MATCH_REPAIR_PARSER_VERSION, repairMatchResponse } from './repair'
@@ -53,6 +54,10 @@ describe('repairMatchResponse', () => {
     expect(result.response.winner).toBe('tool_a')
     expect(result.naturalResponse).toContain('Supabase is the better default')
     expect(result.repairModel).toBe('openai/gpt-5.4-mini')
+    expect(llmService.complete).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({ timeoutMs: serverSettings.match.requestTimeoutMs }),
+    )
   })
 
   it('should strip JSON code fences from the repair output', async () => {

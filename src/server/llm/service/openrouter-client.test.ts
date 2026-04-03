@@ -111,4 +111,33 @@ describe('openrouter-client', () => {
     await expectation
     expect(createMock).toHaveBeenCalledTimes(1)
   })
+
+  it('uses a request-specific timeout override when provided', async () => {
+    createMock.mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      model: 'openai/gpt-5.4-pro',
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 12,
+        total_tokens: 22,
+      },
+    })
+
+    const { complete } = await import('~/server/llm/service/openrouter-client')
+
+    await complete(
+      'openai/gpt-5.4-pro',
+      [{ role: 'user', content: 'hello' }],
+      undefined,
+      { timeoutMs: 123_000 },
+    )
+
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'openai/gpt-5.4-pro' }),
+      expect.objectContaining({
+        maxRetries: 0,
+        timeout: 123_000,
+      }),
+    )
+  })
 })

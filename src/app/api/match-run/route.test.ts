@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const claimMatchBatchExecutionMock = vi.hoisted(() => vi.fn())
 const runMatchBatchMock = vi.hoisted(() => vi.fn())
 const serverSettingsMock = vi.hoisted(() => ({
-  match: { cronInvocationSafetyBufferMs: 60_000 },
+  match: { cronInvocationSafetyBufferMs: 60_000, requestTimeoutMs: 180_000 },
   openRouter: {
     transportRetryAttempts: 2,
     transportRetryBaseDelayMs: 1_000,
@@ -85,7 +85,7 @@ describe('POST /api/match-run', () => {
     expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', {
       database: expect.anything(),
       maxRuntimeMs: 740_000,
-      minRemainingRuntimeMs: 601_000,
+      minRemainingRuntimeMs: 722_000,
       retryTerminalEvaluations: true,
     })
   })

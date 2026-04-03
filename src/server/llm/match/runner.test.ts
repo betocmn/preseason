@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -401,6 +402,10 @@ describe('runMatchBatch', () => {
     expect(evals.every((e) => e.status === 'completed')).toBe(true)
     expect(evals.every((e) => e.winnerDecision != null)).toBe(true)
     expect(evals.every((e) => e.renderedUserPrompt != null)).toBe(true)
+    expect(mockLlm.complete).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({ timeoutMs: serverSettings.match.requestTimeoutMs }),
+    )
   })
 
   it('should handle model drift as invalid_output', async () => {

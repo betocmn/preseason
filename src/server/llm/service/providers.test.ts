@@ -189,4 +189,22 @@ describe('llm providers', () => {
     expect(result.returnedModel).toBe('mock-returned-model')
     expect(result).not.toHaveProperty('model')
   })
+
+  it('passes timeout overrides to the client when provided', async () => {
+    const provider = new LlmService().getProvider('openai')
+
+    await provider.complete({
+      model: 'gpt-4o',
+      systemPrompt: 'sys',
+      userPrompt: 'usr',
+      timeoutMs: 123_000,
+    })
+
+    expect(completeMock).toHaveBeenCalledWith(
+      'openai/gpt-4o',
+      expect.any(Array),
+      undefined,
+      { timeoutMs: 123_000 },
+    )
+  })
 })

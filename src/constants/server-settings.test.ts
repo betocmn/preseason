@@ -24,6 +24,13 @@ describe('serverSettings.match', () => {
     expect(serverSettings.match.cronInvocationSafetyBufferMs).toBeLessThan(800 * 1000)
   })
 
+  it('keeps per-request timeouts short enough for repairable evaluations', () => {
+    expect(serverSettings.match.requestTimeoutMs).toBeGreaterThan(0)
+    expect(serverSettings.match.requestTimeoutMs).toBeLessThan(
+      serverSettings.openRouter.requestTimeoutMs,
+    )
+  })
+
   it('configures a dedicated repair model for invalid match outputs', () => {
     expect(serverSettings.match.outputRepair.modelProvider).toBe('openai')
     expect(serverSettings.match.outputRepair.modelId).toContain('gpt-5.4-mini')

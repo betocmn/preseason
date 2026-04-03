@@ -4,18 +4,12 @@ import { env } from '~/env'
 import { isCronRequestAuthorized } from '~/lib/cron-auth'
 import { db } from '~/server/db'
 import { claimMatchBatchExecution } from '~/server/llm/match/batches'
+import { getMaxMatchEvaluationRuntimeMs } from '~/server/llm/match/runtime-budget'
 import { runMatchBatch } from '~/server/llm/match/runner'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 800
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function getMaxSingleEvaluationRuntimeMs() {
-  const attempts = serverSettings.openRouter.transportRetryAttempts
-  const retryDelayMs =
-    (serverSettings.openRouter.transportRetryBaseDelayMs * ((attempts - 1) * attempts)) / 2
-  return serverSettings.openRouter.requestTimeoutMs * attempts + retryDelayMs
-}
 
 export async function POST(request: Request) {
   if (!env.CRON_SECRET) {
@@ -56,7 +50,7 @@ export async function POST(request: Request) {
     const summary = await runMatchBatch(batch.id, claimToken, {
       database: db,
       maxRuntimeMs: maxDuration * 1000 - serverSettings.match.cronInvocationSafetyBufferMs,
-      minRemainingRuntimeMs: getMaxSingleEvaluationRuntimeMs(),
+      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs(),
       retryTerminalEvaluations: true,
     })
 

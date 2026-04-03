@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { serverSettings } from '~/constants/server-settings'
 import { db as defaultDb } from '~/server/db'
 import type * as schema from '~/server/db/schema'
 import {
@@ -477,6 +478,7 @@ export async function runMatchBatch(
             topP: modelSnapshot.topP ?? undefined,
             maxTokens: modelSnapshot.maxTokens ?? undefined,
             seed: modelSnapshot.seed ?? undefined,
+            timeoutMs: serverSettings.match.requestTimeoutMs,
           })
 
           const drift = checkModelDrift(modelSnapshot.requestedModelId, completion.returnedModel)
