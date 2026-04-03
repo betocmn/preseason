@@ -8,6 +8,8 @@ import { cn } from '~/lib/utils'
 
 type AvatarImageLoadingStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
+type AvatarImageElementState = Pick<HTMLImageElement, 'complete' | 'naturalWidth'>
+
 type AvatarImageStatusContextValue = {
   imageLoadingStatus: AvatarImageLoadingStatus
   setImageLoadingStatus: React.Dispatch<React.SetStateAction<AvatarImageLoadingStatus>>
@@ -17,6 +19,21 @@ const AvatarImageStatusContext = React.createContext<AvatarImageStatusContextVal
 
 export function shouldOptimizeAvatarSrc(src: string | undefined) {
   return typeof src === 'string' && src.startsWith('/')
+}
+
+export function getAvatarImageLoadingStatus(
+  src: string | undefined,
+  imageElement: AvatarImageElementState | null,
+): AvatarImageLoadingStatus {
+  if (!src) {
+    return 'error'
+  }
+
+  if (imageElement?.complete) {
+    return imageElement.naturalWidth > 0 ? 'loaded' : 'error'
+  }
+
+  return 'loading'
 }
 
 function useAvatarImageStatusContext(componentName: string) {
@@ -66,6 +83,7 @@ const AvatarImage = React.forwardRef<React.ElementRef<typeof NextImage>, AvatarI
   ({ className, size = 40, src, alt, onLoad, onError, onLoadingStatusChange, ...props }, ref) => {
     const { imageLoadingStatus, setImageLoadingStatus } = useAvatarImageStatusContext('AvatarImage')
     const imageSrc = typeof src === 'string' ? src : undefined
+    const imageElementRef = React.useRef<React.ElementRef<typeof NextImage> | null>(null)
 
     const updateLoadingStatus = React.useCallback(
       (status: AvatarImageLoadingStatus) => {
@@ -75,8 +93,27 @@ const AvatarImage = React.forwardRef<React.ElementRef<typeof NextImage>, AvatarI
       [onLoadingStatusChange, setImageLoadingStatus],
     )
 
+    const handleImageRef = React.useCallback(
+      (node: React.ElementRef<typeof NextImage> | null) => {
+        imageElementRef.current = node
+
+        if (ref) {
+          if (typeof ref === 'function') {
+            ref(node)
+          } else {
+            ref.current = node
+          }
+        }
+
+        if (node) {
+          updateLoadingStatus(getAvatarImageLoadingStatus(imageSrc, node))
+        }
+      },
+      [imageSrc, ref, updateLoadingStatus],
+    )
+
     React.useEffect(() => {
-      updateLoadingStatus(imageSrc ? 'loading' : 'error')
+      updateLoadingStatus(getAvatarImageLoadingStatus(imageSrc, imageElementRef.current))
 
       return () => {
         setImageLoadingStatus('idle')
@@ -89,7 +126,7 @@ const AvatarImage = React.forwardRef<React.ElementRef<typeof NextImage>, AvatarI
 
     return (
       <NextImage
-        ref={ref}
+        ref={handleImageRef}
         src={imageSrc}
         className={cn(
           'absolute inset-0 aspect-square h-full w-full',
