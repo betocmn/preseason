@@ -37,7 +37,9 @@ export async function GET(request: Request) {
       database: db,
       maxEvaluations: serverSettings.match.cronEvaluationsPerInvocation,
       maxRuntimeMs: maxDuration * 1000 - serverSettings.match.cronInvocationSafetyBufferMs,
-      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs(),
+      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs({
+        retryTerminalEvaluations: false,
+      }),
       retryTerminalEvaluations: false,
     })
 

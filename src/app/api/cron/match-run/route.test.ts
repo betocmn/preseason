@@ -6,7 +6,7 @@ const serverSettingsMock = vi.hoisted(() => ({
   match: {
     cronEvaluationsPerInvocation: 4,
     cronInvocationSafetyBufferMs: 60_000,
-    requestTimeoutMs: 180_000,
+    requestTimeoutMs: 120_000,
   },
   openRouter: {
     transportRetryAttempts: 2,
@@ -107,7 +107,7 @@ describe('GET /api/cron/match-run', () => {
       database: expect.anything(),
       maxEvaluations: 4,
       maxRuntimeMs: 740_000,
-      minRemainingRuntimeMs: 722_000,
+      minRemainingRuntimeMs: 482_000,
       retryTerminalEvaluations: false,
     })
   })

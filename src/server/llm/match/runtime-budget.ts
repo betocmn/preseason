@@ -7,9 +7,14 @@ function getMaxRetriedRequestRuntimeMs(timeoutMs: number) {
   return timeoutMs * attempts + retryDelayMs
 }
 
-export function getMaxMatchEvaluationRuntimeMs() {
-  const maxRequestRuntimeMs = getMaxRetriedRequestRuntimeMs(serverSettings.match.requestTimeoutMs)
+type MatchEvaluationRuntimeBudgetOptions = {
+  retryTerminalEvaluations: boolean
+}
 
-  // A single evaluation may need one primary completion and one repair completion.
-  return maxRequestRuntimeMs * 2
+export function getMaxMatchEvaluationRuntimeMs(options: MatchEvaluationRuntimeBudgetOptions) {
+  const maxRequestRuntimeMs = getMaxRetriedRequestRuntimeMs(serverSettings.match.requestTimeoutMs)
+  const llmRequestCount = options.retryTerminalEvaluations ? 3 : 2
+
+  // Retried invalid_output rows may need stored-output repair, a fresh completion, and a repair.
+  return maxRequestRuntimeMs * llmRequestCount
 }

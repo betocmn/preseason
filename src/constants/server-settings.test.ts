@@ -29,6 +29,7 @@ describe('serverSettings.match', () => {
     expect(serverSettings.match.requestTimeoutMs).toBeLessThan(
       serverSettings.openRouter.requestTimeoutMs,
     )
+    expect(serverSettings.match.requestTimeoutMs).toBeLessThanOrEqual(2 * 60 * 1000)
   })
 
   it('configures a dedicated repair model for invalid match outputs', () => {

@@ -4,7 +4,7 @@ const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
-const matchRequestTimeoutMs = 3 * 60 * 1000
+const matchRequestTimeoutMs = 2 * 60 * 1000
 
 const backgroundSmokePromptSelections = [
   { slug: 'real-estate-website', level: 'beginner' },
@@ -49,7 +49,7 @@ export const serverSettings = {
     cronEvaluationsPerInvocation: 4,
     // Leave time for batch cleanup before the route itself hits the platform limit.
     cronInvocationSafetyBufferMs: matchCronInvocationSafetyBufferMs,
-    // Keep a primary completion plus one repair attempt inside the match route budget.
+    // Keep the worst-case stored-output recovery and rerun path inside the match route budget.
     requestTimeoutMs: matchRequestTimeoutMs,
     // These models have repeatedly produced low-quality or schema-invalid match output.
     excludedRequestedModelIds: [

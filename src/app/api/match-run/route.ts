@@ -50,7 +50,9 @@ export async function POST(request: Request) {
     const summary = await runMatchBatch(batch.id, claimToken, {
       database: db,
       maxRuntimeMs: maxDuration * 1000 - serverSettings.match.cronInvocationSafetyBufferMs,
-      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs(),
+      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs({
+        retryTerminalEvaluations: true,
+      }),
       retryTerminalEvaluations: true,
     })
 
