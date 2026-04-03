@@ -109,7 +109,7 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
 
               {/* Comment text */}
               <p className="text-sm leading-relaxed text-foreground/75">
-                &ldquo;{truncate(comment.content, 220)}&rdquo;
+                &ldquo;{truncate(comment.content, 660)}&rdquo;
               </p>
 
               {/* Match context */}
