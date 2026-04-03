@@ -6,9 +6,14 @@ export const contentType = OG_CONTENT_TYPE
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const caller = await api()
-  const data = await caller.benchmarkRanking.byCategoryGroup({ groupSlug: slug })
 
-  const name = data.categoryGroup?.name ?? 'Category'
-  return createOgImage(`${name} Rankings`, 'Benchmark rankings powered by LLM recommendations')
+  try {
+    const caller = await api()
+    const data = await caller.benchmarkRanking.byCategoryGroup({ groupSlug: slug })
+    const name = data.categoryGroup?.name ?? 'Category'
+
+    return createOgImage(`${name} Rankings`, 'Benchmark rankings powered by LLM recommendations')
+  } catch {
+    return createOgImage('Rankings', 'Preseason')
+  }
 }

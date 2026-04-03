@@ -431,7 +431,11 @@ describe('matchRouter', () => {
     })
 
     expect(result.createdCount).toBe(1)
-    const batch = result.batches[0]!
+    const [batch] = result.batches
+    expect(batch).toBeDefined()
+    if (!batch) {
+      throw new Error('Expected a created batch')
+    }
     expect(batch.categoryId).toBe(fixture.category.id)
     expect(batch.status).toBe('pending')
     expect(new Set([batch.toolAId, batch.toolBId])).toEqual(

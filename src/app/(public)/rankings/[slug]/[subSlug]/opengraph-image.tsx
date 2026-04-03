@@ -9,10 +9,21 @@ export default async function Image({
 }: {
   params: Promise<{ slug: string; subSlug: string }>
 }) {
-  const { subSlug } = await params
-  const caller = await api()
-  const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
+  const { slug, subSlug } = await params
 
-  const name = data.category?.name ?? 'Category'
-  return createOgImage(`${name} Rankings`, 'Benchmark rankings powered by LLM recommendations')
+  try {
+    const caller = await api()
+    const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
+
+    if (!data.category || data.category.categoryGroup.slug !== slug) {
+      return createOgImage('Rankings', 'Preseason')
+    }
+
+    return createOgImage(
+      `${data.category.name} Rankings`,
+      'Benchmark rankings powered by LLM recommendations',
+    )
+  } catch {
+    return createOgImage('Rankings', 'Preseason')
+  }
 }
