@@ -17,6 +17,7 @@ import {
   tools,
 } from '~/server/db/schema'
 import { createMatchBatch } from '~/server/llm/match/batches'
+import { isMatchEligibleRequestedModelId } from '~/server/llm/match/model-eligibility'
 
 function canonicalizeToolOrder(toolAId: string, toolBId: string): [string, string] {
   const normalizedToolAId = toolAId.toLowerCase()
@@ -41,6 +42,7 @@ function toMatchBatchError(error: unknown): TRPCError | null {
   if (
     message.includes('Both tools must belong') ||
     message.includes('Season has no frozen') ||
+    message.includes('Season has no match-eligible') ||
     message.includes('benchmarkRunId')
   ) {
     return new TRPCError({ code: 'BAD_REQUEST', message })
@@ -183,10 +185,20 @@ export const matchRouter = createTRPCRouter({
       })
     }
 
-    const [modelCountRow] = await ctx.db
-      .select({ cnt: count() })
-      .from(benchmarkSeasonModels)
-      .where(eq(benchmarkSeasonModels.seasonId, seasonId))
+    const seasonModels = await ctx.db.query.benchmarkSeasonModels.findMany({
+      where: eq(benchmarkSeasonModels.seasonId, seasonId),
+      with: {
+        modelSnapshot: {
+          columns: {
+            requestedModelId: true,
+          },
+        },
+      },
+    })
+
+    const modelCount = seasonModels.filter((seasonModel) =>
+      isMatchEligibleRequestedModelId(seasonModel.modelSnapshot.requestedModelId),
+    ).length
 
     const categoryCounts = await ctx.db
       .select({
@@ -220,7 +232,7 @@ export const matchRouter = createTRPCRouter({
     return {
       season: {
         ...season,
-        modelCount: Number(modelCountRow?.cnt ?? 0),
+        modelCount,
       },
       promptTemplate,
       categories: categoriesForLaunch.map((category) => ({

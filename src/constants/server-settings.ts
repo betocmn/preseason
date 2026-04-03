@@ -48,6 +48,15 @@ export const serverSettings = {
     cronEvaluationsPerInvocation: 4,
     // Leave time for batch cleanup before the route itself hits the platform limit.
     cronInvocationSafetyBufferMs: matchCronInvocationSafetyBufferMs,
+    // These models have repeatedly produced low-quality or schema-invalid match output.
+    excludedRequestedModelIds: [
+      'google/gemini-2.5-pro',
+      'meta-llama/llama-4-maverick',
+      'meta-llama/llama-4-scout',
+      'moonshotai/kimi-k2.5',
+      'qwen/qwen3-coder-next',
+      'z-ai/glm-5-turbo',
+    ],
     outputRepair: {
       modelProvider: 'openai',
       modelId: 'openai/gpt-5.4-mini',

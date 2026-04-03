@@ -29,6 +29,11 @@ describe('serverSettings.match', () => {
     expect(serverSettings.match.outputRepair.modelId).toContain('gpt-5.4-mini')
     expect(serverSettings.match.outputRepair.maxTokens).toBeGreaterThan(0)
   })
+
+  it('excludes the known unreliable match models', () => {
+    expect(serverSettings.match.excludedRequestedModelIds).toContain('google/gemini-2.5-pro')
+    expect(serverSettings.match.excludedRequestedModelIds).toContain('moonshotai/kimi-k2.5')
+  })
 })
 
 describe('serverSettings.openRouter', () => {

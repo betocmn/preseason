@@ -1,6 +1,6 @@
 import { serverSettings } from '~/constants/server-settings'
 import type { MatchResponse } from '~/server/llm/match/schema'
-import { SUPPORTED_SCHEMA_VERSION, validateMatchResponse } from '~/server/llm/match/schema'
+import { validateMatchResponse } from '~/server/llm/match/schema'
 import type { LlmService } from '~/server/llm/service'
 
 export const MATCH_REPAIR_PARSER_VERSION = 'match-repair-v2+repair-v1'

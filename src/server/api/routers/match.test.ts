@@ -1,6 +1,7 @@
 import type { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -17,7 +18,7 @@ import {
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller, seedUser } from '~/test/trpc'
 
-function first<T>(arr: T[]): T {
+function first<T>(arr: readonly T[]): T {
   if (arr.length === 0) throw new Error('Expected at least one result')
   return arr[0] as T
 }
@@ -299,6 +300,54 @@ describe('matchRouter', () => {
     ])
   })
 
+  it('counts only match-eligible models in admin launch context', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+    const excludedRequestedModelId = first(serverSettings.match.excludedRequestedModelIds)
+
+    const excludedLlm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Gemini 2.5 Pro',
+          slug: 'gemini-2-5-pro',
+          provider: 'google',
+          company: 'Google',
+          modelFamily: 'Gemini Pro',
+          modelVersion: '2.5',
+          modelId: 'google/gemini-2.5-pro',
+        })
+        .returning(),
+    )
+
+    const excludedSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: excludedLlm.id,
+          name: 'Gemini 2.5 Pro',
+          provider: 'google',
+          company: 'Google',
+          modelFamily: 'Gemini Pro',
+          modelVersion: '2.5',
+          tier: 'frontier',
+          requestedModelId: excludedRequestedModelId,
+          snapshotKey: 'google/gemini-2.5-pro::0.2::1::1200::null',
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: fixture.season.id,
+      modelSnapshotId: excludedSnapshot.id,
+    })
+
+    const context = await caller.match.getAdminLaunchContext()
+    expect(context.season.modelCount).toBe(1)
+  })
+
   it('errors when no active benchmark season exists for admin launch context', async () => {
     const { authUser } = await seedUser({ role: 'admin' })
     const caller = createTestCaller(authUser)
@@ -431,7 +480,7 @@ describe('matchRouter', () => {
     })
 
     expect(result.createdCount).toBe(1)
-    const batch = result.batches[0]!
+    const batch = first(result.batches)
     expect(batch.categoryId).toBe(fixture.category.id)
     expect(batch.status).toBe('pending')
     expect(new Set([batch.toolAId, batch.toolBId])).toEqual(
@@ -751,6 +800,67 @@ describe('matchRouter', () => {
         triggerMode: 'benchmark_run',
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>)
+  })
+
+  it('maps no match-eligible models errors to BAD_REQUEST', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const fixture = await seedMatchRouterFixture()
+    const db = getTestDb()
+
+    await db
+      .delete(benchmarkSeasonModels)
+      .where(eq(benchmarkSeasonModels.modelSnapshotId, fixture.snapshot.id))
+
+    const excludedLlm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Kimi K2.5',
+          slug: 'kimi-k2-5-router',
+          provider: 'moonshotai',
+          company: 'MoonshotAI',
+          modelFamily: 'Kimi',
+          modelVersion: '2.5',
+          modelId: 'moonshotai/kimi-k2.5',
+        })
+        .returning(),
+    )
+
+    const excludedSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: excludedLlm.id,
+          name: 'Kimi K2.5',
+          provider: 'moonshotai',
+          company: 'MoonshotAI',
+          modelFamily: 'Kimi',
+          modelVersion: '2.5',
+          tier: 'frontier',
+          requestedModelId: 'moonshotai/kimi-k2.5',
+          snapshotKey: 'moonshotai/kimi-k2.5::0.2::1::1200::null',
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: fixture.season.id,
+      modelSnapshotId: excludedSnapshot.id,
+    })
+
+    await expect(
+      caller.match.createBatch({
+        seasonId: fixture.season.id,
+        categoryId: fixture.category.id,
+        toolAId: fixture.toolA.id,
+        toolBId: fixture.toolB.id,
+        promptTemplateId: fixture.template.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Season has no match-eligible frozen model snapshots — cannot create match batch',
+    } satisfies Partial<TRPCError>)
   })
 
   it('should list batches with filters', async () => {
