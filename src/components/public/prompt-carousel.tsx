@@ -246,6 +246,7 @@ export function PromptCarousel({
                                 slug={topTool.tool.slug}
                                 logoUrl={topTool.tool.logoUrl}
                                 size="sm"
+                                imageLoading="eager"
                               />
                             </div>
                             <div className="flex items-center gap-2">
