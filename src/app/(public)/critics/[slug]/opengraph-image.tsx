@@ -10,10 +10,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
 
   try {
     const critic = await caller.critic.getBySlug({ slug })
-    return createOgImage(
-      critic.user.displayName,
-      critic.user.bio ?? 'Verified Preseason critic',
-    )
+    return createOgImage(critic.user.displayName, critic.user.bio ?? 'Verified Preseason critic')
   } catch {
     return createOgImage('Critic', 'Preseason')
   }

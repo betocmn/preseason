@@ -1,10 +1,20 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { ImageResponse } from 'next/og'
 
 export const OG_SIZE = { width: 1200, height: 630 }
 
 export const OG_CONTENT_TYPE = 'image/png'
 
-export function createOgImage(title: string, subtitle?: string) {
+async function getLogoBase64() {
+  const logoPath = join(process.cwd(), 'public', 'favicon', 'web-app-manifest-512x512.png')
+  const buffer = await readFile(logoPath)
+  return `data:image/png;base64,${buffer.toString('base64')}`
+}
+
+export async function createOgImage(title: string, subtitle?: string) {
+  const logoSrc = await getLogoBase64()
+
   return new ImageResponse(
     <div
       style={{
@@ -40,23 +50,15 @@ export function createOgImage(title: string, subtitle?: string) {
           padding: '0 80px',
         }}
       >
-        {/* Icon */}
-        <div
-          style={{
-            width: '80px',
-            height: '80px',
-            borderRadius: '20px',
-            background: 'linear-gradient(135deg, #73edff, #5a93ff, #aa9fff)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '44px',
-            fontWeight: 700,
-            color: '#0f1218',
-          }}
-        >
-          P
-        </div>
+        {/* Logo — next/image cannot be used in OG image generation */}
+        {/* biome-ignore lint/performance/noImgElement: OG images use Satori, not the browser */}
+        <img
+          src={logoSrc}
+          width={80}
+          height={80}
+          style={{ borderRadius: '20px' }}
+          alt="Preseason"
+        />
 
         {/* Title */}
         <div
@@ -100,7 +102,7 @@ export function createOgImage(title: string, subtitle?: string) {
           color: '#5a6577',
         }}
       >
-        preseason.tools
+        preseason.ai
       </div>
     </div>,
     OG_SIZE,
