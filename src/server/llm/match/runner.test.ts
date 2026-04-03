@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -401,6 +402,10 @@ describe('runMatchBatch', () => {
     expect(evals.every((e) => e.status === 'completed')).toBe(true)
     expect(evals.every((e) => e.winnerDecision != null)).toBe(true)
     expect(evals.every((e) => e.renderedUserPrompt != null)).toBe(true)
+    expect(mockLlm.complete).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({ timeoutMs: serverSettings.match.requestTimeoutMs }),
+    )
   })
 
   it('should handle model drift as invalid_output', async () => {
@@ -451,6 +456,134 @@ describe('runMatchBatch', () => {
 
     expect(summary.status).toBe('failed')
     expect(summary.invalidOutputEvaluations).toBe(2)
+  })
+
+  it('should repair recoverable parse failures into completed evaluations', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      if (request.model === 'openai/gpt-4o') {
+        return mockCompletion('Supabase is the stronger default here.', request.model)
+      }
+
+      return mockCompletion(
+        JSON.stringify({
+          schema_version: 'match-v2',
+          winner: 'tool_a',
+          comparison_summary: 'Tool A is the better fit.',
+          tool_a: {
+            pros: [
+              {
+                phrase: 'Faster setup',
+                evidence_sentence: 'Tool A is faster to configure.',
+              },
+            ],
+            cons: [],
+          },
+          tool_b: {
+            pros: [],
+            cons: [
+              {
+                phrase: 'More setup',
+                evidence_sentence: 'Tool B needs more configuration.',
+              },
+            ],
+          },
+          confidence: 0.82,
+        }),
+        request.model,
+      )
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+    })
+
+    expect(summary.status).toBe('completed')
+    expect(summary.completedEvaluations).toBe(2)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(4)
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    expect(evals.every((evaluation) => evaluation.status === 'completed')).toBe(true)
+    expect(
+      evals.every((evaluation) => evaluation.parserVersion === 'match-repair-v2+repair-v1'),
+    ).toBe(true)
+  })
+
+  it('should recover stored invalid output before rerunning the original model', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+    })
+    const firstEval = evals[0] as (typeof evals)[number]
+    const secondEval = evals[1] as (typeof evals)[number]
+
+    await db
+      .update(matchEvaluations)
+      .set({
+        status: 'invalid_output',
+        rawResponse: 'Clerk is easier to adopt for this use case.',
+        renderedUserPrompt: 'Compare Clerk vs Auth0 for Auth.',
+        requestedModelId: 'gpt-4o',
+        returnedModelId: 'gpt-4o',
+        provider: 'openai',
+        errorMessage: 'Missing <preseason_match_json> tags',
+      })
+      .where(eq(matchEvaluations.id, firstEval.id))
+
+    await db
+      .update(matchEvaluations)
+      .set({
+        status: 'completed',
+        winnerDecision: 'tool_a',
+      })
+      .where(eq(matchEvaluations.id, secondEval.id))
+
+    const mockLlm = createMockLlmService(async (_provider, request) =>
+      mockCompletion(
+        JSON.stringify({
+          schema_version: 'match-v2',
+          winner: 'tool_a',
+          comparison_summary: 'Tool A is the better fit.',
+          tool_a: {
+            pros: [{ phrase: 'Simple', evidence_sentence: 'Tool A is simpler.' }],
+            cons: [],
+          },
+          tool_b: { pros: [], cons: [] },
+          confidence: 0.74,
+        }),
+        request.model,
+      ),
+    )
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+      retryTerminalEvaluations: true,
+    })
+
+    expect(summary.status).toBe('completed')
+    expect(summary.completedEvaluations).toBe(2)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+    expect(mockLlm.complete.mock.calls[0]?.[1].model).toBe('openai/gpt-5.4-mini')
+
+    const recoveredEval = await db.query.matchEvaluations.findFirst({
+      where: eq(matchEvaluations.id, firstEval.id),
+    })
+    expect(recoveredEval?.status).toBe('completed')
+    expect(recoveredEval?.parserVersion).toBe('match-repair-v2+repair-v1')
   })
 
   it('should handle transport error as failed', async () => {
@@ -578,6 +711,41 @@ describe('runMatchBatch', () => {
     })
     expect(evals.filter((evaluation) => evaluation.status === 'completed')).toHaveLength(1)
     expect(evals.filter((evaluation) => evaluation.status === 'pending')).toHaveLength(1)
+  })
+
+  it('should release a batch back to pending when runtime budget gets too low', async () => {
+    const db = getTestDb()
+    const fixture = await seedRunnerFixture()
+    const { batch, claimToken } = await createAndClaimBatch(fixture)
+    let currentTimeMs = Date.UTC(2026, 0, 1)
+
+    const mockLlm = createMockLlmService(async (_provider, request) => {
+      currentTimeMs += 250
+      return mockCompletion(wrapResponse(buildValidMatchResponse()), request.model)
+    })
+
+    const summary = await runMatchBatch(batch.id, claimToken, {
+      database: db,
+      llmService: mockLlm,
+      heartbeatIntervalMs: 999_999,
+      maxRuntimeMs: 1_000,
+      minRemainingRuntimeMs: 800,
+      now: () => new Date(currentTimeMs),
+    })
+
+    expect(summary.status).toBe('pending')
+    expect(summary.completedEvaluations).toBe(1)
+    expect(summary.failedEvaluations).toBe(0)
+    expect(summary.invalidOutputEvaluations).toBe(0)
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1)
+
+    const batchAfter = await db.query.matchBatches.findFirst({
+      where: eq(matchBatches.id, batch.id),
+    })
+    expect(batchAfter?.status).toBe('pending')
+    expect(batchAfter?.claimToken).toBeNull()
+    expect(batchAfter?.lastHeartbeatAt).toBeNull()
+    expect(batchAfter?.completedAt).toBeNull()
   })
 
   it('should finalize batch state after a heartbeat write failure', async () => {

@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const claimMatchBatchExecutionMock = vi.hoisted(() => vi.fn())
 const runMatchBatchMock = vi.hoisted(() => vi.fn())
+const serverSettingsMock = vi.hoisted(() => ({
+  match: { cronInvocationSafetyBufferMs: 60_000, requestTimeoutMs: 120_000 },
+  openRouter: {
+    transportRetryAttempts: 2,
+    transportRetryBaseDelayMs: 1_000,
+    requestTimeoutMs: 300_000,
+  },
+}))
 
 vi.mock('~/env', () => ({
   env: {
@@ -11,6 +19,10 @@ vi.mock('~/env', () => ({
 
 vi.mock('~/server/db', () => ({
   db: {},
+}))
+
+vi.mock('~/constants/server-settings', () => ({
+  serverSettings: serverSettingsMock,
 }))
 
 vi.mock('~/server/llm/match/batches', () => ({
@@ -72,6 +84,8 @@ describe('POST /api/match-run', () => {
     expect(claimMatchBatchExecutionMock).toHaveBeenCalledOnce()
     expect(runMatchBatchMock).toHaveBeenCalledWith(batchId, 'claim-token', {
       database: expect.anything(),
+      maxRuntimeMs: 740_000,
+      minRemainingRuntimeMs: 723_000,
       retryTerminalEvaluations: true,
     })
   })

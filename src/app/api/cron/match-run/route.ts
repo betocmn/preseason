@@ -5,6 +5,7 @@ import { isCronRequestAuthorized } from '~/lib/cron-auth'
 import { db } from '~/server/db'
 import { claimNextMatchBatchExecution } from '~/server/llm/match/batches'
 import { runMatchBatch } from '~/server/llm/match/runner'
+import { getMaxMatchEvaluationRuntimeMs } from '~/server/llm/match/runtime-budget'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 800
@@ -35,6 +36,10 @@ export async function GET(request: Request) {
     const summary = await runMatchBatch(claim.batch.id, claim.claimToken, {
       database: db,
       maxEvaluations: serverSettings.match.cronEvaluationsPerInvocation,
+      maxRuntimeMs: maxDuration * 1000 - serverSettings.match.cronInvocationSafetyBufferMs,
+      minRemainingRuntimeMs: getMaxMatchEvaluationRuntimeMs({
+        retryTerminalEvaluations: false,
+      }),
       retryTerminalEvaluations: false,
     })
 

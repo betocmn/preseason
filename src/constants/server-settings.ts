@@ -2,6 +2,9 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
+const matchCronInvocationSafetyBufferMs = 60 * 1000
+const openRouterRequestTimeoutMs = 5 * 60 * 1000
+const matchRequestTimeoutMs = 2 * 60 * 1000
 
 const backgroundSmokePromptSelections = [
   { slug: 'real-estate-website', level: 'beginner' },
@@ -44,10 +47,31 @@ export const serverSettings = {
     // Match batches can fan out to one LLM call per model/presentation order pair.
     // Keep cron work bounded so a single invocation never attempts a whole batch.
     cronEvaluationsPerInvocation: 4,
+    // Leave time for batch cleanup before the route itself hits the platform limit.
+    cronInvocationSafetyBufferMs: matchCronInvocationSafetyBufferMs,
+    // Keep the worst-case stored-output recovery and rerun path inside the match route budget.
+    requestTimeoutMs: matchRequestTimeoutMs,
+    // These models have repeatedly produced low-quality or schema-invalid match output.
+    excludedRequestedModelIds: [
+      'google/gemini-2.5-pro',
+      'meta-llama/llama-4-maverick',
+      'meta-llama/llama-4-scout',
+      'moonshotai/kimi-k2.5',
+      'qwen/qwen3-coder-next',
+      'z-ai/glm-5-turbo',
+    ],
+    outputRepair: {
+      modelProvider: 'openai',
+      modelId: 'openai/gpt-5.4-mini',
+      temperature: 0,
+      maxTokens: 900,
+    },
   },
   openRouter: {
-    transportRetryAttempts: 3,
+    // Retry transport failures once while keeping the whole evaluation bounded.
+    transportRetryAttempts: 2,
     transportRetryBaseDelayMs: 1_000,
+    requestTimeoutMs: openRouterRequestTimeoutMs,
   },
   toolCandidateReview: {
     cronBatchSize: 8,

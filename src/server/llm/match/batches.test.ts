@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkModelSnapshots,
   benchmarkProtocols,
@@ -241,6 +242,136 @@ describe('createMatchBatch', () => {
         triggerMode: 'manual',
       }),
     ).rejects.toThrow('Season has no frozen model snapshots')
+  })
+
+  it('should exclude configured unreliable models from match batch materialization', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template } = await seedMatchFixture()
+
+    const excludedLlm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Gemini 2.5 Pro',
+          slug: 'gemini-2-5-pro',
+          provider: 'google',
+          company: 'Google',
+          modelFamily: 'Gemini Pro',
+          modelVersion: '2.5',
+          modelId: 'google/gemini-2.5-pro',
+        })
+        .returning(),
+    )
+
+    const excludedSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: excludedLlm.id,
+          name: 'Gemini 2.5 Pro',
+          provider: 'google',
+          company: 'Google',
+          modelFamily: 'Gemini Pro',
+          modelVersion: '2.5',
+          tier: 'frontier',
+          requestedModelId: 'google/gemini-2.5-pro',
+          snapshotKey: 'google/gemini-2.5-pro::0.2::1::1200::null',
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: season.id,
+      modelSnapshotId: excludedSnapshot.id,
+    })
+
+    const batch = await createMatchBatch(db, {
+      seasonId: season.id,
+      categoryId: category.id,
+      toolAId: toolA.id,
+      toolBId: toolB.id,
+      promptTemplateId: template.id,
+      triggerMode: 'manual',
+    })
+
+    expect(batch.totalEvaluations).toBe(2)
+
+    const evals = await db.query.matchEvaluations.findMany({
+      where: eq(matchEvaluations.batchId, batch.id),
+      with: {
+        modelSnapshot: {
+          columns: {
+            requestedModelId: true,
+          },
+        },
+      },
+    })
+
+    expect(evals).toHaveLength(2)
+    expect(
+      evals.every(
+        (evaluation) =>
+          evaluation.modelSnapshot.requestedModelId !==
+          serverSettings.match.excludedRequestedModelIds[0],
+      ),
+    ).toBe(true)
+  })
+
+  it('should reject when only excluded models remain in the season', async () => {
+    const db = getTestDb()
+    const { season, category, toolA, toolB, template, snapshot } = await seedMatchFixture()
+
+    await db
+      .delete(benchmarkSeasonModels)
+      .where(eq(benchmarkSeasonModels.modelSnapshotId, snapshot.id))
+
+    const excludedLlm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Kimi K2.5',
+          slug: 'kimi-k2-5',
+          provider: 'moonshotai',
+          company: 'MoonshotAI',
+          modelFamily: 'Kimi',
+          modelVersion: '2.5',
+          modelId: 'moonshotai/kimi-k2.5',
+        })
+        .returning(),
+    )
+
+    const excludedSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: excludedLlm.id,
+          name: 'Kimi K2.5',
+          provider: 'moonshotai',
+          company: 'MoonshotAI',
+          modelFamily: 'Kimi',
+          modelVersion: '2.5',
+          tier: 'frontier',
+          requestedModelId: 'moonshotai/kimi-k2.5',
+          snapshotKey: 'moonshotai/kimi-k2.5::0.2::1::1200::null',
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: season.id,
+      modelSnapshotId: excludedSnapshot.id,
+    })
+
+    await expect(
+      createMatchBatch(db, {
+        seasonId: season.id,
+        categoryId: category.id,
+        toolAId: toolA.id,
+        toolBId: toolB.id,
+        promptTemplateId: template.id,
+        triggerMode: 'manual',
+      }),
+    ).rejects.toThrow('Season has no match-eligible frozen model snapshots')
   })
 
   it('should require benchmarkRunId for benchmark_run batches', async () => {

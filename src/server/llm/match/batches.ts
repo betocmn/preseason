@@ -9,6 +9,7 @@ import {
   matchEvaluations,
   toolCategories,
 } from '~/server/db/schema'
+import { isMatchEligibleRequestedModelId } from '~/server/llm/match/model-eligibility'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
 
@@ -85,15 +86,6 @@ async function validateToolsInCategory(
   }
 }
 
-async function getSeasonModelCount(database: DatabaseClient, seasonId: string): Promise<number> {
-  const [result] = await database
-    .select({ cnt: count() })
-    .from(benchmarkSeasonModels)
-    .where(eq(benchmarkSeasonModels.seasonId, seasonId))
-
-  return Number(result?.cnt ?? 0)
-}
-
 function validateTriggerModeInput(input: CreateMatchBatchInput) {
   if (input.triggerMode === 'benchmark_run' && !input.benchmarkRunId) {
     throw new Error('benchmarkRunId is required when triggerMode is benchmark_run')
@@ -166,9 +158,29 @@ export async function createMatchBatch(
     return await database.transaction(async (tx) => {
       await validateToolsInCategory(tx, input.categoryId, toolAId, toolBId)
 
-      const modelCount = await getSeasonModelCount(tx, input.seasonId)
-      if (modelCount === 0) {
+      const seasonModels = await tx.query.benchmarkSeasonModels.findMany({
+        where: eq(benchmarkSeasonModels.seasonId, input.seasonId),
+        with: {
+          modelSnapshot: {
+            columns: {
+              requestedModelId: true,
+            },
+          },
+        },
+      })
+
+      if (seasonModels.length === 0) {
         throw new Error('Season has no frozen model snapshots — cannot create match batch')
+      }
+
+      const eligibleSeasonModels = seasonModels.filter((seasonModel) =>
+        isMatchEligibleRequestedModelId(seasonModel.modelSnapshot.requestedModelId),
+      )
+
+      if (eligibleSeasonModels.length === 0) {
+        throw new Error(
+          'Season has no match-eligible frozen model snapshots — cannot create match batch',
+        )
       }
 
       if (normalizedIdempotencyKey) {
@@ -180,10 +192,7 @@ export async function createMatchBatch(
         if (existing) return existing
       }
 
-      const seasonModels = await tx.query.benchmarkSeasonModels.findMany({
-        where: eq(benchmarkSeasonModels.seasonId, input.seasonId),
-      })
-      const totalEvaluations = seasonModels.length * 2 // a_first + b_first per model
+      const totalEvaluations = eligibleSeasonModels.length * 2 // a_first + b_first per model
 
       const [batch] = await tx
         .insert(matchBatches)
@@ -206,7 +215,7 @@ export async function createMatchBatch(
         throw new Error('Failed to create match batch')
       }
 
-      const evaluationRows = seasonModels.flatMap((sm) => [
+      const evaluationRows = eligibleSeasonModels.flatMap((sm) => [
         {
           batchId: batch.id,
           seasonId: input.seasonId,
