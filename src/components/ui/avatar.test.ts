@@ -1,7 +1,13 @@
 import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { Avatar, AvatarFallback, AvatarImage, shouldOptimizeAvatarSrc } from './avatar'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  getAvatarImageLoadingStatus,
+  shouldOptimizeAvatarSrc,
+} from './avatar'
 
 describe('shouldOptimizeAvatarSrc', () => {
   it('optimizes local public assets', () => {
@@ -34,5 +40,38 @@ describe('Avatar initial render', () => {
 
     expect(html).toContain('absolute inset-0 aspect-square h-full w-full opacity-0')
     expect(html).toContain('TT')
+  })
+})
+
+describe('getAvatarImageLoadingStatus', () => {
+  it('treats missing sources as errors', () => {
+    expect(getAvatarImageLoadingStatus(undefined, null)).toBe('error')
+  })
+
+  it('treats incomplete images as loading', () => {
+    expect(
+      getAvatarImageLoadingStatus('/logos/tool.png', {
+        complete: false,
+        naturalWidth: 0,
+      }),
+    ).toBe('loading')
+  })
+
+  it('treats cached complete images as loaded', () => {
+    expect(
+      getAvatarImageLoadingStatus('/logos/tool.png', {
+        complete: true,
+        naturalWidth: 200,
+      }),
+    ).toBe('loaded')
+  })
+
+  it('treats broken complete images as errors', () => {
+    expect(
+      getAvatarImageLoadingStatus('/logos/tool.png', {
+        complete: true,
+        naturalWidth: 0,
+      }),
+    ).toBe('error')
   })
 })
