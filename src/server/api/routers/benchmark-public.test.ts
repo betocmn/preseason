@@ -85,6 +85,59 @@ async function seedCompletedManualBatch(args: {
   })
 }
 
+async function seedCompletedManualBatchWithDecision(args: {
+  db: TestDb
+  seasonId: string
+  categoryId: string
+  toolOneId: string
+  toolTwoId: string
+  winnerDecision: (typeof matchEvaluations.$inferInsert)['winnerDecision']
+  promptTemplateId: string
+  modelSnapshotId: string
+  createdAt?: Date
+}) {
+  const {
+    db,
+    seasonId,
+    categoryId,
+    toolOneId,
+    toolTwoId,
+    winnerDecision,
+    promptTemplateId,
+    modelSnapshotId,
+    createdAt,
+  } = args
+
+  const [toolAId, toolBId] = toolOneId < toolTwoId ? [toolOneId, toolTwoId] : [toolTwoId, toolOneId]
+
+  const batch = first(
+    await db
+      .insert(matchBatches)
+      .values({
+        seasonId,
+        categoryId,
+        toolAId,
+        toolBId,
+        promptTemplateId,
+        triggerMode: 'manual',
+        status: 'completed',
+        totalEvaluations: 1,
+        completedEvaluations: 1,
+        createdAt,
+      })
+      .returning(),
+  )
+
+  await db.insert(matchEvaluations).values({
+    batchId: batch.id,
+    seasonId,
+    modelSnapshotId,
+    presentationOrder: 'a_first',
+    status: 'completed',
+    winnerDecision,
+  })
+}
+
 async function seedSeasonDecision(args: {
   db: TestDb
   seasonId: string
@@ -886,6 +939,151 @@ describe('benchmark public routers', () => {
     expect(featured[0]?.result.decisiveCaseCount).toBe(2)
     expect(featured[0]?.result.aWins).toBe(1)
     expect(featured[0]?.result.bWins).toBe(1)
+  })
+
+  it('keeps scanning manual pairs when earlier candidates have no decisive cases', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+        { name: 'Firebase', slug: 'firebase' },
+        { name: 'Pocketbase', slug: 'pocketbase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+    const firebase = first(toolRows.slice(2))
+    const pocketbase = first(toolRows.slice(3))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-featured-manual-scan',
+          name: 'Benchmark Featured Manual Scan',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const season = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-featured-manual-scan',
+          name: 'Season Featured Manual Scan',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Featured Scan LLM',
+          slug: 'featured-scan-llm',
+          provider: 'anthropic',
+          company: 'Anthropic',
+          modelFamily: 'Sonnet',
+          modelVersion: '4.6',
+          modelId: 'anthropic/claude-sonnet-4.6',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'featured-manual-scan-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: season.id,
+      modelSnapshotId: modelSnapshot.id,
+    })
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-featured-scan',
+          name: 'Match Compare Featured Scan',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    const now = new Date()
+    const newestTie = new Date(now)
+    newestTie.setUTCHours(newestTie.getUTCHours() - 1)
+    const olderDecisive = new Date(now)
+    olderDecisive.setUTCHours(olderDecisive.getUTCHours() - 2)
+
+    await seedCompletedManualBatchWithDecision({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerDecision: 'tie',
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: newestTie,
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: firebase.id,
+      toolTwoId: pocketbase.id,
+      winnerToolId: firebase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: olderDecisive,
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 1,
+    })
+
+    expect(featured).toHaveLength(1)
+    expect(featured[0]?.toolA.slug).toBe('firebase')
+    expect(featured[0]?.toolB.slug).toBe('pocketbase')
+    expect(featured[0]?.result.decisiveCaseCount).toBe(1)
   })
 
   it('keeps manual featured fallback scoped to requested category group', async () => {

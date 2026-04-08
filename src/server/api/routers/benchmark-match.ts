@@ -482,8 +482,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
             toolAId: batch.toolAId,
             toolBId: batch.toolBId,
           })
-
-          if (selectedPairs.length >= remainingSlots) break
         }
 
         if (selectedPairs.length > 0) {
