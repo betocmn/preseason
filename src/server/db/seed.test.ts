@@ -39,6 +39,14 @@ describe('seed catalog coverage', () => {
     expect(countsByCategory.get('state') ?? 0).toBeGreaterThanOrEqual(5)
   })
 
+  it('keeps the new llm devtool categories seeded with competitive coverage', () => {
+    const countsByCategory = getUniqueToolCountByCategory()
+
+    expect(countsByCategory.get('llm-coding-agents') ?? 0).toBeGreaterThanOrEqual(10)
+    expect(countsByCategory.get('llm-observability') ?? 0).toBeGreaterThanOrEqual(7)
+    expect(countsByCategory.get('llm-evals') ?? 0).toBeGreaterThanOrEqual(7)
+  })
+
   it('keeps Vercel CI as an alias instead of a canonical tool', () => {
     expect(TOOLS.some((tool) => tool.slug === 'vercel-ci')).toBe(false)
     expect(TOOLS.find((tool) => tool.slug === 'vercel')?.aliases).toContain('Vercel CI')
