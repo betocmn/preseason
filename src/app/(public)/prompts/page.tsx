@@ -2,8 +2,8 @@ export const revalidate = 3600 // 1 hour
 
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { PromptsPageContent } from '~/components/public/prompts-page-content'
 import { PromptFilters } from '~/components/public/prompt-filters'
+import { PromptsPageContent } from '~/components/public/prompts-page-content'
 import { promptLevelEnum } from '~/server/db/schema'
 import { publicApi } from '~/trpc/server'
 

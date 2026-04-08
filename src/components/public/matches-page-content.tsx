@@ -1,7 +1,7 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
