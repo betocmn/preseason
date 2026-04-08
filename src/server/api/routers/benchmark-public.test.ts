@@ -601,6 +601,150 @@ describe('benchmark public routers', () => {
     expect(result.result?.decisiveCaseCount).toBe(1)
   })
 
+  it('ignores exploration manual match data when no benchmark season is published', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const benchmarkProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-manual-exploration-guard',
+          name: 'Benchmark Manual Exploration Guard',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const explorationProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'exploration-manual-exploration-guard',
+          name: 'Exploration Manual Exploration Guard',
+          mode: 'exploration',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasons).values({
+      protocolId: benchmarkProtocol.id,
+      slug: 'season-benchmark-manual-exploration-guard',
+      name: 'Season Benchmark Manual Exploration Guard',
+      status: 'active',
+      createdAt: new Date('2026-03-10T00:00:00.000Z'),
+    })
+    const explorationSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: explorationProtocol.id,
+          slug: 'season-exploration-manual-exploration-guard',
+          name: 'Season Exploration Manual Exploration Guard',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Exploration Guard LLM',
+          slug: 'exploration-guard-llm',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4o',
+          modelId: 'openai/gpt-4o',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'exploration-guard-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: explorationSeason.id,
+      modelSnapshotId: modelSnapshot.id,
+    })
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-exploration-guard',
+          name: 'Match Compare Exploration Guard',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: explorationSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.result).toBeNull()
+  })
+
   it('keeps manual fallback scoped by season, window, and model tier', async () => {
     const db = getTestDb()
     const group = first(
@@ -939,6 +1083,147 @@ describe('benchmark public routers', () => {
     expect(featured[0]?.result.decisiveCaseCount).toBe(2)
     expect(featured[0]?.result.aWins).toBe(1)
     expect(featured[0]?.result.bWins).toBe(1)
+  })
+
+  it('ignores exploration manual featured matchups when benchmark seasons are unpublished', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const benchmarkProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-featured-exploration-guard',
+          name: 'Benchmark Featured Exploration Guard',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const explorationProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'exploration-featured-exploration-guard',
+          name: 'Exploration Featured Exploration Guard',
+          mode: 'exploration',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasons).values({
+      protocolId: benchmarkProtocol.id,
+      slug: 'season-benchmark-featured-exploration-guard',
+      name: 'Season Benchmark Featured Exploration Guard',
+      status: 'active',
+      createdAt: new Date('2026-03-10T00:00:00.000Z'),
+    })
+    const explorationSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: explorationProtocol.id,
+          slug: 'season-exploration-featured-exploration-guard',
+          name: 'Season Exploration Featured Exploration Guard',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Featured Exploration Guard LLM',
+          slug: 'featured-exploration-guard-llm',
+          provider: 'anthropic',
+          company: 'Anthropic',
+          modelFamily: 'Sonnet',
+          modelVersion: '4.6',
+          modelId: 'anthropic/claude-sonnet-4.6',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'featured-exploration-guard-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: explorationSeason.id,
+      modelSnapshotId: modelSnapshot.id,
+    })
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-featured-exploration-guard',
+          name: 'Match Compare Featured Exploration Guard',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: explorationSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 12,
+    })
+
+    expect(featured).toEqual([])
   })
 
   it('keeps scanning manual pairs when earlier candidates have no decisive cases', async () => {

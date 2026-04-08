@@ -66,6 +66,16 @@ export async function findBenchmarkSeasonId(database: DatabaseClient, seasonId: 
   return rows[0]?.id ?? null
 }
 
+export async function findAllBenchmarkSeasonIds(database: DatabaseClient) {
+  const rows = await database
+    .select({ id: benchmarkSeasons.id })
+    .from(benchmarkSeasons)
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
+    .where(eq(benchmarkProtocols.mode, 'benchmark'))
+
+  return rows.map((row) => row.id)
+}
+
 type ResolveBenchmarkCronRunTargetOptions = {
   now?: Date
 }
