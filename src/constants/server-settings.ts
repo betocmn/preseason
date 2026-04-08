@@ -25,6 +25,8 @@ export const serverSettings = {
     maxSubmissionsPerIp: 3,
     rateLimitWindowMs: contactRateLimitWindowMs,
     advisoryLockNamespace: 41_028,
+    // Default to trusting the single proxy directly in front of the app.
+    forwardedForTrustedProxyHops: 1,
   },
   benchmark: {
     promptContractVersion: '1.1',
