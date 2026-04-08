@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isIP } from 'node:net'
 import { TRPCError } from '@trpc/server'
 import { and, eq, gte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -14,6 +15,41 @@ const UNKNOWN_CLIENT_KEY = 'unknown-client'
 function normalizeSingleHeaderValue(value: string | null) {
   const normalized = value?.trim()
   return normalized && normalized.length > 0 ? normalized : null
+}
+
+function normalizeIpLiteral(value: string) {
+  return isIP(value) === 6 ? value.toLowerCase() : value
+}
+
+function normalizeForwardedForHop(value: string | null) {
+  const normalized = normalizeSingleHeaderValue(value)
+
+  if (normalized === null) {
+    return null
+  }
+
+  const bracketedIpv6Match = normalized.match(/^\[([^[\]]+)\](?::\d+)?$/)
+  if (bracketedIpv6Match?.[1] && isIP(bracketedIpv6Match[1]) === 6) {
+    return normalizeIpLiteral(bracketedIpv6Match[1])
+  }
+
+  if (isIP(normalized) !== 0) {
+    return normalizeIpLiteral(normalized)
+  }
+
+  const firstColonIndex = normalized.indexOf(':')
+  const lastColonIndex = normalized.lastIndexOf(':')
+
+  if (firstColonIndex === lastColonIndex && firstColonIndex > 0) {
+    const host = normalized.slice(0, lastColonIndex)
+    const port = normalized.slice(lastColonIndex + 1)
+
+    if (/^\d+$/.test(port) && isIP(host) === 4) {
+      return normalizeIpLiteral(host)
+    }
+  }
+
+  return null
 }
 
 function normalizeForwardedForIp(value: string | null) {
@@ -32,7 +68,7 @@ function normalizeForwardedForIp(value: string | null) {
     forwardedHops.length - serverSettings.contact.forwardedForTrustedProxyHops,
   )
 
-  return forwardedHops[clientHopIndex] ?? null
+  return normalizeForwardedForHop(forwardedHops[clientHopIndex] ?? null)
 }
 
 function buildFallbackClientKey(headers: Headers) {
