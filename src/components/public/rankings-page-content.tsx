@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingTable } from '~/components/public/ranking-table'
-import { normalizeModelSnapshotId, type ModelFilterCompany } from '~/lib/model-filters'
+import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api, type RouterOutputs } from '~/trpc/react'
 
 type RankingIndexGroup = RouterOutputs['benchmarkRanking']['listIndexGroups'][number]

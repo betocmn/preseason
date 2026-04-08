@@ -7,8 +7,8 @@ import { EmptyState } from '~/components/public/empty-state'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { formatPromptLevel } from '~/lib/prompt-levels'
-import { promptLevelEnum } from '~/server/db/schema'
 import type { AppRouter } from '~/server/api/root'
+import { promptLevelEnum } from '~/server/db/schema'
 import { api } from '~/trpc/react'
 
 type PromptItem = inferRouterOutputs<AppRouter>['prompt']['listActive'][number]

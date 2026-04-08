@@ -4,7 +4,7 @@ import type { inferRouterOutputs } from '@trpc/server'
 import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
-import { normalizeModelSnapshotId, type ModelFilterCompany } from '~/lib/model-filters'
+import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
 import type { AppRouter } from '~/server/api/root'
 import { api } from '~/trpc/react'
 
