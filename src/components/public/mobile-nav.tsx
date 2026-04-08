@@ -44,8 +44,8 @@ export function MobileNav() {
           <Link href="/login" className="rounded-md px-3 py-2 text-sm hover:bg-accent">
             Log in
           </Link>
-          <Link href="/signup" className="rounded-md px-3 py-2 text-sm hover:bg-accent">
-            Sign up
+          <Link href="/contact" className="rounded-md px-3 py-2 text-sm hover:bg-accent">
+            Contact
           </Link>
         </nav>
       </SheetContent>
