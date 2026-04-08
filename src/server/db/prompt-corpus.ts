@@ -446,6 +446,74 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       },
     },
   },
+  {
+    title: 'AI Support Agent Platform',
+    slug: 'ai-support-agent-platform',
+    expectedCategories: [
+      'ai',
+      'llm-coding-agents',
+      'llm-observability',
+      'llm-evals',
+      'auth',
+      'database',
+      'hosting',
+      'search',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'Customer support platform with a branded AI agent, internal knowledge search, and review tooling',
+        contentMd:
+          'Build a customer support platform with a user-facing AI support agent that answers questions from company docs, escalates tricky issues to humans, and keeps a searchable record of conversations. Include team logins, hosted deployment, support content search, and a way to review how the AI agent is performing over time.',
+      },
+      intermediate: {
+        description:
+          'Support automation product with retrieval, agent workflows, traces, and evaluation loops',
+        contentMd:
+          'Build an AI support platform where end users can chat with a support agent that uses company knowledge, cites relevant docs, and hands off to human agents when confidence is low. Support admin logins, searchable knowledge content, persistent conversation history, hosted deployment, and a workflow for testing prompt changes before release. Include explicit traces, failure review, and evaluation runs so the team can monitor answer quality and catch regressions.',
+      },
+      advanced: {
+        description:
+          'Production support agent system with reliability controls, observability, and continuous evals',
+        contentMd:
+          'Build a production-grade AI support platform with authenticated admin users, a customer-facing support agent, retrieval-backed answers, escalation to human operators, and searchable knowledge assets. Model users, conversations, retrieved context, tool invocations, feedback events, and escalation state explicitly. Include hosting, persistence, and search, but also require a dedicated coding-agent workflow for the team maintaining prompts and system behavior. Add observability for prompt, retrieval, latency, and failure traces, plus evaluation pipelines that score groundedness, escalation correctness, and regression risk before prompt or model changes are shipped.',
+      },
+    },
+  },
+  {
+    title: 'AI Revenue Ops Copilot',
+    slug: 'ai-revenue-ops-copilot',
+    expectedCategories: [
+      'ai',
+      'llm-coding-agents',
+      'llm-observability',
+      'llm-evals',
+      'api',
+      'database',
+      'hosting',
+      'analytics',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'Revenue operations copilot that summarizes pipeline data and suggests follow-up actions',
+        contentMd:
+          'Build an AI revenue operations copilot that connects to sales systems, summarizes pipeline activity, suggests follow-up tasks, and highlights deal risks for operators. Include hosted deployment, a data store for synced records, analytics dashboards, and a way to test whether the copilot is making useful recommendations.',
+      },
+      intermediate: {
+        description:
+          'Ops copilot with workflow APIs, data sync, trace monitoring, and prompt evaluation',
+        contentMd:
+          'Build an AI revenue ops copilot that pulls CRM and product-usage data through APIs, stores synced records, and helps operators prioritize renewals, expansion opportunities, and at-risk accounts. Support hosted deployment, analytics for copilot usage and outcomes, and a workflow where the engineering team iterates on prompts and agent behavior with coding-agent assistance. Include observability for model calls and tool use, plus evaluation runs that verify recommendation quality before changes go live.',
+      },
+      advanced: {
+        description:
+          'Production revenue copilot with API orchestration, eval gates, and operational observability',
+        contentMd:
+          'Build a production-grade AI revenue operations copilot that ingests CRM, billing, and product telemetry through APIs, stores normalized account state, and generates account summaries, risk flags, and recommended next actions for operators. Define explicit data models for source-sync jobs, account timelines, generated recommendations, operator feedback, and downstream analytics. Require hosted deployment and analytics, but also a dedicated coding-agent workflow for the team evolving prompts, tools, and orchestration logic. Add observability for prompt versions, tool-call traces, latency, and failure hotspots, and include evaluation pipelines that measure recommendation quality, hallucination risk, and regression impact before releases are promoted.',
+      },
+    },
+  },
 ]
 
 export const PROMPT_SLUGS = PROMPT_SCENARIOS.map((scenario) => scenario.slug)
