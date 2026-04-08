@@ -42,6 +42,10 @@ export const serverSettings = {
       temperature: 0,
       maxTokens: 700,
     },
+    featuredMatchups: {
+      manualPairScanMultiplier: 8,
+      manualPairScanMaxRows: 400,
+    },
   },
   match: {
     // Match batches can fan out to one LLM call per model/presentation order pair.
