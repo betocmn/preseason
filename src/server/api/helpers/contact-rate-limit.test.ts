@@ -81,12 +81,38 @@ describe('createRateLimitedContactMessage', () => {
     }
   })
 
-  it('falls back to a stable header fingerprint when IP headers are missing', async () => {
+  it('ignores spoofable single-ip headers and keys on the forwarded chain', async () => {
+    const db = getTestDb()
+
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'cf-connecting-ip': '203.0.113.99',
+        'x-forwarded-for': '198.51.100.25, 192.0.2.10',
+        'x-real-ip': '203.0.113.100',
+      }),
+      buildInput(1),
+    )
+
+    const rows = await db.select().from(contactMessages)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('192.0.2.10').digest('hex'))
+    expect(rows[0]?.sourceIpHash).not.toBe(
+      createHash('sha256').update('203.0.113.99').digest('hex'),
+    )
+    expect(rows[0]?.sourceIpHash).not.toBe(
+      createHash('sha256').update('203.0.113.100').digest('hex'),
+    )
+  })
+
+  it('falls back to a stable header fingerprint when the trusted forwarded chain is missing', async () => {
     const db = getTestDb()
     const headers = new Headers({
       'accept-language': 'en-US,en;q=0.9',
+      'cf-connecting-ip': '203.0.113.101',
       host: 'preseason.dev',
       'user-agent': 'Vitest Browser/1.0',
+      'x-real-ip': '203.0.113.102',
     })
 
     await createRateLimitedContactMessage(db, headers, buildInput(1))
