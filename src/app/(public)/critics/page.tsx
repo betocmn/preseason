@@ -3,6 +3,7 @@ export const revalidate = 3600 // 1 hour
 import type { Metadata } from 'next'
 import { CriticsGrid } from '~/components/public/critics-grid'
 import { RecentCommentaryList } from '~/components/public/recent-commentary-list'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
 }
 
 export default async function CriticsPage() {
+  await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
   const [criticsData, commentsData] = await Promise.all([
     caller.critic.listWithCount({ limit: 12, offset: 0 }),

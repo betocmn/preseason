@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 }
 
 export default async function MatchesPage() {
+  await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
   const matchups = await caller.benchmarkMatch.listFeatured()
 
