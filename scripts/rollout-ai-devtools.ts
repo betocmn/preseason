@@ -347,10 +347,7 @@ async function inspectToolActions(database: DatabaseClient) {
 async function inspectPromptActions(database: DatabaseClient) {
   const targetPromptRows = getTargetPromptRows()
   const existingRows = await database.query.prompts.findMany({
-    where: inArray(
-      prompts.slug,
-      [...TARGET_PROMPT_SLUGS],
-    ),
+    where: inArray(prompts.slug, [...TARGET_PROMPT_SLUGS]),
     orderBy: [asc(prompts.slug), asc(prompts.level)],
   })
 
@@ -476,9 +473,7 @@ async function inspectToolCategoryActions(database: DatabaseClient) {
           ),
         })
 
-  const existingByKey = new Map(
-    existingRows.map((row) => [`${row.toolId}:${row.categoryId}`, row]),
-  )
+  const existingByKey = new Map(existingRows.map((row) => [`${row.toolId}:${row.categoryId}`, row]))
   const actions: Action[] = []
 
   for (const desired of AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS) {
@@ -711,9 +706,7 @@ async function applyToolCategoryUpserts(
     const toolId = toolIdBySlug.get(desired.toolSlug)
     const categoryId = categoryIdBySlug.get(desired.categorySlug)
     if (!toolId || !categoryId) {
-      throw new Error(
-        `Unable to resolve assignment ${desired.toolSlug} -> ${desired.categorySlug}`,
-      )
+      throw new Error(`Unable to resolve assignment ${desired.toolSlug} -> ${desired.categorySlug}`)
     }
 
     const existing = await database.query.toolCategories.findFirst({
@@ -796,7 +789,9 @@ async function ensureTargetSeason(
       throw new Error(`Target season ${TARGET_SEASON_SLUG} uses a different protocol`)
     }
     if (!['draft', 'active'].includes(existing.status)) {
-      throw new Error(`Target season ${TARGET_SEASON_SLUG} is in unsupported status ${existing.status}`)
+      throw new Error(
+        `Target season ${TARGET_SEASON_SLUG} is in unsupported status ${existing.status}`,
+      )
     }
     return {
       season: existing,
@@ -847,7 +842,9 @@ async function freezeSeasonSnapshot(
     throw new Error('No active LLMs found')
   }
 
-  const allCategorySlugs = [...new Set(promptsWithContent.flatMap((prompt) => prompt.expectedCategories ?? []))]
+  const allCategorySlugs = [
+    ...new Set(promptsWithContent.flatMap((prompt) => prompt.expectedCategories ?? [])),
+  ]
   const categoryRows =
     allCategorySlugs.length === 0
       ? []
@@ -1066,7 +1063,10 @@ async function loadLatestActiveSeason(database: DatabaseClient) {
   )
 }
 
-async function runDryRun(database: DatabaseClient, preflight: PreflightState): Promise<DryRunSummary> {
+async function runDryRun(
+  database: DatabaseClient,
+  preflight: PreflightState,
+): Promise<DryRunSummary> {
   const currentShape = await loadActiveBenchmarkShape(database)
   const categoryInspection = await inspectCategoryActions(database, preflight.devtoolsGroup.id)
   const toolInspection = await inspectToolActions(database)
@@ -1097,12 +1097,16 @@ async function runDryRun(database: DatabaseClient, preflight: PreflightState): P
     estimatedDailyCaseCount: futurePromptCount * currentShape.activeModelCount,
     matchEligibleModelCount: currentShape.matchEligibleModelCount,
     plannedMatchBatchCount: AI_DEVTOOLS_MATCHUPS.length,
-    estimatedMatchEvaluations: AI_DEVTOOLS_MATCHUPS.length * currentShape.matchEligibleModelCount * 2,
+    estimatedMatchEvaluations:
+      AI_DEVTOOLS_MATCHUPS.length * currentShape.matchEligibleModelCount * 2,
     plannedMatchups,
   }
 }
 
-async function runExecute(database: DatabaseClient, preflight: PreflightState): Promise<ExecuteSummary> {
+async function runExecute(
+  database: DatabaseClient,
+  preflight: PreflightState,
+): Promise<ExecuteSummary> {
   const currentActiveSeasonSlugBefore = preflight.activeBenchmarkSeasons[0]?.slug ?? null
 
   const catalogResult = await database.transaction(async (tx) => {
@@ -1171,7 +1175,9 @@ async function runExecute(database: DatabaseClient, preflight: PreflightState): 
     columns: { id: true },
   })
   if (activeSeasonCount.length !== 1) {
-    throw new Error(`Expected exactly one active season after rollout, found ${activeSeasonCount.length}`)
+    throw new Error(
+      `Expected exactly one active season after rollout, found ${activeSeasonCount.length}`,
+    )
   }
 
   const requiredFrozenCategories = ['ai', 'llm-coding-agents', 'llm-observability', 'llm-evals']

@@ -151,7 +151,12 @@ async function seedAiPromptAndCategories(adminCaller: ReturnType<typeof createTe
     .returning()
 
   if (!prompt || !llm) throw new Error('Failed to seed AI prompt/llm')
-  return { group, prompt, llm, expectedCategorySlugs: categoryInputs.map((category) => category.slug) }
+  return {
+    group,
+    prompt,
+    llm,
+    expectedCategorySlugs: categoryInputs.map((category) => category.slug),
+  }
 }
 
 describe('benchmarkAdminRouter', () => {
