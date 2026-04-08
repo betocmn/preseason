@@ -1,3 +1,5 @@
+export const revalidate = 3600 // 1 hour
+
 import { notFound, redirect } from 'next/navigation'
 import { api } from '~/trpc/server'
 
