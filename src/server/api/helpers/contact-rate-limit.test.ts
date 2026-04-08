@@ -81,6 +81,64 @@ describe('createRateLimitedContactMessage', () => {
     }
   })
 
+  it('normalizes forwarded ipv4 hops with ports before hashing and rate limiting', async () => {
+    const db = getTestDb()
+
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'x-forwarded-for': '198.51.100.25:53144',
+      }),
+      buildInput(1),
+    )
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'x-forwarded-for': '198.51.100.25:53145',
+      }),
+      buildInput(2),
+    )
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'x-forwarded-for': '198.51.100.25:53146',
+      }),
+      buildInput(3),
+    )
+
+    await expect(
+      createRateLimitedContactMessage(
+        db,
+        new Headers({
+          'x-forwarded-for': '198.51.100.25:53147',
+        }),
+        buildInput(4),
+      ),
+    ).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    } satisfies Partial<TRPCError>)
+
+    const rows = await db.select().from(contactMessages)
+    expect(rows).toHaveLength(3)
+    expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('198.51.100.25').digest('hex'))
+  })
+
+  it('normalizes bracketed ipv6 forwarded hops with ports before hashing', async () => {
+    const db = getTestDb()
+
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'x-forwarded-for': '[2001:DB8::25]:53144',
+      }),
+      buildInput(1),
+    )
+
+    const rows = await db.select().from(contactMessages)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('2001:db8::25').digest('hex'))
+  })
+
   it('ignores spoofable single-ip headers and keys on the forwarded chain', async () => {
     const db = getTestDb()
 
