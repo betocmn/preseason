@@ -57,6 +57,7 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'claude-code',
     website: 'https://code.claude.com/docs/en/overview',
     description: 'Anthropic coding agent for terminal-first software development tasks',
+    logoUrl: '/logos/claude-code.png',
     aliases: ['ClaudeCode'],
   },
   {
@@ -64,6 +65,7 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'codex-cli',
     website: 'https://openai.com/codex/get-started/',
     description: 'OpenAI coding agent and CLI for software engineering workflows',
+    logoUrl: '/logos/codex-cli.png',
     aliases: ['Codex CLI', 'OpenAI Codex CLI'],
   },
   {
@@ -71,12 +73,14 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'cursor',
     website: 'https://cursor.com',
     description: 'AI-native code editor with agentic coding and repo-aware assistance',
+    logoUrl: '/logos/cursor.png',
   },
   {
     name: 'Windsurf',
     slug: 'windsurf',
     website: 'https://windsurf.com',
     description: 'AI coding environment from Codeium with editor and agent workflows',
+    logoUrl: '/logos/windsurf.png',
     aliases: ['Codeium Windsurf'],
   },
   {
@@ -84,12 +88,14 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'cline',
     website: 'https://cline.bot',
     description: 'Open source coding agent for editor-based autonomous development tasks',
+    logoUrl: '/logos/cline.png',
   },
   {
     name: 'Roo Code',
     slug: 'roo-code',
     website: 'https://roocode.com',
     description: 'Open source coding agent focused on structured multi-step code changes',
+    logoUrl: '/logos/roo-code.png',
     aliases: ['RooCode'],
   },
   {
@@ -97,12 +103,14 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'aider',
     website: 'https://aider.chat',
     description: 'Terminal pair programming tool that edits local repositories with LLMs',
+    logoUrl: '/logos/aider.png',
   },
   {
     name: 'OpenHands',
     slug: 'openhands',
     website: 'https://openhands.dev',
     description: 'Open source software engineering agent for codebase tasks and issue resolution',
+    logoUrl: '/logos/openhands.png',
     aliases: ['Open Hands'],
   },
   {
@@ -110,6 +118,7 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'opencode',
     website: 'https://opencode.ai',
     description: 'Open source AI coding agent that works in the terminal, IDE, and desktop',
+    logoUrl: '/logos/opencode.png',
     aliases: ['Open Code', 'open-code'],
   },
   {
@@ -117,6 +126,7 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'amp-code',
     website: 'https://ampcode.com',
     description: 'Frontier coding agent for terminal and editor-based development workflows',
+    logoUrl: '/logos/amp-code.png',
     aliases: ['AmpCode'],
   },
   {
@@ -124,30 +134,35 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'langfuse',
     website: 'https://langfuse.com',
     description: 'Open source LLM engineering platform for tracing, prompts, and metrics',
+    logoUrl: '/logos/langfuse.png',
   },
   {
     name: 'LangSmith',
     slug: 'langsmith',
     website: 'https://www.langchain.com/langsmith/observability',
     description: 'LLM application platform for observability, testing, and evaluation workflows',
+    logoUrl: '/logos/langsmith.png',
   },
   {
     name: 'Helicone',
     slug: 'helicone',
     website: 'https://www.helicone.ai',
     description: 'Open source observability layer for LLM requests, costs, and performance',
+    logoUrl: '/logos/helicone.png',
   },
   {
     name: 'Braintrust',
     slug: 'braintrust',
     website: 'https://www.braintrust.dev',
     description: 'Platform for LLM observability, evaluations, and production quality loops',
+    logoUrl: '/logos/braintrust.png',
   },
   {
     name: 'Arize Phoenix',
     slug: 'arize-phoenix',
     website: 'https://phoenix.arize.com',
     description: 'Open source observability and evaluation tooling for LLM and agent systems',
+    logoUrl: '/logos/arize-phoenix.png',
     aliases: ['Phoenix Arize'],
   },
   {
@@ -155,36 +170,42 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'langwatch',
     website: 'https://langwatch.ai',
     description: 'Observability and guardrails platform for LLM apps and agents',
+    logoUrl: '/logos/langwatch.png',
   },
   {
     name: 'OpenLIT',
     slug: 'openlit',
     website: 'https://openlit.io',
     description: 'OpenTelemetry-native observability for LLMs, vector databases, and agents',
+    logoUrl: '/logos/openlit.png',
   },
   {
     name: 'Promptfoo',
     slug: 'promptfoo',
     website: 'https://www.promptfoo.dev',
     description: 'LLM evals and red-team framework for prompt, model, and system testing',
+    logoUrl: '/logos/promptfoo.png',
   },
   {
     name: 'Ragas',
     slug: 'ragas',
     website: 'https://docs.ragas.io/en/stable/',
     description: 'Framework for evaluating retrieval-augmented generation and agent quality',
+    logoUrl: '/logos/ragas.png',
   },
   {
     name: 'DeepEval',
     slug: 'deepeval',
     website: 'https://www.confident-ai.com',
     description: 'Open source LLM evaluation framework for unit, regression, and agent tests',
+    logoUrl: '/logos/deepeval.png',
   },
   {
     name: 'Patronus AI',
     slug: 'patronus-ai',
     website: 'https://www.patronus.ai',
     description: 'AI evaluation and reliability platform for detecting LLM failures in production',
+    logoUrl: '/logos/patronus-ai.png',
   },
 ]
 
