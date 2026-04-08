@@ -3,43 +3,54 @@ import { TRPCError } from '@trpc/server'
 import { and, eq, gte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { serverSettings } from '~/constants/server-settings'
-import { env } from '~/env'
 import type { ContactMessageInput } from '~/lib/contact-schema'
 import type * as schema from '~/server/db/schema'
 import { contactMessages } from '~/server/db/schema'
 
 type Database = PostgresJsDatabase<typeof schema>
 
-const LOCALHOST_IP = '127.0.0.1'
+const UNKNOWN_CLIENT_KEY = 'unknown-client'
 
-function normalizeHeaderIp(value: string | null) {
-  const [firstValue] = value?.split(',') ?? []
-  const normalized = firstValue?.trim()
+function normalizeSingleHeaderValue(value: string | null) {
+  const normalized = value?.trim()
   return normalized && normalized.length > 0 ? normalized : null
 }
 
-function resolveContactRequestIp(headers: Headers) {
-  const ip =
-    normalizeHeaderIp(headers.get('x-forwarded-for')) ??
-    normalizeHeaderIp(headers.get('x-real-ip')) ??
-    normalizeHeaderIp(headers.get('cf-connecting-ip'))
+function normalizeForwardedForIp(value: string | null) {
+  const forwardedHops =
+    value
+      ?.split(',')
+      .map((hop) => hop.trim())
+      .filter((hop) => hop.length > 0) ?? []
 
-  if (ip) {
-    return ip
-  }
-
-  if (env.NODE_ENV === 'production') {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Unable to process this request right now. Please try again later.',
-    })
-  }
-
-  return LOCALHOST_IP
+  return forwardedHops.at(-1) ?? null
 }
 
-function hashIpAddress(ip: string) {
-  return createHash('sha256').update(ip).digest('hex')
+function buildFallbackClientKey(headers: Headers) {
+  const fingerprintParts = [
+    normalizeSingleHeaderValue(headers.get('user-agent')),
+    normalizeSingleHeaderValue(headers.get('accept-language')),
+    normalizeSingleHeaderValue(headers.get('host')),
+  ].filter((part): part is string => part !== null)
+
+  if (fingerprintParts.length === 0) {
+    return UNKNOWN_CLIENT_KEY
+  }
+
+  return `header-fallback:${fingerprintParts.join('|')}`
+}
+
+function resolveContactRequestClientKey(headers: Headers) {
+  return (
+    normalizeSingleHeaderValue(headers.get('cf-connecting-ip')) ??
+    normalizeSingleHeaderValue(headers.get('x-real-ip')) ??
+    normalizeForwardedForIp(headers.get('x-forwarded-for')) ??
+    buildFallbackClientKey(headers)
+  )
+}
+
+function hashClientKey(clientKey: string) {
+  return createHash('sha256').update(clientKey).digest('hex')
 }
 
 export async function createRateLimitedContactMessage(
@@ -48,7 +59,7 @@ export async function createRateLimitedContactMessage(
   input: ContactMessageInput,
   now = new Date(),
 ) {
-  const sourceIpHash = hashIpAddress(resolveContactRequestIp(headers))
+  const sourceIpHash = hashClientKey(resolveContactRequestClientKey(headers))
   const windowStart = new Date(now.getTime() - serverSettings.contact.rateLimitWindowMs)
 
   await db.transaction(async (tx) => {

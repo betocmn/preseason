@@ -1,0 +1,76 @@
+import { createHash } from 'node:crypto'
+import type { TRPCError } from '@trpc/server'
+import { sql } from 'drizzle-orm'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { createRateLimitedContactMessage } from '~/server/api/helpers/contact-rate-limit'
+import { contactMessages } from '~/server/db/schema'
+import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
+
+function buildInput(index: number) {
+  return {
+    email: `contact-${index}@example.com`,
+    message: `Contact message ${index}`,
+  }
+}
+
+async function countContactMessages() {
+  const rows = await getTestDb()
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(contactMessages)
+
+  return rows[0]?.count ?? 0
+}
+
+describe('createRateLimitedContactMessage', () => {
+  beforeAll(async () => {
+    await setupTestDatabase()
+  })
+
+  afterAll(async () => {
+    await teardownTestDatabase()
+  })
+
+  beforeEach(async () => {
+    await cleanTestDatabase()
+  })
+
+  it('uses the last forwarded hop instead of trusting the leftmost x-forwarded-for entry', async () => {
+    const db = getTestDb()
+
+    await createRateLimitedContactMessage(
+      db,
+      new Headers({
+        'x-forwarded-for': '203.0.113.5, 198.51.100.50',
+      }),
+      buildInput(1),
+    )
+
+    const rows = await db.select().from(contactMessages)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('198.51.100.50').digest('hex'))
+    expect(rows[0]?.sourceIpHash).not.toBe(createHash('sha256').update('203.0.113.5').digest('hex'))
+  })
+
+  it('falls back to a stable header fingerprint when IP headers are missing', async () => {
+    const db = getTestDb()
+    const headers = new Headers({
+      'accept-language': 'en-US,en;q=0.9',
+      host: 'preseason.dev',
+      'user-agent': 'Vitest Browser/1.0',
+    })
+
+    await createRateLimitedContactMessage(db, headers, buildInput(1))
+    await createRateLimitedContactMessage(db, headers, buildInput(2))
+    await createRateLimitedContactMessage(db, headers, buildInput(3))
+
+    await expect(createRateLimitedContactMessage(db, headers, buildInput(4))).rejects.toMatchObject(
+      {
+        code: 'TOO_MANY_REQUESTS',
+      } satisfies Partial<TRPCError>,
+    )
+
+    expect(await countContactMessages()).toBe(3)
+  })
+})
