@@ -1,7 +1,7 @@
 export const revalidate = 3600 // 1 hour
 
 import { notFound, redirect } from 'next/navigation'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 export default async function PromptSlugRedirectPage({
   params,
@@ -9,7 +9,7 @@ export default async function PromptSlugRedirectPage({
   params: Promise<{ level: string }>
 }) {
   const { level: slug } = await params
-  const caller = await api()
+  const caller = await publicApi()
   const prompts = await caller.prompt.listBySlug({ slug })
   if (prompts.length === 0) notFound()
 

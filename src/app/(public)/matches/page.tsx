@@ -3,7 +3,7 @@ export const revalidate = 3600 // 1 hour
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Matches',
@@ -27,7 +27,7 @@ type Props = {
 
 export default async function MatchesPage({ searchParams }: Props) {
   const { category } = await searchParams
-  const caller = await api()
+  const caller = await publicApi()
   const matchups = await caller.benchmarkMatch.listFeatured(
     category ? { categorySlug: category } : undefined,
   )
