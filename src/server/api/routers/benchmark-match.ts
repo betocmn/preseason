@@ -321,7 +321,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       // Otherwise, fall back to manual match batch data
       const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id, {
-        seasonId,
         windowType: input.windowType,
         anchorDate,
         promptLevel: input.promptLevel,
@@ -443,9 +442,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
         const remainingSlots = limit - matchups.length
         const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
-        const eligibleManualSeasonIds = seasonId
-          ? [seasonId]
-          : await findAllBenchmarkSeasonIds(ctx.db)
+        const eligibleManualSeasonIds = await findAllBenchmarkSeasonIds(ctx.db)
         const manualBaseConditions = [
           eq(matchBatches.triggerMode, 'manual'),
           eq(matchBatches.status, 'completed'),
