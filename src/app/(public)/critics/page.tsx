@@ -39,10 +39,7 @@ export default async function CriticsPage() {
       {/* Recent commentary feed */}
       <div>
         <h2 className="mb-4 text-xl font-bold tracking-tight">Recent Commentary</h2>
-        <RecentCommentaryList
-          initialItems={commentsData.items}
-          initialTotal={commentsData.total}
-        />
+        <RecentCommentaryList initialItems={commentsData.items} initialTotal={commentsData.total} />
       </div>
     </div>
   )

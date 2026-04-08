@@ -105,8 +105,8 @@ export default async function RankingsPage({ searchParams }: Props) {
 
   const heading = selectedRanking
     ? isGroup
-      ? (('categoryGroup' in selectedRanking && selectedRanking.categoryGroup?.name) || 'Category')
-      : (('category' in selectedRanking && selectedRanking.category?.name) || 'Category')
+      ? ('categoryGroup' in selectedRanking && selectedRanking.categoryGroup?.name) || 'Category'
+      : ('category' in selectedRanking && selectedRanking.category?.name) || 'Category'
     : null
 
   return (
