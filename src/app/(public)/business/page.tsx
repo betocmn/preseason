@@ -6,11 +6,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Business Access',
     description: 'API access and data licensing for Preseason recommendation data.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Business Access',
     description: 'API access and data licensing for Preseason recommendation data.',
+    images: ['/opengraph-image'],
   },
 }
 

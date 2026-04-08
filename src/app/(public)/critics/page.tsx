@@ -8,11 +8,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Critics',
     description: 'Verified critics who provide expert commentary on tool recommendations.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Critics',
     description: 'Verified critics who provide expert commentary on tool recommendations.',
+    images: ['/opengraph-image'],
   },
 }
 
