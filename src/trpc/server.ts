@@ -15,11 +15,10 @@ const createContext = cache(async () => {
 export const api = cache(async () => createCaller(await createContext()))
 
 // Public RSC callers must avoid request-time APIs or the route becomes dynamic.
-export const publicApi = cache(
-  async () =>
-    createCaller({
-      db,
-      user: null,
-      headers: new Headers([['x-trpc-source', 'rsc-public']]),
-    }),
+export const publicApi = cache(async () =>
+  createCaller({
+    db,
+    user: null,
+    headers: new Headers([['x-trpc-source', 'rsc-public']]),
+  }),
 )
