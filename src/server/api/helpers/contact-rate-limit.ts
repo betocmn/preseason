@@ -23,7 +23,16 @@ function normalizeForwardedForIp(value: string | null) {
       .map((hop) => hop.trim())
       .filter((hop) => hop.length > 0) ?? []
 
-  return forwardedHops.at(-1) ?? null
+  if (forwardedHops.length === 0) {
+    return null
+  }
+
+  const clientHopIndex = Math.max(
+    0,
+    forwardedHops.length - serverSettings.contact.forwardedForTrustedProxyHops,
+  )
+
+  return forwardedHops[clientHopIndex] ?? null
 }
 
 function buildFallbackClientKey(headers: Headers) {

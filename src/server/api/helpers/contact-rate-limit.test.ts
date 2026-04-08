@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { TRPCError } from '@trpc/server'
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import { createRateLimitedContactMessage } from '~/server/api/helpers/contact-rate-limit'
 import { contactMessages } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
@@ -36,7 +37,7 @@ describe('createRateLimitedContactMessage', () => {
     await cleanTestDatabase()
   })
 
-  it('uses the last forwarded hop instead of trusting the leftmost x-forwarded-for entry', async () => {
+  it('uses the last untrusted forwarded hop when a single proxy appends the client ip', async () => {
     const db = getTestDb()
 
     await createRateLimitedContactMessage(
@@ -51,6 +52,33 @@ describe('createRateLimitedContactMessage', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('198.51.100.50').digest('hex'))
     expect(rows[0]?.sourceIpHash).not.toBe(createHash('sha256').update('203.0.113.5').digest('hex'))
+  })
+
+  it('can derive the client hop from a multi-proxy x-forwarded-for chain', async () => {
+    const db = getTestDb()
+    const originalTrustedProxyHops = serverSettings.contact.forwardedForTrustedProxyHops
+
+    ;(
+      serverSettings.contact as { forwardedForTrustedProxyHops: number }
+    ).forwardedForTrustedProxyHops = 2
+
+    try {
+      await createRateLimitedContactMessage(
+        db,
+        new Headers({
+          'x-forwarded-for': '198.51.100.25, 192.0.2.10',
+        }),
+        buildInput(1),
+      )
+
+      const rows = await db.select().from(contactMessages)
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.sourceIpHash).toBe(createHash('sha256').update('198.51.100.25').digest('hex'))
+    } finally {
+      ;(
+        serverSettings.contact as { forwardedForTrustedProxyHops: number }
+      ).forwardedForTrustedProxyHops = originalTrustedProxyHops
+    }
   })
 
   it('falls back to a stable header fingerprint when IP headers are missing', async () => {

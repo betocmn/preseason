@@ -22,6 +22,11 @@ describe('serverSettings.contact', () => {
   it('sets a positive throttling window', () => {
     expect(serverSettings.contact.rateLimitWindowMs).toBeGreaterThan(0)
   })
+
+  it('defaults to a positive trusted proxy hop count', () => {
+    expect(serverSettings.contact.forwardedForTrustedProxyHops).toBeGreaterThan(0)
+    expect(serverSettings.contact.forwardedForTrustedProxyHops).toBeLessThanOrEqual(2)
+  })
 })
 
 describe('serverSettings.match', () => {
