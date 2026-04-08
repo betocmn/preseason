@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { RankingIndex } from '~/components/public/ranking-index'
+import { resolveFilteredQuery } from '~/components/public/ranking-query-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api, type RouterOutputs } from '~/trpc/react'
@@ -76,22 +77,55 @@ export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPag
     { enabled: !showIndex && !!filters.sub },
   )
 
-  if (
-    (showIndex && hasModelFilters && !indexQuery.data && indexQuery.isFetching) ||
-    (!showIndex &&
-      !groupQuery.data &&
-      !subQuery.data &&
-      (groupQuery.isFetching || subQuery.isFetching))
-  ) {
+  if (showIndex) {
+    const resolvedIndex = resolveFilteredQuery({
+      enabled: hasModelFilters,
+      initialData: initialGroups,
+      query: {
+        data: indexQuery.data,
+        status: indexQuery.status,
+      },
+    })
+
+    if (resolvedIndex.state === 'loading') {
+      return <p className="text-sm text-muted-foreground">Loading rankings...</p>
+    }
+
+    if (resolvedIndex.state === 'error') {
+      return (
+        <EmptyState
+          title="Could not load filtered rankings"
+          description="There was a problem applying the selected filters. Please try again."
+        />
+      )
+    }
+
+    return <RankingIndex groups={resolvedIndex.data} />
+  }
+
+  const activeQuery = isGroup ? groupQuery : subQuery
+  const resolvedRanking = resolveFilteredQuery({
+    enabled: true,
+    query: {
+      data: activeQuery.data,
+      status: activeQuery.status,
+    },
+  })
+
+  if (resolvedRanking.state === 'loading') {
     return <p className="text-sm text-muted-foreground">Loading rankings...</p>
   }
 
-  if (showIndex) {
-    const groups = hasModelFilters ? (indexQuery.data ?? initialGroups) : initialGroups
-    return <RankingIndex groups={groups} />
+  if (resolvedRanking.state === 'error') {
+    return (
+      <EmptyState
+        title="Could not load filtered rankings"
+        description="There was a problem applying the selected filters. Please try again."
+      />
+    )
   }
 
-  const selected = isGroup ? groupQuery.data : subQuery.data
+  const selected = resolvedRanking.data
   const heading = isGroup
     ? ((selected && 'categoryGroup' in selected ? selected.categoryGroup?.name : null) ??
       'Category')

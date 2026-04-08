@@ -3,6 +3,7 @@
 import type { inferRouterOutputs } from '@trpc/server'
 import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
+import { resolveFilteredQuery } from '~/components/public/ranking-query-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
 import type { AppRouter } from '~/server/api/root'
@@ -66,23 +67,35 @@ export function RankingDetailContent(props: RankingDetailContentProps) {
     { enabled: props.kind === 'subcategory' && hasFilters },
   )
 
-  if (
-    hasFilters &&
-    !groupQuery.data &&
-    !subQuery.data &&
-    (groupQuery.isFetching || subQuery.isFetching)
-  ) {
+  const initialHeading =
+    props.kind === 'group'
+      ? (props.initialData.categoryGroup?.name ?? 'Category')
+      : (props.initialData.category?.name ?? 'Category')
+
+  const activeQuery = props.kind === 'group' ? groupQuery : subQuery
+  const resolved = resolveFilteredQuery({
+    enabled: hasFilters,
+    initialData: props.initialData,
+    query: {
+      data: activeQuery.data,
+      status: activeQuery.status,
+    },
+  })
+
+  if (resolved.state === 'loading') {
     return <p className="text-sm text-muted-foreground">Loading rankings...</p>
   }
 
-  const data =
-    props.kind === 'group'
-      ? hasFilters
-        ? (groupQuery.data ?? props.initialData)
-        : props.initialData
-      : hasFilters
-        ? (subQuery.data ?? props.initialData)
-        : props.initialData
+  if (resolved.state === 'error') {
+    return (
+      <EmptyState
+        title={`Could not load filtered rankings for ${initialHeading}`}
+        description="There was a problem applying the selected filters. Please try again."
+      />
+    )
+  }
+
+  const data = resolved.data
 
   const heading =
     props.kind === 'group'
