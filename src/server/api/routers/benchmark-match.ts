@@ -7,6 +7,7 @@ import {
   findAllBenchmarkSeasonIds,
   findBenchmarkSeasonId,
   findLatestPublishedBenchmarkSeasonId,
+  findPublishedBenchmarkSeasonIds,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import type { db as DatabaseInstance } from '~/server/db'
@@ -47,6 +48,7 @@ function matchupKey(categoryId: string, toolAId: string, toolBId: string) {
 
 type ManualHeadToHeadScope = {
   seasonId?: string
+  seasonIds?: string[]
   windowType?: WindowType
   anchorDate?: string
   promptLevel?: PromptLevel
@@ -185,9 +187,9 @@ async function buildManualHeadToHead(
   // Manual batches do not carry prompt-level metadata, so promptLevel-scoped
   // requests should not return unscoped manual fallback results.
   if (scope?.promptLevel) return null
-  const eligibleSeasonIds = scope?.seasonId
-    ? [scope.seasonId]
-    : await findAllBenchmarkSeasonIds(database)
+  const eligibleSeasonIds =
+    scope?.seasonIds ??
+    (scope?.seasonId ? [scope.seasonId] : await findAllBenchmarkSeasonIds(database))
   if (eligibleSeasonIds.length === 0) return null
 
   const conditions = [
@@ -251,6 +253,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         }),
     )
     .query(async ({ ctx, input }) => {
+      const hasExplicitSeasonId = input.seasonId !== undefined
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const [category, toolA, toolB] = await Promise.all([
         ctx.db.query.subcategories.findFirst({
@@ -320,8 +323,11 @@ export const benchmarkMatchRouter = createTRPCRouter({
       }
 
       // Otherwise, fall back to manual match batch data
+      const manualSeasonIds = hasExplicitSeasonId
+        ? [seasonId]
+        : await findPublishedBenchmarkSeasonIds(ctx.db, anchorDate)
       const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id, {
-        seasonId,
+        seasonIds: manualSeasonIds,
         windowType: input.windowType,
         anchorDate,
         promptLevel: input.promptLevel,
@@ -444,7 +450,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         const remainingSlots = limit - matchups.length
         const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
         const eligibleManualSeasonIds = seasonId
-          ? [seasonId]
+          ? await findPublishedBenchmarkSeasonIds(ctx.db, anchorDate)
           : await findAllBenchmarkSeasonIds(ctx.db)
         const manualBaseConditions = [
           eq(matchBatches.triggerMode, 'manual'),
