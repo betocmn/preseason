@@ -7,6 +7,7 @@ const navLinks = [
   { href: '/prompts', label: 'Prompts' },
   { href: '/critics', label: 'Critics' },
   { href: '/methodology', label: 'Methodology' },
+  { href: '/contact', label: 'Contact' },
 ]
 
 const legalLinks = [

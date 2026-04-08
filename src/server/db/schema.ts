@@ -1278,3 +1278,25 @@ export const matchEvaluationRelations = relations(matchEvaluations, ({ one }) =>
     relationName: 'matchEvaluationWinner',
   }),
 }))
+
+// ============================================================================
+// CONTACT MESSAGES
+// ============================================================================
+
+export const contactMessages = createTable(
+  'contact_message',
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom().notNull(),
+    email: varchar({ length: 255 }).notNull(),
+    message: text('message').notNull(),
+    sourceIpHash: varchar('source_ip_hash', { length: 64 }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index('contact_message_created_at_idx').on(t.createdAt),
+    index('contact_message_source_ip_hash_created_at_idx').on(t.sourceIpHash, t.createdAt),
+  ],
+)
