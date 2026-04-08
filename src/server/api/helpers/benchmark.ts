@@ -55,6 +55,26 @@ export async function findLatestPublishedBenchmarkSeasonId(
   return rows[0]?.id ?? null
 }
 
+export async function findPublishedBenchmarkSeasonIds(
+  database: DatabaseClient,
+  anchorDate?: string,
+) {
+  const rows = await database
+    .selectDistinct({ id: benchmarkSeasons.id })
+    .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
+    .where(
+      and(
+        eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
+        anchorDate ? lte(benchmarkRuns.scheduledFor, anchorDate) : undefined,
+      ),
+    )
+
+  return rows.map((row) => row.id)
+}
+
 export async function findBenchmarkSeasonId(database: DatabaseClient, seasonId: string) {
   const rows = await database
     .select({ id: benchmarkSeasons.id })
