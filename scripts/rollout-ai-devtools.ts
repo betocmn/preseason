@@ -396,8 +396,10 @@ async function inspectAliasActions(database: DatabaseClient) {
   const aliasOwnerByNormalized = new Map<string, string>()
   for (const aliasRow of desiredAliasRows) {
     const existingOwner = aliasOwnerByNormalized.get(aliasRow.normalizedAlias)
-    if (existingOwner && existingOwner !== aliasRow.toolSlug) {
-      throw new Error(`Duplicate desired alias ${aliasRow.alias} across ${existingOwner} and ${aliasRow.toolSlug}`)
+    if (existingOwner) {
+      throw new Error(
+        `Duplicate desired alias normalization ${aliasRow.normalizedAlias} for ${existingOwner} and ${aliasRow.toolSlug}`,
+      )
     }
     aliasOwnerByNormalized.set(aliasRow.normalizedAlias, aliasRow.toolSlug)
   }
@@ -637,6 +639,17 @@ async function applyAliasUpserts(database: DatabaseClient, toolIdBySlug: Map<str
       normalizedAlias: normalizeAlias(alias),
     })),
   )
+
+  const desiredOwnerByNormalized = new Map<string, string>()
+  for (const desiredAlias of desiredAliasRows) {
+    const existingOwner = desiredOwnerByNormalized.get(desiredAlias.normalizedAlias)
+    if (existingOwner) {
+      throw new Error(
+        `Duplicate desired alias normalization ${desiredAlias.normalizedAlias} for ${existingOwner} and ${desiredAlias.toolSlug}`,
+      )
+    }
+    desiredOwnerByNormalized.set(desiredAlias.normalizedAlias, desiredAlias.toolSlug)
+  }
 
   const existingRows =
     desiredAliasRows.length === 0
