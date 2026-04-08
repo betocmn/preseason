@@ -13,6 +13,17 @@ describe('serverSettings.benchmark', () => {
   })
 })
 
+describe('serverSettings.contact', () => {
+  it('keeps the per-ip limit positive and small', () => {
+    expect(serverSettings.contact.maxSubmissionsPerIp).toBeGreaterThan(0)
+    expect(serverSettings.contact.maxSubmissionsPerIp).toBeLessThanOrEqual(5)
+  })
+
+  it('sets a positive throttling window', () => {
+    expect(serverSettings.contact.rateLimitWindowMs).toBeGreaterThan(0)
+  })
+})
+
 describe('serverSettings.match', () => {
   it('keeps the cron evaluation batch size small', () => {
     expect(serverSettings.match.cronEvaluationsPerInvocation).toBeGreaterThan(0)
