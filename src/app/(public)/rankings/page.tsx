@@ -1,9 +1,12 @@
+export const revalidate = 3600 // 1 hour
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
+import { EmptyState } from '~/components/public/empty-state'
 import { RankingIndex } from '~/components/public/ranking-index'
-import { RankingsPageContent } from '~/components/public/rankings-page-content'
+import { RankingTable } from '~/components/public/ranking-table'
 import { normalizeModelSnapshotId } from '~/lib/model-filters'
 import { api } from '~/trpc/server'
 
@@ -55,6 +58,8 @@ export default async function RankingsPage({ searchParams }: Props) {
   const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
   const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
   const showIndex = !category && !sub
+
+  // Fetch data for either index view or selected category/subcategory view
   const indexGroups = showIndex
     ? await Promise.all(
         groups.map(async (group) => {
@@ -79,6 +84,30 @@ export default async function RankingsPage({ searchParams }: Props) {
         }),
       )
     : []
+
+  // When a specific category/subcategory is selected, fetch its ranking server-side
+  const isGroup = !!category && !sub
+  const selectedRanking = !showIndex
+    ? sub
+      ? await caller.benchmarkRanking.byCategory({
+          categorySlug: sub,
+          promptLevel: validPromptLevel,
+          modelTier: validModelTier,
+          modelSnapshotId: validModelSnapshotId,
+        })
+      : await caller.benchmarkRanking.byCategoryGroup({
+          groupSlug: category,
+          promptLevel: validPromptLevel,
+          modelTier: validModelTier,
+          modelSnapshotId: validModelSnapshotId,
+        })
+    : null
+
+  const heading = selectedRanking
+    ? isGroup
+      ? (('categoryGroup' in selectedRanking && selectedRanking.categoryGroup?.name) || 'Category')
+      : (('category' in selectedRanking && selectedRanking.category?.name) || 'Category')
+    : null
 
   return (
     <div className="container py-8">
@@ -107,13 +136,18 @@ export default async function RankingsPage({ searchParams }: Props) {
       <div className="mt-6">
         {showIndex ? (
           <RankingIndex groups={indexGroups} />
+        ) : selectedRanking?.ranking && selectedRanking.ranking.items.length > 0 ? (
+          <div>
+            <h2 className="mb-4 text-lg font-semibold">{heading}</h2>
+            <RankingTable
+              items={selectedRanking.ranking.items}
+              meetsPublicationThreshold={selectedRanking.ranking.meetsPublicationThreshold}
+            />
+          </div>
         ) : (
-          <RankingsPageContent
-            currentGroup={category}
-            currentSub={sub}
-            promptLevel={validPromptLevel}
-            modelTier={validModelTier}
-            modelSnapshotId={validModelSnapshotId}
+          <EmptyState
+            title={`No benchmark data for ${heading ?? 'this category'} yet`}
+            description="Rankings are computed from published benchmark runs. Check back after runs have completed."
           />
         )}
       </div>
