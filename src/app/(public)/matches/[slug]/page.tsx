@@ -122,11 +122,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `${data.toolA.name} vs ${data.toolB.name}`
   const categoryName = data.category?.name ?? 'category'
   const description = `Benchmark head-to-head in ${categoryName}: ${data.toolA.name} vs ${data.toolB.name}.`
+  const imagePath = `/matches/${encodeURIComponent(slug)}/opengraph-image`
   return {
     title,
     description,
-    openGraph: { title, description, type: 'article' },
-    twitter: { card: 'summary_large_image', title, description },
+    openGraph: { title, description, type: 'article', images: [imagePath] },
+    twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
   }
 }
 

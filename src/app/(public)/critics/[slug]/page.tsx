@@ -31,11 +31,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const description = critic.title
       ? `${critic.user.displayName} — ${critic.title}. Verified critic on Preseason.`
       : `${critic.user.displayName} is a verified critic on Preseason.`
+    const imagePath = `/critics/${encodeURIComponent(slug)}/opengraph-image`
     return {
       title,
       description,
-      openGraph: { title, description, type: 'profile' },
-      twitter: { card: 'summary_large_image', title, description },
+      openGraph: { title, description, type: 'profile', images: [imagePath] },
+      twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
     }
   } catch {
     return { title: 'Critic' }
