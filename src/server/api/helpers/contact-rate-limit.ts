@@ -4,15 +4,11 @@ import { and, eq, gte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { serverSettings } from '~/constants/server-settings'
 import { env } from '~/env'
+import type { ContactMessageInput } from '~/lib/contact-schema'
 import type * as schema from '~/server/db/schema'
 import { contactMessages } from '~/server/db/schema'
 
 type Database = PostgresJsDatabase<typeof schema>
-
-type ContactMessageInput = {
-  email: string
-  message: string
-}
 
 const LOCALHOST_IP = '127.0.0.1'
 

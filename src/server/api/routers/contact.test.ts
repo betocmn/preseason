@@ -71,6 +71,21 @@ describe('contactRouter', () => {
     expect(rows[0]?.sourceIpHash).not.toBe(ip)
   })
 
+  it('rejects whitespace-only messages without inserting a row', async () => {
+    const caller = createContactCaller('198.51.100.24')
+
+    await expect(
+      caller.contact.create({
+        email: 'contact@example.com',
+        message: '   ',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    } satisfies Partial<TRPCError>)
+
+    expect(await countContactMessages()).toBe(0)
+  })
+
   it('rejects the fourth sequential submission from the same ip within the rate-limit window', async () => {
     const caller = createContactCaller('198.51.100.30')
 
