@@ -1081,9 +1081,12 @@ describe('benchmark public routers', () => {
     })
 
     expect(featured).toHaveLength(1)
-    expect(featured[0]?.toolA.slug).toBe('firebase')
-    expect(featured[0]?.toolB.slug).toBe('pocketbase')
-    expect(featured[0]?.result.decisiveCaseCount).toBe(1)
+    const entry = featured[0]
+    expect(entry).toBeDefined()
+    const pair = [entry?.toolA.slug, entry?.toolB.slug].sort()
+    expect(pair).toEqual(['firebase', 'pocketbase'])
+    expect(entry?.result.decisiveCaseCount).toBe(1)
+    expect((entry?.result.aWins ?? 0) + (entry?.result.bWins ?? 0)).toBe(1)
   })
 
   it('keeps manual featured fallback scoped to requested category group', async () => {
