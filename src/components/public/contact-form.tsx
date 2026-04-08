@@ -3,7 +3,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
 import { Button } from '~/components/ui/button'
 import {
   Form,
@@ -15,18 +14,12 @@ import {
 } from '~/components/ui/form'
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
+import { type ContactMessageInput, contactMessageSchema } from '~/lib/contact-schema'
 import { api } from '~/trpc/react'
 
-const contactSchema = z.object({
-  email: z.string().email('Please enter a valid email').max(255),
-  message: z.string().min(1, 'Message is required').max(5000),
-})
-
-type ContactValues = z.infer<typeof contactSchema>
-
 export function ContactForm() {
-  const form = useForm<ContactValues>({
-    resolver: zodResolver(contactSchema),
+  const form = useForm<ContactMessageInput>({
+    resolver: zodResolver(contactMessageSchema),
     defaultValues: { email: '', message: '' },
   })
 
@@ -40,7 +33,7 @@ export function ContactForm() {
     },
   })
 
-  function onSubmit(values: ContactValues) {
+  function onSubmit(values: ContactMessageInput) {
     createMessage.mutate(values)
   }
 
