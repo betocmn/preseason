@@ -8,11 +8,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Matches',
     description: 'Benchmark match-ups between top tools based on LLM recommendations.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Matches',
     description: 'Benchmark match-ups between top tools based on LLM recommendations.',
+    images: ['/opengraph-image'],
   },
 }
 

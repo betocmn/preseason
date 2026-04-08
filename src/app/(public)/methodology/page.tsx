@@ -6,11 +6,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Methodology',
     description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Methodology',
     description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
+    images: ['/opengraph-image'],
   },
 }
 

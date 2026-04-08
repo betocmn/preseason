@@ -32,11 +32,13 @@ export const metadata: Metadata = {
     siteName: 'Preseason',
     title: 'Preseason',
     description: siteDescription,
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Preseason',
     description: siteDescription,
+    images: ['/opengraph-image'],
   },
   icons: {
     icon: [{ url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' }],

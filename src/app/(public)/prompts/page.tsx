@@ -16,11 +16,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Prompts',
     description: 'Browse vibe-coding prompts used to generate tool recommendations.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Prompts',
     description: 'Browse vibe-coding prompts used to generate tool recommendations.',
+    images: ['/opengraph-image'],
   },
 }
 
