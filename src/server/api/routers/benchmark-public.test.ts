@@ -934,6 +934,160 @@ describe('benchmark public routers', () => {
     expect(result.result?.bWins).toBe(1)
   })
 
+  it('uses published manual fallback when the latest published season has no head-to-head result', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-manual-published-fallback',
+          name: 'Benchmark Manual Published Fallback',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const olderSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-published-fallback-older',
+          name: 'Season Manual Published Fallback Older',
+          status: 'active',
+          createdAt: new Date('2026-03-09T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const latestPublishedSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-published-fallback-latest',
+          name: 'Season Manual Published Fallback Latest',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkRuns).values([
+      {
+        seasonId: olderSeason.id,
+        scheduledFor: '2026-03-09',
+        status: 'published',
+        qcStatus: 'passed',
+      },
+      {
+        seasonId: latestPublishedSeason.id,
+        scheduledFor: '2026-03-10',
+        status: 'published',
+        qcStatus: 'passed',
+      },
+    ])
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Published Fallback LLM',
+          slug: 'published-fallback-llm',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4o',
+          modelId: 'openai/gpt-4o',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'published-fallback-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values([
+      { seasonId: olderSeason.id, modelSnapshotId: modelSnapshot.id },
+      { seasonId: latestPublishedSeason.id, modelSnapshotId: modelSnapshot.id },
+    ])
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-published-fallback',
+          name: 'Match Compare Published Fallback',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: olderSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.result).not.toBeNull()
+    expect(result.result?.aWins).toBe(1)
+    expect(result.result?.bWins).toBe(0)
+    expect(result.result?.decisiveCaseCount).toBe(1)
+  })
+
   it('aggregates manual featured matchups across batches for the same pair', async () => {
     const db = getTestDb()
     const group = first(
@@ -1224,6 +1378,168 @@ describe('benchmark public routers', () => {
     })
 
     expect(featured).toEqual([])
+  })
+
+  it('keeps manual featured fallback limited to published benchmark seasons', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+        { name: 'Firebase', slug: 'firebase' },
+        { name: 'Pocketbase', slug: 'pocketbase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+    const firebase = first(toolRows.slice(2))
+    const pocketbase = first(toolRows.slice(3))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-featured-published-manual-only',
+          name: 'Benchmark Featured Published Manual Only',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const publishedSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-featured-published-manual-only',
+          name: 'Season Featured Published Manual Only',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const unpublishedSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-featured-unpublished-manual-only',
+          name: 'Season Featured Unpublished Manual Only',
+          status: 'active',
+          createdAt: new Date('2026-03-11T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkRuns).values({
+      seasonId: publishedSeason.id,
+      scheduledFor: '2026-03-10',
+      status: 'published',
+      qcStatus: 'passed',
+    })
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Featured Published Manual LLM',
+          slug: 'featured-published-manual-llm',
+          provider: 'anthropic',
+          company: 'Anthropic',
+          modelFamily: 'Sonnet',
+          modelVersion: '4.6',
+          modelId: 'anthropic/claude-sonnet-4.6',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'featured-published-manual-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values([
+      { seasonId: publishedSeason.id, modelSnapshotId: modelSnapshot.id },
+      { seasonId: unpublishedSeason.id, modelSnapshotId: modelSnapshot.id },
+    ])
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-featured-published-manual-only',
+          name: 'Match Compare Featured Published Manual Only',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    const publishedBatchCreatedAt = new Date()
+    publishedBatchCreatedAt.setUTCDate(publishedBatchCreatedAt.getUTCDate() - 2)
+    const unpublishedBatchCreatedAt = new Date()
+    unpublishedBatchCreatedAt.setUTCDate(unpublishedBatchCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: publishedSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: publishedBatchCreatedAt,
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: unpublishedSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: firebase.id,
+      toolTwoId: pocketbase.id,
+      winnerToolId: firebase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: unpublishedBatchCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 12,
+    })
+
+    expect(featured).toHaveLength(1)
+    const pair = [featured[0]?.toolA.slug, featured[0]?.toolB.slug].sort()
+    expect(pair).toEqual(['clerk', 'supabase'])
   })
 
   it('keeps scanning manual pairs when earlier candidates have no decisive cases', async () => {
