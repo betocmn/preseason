@@ -1,3 +1,5 @@
+export const revalidate = 3600 // 1 hour
+
 import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'

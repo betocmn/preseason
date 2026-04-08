@@ -1,3 +1,5 @@
+export const revalidate = 3600 // 1 hour
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'

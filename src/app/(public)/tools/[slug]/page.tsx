@@ -1,3 +1,5 @@
+export const revalidate = 3600 // 1 hour
+
 import { TRPCError } from '@trpc/server'
 import { CheckCircle, ExternalLink } from 'lucide-react'
 import type { Metadata } from 'next'
