@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, or } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   anchorDateSchema,
@@ -200,7 +200,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
       } else {
         const defaultSeasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
         if (!defaultSeasonId) {
-          return { category, toolA, toolB, result: null }
+          const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id)
+          return { category, toolA, toolB, result: manualResult }
         }
         seasonId = defaultSeasonId
       }
@@ -249,18 +250,20 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
       let subs: { id: string; name: string; slug: string }[] = []
-      if (seasonId) {
-        if (input?.categorySlug) {
-          const group = await ctx.db.query.categories.findFirst({
-            where: eq(categories.slug, input.categorySlug),
-            with: {
-              subcategories: {
-                orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-              },
+      if (input?.categorySlug) {
+        const group = await ctx.db.query.categories.findFirst({
+          where: eq(categories.slug, input.categorySlug),
+          with: {
+            subcategories: {
+              orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
             },
-          })
-          subs = group?.subcategories ?? []
-        } else {
+          },
+        })
+        subs = group?.subcategories ?? []
+      }
+
+      if (seasonId) {
+        if (!input?.categorySlug) {
           subs = await ctx.db.query.subcategories.findMany({
             orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
           })
@@ -334,19 +337,29 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // 2. Fill remaining slots with manual match batches
       // ---------------------------------------------------------------
       if (matchups.length < limit) {
-        const manualBatches = await ctx.db.query.matchBatches.findMany({
-          where: and(eq(matchBatches.triggerMode, 'manual'), eq(matchBatches.status, 'completed')),
-          orderBy: [desc(matchBatches.createdAt)],
-          with: {
-            category: true,
-            toolA: true,
-            toolB: true,
-            evaluations: {
-              where: eq(matchEvaluations.status, 'completed'),
-              with: { modelSnapshot: true },
-            },
-          },
-        })
+        const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
+        const manualBatches =
+          scopedSubcategoryIds && scopedSubcategoryIds.length === 0
+            ? []
+            : await ctx.db.query.matchBatches.findMany({
+                where: and(
+                  eq(matchBatches.triggerMode, 'manual'),
+                  eq(matchBatches.status, 'completed'),
+                  scopedSubcategoryIds
+                    ? inArray(matchBatches.categoryId, scopedSubcategoryIds)
+                    : undefined,
+                ),
+                orderBy: [desc(matchBatches.createdAt)],
+                with: {
+                  category: true,
+                  toolA: true,
+                  toolB: true,
+                  evaluations: {
+                    where: eq(matchEvaluations.status, 'completed'),
+                    with: { modelSnapshot: true },
+                  },
+                },
+              })
 
         for (const batch of manualBatches) {
           if (matchups.length >= limit) break
