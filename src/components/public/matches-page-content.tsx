@@ -1,30 +1,22 @@
-'use client'
-
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { api } from '~/trpc/react'
+import type { RouterOutputs } from '~/trpc/react'
+
+type MatchItem = RouterOutputs['benchmarkMatch']['listFeatured'][number]
 
 type MatchesPageContentProps = {
-  initialCategorySlug?: string
+  items: MatchItem[]
 }
 
 function matchSlug(categorySlug: string, toolASlug: string, toolBSlug: string) {
   return `${categorySlug}--${toolASlug}-vs-${toolBSlug}`
 }
 
-export function MatchesPageContent({ initialCategorySlug }: MatchesPageContentProps) {
-  const { data: matchups, isLoading } = api.benchmarkMatch.listFeatured.useQuery(
-    initialCategorySlug ? { categorySlug: initialCategorySlug } : undefined,
-  )
-
-  if (isLoading) return null
-
-  const items = matchups ?? []
-
+export function MatchesPageContent({ items }: MatchesPageContentProps) {
   if (items.length === 0) {
     return (
       <EmptyState
