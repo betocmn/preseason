@@ -19,7 +19,7 @@ type Props = {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { subSlug } = await params
+  const { slug, subSlug } = await params
   const caller = await api()
   const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
 
@@ -29,11 +29,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const title = `${data.category.name} Rankings`
   const description = `Benchmark rankings for tools in the ${data.category.name} subcategory.`
+  const imagePath = `/rankings/${encodeURIComponent(slug)}/${encodeURIComponent(subSlug)}/opengraph-image`
   return {
     title,
     description,
-    openGraph: { title, description, type: 'article' },
-    twitter: { card: 'summary_large_image', title, description },
+    openGraph: { title, description, type: 'article', images: [imagePath] },
+    twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
   }
 }
 

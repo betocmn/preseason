@@ -22,11 +22,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const tool = await caller.tool.getBySlug({ slug })
     const title = tool.name
     const description = tool.description ?? `See how LLMs recommend ${tool.name}.`
+    const imagePath = `/tools/${encodeURIComponent(slug)}/opengraph-image`
     return {
       title,
       description,
-      openGraph: { title, description, type: 'article' },
-      twitter: { card: 'summary_large_image', title, description },
+      openGraph: { title, description, type: 'article', images: [imagePath] },
+      twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
     }
   } catch {
     return { title: 'Tool' }
