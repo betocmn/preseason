@@ -836,6 +836,11 @@ describe('benchmark public routers', () => {
         })
         .returning(),
     )
+    const now = new Date()
+    const recentBatchOne = new Date(now)
+    recentBatchOne.setUTCDate(recentBatchOne.getUTCDate() - 2)
+    const recentBatchTwo = new Date(now)
+    recentBatchTwo.setUTCDate(recentBatchTwo.getUTCDate() - 1)
 
     await seedCompletedManualBatch({
       db,
@@ -846,7 +851,7 @@ describe('benchmark public routers', () => {
       winnerToolId: clerk.id,
       promptTemplateId: template.id,
       modelSnapshotId: modelSnapshot.id,
-      createdAt: new Date('2026-03-09T12:00:00.000Z'),
+      createdAt: recentBatchOne,
     })
     await seedCompletedManualBatch({
       db,
@@ -857,7 +862,18 @@ describe('benchmark public routers', () => {
       winnerToolId: supabase.id,
       promptTemplateId: template.id,
       modelSnapshotId: modelSnapshot.id,
-      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+      createdAt: recentBatchTwo,
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2000-01-01T00:00:00.000Z'),
     })
 
     const caller = createTestCaller(null)
