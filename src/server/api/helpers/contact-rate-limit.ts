@@ -50,12 +50,7 @@ function buildFallbackClientKey(headers: Headers) {
 }
 
 function resolveContactRequestClientKey(headers: Headers) {
-  return (
-    normalizeSingleHeaderValue(headers.get('cf-connecting-ip')) ??
-    normalizeSingleHeaderValue(headers.get('x-real-ip')) ??
-    normalizeForwardedForIp(headers.get('x-forwarded-for')) ??
-    buildFallbackClientKey(headers)
-  )
+  return normalizeForwardedForIp(headers.get('x-forwarded-for')) ?? buildFallbackClientKey(headers)
 }
 
 function hashClientKey(clientKey: string) {
