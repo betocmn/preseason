@@ -1,14 +1,9 @@
 export const revalidate = 3600 // 1 hour
 
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Suspense } from 'react'
-import { EmptyState } from '~/components/public/empty-state'
+import { PromptsPageContent } from '~/components/public/prompts-page-content'
 import { PromptFilters } from '~/components/public/prompt-filters'
-
-import { Badge } from '~/components/ui/badge'
-import { Card, CardContent } from '~/components/ui/card'
-import { formatPromptLevel } from '~/lib/prompt-levels'
 import { promptLevelEnum } from '~/server/db/schema'
 import { publicApi } from '~/trpc/server'
 
@@ -28,24 +23,11 @@ export const metadata: Metadata = {
   },
 }
 
-type Props = {
-  searchParams: Promise<{ level?: string; group?: string; sub?: string }>
-}
-
-export default async function PromptsPage({ searchParams }: Props) {
-  const { level, group, sub } = await searchParams
-  const validLevels: string[] = promptLevelEnum.enumValues
-  const safeLevel =
-    level && validLevels.includes(level)
-      ? (level as (typeof promptLevelEnum.enumValues)[number])
-      : undefined
-  const safeStr = (v: string | undefined) => (v && v.length >= 1 && v.length <= 100 ? v : undefined)
-  const safeGroup = safeStr(group)
-  const safeSub = safeStr(sub)
+export default async function PromptsPage() {
   const caller = await publicApi()
 
   const [activePrompts, categoryGroups] = await Promise.all([
-    caller.prompt.listActive({ level: safeLevel, group: safeGroup, sub: safeSub }),
+    caller.prompt.listActive(),
     caller.category.listGroups(),
   ])
 
@@ -60,54 +42,13 @@ export default async function PromptsPage({ searchParams }: Props) {
       <h1 className="mb-6 text-xl font-bold tracking-tight">Prompts</h1>
 
       <Suspense fallback={null}>
-        <PromptFilters
-          groups={groups}
-          levels={promptLevelEnum.enumValues}
-          currentLevel={level}
-          currentGroup={group}
-          currentSub={sub}
-        />
+        <PromptFilters groups={groups} levels={promptLevelEnum.enumValues} />
       </Suspense>
 
       <div className="mt-6">
-        {activePrompts.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {activePrompts.map((prompt) => (
-              <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
-                <CardContent className="p-4">
-                  <Badge variant="outline" className="mb-2 text-[11px] font-normal">
-                    {formatPromptLevel(prompt.level)}
-                  </Badge>
-                  <h3 className="font-medium">{prompt.title}</h3>
-                  {prompt.description && (
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                      {prompt.description}
-                    </p>
-                  )}
-                  {prompt.expectedCategories && prompt.expectedCategories.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {prompt.expectedCategories.slice(0, 3).map((cat) => (
-                        <Badge key={cat} variant="secondary" className="text-xs">
-                          {cat}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-                <Link
-                  href={`/prompts/${prompt.level}/${prompt.slug}`}
-                  className="absolute inset-0 z-10 rounded-lg"
-                  aria-label={prompt.title}
-                />
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No prompts found"
-            description="Try adjusting your filters or check back later."
-          />
-        )}
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading prompts...</p>}>
+          <PromptsPageContent initialItems={activePrompts} />
+        </Suspense>
       </div>
     </div>
   )

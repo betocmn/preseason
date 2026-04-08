@@ -1,22 +1,40 @@
+'use client'
+
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import type { RouterOutputs } from '~/trpc/react'
+import { api, type RouterOutputs } from '~/trpc/react'
 
 type MatchItem = RouterOutputs['benchmarkMatch']['listFeatured'][number]
 
 type MatchesPageContentProps = {
-  items: MatchItem[]
+  initialItems: MatchItem[]
 }
 
 function matchSlug(categorySlug: string, toolASlug: string, toolBSlug: string) {
   return `${categorySlug}--${toolASlug}-vs-${toolBSlug}`
 }
 
-export function MatchesPageContent({ items }: MatchesPageContentProps) {
+export function MatchesPageContent({ initialItems }: MatchesPageContentProps) {
+  const searchParams = useSearchParams()
+  const category = searchParams.get('category') ?? undefined
+  const safeCategory =
+    category && category.length >= 1 && category.length <= 100 ? category : undefined
+  const { data, isFetching } = api.benchmarkMatch.listFeatured.useQuery(
+    safeCategory ? { categorySlug: safeCategory } : undefined,
+    { enabled: !!safeCategory },
+  )
+
+  if (safeCategory && !data && isFetching) {
+    return <p className="text-sm text-muted-foreground">Loading matches...</p>
+  }
+
+  const items = safeCategory ? (data ?? []) : initialItems
+
   if (items.length === 0) {
     return (
       <EmptyState
