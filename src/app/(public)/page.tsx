@@ -11,9 +11,11 @@ import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
 import { serverSettings } from '~/constants/server-settings'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 export default async function HomePage() {
+  await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
   const today = new Date().toISOString().slice(0, 10)
   const pageSize = serverSettings.homepage.promptCarouselPageSize

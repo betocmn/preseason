@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 }
 
 export default async function RankingsPage() {
+  await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
   const [categoryGroups, modelFiltersData, indexGroups] = await Promise.all([
     caller.category.listGroups(),

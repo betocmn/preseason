@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import { PromptFilters } from '~/components/public/prompt-filters'
 import { PromptsPageContent } from '~/components/public/prompts-page-content'
 import { promptLevelEnum } from '~/server/db/schema'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 }
 
 export default async function PromptsPage() {
+  await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
 
   const [activePrompts, categoryGroups] = await Promise.all([

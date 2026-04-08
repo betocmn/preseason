@@ -1,4 +1,3 @@
-export const dynamic = 'force-static'
 export const revalidate = 3600 // 1 hour
 
 import type { Metadata } from 'next'
@@ -8,6 +7,7 @@ import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
 import { RankingDetailContent } from '~/components/public/ranking-detail-content'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
+import { deferToRequestWhenDatabaseUnavailable, hasBuildDatabaseAccess } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
 
 type Props = {
@@ -15,6 +15,13 @@ type Props = {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  if (!hasBuildDatabaseAccess()) {
+    return {
+      title: 'Rankings',
+      description: 'Benchmark rankings for tools by category.',
+    }
+  }
+
   const { slug, subSlug } = await params
   const caller = await publicApi()
   const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
@@ -35,6 +42,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export async function generateStaticParams() {
+  if (!hasBuildDatabaseAccess()) {
+    return []
+  }
+
   const caller = await publicApi()
   const groups = await caller.category.listGroups()
   return groups.flatMap((group) =>
@@ -46,6 +57,7 @@ export async function generateStaticParams() {
 }
 
 export default async function SubcategoryRankingPage({ params }: Props) {
+  await deferToRequestWhenDatabaseUnavailable()
   const { slug, subSlug } = await params
   const caller = await publicApi()
   const [groups, modelFiltersData] = await Promise.all([
