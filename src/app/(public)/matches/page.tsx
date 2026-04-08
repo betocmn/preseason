@@ -2,6 +2,7 @@ export const revalidate = 3600 // 1 hour
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
 import { publicApi } from '~/trpc/server'
 
@@ -21,16 +22,9 @@ export const metadata: Metadata = {
   },
 }
 
-type Props = {
-  searchParams: Promise<{ category?: string }>
-}
-
-export default async function MatchesPage({ searchParams }: Props) {
-  const { category } = await searchParams
+export default async function MatchesPage() {
   const caller = await publicApi()
-  const matchups = await caller.benchmarkMatch.listFeatured(
-    category ? { categorySlug: category } : undefined,
-  )
+  const matchups = await caller.benchmarkMatch.listFeatured()
 
   return (
     <div className="container py-8">
@@ -49,7 +43,9 @@ export default async function MatchesPage({ searchParams }: Props) {
         decisions.
       </p>
 
-      <MatchesPageContent items={matchups} />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading matches...</p>}>
+        <MatchesPageContent initialItems={matchups} />
+      </Suspense>
     </div>
   )
 }

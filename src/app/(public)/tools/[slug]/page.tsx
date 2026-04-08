@@ -1,3 +1,4 @@
+export const dynamic = 'force-static'
 export const revalidate = 3600 // 1 hour
 
 import { TRPCError } from '@trpc/server'

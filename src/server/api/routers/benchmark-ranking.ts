@@ -54,6 +54,65 @@ async function resolveSeasonId(
 }
 
 export const benchmarkRankingRouter = createTRPCRouter({
+  listIndexGroups: publicProcedure
+    .input(
+      z
+        .object({
+          seasonId: z.string().uuid().optional(),
+          windowType: windowTypeSchema,
+          anchorDate: anchorDateSchema.optional(),
+        })
+        .merge(tierFiltersSchema),
+    )
+    .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const groups = await ctx.db.query.categories.findMany({
+        orderBy: [asc(categories.displayOrder), asc(categories.name)],
+        with: {
+          subcategories: {
+            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+          },
+        },
+      })
+
+      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+
+      return Promise.all(
+        groups.map(async (group) => {
+          if (group.subcategories.length === 0 || !seasonId) {
+            return {
+              slug: group.slug,
+              name: group.name,
+              ranking: null,
+            }
+          }
+
+          const ranking = await computeCategoryGroupRanking(ctx.db, {
+            categoryGroupId: group.id,
+            categoryIds: group.subcategories.map((sub) => sub.id),
+            seasonId,
+            windowType: input.windowType,
+            anchorDate,
+            promptLevel: input.promptLevel,
+            modelTier: input.modelTier,
+            modelSnapshotId: input.modelSnapshotId,
+          })
+
+          return {
+            slug: group.slug,
+            name: group.name,
+            ranking: ranking
+              ? {
+                  items: ranking.items,
+                  totalEligibleDecisions: ranking.totalEligibleDecisions,
+                  meetsPublicationThreshold: ranking.meetsPublicationThreshold,
+                }
+              : null,
+          }
+        }),
+      )
+    }),
+
   byCategory: publicProcedure
     .input(
       z

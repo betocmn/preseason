@@ -59,10 +59,16 @@ export function BenchmarkRankingFilters({
       ),
     ),
   )
+  const effectiveGroup = showCategorySelect
+    ? (searchParams.get('category') ?? currentGroup)
+    : currentGroup
+  const effectiveSub = showCategorySelect ? (searchParams.get('sub') ?? currentSub) : currentSub
+  const effectivePromptLevel = searchParams.get('promptLevel') ?? currentPromptLevel
+  const effectiveModelTier = searchParams.get('modelTier') ?? currentModelTier
+  const modelSnapshotParam = searchParams.get('modelSnapshotId') ?? currentModelSnapshotId
+
   const normalizedModelSnapshotId =
-    currentModelSnapshotId && modelLookup.has(currentModelSnapshotId)
-      ? currentModelSnapshotId
-      : undefined
+    modelSnapshotParam && modelLookup.has(modelSnapshotParam) ? modelSnapshotParam : undefined
   const selectedModel = normalizedModelSnapshotId
     ? modelLookup.get(normalizedModelSnapshotId)
     : undefined
@@ -80,18 +86,18 @@ export function BenchmarkRankingFilters({
     router.replace(qs ? `${basePath}?${qs}` : basePath)
   }
 
-  const categoryValue = currentSub
-    ? `${currentGroup}:${currentSub}`
-    : currentGroup
-      ? currentGroup
+  const categoryValue = effectiveSub
+    ? `${effectiveGroup}:${effectiveSub}`
+    : effectiveGroup
+      ? effectiveGroup
       : 'all'
 
   const categoryLabel = (() => {
-    if (!currentGroup) return 'All Categories'
-    const group = groups.find((g) => g.slug === currentGroup)
+    if (!effectiveGroup) return 'All Categories'
+    const group = groups.find((g) => g.slug === effectiveGroup)
     if (!group) return 'All Categories'
-    if (currentSub) {
-      const sub = group.subcategories.find((s) => s.slug === currentSub)
+    if (effectiveSub) {
+      const sub = group.subcategories.find((s) => s.slug === effectiveSub)
       return sub ? `${group.name} / ${sub.name}` : group.name
     }
     return `All ${group.name}`
@@ -144,15 +150,15 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <FlaskConical className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={currentPromptLevel ?? 'all'}
+          value={effectivePromptLevel ?? 'all'}
           onValueChange={(val) => {
             navigate({ promptLevel: val === 'all' ? undefined : val })
           }}
         >
           <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
-              {currentPromptLevel
-                ? `${currentPromptLevel.charAt(0).toUpperCase()}${currentPromptLevel.slice(1)}`
+              {effectivePromptLevel
+                ? `${effectivePromptLevel.charAt(0).toUpperCase()}${effectivePromptLevel.slice(1)}`
                 : 'All User Prompting Levels'}
             </span>
           </SelectTrigger>
@@ -168,15 +174,15 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <Layers className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={currentModelTier ?? 'all'}
+          value={effectiveModelTier ?? 'all'}
           onValueChange={(val) => {
             navigate({ modelTier: val === 'all' ? undefined : val })
           }}
         >
           <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
-              {currentModelTier
-                ? `${currentModelTier.charAt(0).toUpperCase()}${currentModelTier.slice(1)} Models`
+              {effectiveModelTier
+                ? `${effectiveModelTier.charAt(0).toUpperCase()}${effectiveModelTier.slice(1)} Models`
                 : 'All Model Tiers'}
             </span>
           </SelectTrigger>
