@@ -124,6 +124,9 @@ type ExecuteSummary = {
   matchBatchStatuses: string[]
 }
 
+const SCRIPT_SUPABASE_URL = 'https://example.supabase.co'
+const SCRIPT_SUPABASE_ANON_KEY = 'placeholder-anon-key'
+
 function parseArgs(argv: string[]): Args {
   let databaseUrl: string | null = null
   let execute = false
@@ -152,6 +155,13 @@ function parseArgs(argv: string[]): Args {
   }
 
   return { databaseUrl, execute }
+}
+
+export function configureRuntimeEnv(args: Args) {
+  // Force env-dependent imports to use the CLI-selected database instead of inherited shell state.
+  process.env.DATABASE_URL = args.databaseUrl
+  process.env.NEXT_PUBLIC_SUPABASE_URL = SCRIPT_SUPABASE_URL
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = SCRIPT_SUPABASE_ANON_KEY
 }
 
 function normalizeAlias(alias: string) {
@@ -1212,9 +1222,7 @@ async function runExecute(
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
-  process.env.DATABASE_URL ??= args.databaseUrl
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'https://example.supabase.co'
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= 'placeholder-anon-key'
+  configureRuntimeEnv(args)
 
   const { sqlClient, database } = createDatabase(args.databaseUrl)
 
