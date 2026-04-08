@@ -1,3 +1,4 @@
+export const dynamic = 'force-static'
 export const revalidate = 3600 // 1 hour
 
 import type { Metadata } from 'next'
@@ -39,21 +40,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: { title, description, type: 'article', images: [imagePath] },
     twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
   }
-}
-
-export async function generateStaticParams() {
-  if (!hasBuildDatabaseAccess()) {
-    return []
-  }
-
-  const caller = await publicApi()
-  const groups = await caller.category.listGroups()
-  return groups.flatMap((group) =>
-    group.subcategories.map((subcategory) => ({
-      slug: group.slug,
-      subSlug: subcategory.slug,
-    })),
-  )
 }
 
 export default async function SubcategoryRankingPage({ params }: Props) {
