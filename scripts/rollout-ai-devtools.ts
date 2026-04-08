@@ -130,6 +130,9 @@ function parseArgs(argv: string[]): Args {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
+    if (!arg) {
+      continue
+    }
     if (arg === '--execute') {
       execute = true
       continue
