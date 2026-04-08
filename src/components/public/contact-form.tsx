@@ -32,7 +32,7 @@ export function ContactForm() {
 
   const createMessage = api.contact.create.useMutation({
     onSuccess: () => {
-      toast.success('Message sent! We'll get back to you soon.')
+      toast.success('Message sent! We will get back to you soon.')
       form.reset()
     },
     onError: (error) => {
@@ -68,11 +68,7 @@ export function ContactForm() {
             <FormItem>
               <FormLabel>Message</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="What's on your mind?"
-                  rows={5}
-                  {...field}
-                />
+                <Textarea placeholder="What's on your mind?" rows={5} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
