@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { CategoryPill } from '~/components/public/category-pill'
 import { CommentList } from '~/components/public/comment-list'
+import { ToolMatchupList } from '~/components/public/tool-matchup-list'
+import { ToolRankingSummary } from '~/components/public/tool-ranking-summary'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -46,14 +48,18 @@ export default async function ToolDetailPage({ params }: Props) {
     }
   })()
 
-  const comments = await caller.comment.listByTarget({ targetType: 'tool', targetId: tool.id })
+  const [comments, rankingsData, matchups] = await Promise.all([
+    caller.comment.listByTarget({ targetType: 'tool', targetId: tool.id }),
+    caller.benchmarkRanking.byTool({ toolSlug: slug }),
+    caller.benchmarkMatch.listByTool({ toolSlug: slug }),
+  ])
 
   const toolCategories = tool.toolCategories?.map((tc) => tc.category) ?? []
 
   return (
     <div className="container max-w-4xl py-8">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <Avatar className="h-8 w-8 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
             {tool.logoUrl && <AvatarImage src={tool.logoUrl} alt={tool.name} size={32} />}
@@ -92,6 +98,12 @@ export default async function ToolDetailPage({ params }: Props) {
           </Button>
         )}
       </div>
+
+      {/* Rankings */}
+      <ToolRankingSummary rankings={rankingsData.rankings} />
+
+      {/* Matchups */}
+      <ToolMatchupList matchups={matchups} />
 
       {/* Comments */}
       <Card>

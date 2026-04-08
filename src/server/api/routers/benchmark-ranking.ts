@@ -13,8 +13,16 @@ import {
   benchmarkSeasonModels,
   categories,
   subcategories,
+  tools,
 } from '~/server/db/schema'
-import { computeCategoryGroupRanking, computeCategoryRanking } from '~/server/llm/benchmark/scoring'
+import {
+  computeCategoryGroupRanking,
+  computeCategoryRanking,
+  type DecisionRow,
+  fetchDecisions,
+  prepareScoringContext,
+  rankFromDecisions,
+} from '~/server/llm/benchmark/scoring'
 import { promptLevelSchema } from '~/server/llm/prompts'
 
 const windowTypeSchema = z
@@ -199,5 +207,92 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }))
 
       return { seasonId, companies }
+    }),
+
+  byTool: publicProcedure
+    .input(
+      z.object({
+        toolSlug: z.string().min(1).max(255),
+        windowType: windowTypeSchema,
+        anchorDate: anchorDateSchema.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+
+      const tool = await ctx.db.query.tools.findFirst({
+        where: eq(tools.slug, input.toolSlug),
+        with: {
+          toolCategories: {
+            with: {
+              category: {
+                with: { categoryGroup: true },
+              },
+            },
+          },
+        },
+      })
+      if (!tool) return { rankings: [] }
+
+      const categoryIds = tool.toolCategories.map((tc) => tc.category.id)
+      if (categoryIds.length === 0) return { rankings: [] }
+
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+      if (!seasonId) return { rankings: [] }
+
+      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, input.windowType, anchorDate)
+      if (scoringCtx.runIds.length === 0) return { rankings: [] }
+
+      const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, categoryIds)
+
+      const decisionsByCategory = new Map<string, DecisionRow[]>()
+      for (const d of allDecisions) {
+        let list = decisionsByCategory.get(d.categoryId)
+        if (!list) {
+          list = []
+          decisionsByCategory.set(d.categoryId, list)
+        }
+        list.push(d)
+      }
+
+      const rankings = tool.toolCategories
+        .map((tc) => {
+          const cat = tc.category
+          const catDecisions = decisionsByCategory.get(cat.id) ?? []
+          const ranking = rankFromDecisions(
+            catDecisions,
+            scoringCtx.weightConfigs,
+            cat.id,
+            input.windowType,
+            anchorDate,
+          )
+
+          const toolIndex = ranking.items.findIndex((item) => item.toolId === tool.id)
+          if (toolIndex === -1) return null
+
+          const entry = ranking.items[toolIndex]!
+          return {
+            category: {
+              id: cat.id,
+              name: cat.name,
+              slug: cat.slug,
+              groupSlug: cat.categoryGroup?.slug ?? '',
+            },
+            rank: toolIndex + 1,
+            totalTools: ranking.items.length,
+            weightedSupportRate: entry.weightedSupportRate,
+            rawSupportRate: entry.rawSupportRate,
+            rawSupportCount: entry.rawSupportCount,
+            rawEligibleCount: entry.rawEligibleCount,
+            ciLow: entry.ciLow,
+            ciHigh: entry.ciHigh,
+            trend: entry.trend,
+            meetsPublicationThreshold: ranking.meetsPublicationThreshold,
+          }
+        })
+        .filter((r) => r !== null)
+        .sort((a, b) => a.rank - b.rank)
+
+      return { rankings }
     }),
 })
