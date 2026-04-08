@@ -83,6 +83,82 @@ async function seedPromptAndCategory(adminCaller: ReturnType<typeof createTestCa
   return { group, category, prompt, llm }
 }
 
+async function seedAiPromptAndCategories(adminCaller: ReturnType<typeof createTestCaller>) {
+  const group = await adminCaller.category.createGroup({
+    name: 'Devtools',
+    slug: 'devtools',
+    displayOrder: 1,
+  })
+  if (!group) throw new Error('Expected group')
+
+  const categoryInputs = [
+    { name: 'AI / LLM Integration', slug: 'ai', icon: 'brain', displayOrder: 1 },
+    {
+      name: 'LLM Coding Agents',
+      slug: 'llm-coding-agents',
+      icon: 'terminal',
+      displayOrder: 2,
+    },
+    {
+      name: 'LLM Observability',
+      slug: 'llm-observability',
+      icon: 'eye',
+      displayOrder: 3,
+    },
+    {
+      name: 'LLM Evals',
+      slug: 'llm-evals',
+      icon: 'flask-conical',
+      displayOrder: 4,
+    },
+  ]
+
+  for (const categoryInput of categoryInputs) {
+    await adminCaller.category.create({
+      ...categoryInput,
+      categoryId: group.id,
+      description: `${categoryInput.name} tools`,
+    })
+  }
+
+  const db = getTestDb()
+  const { prompts, llms } = await import('~/server/db/schema')
+  const [prompt] = await db
+    .insert(prompts)
+    .values({
+      title: 'AI Support Agent',
+      slug: 'ai-support-agent',
+      level: 'advanced',
+      description: 'AI native support workflow',
+      expectedCategories: categoryInputs.map((category) => category.slug),
+      contentMd: '# Build an AI support agent\n\nInclude evals and observability.',
+      isActive: true,
+    })
+    .returning()
+
+  const [llm] = await db
+    .insert(llms)
+    .values({
+      name: 'Claude Sonnet',
+      slug: 'claude-sonnet',
+      provider: 'anthropic',
+      company: 'Anthropic',
+      modelFamily: 'Claude',
+      modelVersion: '4.6',
+      modelId: 'anthropic/claude-sonnet-4.6',
+      isActive: true,
+    })
+    .returning()
+
+  if (!prompt || !llm) throw new Error('Failed to seed AI prompt/llm')
+  return {
+    group,
+    prompt,
+    llm,
+    expectedCategorySlugs: categoryInputs.map((category) => category.slug),
+  }
+}
+
 describe('benchmarkAdminRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -155,6 +231,31 @@ describe('benchmarkAdminRouter', () => {
     expect(detail.status).toBe('active')
     expect(detail.seasonPrompts).toHaveLength(1)
     expect(detail.seasonModels).toHaveLength(1)
+  })
+
+  it('freezes ai-native prompt categories into the season snapshot', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    const seeded = await seedAiPromptAndCategories(caller)
+
+    const season = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-ai',
+      name: 'Season AI',
+    })
+
+    const result = await caller.benchmarkAdmin.freezeSeason({ seasonId: season.id })
+    expect(result.promptVersionCount).toBe(1)
+    expect(result.modelSnapshotCount).toBe(1)
+    expect(result.caseCount).toBe(1)
+
+    const detail = await caller.benchmarkAdmin.getSeasonById({ id: season.id })
+    const frozenCategorySlugs =
+      detail.seasonPrompts[0]?.promptVersion.categories.map((category) => category.category.slug) ??
+      []
+
+    expect(frozenCategorySlugs).toEqual(seeded.expectedCategorySlugs)
   })
 
   it('rejects freezing a non-draft season', async () => {

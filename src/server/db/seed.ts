@@ -15,6 +15,11 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { CURATED_LLM_CATALOG } from '~/server/llm/catalog'
 
+import {
+  AI_DEVTOOLS_SUBCATEGORIES,
+  AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS,
+  AI_DEVTOOLS_TOOLS,
+} from './ai-devtools-catalog'
 import { PROMPT_CORPUS } from './prompt-corpus'
 import * as schema from './schema'
 
@@ -111,9 +116,12 @@ const SUBCATEGORY_GROUP_MAP: Record<string, string> = {
   'ci-cd': 'devtools',
   jobs: 'devtools',
   notifications: 'devtools',
+  'llm-coding-agents': 'devtools',
+  'llm-observability': 'devtools',
+  'llm-evals': 'devtools',
 }
 
-export const SUBCATEGORIES = [
+const CORE_SUBCATEGORIES = [
   {
     name: 'Authentication',
     slug: 'auth',
@@ -263,7 +271,9 @@ export const SUBCATEGORIES = [
   },
 ]
 
-export const TOOLS = [
+export const SUBCATEGORIES = [...CORE_SUBCATEGORIES, ...AI_DEVTOOLS_SUBCATEGORIES]
+
+const CORE_TOOLS = [
   // Auth
   {
     name: 'Clerk',
@@ -981,8 +991,10 @@ export const TOOLS = [
   },
 ]
 
+export const TOOLS = [...CORE_TOOLS, ...AI_DEVTOOLS_TOOLS]
+
 // Map tool slugs to their category slugs (with isPrimary flag)
-export const TOOL_CATEGORY_ASSIGNMENTS: Array<{
+const CORE_TOOL_CATEGORY_ASSIGNMENTS: Array<{
   toolSlug: string
   categorySlug: string
   isPrimary: boolean
@@ -1117,6 +1129,11 @@ export const TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'firebase', categorySlug: 'realtime', isPrimary: false },
   { toolSlug: 'firebase', categorySlug: 'notifications', isPrimary: false },
   { toolSlug: 'vercel', categorySlug: 'ci-cd', isPrimary: false },
+]
+
+export const TOOL_CATEGORY_ASSIGNMENTS = [
+  ...CORE_TOOL_CATEGORY_ASSIGNMENTS,
+  ...AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS,
 ]
 
 const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
