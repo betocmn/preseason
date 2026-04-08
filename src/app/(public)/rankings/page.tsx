@@ -13,11 +13,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Rankings',
     description: 'Benchmark-grade rankings of tools recommended by LLMs across all categories.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Rankings',
     description: 'Benchmark-grade rankings of tools recommended by LLMs across all categories.',
+    images: ['/opengraph-image'],
   },
 }
 

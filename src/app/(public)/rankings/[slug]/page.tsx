@@ -29,11 +29,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const title = `${data.categoryGroup.name} Rankings`
   const description = `Benchmark rankings for tools in the ${data.categoryGroup.name} category.`
+  const imagePath = `/rankings/${encodeURIComponent(slug)}/opengraph-image`
   return {
     title,
     description,
-    openGraph: { title, description, type: 'article' },
-    twitter: { card: 'summary_large_image', title, description },
+    openGraph: { title, description, type: 'article', images: [imagePath] },
+    twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
   }
 }
 
