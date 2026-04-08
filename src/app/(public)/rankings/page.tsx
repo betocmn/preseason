@@ -1,11 +1,12 @@
+export const revalidate = 3600 // 1 hour
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
-import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingsPageContent } from '~/components/public/rankings-page-content'
-import { normalizeModelSnapshotId } from '~/lib/model-filters'
-import { api } from '~/trpc/server'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
+import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Rankings',
@@ -23,23 +24,13 @@ export const metadata: Metadata = {
   },
 }
 
-type Props = {
-  searchParams: Promise<{
-    category?: string
-    sub?: string
-    promptLevel?: string
-    modelTier?: string
-    modelSnapshotId?: string
-  }>
-}
-
-export default async function RankingsPage({ searchParams }: Props) {
-  const { category: rawCategory, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
-  const category = rawCategory ?? 'devtools'
-  const caller = await api()
-  const [categoryGroups, modelFiltersData] = await Promise.all([
+export default async function RankingsPage() {
+  await deferToRequestWhenDatabaseUnavailable()
+  const caller = await publicApi()
+  const [categoryGroups, modelFiltersData, indexGroups] = await Promise.all([
     caller.category.listGroups(),
     caller.benchmarkRanking.listModelFilters({}),
+    caller.benchmarkRanking.listIndexGroups({}),
   ])
 
   const groups = categoryGroups.map((g) => ({
@@ -48,37 +39,6 @@ export default async function RankingsPage({ searchParams }: Props) {
     subcategories: g.subcategories.map((s) => ({ slug: s.slug, name: s.name })),
   }))
   const modelFilters = modelFiltersData.companies
-
-  const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
-    (t) => t === promptLevel,
-  )
-  const validModelTier = (['frontier', 'mid', 'small'] as const).find((t) => t === modelTier)
-  const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
-  const showIndex = !category && !sub
-  const indexGroups = showIndex
-    ? await Promise.all(
-        groups.map(async (group) => {
-          const data = await caller.benchmarkRanking.byCategoryGroup({
-            groupSlug: group.slug,
-            promptLevel: validPromptLevel,
-            modelTier: validModelTier,
-            modelSnapshotId: validModelSnapshotId,
-          })
-
-          return {
-            slug: group.slug,
-            name: group.name,
-            ranking: data.ranking
-              ? {
-                  items: data.ranking.items,
-                  totalEligibleDecisions: data.ranking.totalEligibleDecisions,
-                  meetsPublicationThreshold: data.ranking.meetsPublicationThreshold,
-                }
-              : null,
-          }
-        }),
-      )
-    : []
 
   return (
     <div className="container py-8">
@@ -93,29 +53,13 @@ export default async function RankingsPage({ searchParams }: Props) {
       </div>
 
       <Suspense fallback={null}>
-        <BenchmarkRankingFilters
-          groups={groups}
-          modelFilters={modelFilters}
-          currentGroup={category}
-          currentSub={sub}
-          currentPromptLevel={validPromptLevel}
-          currentModelTier={validModelTier}
-          currentModelSnapshotId={validModelSnapshotId}
-        />
+        <BenchmarkRankingFilters groups={groups} modelFilters={modelFilters} />
       </Suspense>
 
       <div className="mt-6">
-        {showIndex ? (
-          <RankingIndex groups={indexGroups} />
-        ) : (
-          <RankingsPageContent
-            currentGroup={category}
-            currentSub={sub}
-            promptLevel={validPromptLevel}
-            modelTier={validModelTier}
-            modelSnapshotId={validModelSnapshotId}
-          />
-        )}
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading rankings...</p>}>
+          <RankingsPageContent initialGroups={indexGroups} modelFilters={modelFilters} />
+        </Suspense>
       </div>
     </div>
   )

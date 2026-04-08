@@ -1,3 +1,6 @@
+export const dynamic = 'force-static'
+export const revalidate = 3600 // 1 hour
+
 import { TRPCError } from '@trpc/server'
 import { FileText } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -9,7 +12,7 @@ import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { formatPromptLevel } from '~/lib/prompt-levels'
 import { isPromptLevel } from '~/server/llm/prompts'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ level: string; slug: string }>
@@ -20,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!isPromptLevel(level)) return { title: 'Prompt' }
 
   try {
-    const caller = await api()
+    const caller = await publicApi()
     const prompt = await caller.prompt.getBySlug({ slug, level })
     const title = prompt.title
     const description = prompt.description ?? `Prompt: ${prompt.title}`
@@ -40,7 +43,7 @@ export default async function PromptDetailPage({ params }: Props) {
   const { level, slug } = await params
   if (!isPromptLevel(level)) notFound()
 
-  const caller = await api()
+  const caller = await publicApi()
   const prompt = await (async () => {
     try {
       return await caller.prompt.getBySlug({ slug, level })

@@ -1,3 +1,6 @@
+export const dynamic = 'force-static'
+export const revalidate = 3600 // 1 hour
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -14,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -114,7 +117,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const parsed = parseMatchSlug(slug)
   if (!parsed) return { title: 'Match Not Found' }
 
-  const caller = await api()
+  const caller = await publicApi()
   const data = await caller.benchmarkMatch.headToHead(parsed)
 
   if (!data.toolA || !data.toolB) return { title: 'Match Not Found' }
@@ -136,7 +139,7 @@ export default async function MatchDetailPage({ params }: Props) {
   const parsed = parseMatchSlug(slug)
   if (!parsed) notFound()
 
-  const caller = await api()
+  const caller = await publicApi()
   const data = await caller.benchmarkMatch.headToHead(parsed)
 
   if (!data.category || !data.toolA || !data.toolB) {

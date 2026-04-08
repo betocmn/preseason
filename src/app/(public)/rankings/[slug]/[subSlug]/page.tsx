@@ -1,26 +1,29 @@
+export const revalidate = 3600 // 1 hour
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-filters'
-import { EmptyState } from '~/components/public/empty-state'
-import { RankingTable } from '~/components/public/ranking-table'
+import { RankingDetailContent } from '~/components/public/ranking-detail-content'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
-import { normalizeModelSnapshotId } from '~/lib/model-filters'
-import { api } from '~/trpc/server'
+import { deferToRequestWhenDatabaseUnavailable, hasBuildDatabaseAccess } from '~/server/prerender'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string; subSlug: string }>
-  searchParams: Promise<{
-    promptLevel?: string
-    modelTier?: string
-    modelSnapshotId?: string
-  }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  if (!hasBuildDatabaseAccess()) {
+    return {
+      title: 'Rankings',
+      description: 'Benchmark rankings for tools by category.',
+    }
+  }
+
   const { slug, subSlug } = await params
-  const caller = await api()
+  const caller = await publicApi()
   const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
 
   if (!data.category) {
@@ -38,25 +41,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function SubcategoryRankingPage({ params, searchParams }: Props) {
-  const { slug, subSlug } = await params
-  const { promptLevel, modelTier, modelSnapshotId } = await searchParams
-  const caller = await api()
-  const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
-    (tier) => tier === promptLevel,
+export async function generateStaticParams() {
+  if (!hasBuildDatabaseAccess()) {
+    return []
+  }
+
+  const caller = await publicApi()
+  const groups = await caller.category.listGroups()
+  return groups.flatMap((group) =>
+    group.subcategories.map((subcategory) => ({
+      slug: group.slug,
+      subSlug: subcategory.slug,
+    })),
   )
-  const validModelTier = (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier)
+}
+
+export default async function SubcategoryRankingPage({ params }: Props) {
+  await deferToRequestWhenDatabaseUnavailable()
+  const { slug, subSlug } = await params
+  const caller = await publicApi()
   const [groups, modelFiltersData] = await Promise.all([
     caller.category.listGroups(),
     caller.benchmarkRanking.listModelFilters({}),
   ])
   const modelFilters = modelFiltersData.companies
-  const validModelSnapshotId = normalizeModelSnapshotId(modelFilters, modelSnapshotId)
   const data = await caller.benchmarkRanking.byCategory({
     categorySlug: subSlug,
-    promptLevel: validPromptLevel,
-    modelTier: validModelTier,
-    modelSnapshotId: validModelSnapshotId,
   })
 
   if (!data.category) {
@@ -83,25 +93,20 @@ export default async function SubcategoryRankingPage({ params, searchParams }: P
           modelFilters={modelFilters}
           currentGroup={slug}
           currentSub={subSlug}
-          currentPromptLevel={validPromptLevel}
-          currentModelTier={validModelTier}
-          currentModelSnapshotId={validModelSnapshotId}
           basePath={`/rankings/${slug}/${subSlug}`}
           showCategorySelect={false}
         />
       </Suspense>
-      <h2 className="mb-4 mt-6 text-lg font-semibold">{data.category.name}</h2>
-      {data.ranking && data.ranking.items.length > 0 ? (
-        <RankingTable
-          items={data.ranking.items}
-          meetsPublicationThreshold={data.ranking.meetsPublicationThreshold}
+      <Suspense
+        fallback={<p className="mt-6 text-sm text-muted-foreground">Loading rankings...</p>}
+      >
+        <RankingDetailContent
+          initialData={data}
+          kind="subcategory"
+          modelFilters={modelFilters}
+          slug={subSlug}
         />
-      ) : (
-        <EmptyState
-          title={`No benchmark data for ${data.category.name} yet`}
-          description="Rankings are computed from published benchmark runs. Check back after runs have completed."
-        />
-      )}
+      </Suspense>
     </SidebarLayout>
   )
 }
