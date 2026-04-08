@@ -117,6 +117,7 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
                 <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                   {logoA && logoB ? (
                     <>
+                      <span className="shrink-0 text-muted-foreground/60">Feedback on</span>
                       <ToolLogo url={logoA.url} name={logoA.name} size={4} />
                       <span className="truncate">{logoA.name}</span>
                       <span className="text-muted-foreground/60">vs</span>
@@ -125,6 +126,7 @@ export function CommentaryFeed({ comments }: { comments: CommentItem[] }) {
                     </>
                   ) : logoA ? (
                     <>
+                      <span className="shrink-0 text-muted-foreground/60">Feedback on</span>
                       <ToolLogo url={logoA.url} name={logoA.name} size={4} />
                       <span className="truncate">{comment.context.label}</span>
                     </>
