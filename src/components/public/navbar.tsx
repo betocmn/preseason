@@ -54,7 +54,7 @@ export function Navbar() {
         <div className="ml-auto flex items-center gap-3">
           <ThemeToggle />
           <Button size="sm" asChild className="hidden md:inline-flex">
-            <Link href="/signup">Sign up</Link>
+            <Link href="/contact">Contact</Link>
           </Button>
 
           <MobileNav />
