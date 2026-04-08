@@ -86,8 +86,8 @@ export function RankingDetailContent(props: RankingDetailContentProps) {
 
   const heading =
     props.kind === 'group'
-      ? (data.categoryGroup?.name ?? 'Category')
-      : (data.category?.name ?? 'Category')
+      ? ((data && 'categoryGroup' in data ? data.categoryGroup?.name : null) ?? 'Category')
+      : ((data && 'category' in data ? data.category?.name : null) ?? 'Category')
 
   return data.ranking && data.ranking.items.length > 0 ? (
     <div>

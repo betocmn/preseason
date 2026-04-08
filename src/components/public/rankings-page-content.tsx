@@ -93,8 +93,9 @@ export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPag
 
   const selected = isGroup ? groupQuery.data : subQuery.data
   const heading = isGroup
-    ? (selected?.categoryGroup?.name ?? 'Category')
-    : (selected?.category?.name ?? 'Category')
+    ? ((selected && 'categoryGroup' in selected ? selected.categoryGroup?.name : null) ??
+      'Category')
+    : ((selected && 'category' in selected ? selected.category?.name : null) ?? 'Category')
 
   if (!selected?.ranking || selected.ranking.items.length === 0) {
     return (
