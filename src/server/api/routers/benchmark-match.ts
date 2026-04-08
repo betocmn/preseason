@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import {
   anchorDateSchema,
+  findAllBenchmarkSeasonIds,
   findBenchmarkSeasonId,
   findLatestPublishedBenchmarkSeasonId,
 } from '~/server/api/helpers/benchmark'
@@ -184,6 +185,10 @@ async function buildManualHeadToHead(
   // Manual batches do not carry prompt-level metadata, so promptLevel-scoped
   // requests should not return unscoped manual fallback results.
   if (scope?.promptLevel) return null
+  const eligibleSeasonIds = scope?.seasonId
+    ? [scope.seasonId]
+    : await findAllBenchmarkSeasonIds(database)
+  if (eligibleSeasonIds.length === 0) return null
 
   const conditions = [
     eq(matchBatches.triggerMode, 'manual'),
@@ -193,7 +198,7 @@ async function buildManualHeadToHead(
       and(eq(matchBatches.toolAId, toolAId), eq(matchBatches.toolBId, toolBId)),
       and(eq(matchBatches.toolAId, toolBId), eq(matchBatches.toolBId, toolAId)),
     ),
-    scope?.seasonId ? eq(matchBatches.seasonId, scope.seasonId) : undefined,
+    inArray(matchBatches.seasonId, eligibleSeasonIds),
   ]
 
   if (scope?.anchorDate) {
@@ -438,10 +443,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
         const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
         const remainingSlots = limit - matchups.length
         const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
+        const eligibleManualSeasonIds = seasonId
+          ? [seasonId]
+          : await findAllBenchmarkSeasonIds(ctx.db)
         const manualBaseConditions = [
           eq(matchBatches.triggerMode, 'manual'),
           eq(matchBatches.status, 'completed'),
-          seasonId ? eq(matchBatches.seasonId, seasonId) : undefined,
+          inArray(matchBatches.seasonId, eligibleManualSeasonIds),
           lt(matchBatches.createdAt, windowBounds.endExclusive),
           windowBounds.startInclusive
             ? gte(matchBatches.createdAt, windowBounds.startInclusive)
@@ -449,7 +457,10 @@ export const benchmarkMatchRouter = createTRPCRouter({
           scopedSubcategoryIds ? inArray(matchBatches.categoryId, scopedSubcategoryIds) : undefined,
         ]
 
-        if (!(scopedSubcategoryIds && scopedSubcategoryIds.length === 0)) {
+        if (
+          !(scopedSubcategoryIds && scopedSubcategoryIds.length === 0) &&
+          eligibleManualSeasonIds.length > 0
+        ) {
           const scanPageSize = Math.min(
             serverSettings.benchmark.featuredMatchups.manualPairScanMaxRows,
             Math.max(
