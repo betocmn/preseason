@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   categories,
   comments,
+  contactMessages,
   criticProfiles,
   llms,
   prompts,
@@ -585,6 +586,26 @@ describe('Database Schema', () => {
       await db.delete(criticProfiles).where(eq(criticProfiles.id, critic.id))
       const result = await db.select().from(comments)
       expect(result).toHaveLength(0)
+    })
+  })
+
+  // ========================================================================
+  // Contact Messages
+  // ========================================================================
+
+  describe('Contact Messages', () => {
+    it('should create and query messages with a hashed source ip', async () => {
+      const db = getTestDb()
+      await db.insert(contactMessages).values({
+        email: 'contact@example.com',
+        message: 'Need help with a plan upgrade',
+        sourceIpHash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      })
+
+      const result = await db.select().from(contactMessages)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.email).toBe('contact@example.com')
+      expect(result[0]?.sourceIpHash).toHaveLength(64)
     })
   })
 })

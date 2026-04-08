@@ -1,6 +1,6 @@
 import { z } from 'zod'
+import { createRateLimitedContactMessage } from '~/server/api/helpers/contact-rate-limit'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import { contactMessages } from '~/server/db/schema'
 
 export const contactRouter = createTRPCRouter({
   create: publicProcedure
@@ -11,10 +11,7 @@ export const contactRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.insert(contactMessages).values({
-        email: input.email,
-        message: input.message,
-      })
+      await createRateLimitedContactMessage(ctx.db, ctx.headers, input)
       return { success: true }
     }),
 })

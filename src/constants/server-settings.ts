@@ -2,6 +2,7 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
+const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
 const matchRequestTimeoutMs = 2 * 60 * 1000
@@ -19,6 +20,11 @@ export const serverSettings = {
     promptCarouselPageSize: 5,
     promptCarouselRevalidateSeconds: 3_600,
     promptCarouselSnapshotMaxRunIds: 1_000,
+  },
+  contact: {
+    maxSubmissionsPerIp: 3,
+    rateLimitWindowMs: contactRateLimitWindowMs,
+    advisoryLockNamespace: 41_028,
   },
   benchmark: {
     promptContractVersion: '1.1',
