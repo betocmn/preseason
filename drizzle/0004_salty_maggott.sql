@@ -1,0 +1,2 @@
+ALTER TABLE "preseason_contact_message" ADD COLUMN "source_ip_hash" varchar(64);--> statement-breakpoint
+CREATE INDEX "contact_message_source_ip_hash_created_at_idx" ON "preseason_contact_message" USING btree ("source_ip_hash","createdAt");
