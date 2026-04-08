@@ -1046,22 +1046,23 @@ describe('benchmark public routers', () => {
     )
 
     const now = new Date()
-    const newestTie = new Date(now)
-    newestTie.setUTCHours(newestTie.getUTCHours() - 1)
+    for (let i = 0; i < 8; i++) {
+      const tieBatchCreatedAt = new Date(now)
+      tieBatchCreatedAt.setUTCMinutes(tieBatchCreatedAt.getUTCMinutes() - i - 1)
+      await seedCompletedManualBatchWithDecision({
+        db,
+        seasonId: season.id,
+        categoryId: authCategory.id,
+        toolOneId: clerk.id,
+        toolTwoId: supabase.id,
+        winnerDecision: 'tie',
+        promptTemplateId: template.id,
+        modelSnapshotId: modelSnapshot.id,
+        createdAt: tieBatchCreatedAt,
+      })
+    }
     const olderDecisive = new Date(now)
-    olderDecisive.setUTCHours(olderDecisive.getUTCHours() - 2)
-
-    await seedCompletedManualBatchWithDecision({
-      db,
-      seasonId: season.id,
-      categoryId: authCategory.id,
-      toolOneId: clerk.id,
-      toolTwoId: supabase.id,
-      winnerDecision: 'tie',
-      promptTemplateId: template.id,
-      modelSnapshotId: modelSnapshot.id,
-      createdAt: newestTie,
-    })
+    olderDecisive.setUTCMinutes(olderDecisive.getUTCMinutes() - 10)
     await seedCompletedManualBatch({
       db,
       seasonId: season.id,

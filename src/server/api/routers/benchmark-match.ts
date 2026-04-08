@@ -449,116 +449,160 @@ export const benchmarkMatchRouter = createTRPCRouter({
           scopedSubcategoryIds ? inArray(matchBatches.categoryId, scopedSubcategoryIds) : undefined,
         ]
 
-        const manualPairRows =
-          scopedSubcategoryIds && scopedSubcategoryIds.length === 0
-            ? []
-            : await ctx.db.query.matchBatches.findMany({
-                where: and(...manualBaseConditions),
-                columns: {
-                  categoryId: true,
-                  toolAId: true,
-                  toolBId: true,
-                },
-                orderBy: [desc(matchBatches.createdAt)],
-                limit: Math.min(
-                  serverSettings.benchmark.featuredMatchups.manualPairScanMaxRows,
-                  Math.max(
-                    remainingSlots,
-                    remainingSlots *
-                      serverSettings.benchmark.featuredMatchups.manualPairScanMultiplier,
-                  ),
-                ),
-              })
-
-        const selectedPairs: Array<{ categoryId: string; toolAId: string; toolBId: string }> = []
-        const selectedPairKeys = new Set<string>()
-        for (const batch of manualPairRows) {
-          const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
-          if (seenKeys.has(key) || selectedPairKeys.has(key)) continue
-
-          selectedPairKeys.add(key)
-          selectedPairs.push({
-            categoryId: batch.categoryId,
-            toolAId: batch.toolAId,
-            toolBId: batch.toolBId,
-          })
-        }
-
-        if (selectedPairs.length > 0) {
-          const selectedPairConditions = selectedPairs.map((pair) =>
-            and(
-              eq(matchBatches.categoryId, pair.categoryId),
-              or(
-                and(eq(matchBatches.toolAId, pair.toolAId), eq(matchBatches.toolBId, pair.toolBId)),
-                and(eq(matchBatches.toolAId, pair.toolBId), eq(matchBatches.toolBId, pair.toolAId)),
-              ),
+        if (!(scopedSubcategoryIds && scopedSubcategoryIds.length === 0)) {
+          const scanPageSize = Math.min(
+            serverSettings.benchmark.featuredMatchups.manualPairScanMaxRows,
+            Math.max(
+              remainingSlots,
+              remainingSlots * serverSettings.benchmark.featuredMatchups.manualPairScanMultiplier,
             ),
           )
 
-          const manualBatches = await ctx.db.query.matchBatches.findMany({
-            where: and(and(...manualBaseConditions), or(...selectedPairConditions)),
-            orderBy: [desc(matchBatches.createdAt)],
-            with: {
-              category: true,
-              toolA: true,
-              toolB: true,
-              evaluations: {
-                where: eq(matchEvaluations.status, 'completed'),
-                with: { modelSnapshot: true },
+          const attemptedPairKeys = new Set<string>()
+          let scanBeforeCreatedAt: Date | null = null
+          let scanBeforeId: string | null = null
+
+          while (matchups.length < limit) {
+            const whereClause =
+              scanBeforeCreatedAt && scanBeforeId
+                ? and(
+                    ...manualBaseConditions,
+                    or(
+                      lt(matchBatches.createdAt, scanBeforeCreatedAt),
+                      and(
+                        eq(matchBatches.createdAt, scanBeforeCreatedAt),
+                        lt(matchBatches.id, scanBeforeId),
+                      ),
+                    ),
+                  )
+                : and(...manualBaseConditions)
+
+            const manualPairRows: Array<{
+              id: string
+              createdAt: Date
+              categoryId: string
+              toolAId: string
+              toolBId: string
+            }> = await ctx.db.query.matchBatches.findMany({
+              where: whereClause,
+              columns: {
+                id: true,
+                createdAt: true,
+                categoryId: true,
+                toolAId: true,
+                toolBId: true,
               },
-            },
-          })
-
-          type ManualBatch = (typeof manualBatches)[number]
-          const groupedBatchesByKey = new Map<
-            string,
-            {
-              representative: ManualBatch
-              batches: ManualBatch[]
-            }
-          >()
-
-          for (const batch of manualBatches) {
-            const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
-            let grouped = groupedBatchesByKey.get(key)
-            if (!grouped) {
-              grouped = { representative: batch, batches: [] }
-              groupedBatchesByKey.set(key, grouped)
-            }
-            grouped.batches.push(batch)
-          }
-
-          for (const [key, grouped] of groupedBatchesByKey) {
-            if (matchups.length >= limit) break
-
-            if (seenKeys.has(key)) continue
-            const { representative, batches } = grouped
-            const result = buildHeadToHeadFromManualBatches({
-              batches,
-              categoryId: representative.categoryId,
-              toolAId: representative.toolAId,
-              toolBId: representative.toolBId,
+              orderBy: [desc(matchBatches.createdAt), desc(matchBatches.id)],
+              limit: scanPageSize,
             })
-            if (!result) continue
 
-            seenKeys.add(key)
+            if (manualPairRows.length === 0) break
 
-            matchups.push({
-              category: representative.category,
-              toolA: {
-                id: representative.toolA.id,
-                name: representative.toolA.name,
-                slug: representative.toolA.slug,
-                logoUrl: representative.toolA.logoUrl,
+            const lastRow = manualPairRows[manualPairRows.length - 1]
+            if (!lastRow) break
+            scanBeforeCreatedAt = lastRow.createdAt
+            scanBeforeId = lastRow.id
+
+            const selectedPairs: Array<{ categoryId: string; toolAId: string; toolBId: string }> =
+              []
+            const selectedPairKeys = new Set<string>()
+            for (const row of manualPairRows) {
+              const key = matchupKey(row.categoryId, row.toolAId, row.toolBId)
+              if (seenKeys.has(key) || attemptedPairKeys.has(key) || selectedPairKeys.has(key))
+                continue
+
+              selectedPairKeys.add(key)
+              attemptedPairKeys.add(key)
+              selectedPairs.push({
+                categoryId: row.categoryId,
+                toolAId: row.toolAId,
+                toolBId: row.toolBId,
+              })
+            }
+
+            if (selectedPairs.length === 0) continue
+
+            const selectedPairConditions = selectedPairs.map((pair) =>
+              and(
+                eq(matchBatches.categoryId, pair.categoryId),
+                or(
+                  and(
+                    eq(matchBatches.toolAId, pair.toolAId),
+                    eq(matchBatches.toolBId, pair.toolBId),
+                  ),
+                  and(
+                    eq(matchBatches.toolAId, pair.toolBId),
+                    eq(matchBatches.toolBId, pair.toolAId),
+                  ),
+                ),
+              ),
+            )
+
+            const manualBatches = await ctx.db.query.matchBatches.findMany({
+              where: and(and(...manualBaseConditions), or(...selectedPairConditions)),
+              orderBy: [desc(matchBatches.createdAt)],
+              with: {
+                category: true,
+                toolA: true,
+                toolB: true,
+                evaluations: {
+                  where: eq(matchEvaluations.status, 'completed'),
+                  with: { modelSnapshot: true },
+                },
               },
-              toolB: {
-                id: representative.toolB.id,
-                name: representative.toolB.name,
-                slug: representative.toolB.slug,
-                logoUrl: representative.toolB.logoUrl,
-              },
-              result,
             })
+
+            type ManualBatch = (typeof manualBatches)[number]
+            const groupedBatchesByKey = new Map<
+              string,
+              {
+                representative: ManualBatch
+                batches: ManualBatch[]
+              }
+            >()
+
+            for (const batch of manualBatches) {
+              const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
+              let grouped = groupedBatchesByKey.get(key)
+              if (!grouped) {
+                grouped = { representative: batch, batches: [] }
+                groupedBatchesByKey.set(key, grouped)
+              }
+              grouped.batches.push(batch)
+            }
+
+            for (const [key, grouped] of groupedBatchesByKey) {
+              if (matchups.length >= limit) break
+
+              if (seenKeys.has(key)) continue
+              const { representative, batches } = grouped
+              const result = buildHeadToHeadFromManualBatches({
+                batches,
+                categoryId: representative.categoryId,
+                toolAId: representative.toolAId,
+                toolBId: representative.toolBId,
+              })
+              if (!result) continue
+
+              seenKeys.add(key)
+
+              matchups.push({
+                category: representative.category,
+                toolA: {
+                  id: representative.toolA.id,
+                  name: representative.toolA.name,
+                  slug: representative.toolA.slug,
+                  logoUrl: representative.toolA.logoUrl,
+                },
+                toolB: {
+                  id: representative.toolB.id,
+                  name: representative.toolB.name,
+                  slug: representative.toolB.slug,
+                  logoUrl: representative.toolB.logoUrl,
+                },
+                result,
+              })
+            }
           }
         }
       }
