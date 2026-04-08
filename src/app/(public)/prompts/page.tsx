@@ -10,7 +10,7 @@ import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { formatPromptLevel } from '~/lib/prompt-levels'
 import { promptLevelEnum } from '~/server/db/schema'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Prompts',
@@ -42,7 +42,7 @@ export default async function PromptsPage({ searchParams }: Props) {
   const safeStr = (v: string | undefined) => (v && v.length >= 1 && v.length <= 100 ? v : undefined)
   const safeGroup = safeStr(group)
   const safeSub = safeStr(sub)
-  const caller = await api()
+  const caller = await publicApi()
 
   const [activePrompts, categoryGroups] = await Promise.all([
     caller.prompt.listActive({ level: safeLevel, group: safeGroup, sub: safeSub }),

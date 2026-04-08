@@ -9,7 +9,7 @@ import { EmptyState } from '~/components/public/empty-state'
 import { RankingTable } from '~/components/public/ranking-table'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { normalizeModelSnapshotId } from '~/lib/model-filters'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string; subSlug: string }>
@@ -22,7 +22,7 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, subSlug } = await params
-  const caller = await api()
+  const caller = await publicApi()
   const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
 
   if (!data.category) {
@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function SubcategoryRankingPage({ params, searchParams }: Props) {
   const { slug, subSlug } = await params
   const { promptLevel, modelTier, modelSnapshotId } = await searchParams
-  const caller = await api()
+  const caller = await publicApi()
   const validPromptLevel = (['beginner', 'intermediate', 'advanced'] as const).find(
     (tier) => tier === promptLevel,
   )

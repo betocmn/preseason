@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
 import { Separator } from '~/components/ui/separator'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -27,7 +27,7 @@ function formatDate(date: Date | null) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   try {
-    const caller = await api()
+    const caller = await publicApi()
     const critic = await caller.critic.getBySlug({ slug })
     const title = `${critic.user.displayName} | Critics`
     const description = critic.title
@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CriticDetailPage({ params }: Props) {
   const { slug } = await params
-  const caller = await api()
+  const caller = await publicApi()
 
   const critic = await (async () => {
     try {

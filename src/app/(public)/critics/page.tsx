@@ -3,7 +3,7 @@ export const revalidate = 3600 // 1 hour
 import type { Metadata } from 'next'
 import { CriticsGrid } from '~/components/public/critics-grid'
 import { RecentCommentaryList } from '~/components/public/recent-commentary-list'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Critics',
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 }
 
 export default async function CriticsPage() {
-  const caller = await api()
+  const caller = await publicApi()
   const [criticsData, commentsData] = await Promise.all([
     caller.critic.listWithCount({ limit: 12, offset: 0 }),
     caller.comment.listRecent({ limit: 10, offset: 0 }),

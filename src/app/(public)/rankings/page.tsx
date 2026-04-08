@@ -8,7 +8,7 @@ import { EmptyState } from '~/components/public/empty-state'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { RankingTable } from '~/components/public/ranking-table'
 import { normalizeModelSnapshotId } from '~/lib/model-filters'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Rankings',
@@ -39,7 +39,7 @@ type Props = {
 export default async function RankingsPage({ searchParams }: Props) {
   const { category: rawCategory, sub, promptLevel, modelTier, modelSnapshotId } = await searchParams
   const category = rawCategory ?? 'devtools'
-  const caller = await api()
+  const caller = await publicApi()
   const [categoryGroups, modelFiltersData] = await Promise.all([
     caller.category.listGroups(),
     caller.benchmarkRanking.listModelFilters({}),
