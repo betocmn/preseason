@@ -240,210 +240,204 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const limit = input?.limit ?? 12
       const anchorDate = new Date().toISOString().slice(0, 10)
 
-      // ---------------------------------------------------------------
-      // 1. Fetch completed manual match batches
-      // ---------------------------------------------------------------
-      const manualBatches = await ctx.db.query.matchBatches.findMany({
-        where: and(eq(matchBatches.triggerMode, 'manual'), eq(matchBatches.status, 'completed')),
-        orderBy: [desc(matchBatches.createdAt)],
-        with: {
-          category: true,
-          toolA: true,
-          toolB: true,
-          evaluations: {
-            where: eq(matchEvaluations.status, 'completed'),
-            with: { modelSnapshot: true },
-          },
-        },
-      })
+      const matchups: MatchupEntry[] = []
+      const seenKeys = new Set<string>()
 
-      // Deduplicate manual batches by category+tool pair (keep newest)
-      const seenManualKeys = new Set<string>()
-      const manualMatchups: MatchupEntry[] = []
-      for (const batch of manualBatches) {
-        const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
-        if (seenManualKeys.has(key)) continue
-        seenManualKeys.add(key)
+      // ---------------------------------------------------------------
+      // 1. Auto-generated benchmark matchups (top 2 per category)
+      // ---------------------------------------------------------------
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
-        const evals = batch.evaluations
-        let aWins = 0
-        let bWins = 0
-        let abstains = 0
-        for (const ev of evals) {
-          if (ev.winnerDecision === 'tool_a') aWins++
-          else if (ev.winnerDecision === 'tool_b') bWins++
-          else abstains++
+      let subs: { id: string; name: string; slug: string }[] = []
+      if (seasonId) {
+        if (input?.categorySlug) {
+          const group = await ctx.db.query.categories.findFirst({
+            where: eq(categories.slug, input.categorySlug),
+            with: {
+              subcategories: {
+                orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+              },
+            },
+          })
+          subs = group?.subcategories ?? []
+        } else {
+          subs = await ctx.db.query.subcategories.findMany({
+            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+          })
         }
-        const decisiveCaseCount = aWins + bWins
-        const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
-        const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
-        const ci = wilsonInterval(aWins, decisiveCaseCount)
 
-        const modelBreakdownMap = new Map<string, HeadToHeadBreakdownEntry>()
-        for (const ev of evals) {
-          const msId = ev.modelSnapshotId
-          let entry = modelBreakdownMap.get(msId)
-          if (!entry) {
-            entry = {
-              id: msId,
-              label: ev.modelSnapshot.name,
-              tier: ev.modelSnapshot.tier as ModelTier,
-              aWins: 0,
-              bWins: 0,
-              abstains: 0,
-              otherToolCount: 0,
-              decisiveCaseCount: 0,
-              aWinRate: 0,
+        const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
+
+        if (scoringCtx.runIds.length > 0) {
+          const allCategoryIds = subs.map((s) => s.id)
+          const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
+
+          const decisionsByCategory = new Map<string, DecisionRow[]>()
+          for (const d of allDecisions) {
+            let list = decisionsByCategory.get(d.categoryId)
+            if (!list) {
+              list = []
+              decisionsByCategory.set(d.categoryId, list)
             }
-            modelBreakdownMap.set(msId, entry)
+            list.push(d)
           }
-          if (ev.winnerDecision === 'tool_a') {
-            entry.aWins++
-            entry.decisiveCaseCount++
-          } else if (ev.winnerDecision === 'tool_b') {
-            entry.bWins++
-            entry.decisiveCaseCount++
-          } else entry.abstains++
+
+          for (const sub of subs) {
+            if (matchups.length >= limit) break
+
+            const catDecisions = decisionsByCategory.get(sub.id) ?? []
+            const ranking = rankFromDecisions(
+              catDecisions,
+              scoringCtx.weightConfigs,
+              sub.id,
+              'trailing_28d',
+              anchorDate,
+            )
+
+            if (ranking.items.length < 2) continue
+
+            const [top1, top2] = ranking.items
+            if (!top1 || !top2) continue
+
+            const key = matchupKey(sub.id, top1.toolId, top2.toolId)
+            seenKeys.add(key)
+
+            const result = headToHeadFromDecisions(
+              catDecisions,
+              scoringCtx.weightConfigs,
+              top1.toolId,
+              top2.toolId,
+              sub.id,
+            )
+
+            matchups.push({
+              category: sub,
+              toolA: {
+                id: top1.toolId,
+                name: top1.toolName,
+                slug: top1.toolSlug,
+                logoUrl: top1.toolLogoUrl,
+              },
+              toolB: {
+                id: top2.toolId,
+                name: top2.toolName,
+                slug: top2.toolSlug,
+                logoUrl: top2.toolLogoUrl,
+              },
+              result,
+            })
+          }
         }
-
-        const modelBreakdown = Array.from(modelBreakdownMap.values()).map((e) => ({
-          ...e,
-          aWinRate: e.decisiveCaseCount > 0 ? e.aWins / e.decisiveCaseCount : 0,
-        }))
-
-        const result: HeadToHeadResult = {
-          toolAId: batch.toolAId,
-          toolBId: batch.toolBId,
-          categoryId: batch.categoryId,
-          aWins,
-          bWins,
-          abstains,
-          otherToolCount: 0,
-          decisiveCaseCount,
-          aWinRate,
-          bWinRate,
-          ciLow: ci.low,
-          ciHigh: ci.high,
-          weightedAWins: aWins,
-          weightedBWins: bWins,
-          weightedAWinRate: aWinRate,
-          modelBreakdown,
-          promptBreakdown: [],
-          meetsPublicationThreshold: decisiveCaseCount >= 30,
-        }
-
-        manualMatchups.push({
-          category: batch.category,
-          toolA: {
-            id: batch.toolA.id,
-            name: batch.toolA.name,
-            slug: batch.toolA.slug,
-            logoUrl: batch.toolA.logoUrl,
-          },
-          toolB: {
-            id: batch.toolB.id,
-            name: batch.toolB.name,
-            slug: batch.toolB.slug,
-            logoUrl: batch.toolB.logoUrl,
-          },
-          result,
-        })
       }
 
       // ---------------------------------------------------------------
-      // 2. Fill remaining slots with auto-generated benchmark matchups
+      // 2. Fill remaining slots with manual match batches
       // ---------------------------------------------------------------
-      const matchups: MatchupEntry[] = [...manualMatchups]
-
       if (matchups.length < limit) {
-        const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+        const manualBatches = await ctx.db.query.matchBatches.findMany({
+          where: and(eq(matchBatches.triggerMode, 'manual'), eq(matchBatches.status, 'completed')),
+          orderBy: [desc(matchBatches.createdAt)],
+          with: {
+            category: true,
+            toolA: true,
+            toolB: true,
+            evaluations: {
+              where: eq(matchEvaluations.status, 'completed'),
+              with: { modelSnapshot: true },
+            },
+          },
+        })
 
-        if (seasonId) {
-          let subs: { id: string; name: string; slug: string }[]
-          if (input?.categorySlug) {
-            const group = await ctx.db.query.categories.findFirst({
-              where: eq(categories.slug, input.categorySlug),
-              with: {
-                subcategories: {
-                  orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-                },
-              },
-            })
-            subs = group?.subcategories ?? []
-          } else {
-            subs = await ctx.db.query.subcategories.findMany({
-              orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-            })
+        for (const batch of manualBatches) {
+          if (matchups.length >= limit) break
+
+          const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
+          if (seenKeys.has(key)) continue
+          seenKeys.add(key)
+
+          const evals = batch.evaluations
+          let aWins = 0
+          let bWins = 0
+          let abstains = 0
+          for (const ev of evals) {
+            if (ev.winnerDecision === 'tool_a') aWins++
+            else if (ev.winnerDecision === 'tool_b') bWins++
+            else abstains++
           }
+          const decisiveCaseCount = aWins + bWins
+          const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
+          const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
+          const ci = wilsonInterval(aWins, decisiveCaseCount)
 
-          const scoringCtx = await prepareScoringContext(
-            ctx.db,
-            seasonId,
-            'trailing_28d',
-            anchorDate,
-          )
-
-          if (scoringCtx.runIds.length > 0) {
-            const allCategoryIds = subs.map((s) => s.id)
-            const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
-
-            const decisionsByCategory = new Map<string, DecisionRow[]>()
-            for (const d of allDecisions) {
-              let list = decisionsByCategory.get(d.categoryId)
-              if (!list) {
-                list = []
-                decisionsByCategory.set(d.categoryId, list)
+          const modelBreakdownMap = new Map<string, HeadToHeadBreakdownEntry>()
+          for (const ev of evals) {
+            const msId = ev.modelSnapshotId
+            let entry = modelBreakdownMap.get(msId)
+            if (!entry) {
+              entry = {
+                id: msId,
+                label: ev.modelSnapshot.name,
+                tier: ev.modelSnapshot.tier as ModelTier,
+                aWins: 0,
+                bWins: 0,
+                abstains: 0,
+                otherToolCount: 0,
+                decisiveCaseCount: 0,
+                aWinRate: 0,
               }
-              list.push(d)
+              modelBreakdownMap.set(msId, entry)
             }
-
-            for (const sub of subs) {
-              if (matchups.length >= limit) break
-
-              const catDecisions = decisionsByCategory.get(sub.id) ?? []
-              const ranking = rankFromDecisions(
-                catDecisions,
-                scoringCtx.weightConfigs,
-                sub.id,
-                'trailing_28d',
-                anchorDate,
-              )
-
-              if (ranking.items.length < 2) continue
-
-              const [top1, top2] = ranking.items
-              if (!top1 || !top2) continue
-
-              // Skip if this matchup already exists from manual batches
-              const key = matchupKey(sub.id, top1.toolId, top2.toolId)
-              if (seenManualKeys.has(key)) continue
-
-              const result = headToHeadFromDecisions(
-                catDecisions,
-                scoringCtx.weightConfigs,
-                top1.toolId,
-                top2.toolId,
-                sub.id,
-              )
-
-              matchups.push({
-                category: sub,
-                toolA: {
-                  id: top1.toolId,
-                  name: top1.toolName,
-                  slug: top1.toolSlug,
-                  logoUrl: top1.toolLogoUrl,
-                },
-                toolB: {
-                  id: top2.toolId,
-                  name: top2.toolName,
-                  slug: top2.toolSlug,
-                  logoUrl: top2.toolLogoUrl,
-                },
-                result,
-              })
-            }
+            if (ev.winnerDecision === 'tool_a') {
+              entry.aWins++
+              entry.decisiveCaseCount++
+            } else if (ev.winnerDecision === 'tool_b') {
+              entry.bWins++
+              entry.decisiveCaseCount++
+            } else entry.abstains++
           }
+
+          const modelBreakdown = Array.from(modelBreakdownMap.values()).map((e) => ({
+            ...e,
+            aWinRate: e.decisiveCaseCount > 0 ? e.aWins / e.decisiveCaseCount : 0,
+          }))
+
+          const result: HeadToHeadResult = {
+            toolAId: batch.toolAId,
+            toolBId: batch.toolBId,
+            categoryId: batch.categoryId,
+            aWins,
+            bWins,
+            abstains,
+            otherToolCount: 0,
+            decisiveCaseCount,
+            aWinRate,
+            bWinRate,
+            ciLow: ci.low,
+            ciHigh: ci.high,
+            weightedAWins: aWins,
+            weightedBWins: bWins,
+            weightedAWinRate: aWinRate,
+            modelBreakdown,
+            promptBreakdown: [],
+            meetsPublicationThreshold: decisiveCaseCount >= 30,
+          }
+
+          matchups.push({
+            category: batch.category,
+            toolA: {
+              id: batch.toolA.id,
+              name: batch.toolA.name,
+              slug: batch.toolA.slug,
+              logoUrl: batch.toolA.logoUrl,
+            },
+            toolB: {
+              id: batch.toolB.id,
+              name: batch.toolB.name,
+              slug: batch.toolB.slug,
+              logoUrl: batch.toolB.logoUrl,
+            },
+            result,
+          })
         }
       }
 
