@@ -1,3 +1,6 @@
+export const dynamic = 'force-static'
+export const revalidate = 3600 // 1 hour
+
 import { TRPCError } from '@trpc/server'
 import { CheckCircle, ExternalLink } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -11,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
-import { api } from '~/trpc/server'
+import { publicApi } from '~/trpc/server'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -20,7 +23,7 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   try {
-    const caller = await api()
+    const caller = await publicApi()
     const tool = await caller.tool.getBySlug({ slug })
     const title = tool.name
     const description = tool.description ?? `See how LLMs recommend ${tool.name}.`
@@ -38,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ToolDetailPage({ params }: Props) {
   const { slug } = await params
-  const caller = await api()
+  const caller = await publicApi()
 
   const tool = await (async () => {
     try {

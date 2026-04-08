@@ -1,3 +1,5 @@
+export const revalidate = false // fully static
+
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {

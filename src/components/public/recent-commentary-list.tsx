@@ -9,22 +9,26 @@ const PAGE_SIZE = 10
 
 type RecentCommentaryItem = RouterOutputs['comment']['listRecent']['items'][number]
 
-export function RecentCommentaryList() {
-  const [offset, setOffset] = useState(0)
-  const [items, setItems] = useState<RecentCommentaryItem[]>([])
-  const [total, setTotal] = useState(0)
+type RecentCommentaryListProps = {
+  initialItems: RecentCommentaryItem[]
+  initialTotal: number
+}
 
-  const { data, isLoading, isFetching } = api.comment.listRecent.useQuery({
-    limit: PAGE_SIZE,
-    offset,
-  })
+export function RecentCommentaryList({ initialItems, initialTotal }: RecentCommentaryListProps) {
+  const [offset, setOffset] = useState(0)
+  const [items, setItems] = useState<RecentCommentaryItem[]>(initialItems)
+  const [total, setTotal] = useState(initialTotal)
+
+  const { data, isFetching } = api.comment.listRecent.useQuery(
+    { limit: PAGE_SIZE, offset },
+    { enabled: offset > 0 },
+  )
 
   useEffect(() => {
-    if (!data) return
+    if (!data || offset === 0) return
 
     setTotal(data.total)
     setItems((prev) => {
-      if (offset === 0) return data.items
       const existingIds = new Set(prev.map((comment) => comment.id))
       const next = data.items.filter((comment) => !existingIds.has(comment.id))
       return [...prev, ...next]
@@ -33,7 +37,7 @@ export function RecentCommentaryList() {
 
   const hasMore = items.length < total
 
-  if (!isLoading && items.length === 0) return null
+  if (items.length === 0) return null
 
   return (
     <>

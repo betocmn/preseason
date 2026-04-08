@@ -12,22 +12,26 @@ const PAGE_SIZE = 12
 
 type CriticItem = RouterOutputs['critic']['listWithCount']['items'][number]
 
-export function CriticsGrid() {
-  const [offset, setOffset] = useState(0)
-  const [items, setItems] = useState<CriticItem[]>([])
-  const [total, setTotal] = useState(0)
+type CriticsGridProps = {
+  initialItems: CriticItem[]
+  initialTotal: number
+}
 
-  const { data, isLoading, isFetching } = api.critic.listWithCount.useQuery({
-    limit: PAGE_SIZE,
-    offset,
-  })
+export function CriticsGrid({ initialItems, initialTotal }: CriticsGridProps) {
+  const [offset, setOffset] = useState(0)
+  const [items, setItems] = useState<CriticItem[]>(initialItems)
+  const [total, setTotal] = useState(initialTotal)
+
+  const { data, isFetching } = api.critic.listWithCount.useQuery(
+    { limit: PAGE_SIZE, offset },
+    { enabled: offset > 0 },
+  )
 
   useEffect(() => {
-    if (!data) return
+    if (!data || offset === 0) return
 
     setTotal(data.total)
     setItems((prev) => {
-      if (offset === 0) return data.items
       const existingIds = new Set(prev.map((critic) => critic.id))
       const next = data.items.filter((critic) => !existingIds.has(critic.id))
       return [...prev, ...next]
@@ -36,7 +40,7 @@ export function CriticsGrid() {
 
   const hasMore = items.length < total
 
-  if (!isLoading && items.length === 0) {
+  if (items.length === 0) {
     return (
       <EmptyState
         icon={<MessageSquare className="h-8 w-8" />}

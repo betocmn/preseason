@@ -1,3 +1,5 @@
+export const revalidate = 3600 // 1 hour
+
 import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
 import { CommentaryFeed } from '~/components/public/commentary-feed'
@@ -9,10 +11,12 @@ import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent } from '~/components/ui/card'
 import { serverSettings } from '~/constants/server-settings'
-import { api } from '~/trpc/server'
+import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
+import { publicApi } from '~/trpc/server'
 
 export default async function HomePage() {
-  const caller = await api()
+  await deferToRequestWhenDatabaseUnavailable()
+  const caller = await publicApi()
   const today = new Date().toISOString().slice(0, 10)
   const pageSize = serverSettings.homepage.promptCarouselPageSize
 

@@ -36,6 +36,9 @@ export function PromptFilters({
 }: PromptFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const effectiveLevel = searchParams.get('level') ?? currentLevel
+  const effectiveGroup = searchParams.get('group') ?? currentGroup
+  const effectiveSub = searchParams.get('sub') ?? currentSub
 
   function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -50,18 +53,18 @@ export function PromptFilters({
     router.replace(qs ? `/prompts?${qs}` : '/prompts')
   }
 
-  const categoryValue = currentSub
-    ? `${currentGroup}:${currentSub}`
-    : currentGroup
-      ? currentGroup
+  const categoryValue = effectiveSub
+    ? `${effectiveGroup}:${effectiveSub}`
+    : effectiveGroup
+      ? effectiveGroup
       : 'all'
 
   const categoryLabel = (() => {
-    if (!currentGroup) return 'All Categories'
-    const group = groups.find((g) => g.slug === currentGroup)
+    if (!effectiveGroup) return 'All Categories'
+    const group = groups.find((g) => g.slug === effectiveGroup)
     if (!group) return 'All Categories'
-    if (currentSub) {
-      const sub = group.subcategories.find((s) => s.slug === currentSub)
+    if (effectiveSub) {
+      const sub = group.subcategories.find((s) => s.slug === effectiveSub)
       return sub ? `${group.name} / ${sub.name}` : group.name
     }
     return `All ${group.name}`
@@ -72,7 +75,7 @@ export function PromptFilters({
       <div className="flex items-center gap-2">
         <Layers className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={currentLevel ?? 'all'}
+          value={effectiveLevel ?? 'all'}
           onValueChange={(val) => navigate({ level: val === 'all' ? undefined : val })}
         >
           <SelectTrigger className="h-9 w-[220px] border-border/60 bg-background/80 text-sm">
