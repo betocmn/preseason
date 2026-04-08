@@ -21,9 +21,9 @@ function normalizePromptFilters(searchParams: URLSearchParams) {
   const level = searchParams.get('level') ?? undefined
   const group = searchParams.get('group') ?? undefined
   const sub = searchParams.get('sub') ?? undefined
-  const validLevels = promptLevelEnum.enumValues
+  const validLevels = new Set<string>(promptLevelEnum.enumValues)
   const safeLevel =
-    level && validLevels.includes(level)
+    level && validLevels.has(level)
       ? (level as (typeof promptLevelEnum.enumValues)[number])
       : undefined
   const safeStr = (value: string | undefined) =>
