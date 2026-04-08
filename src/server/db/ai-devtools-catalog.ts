@@ -57,7 +57,7 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     slug: 'claude-code',
     website: 'https://code.claude.com/docs/en/overview',
     description: 'Anthropic coding agent for terminal-first software development tasks',
-    aliases: ['ClaudeCode', 'claudecode'],
+    aliases: ['ClaudeCode'],
   },
   {
     name: 'Codex CLI',
