@@ -270,7 +270,9 @@ export const benchmarkRankingRouter = createTRPCRouter({
           const toolIndex = ranking.items.findIndex((item) => item.toolId === tool.id)
           if (toolIndex === -1) return null
 
-          const entry = ranking.items[toolIndex]!
+          const entry = ranking.items[toolIndex]
+          if (!entry) return null
+
           return {
             category: {
               id: cat.id,
