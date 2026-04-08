@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, or } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   anchorDateSchema,
@@ -25,9 +25,10 @@ import {
   type ModelTier,
   prepareScoringContext,
   rankFromDecisions,
+  type WindowType,
   wilsonInterval,
 } from '~/server/llm/benchmark/scoring'
-import { promptLevelSchema } from '~/server/llm/prompts'
+import { type PromptLevel, promptLevelSchema } from '~/server/llm/prompts'
 
 type MatchupEntry = {
   category: { id: string; name: string; slug: string }
@@ -42,31 +43,57 @@ function matchupKey(categoryId: string, toolAId: string, toolBId: string) {
     .toLowerCase()
 }
 
-async function buildManualHeadToHead(
-  database: typeof DatabaseInstance,
-  categoryId: string,
-  toolAId: string,
-  toolBId: string,
-): Promise<HeadToHeadResult | null> {
-  const batches = await database.query.matchBatches.findMany({
-    where: and(
-      eq(matchBatches.triggerMode, 'manual'),
-      eq(matchBatches.status, 'completed'),
-      eq(matchBatches.categoryId, categoryId),
-      or(
-        and(eq(matchBatches.toolAId, toolAId), eq(matchBatches.toolBId, toolBId)),
-        and(eq(matchBatches.toolAId, toolBId), eq(matchBatches.toolBId, toolAId)),
-      ),
-    ),
-    orderBy: [desc(matchBatches.createdAt)],
-    with: {
-      evaluations: {
-        where: eq(matchEvaluations.status, 'completed'),
-        with: { modelSnapshot: true },
-      },
-    },
-  })
+type ManualHeadToHeadScope = {
+  seasonId?: string
+  windowType?: WindowType
+  anchorDate?: string
+  promptLevel?: PromptLevel
+  modelTier?: ModelTier
+}
 
+type ManualHeadToHeadBatch = {
+  toolAId: string
+  toolBId: string
+  evaluations: Array<{
+    modelSnapshotId: string
+    winnerDecision: (typeof matchEvaluations.$inferSelect)['winnerDecision']
+    modelSnapshot: {
+      name: string
+      tier: ModelTier
+    }
+  }>
+}
+
+function addDaysUtc(date: Date, days: number) {
+  const next = new Date(date)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next
+}
+
+function getManualWindowBounds(windowType: WindowType, anchorDate: string) {
+  const dayStart = new Date(`${anchorDate}T00:00:00.000Z`)
+  const dayEndExclusive = addDaysUtc(dayStart, 1)
+
+  switch (windowType) {
+    case 'run_day':
+      return { startInclusive: dayStart, endExclusive: dayEndExclusive }
+    case 'trailing_7d':
+      return { startInclusive: addDaysUtc(dayStart, -6), endExclusive: dayEndExclusive }
+    case 'trailing_28d':
+      return { startInclusive: addDaysUtc(dayStart, -27), endExclusive: dayEndExclusive }
+    case 'season_to_date':
+      return { startInclusive: null, endExclusive: dayEndExclusive }
+  }
+}
+
+function buildHeadToHeadFromManualBatches(args: {
+  batches: ManualHeadToHeadBatch[]
+  categoryId: string
+  toolAId: string
+  toolBId: string
+  modelTier?: ModelTier
+}): HeadToHeadResult | null {
+  const { batches, categoryId, toolAId, toolBId, modelTier } = args
   if (batches.length === 0) return null
 
   let aWins = 0
@@ -77,6 +104,9 @@ async function buildManualHeadToHead(
   for (const batch of batches) {
     const flipped = batch.toolAId !== toolAId
     for (const ev of batch.evaluations) {
+      const tier = ev.modelSnapshot.tier as ModelTier
+      if (modelTier && tier !== modelTier) continue
+
       const decision = ev.winnerDecision
       const isA = flipped ? decision === 'tool_b' : decision === 'tool_a'
       const isB = flipped ? decision === 'tool_a' : decision === 'tool_b'
@@ -91,7 +121,7 @@ async function buildManualHeadToHead(
         entry = {
           id: msId,
           label: ev.modelSnapshot.name,
-          tier: ev.modelSnapshot.tier as ModelTier,
+          tier,
           aWins: 0,
           bWins: 0,
           abstains: 0,
@@ -134,13 +164,63 @@ async function buildManualHeadToHead(
     weightedAWins: aWins,
     weightedBWins: bWins,
     weightedAWinRate: aWinRate,
-    modelBreakdown: Array.from(modelBreakdownMap.values()).map((e) => ({
-      ...e,
-      aWinRate: e.decisiveCaseCount > 0 ? e.aWins / e.decisiveCaseCount : 0,
+    modelBreakdown: Array.from(modelBreakdownMap.values()).map((entry) => ({
+      ...entry,
+      aWinRate: entry.decisiveCaseCount > 0 ? entry.aWins / entry.decisiveCaseCount : 0,
     })),
     promptBreakdown: [],
     meetsPublicationThreshold: decisiveCaseCount >= 30,
   }
+}
+
+async function buildManualHeadToHead(
+  database: typeof DatabaseInstance,
+  categoryId: string,
+  toolAId: string,
+  toolBId: string,
+  scope?: ManualHeadToHeadScope,
+): Promise<HeadToHeadResult | null> {
+  // Manual batches do not carry prompt-level metadata, so promptLevel-scoped
+  // requests should not return unscoped manual fallback results.
+  if (scope?.promptLevel) return null
+
+  const conditions = [
+    eq(matchBatches.triggerMode, 'manual'),
+    eq(matchBatches.status, 'completed'),
+    eq(matchBatches.categoryId, categoryId),
+    or(
+      and(eq(matchBatches.toolAId, toolAId), eq(matchBatches.toolBId, toolBId)),
+      and(eq(matchBatches.toolAId, toolBId), eq(matchBatches.toolBId, toolAId)),
+    ),
+    scope?.seasonId ? eq(matchBatches.seasonId, scope.seasonId) : undefined,
+  ]
+
+  if (scope?.anchorDate) {
+    const bounds = getManualWindowBounds(scope.windowType ?? 'trailing_28d', scope.anchorDate)
+    conditions.push(lt(matchBatches.createdAt, bounds.endExclusive))
+    if (bounds.startInclusive) {
+      conditions.push(gte(matchBatches.createdAt, bounds.startInclusive))
+    }
+  }
+
+  const batches = await database.query.matchBatches.findMany({
+    where: and(...conditions),
+    orderBy: [desc(matchBatches.createdAt)],
+    with: {
+      evaluations: {
+        where: eq(matchEvaluations.status, 'completed'),
+        with: { modelSnapshot: true },
+      },
+    },
+  })
+
+  return buildHeadToHeadFromManualBatches({
+    batches,
+    categoryId,
+    toolAId,
+    toolBId,
+    modelTier: scope?.modelTier,
+  })
 }
 
 export const benchmarkMatchRouter = createTRPCRouter({
@@ -200,7 +280,18 @@ export const benchmarkMatchRouter = createTRPCRouter({
       } else {
         const defaultSeasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
         if (!defaultSeasonId) {
-          const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id)
+          const manualResult = await buildManualHeadToHead(
+            ctx.db,
+            category.id,
+            toolA.id,
+            toolB.id,
+            {
+              windowType: input.windowType,
+              anchorDate,
+              promptLevel: input.promptLevel,
+              modelTier: input.modelTier,
+            },
+          )
           return { category, toolA, toolB, result: manualResult }
         }
         seasonId = defaultSeasonId
@@ -223,7 +314,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
       }
 
       // Otherwise, fall back to manual match batch data
-      const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id)
+      const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id, {
+        seasonId,
+        windowType: input.windowType,
+        anchorDate,
+        promptLevel: input.promptLevel,
+        modelTier: input.modelTier,
+      })
 
       return { category, toolA, toolB, result: manualResult ?? benchmarkResult }
     }),
@@ -361,93 +458,53 @@ export const benchmarkMatchRouter = createTRPCRouter({
                 },
               })
 
+        type ManualBatch = (typeof manualBatches)[number]
+        const groupedBatchesByKey = new Map<
+          string,
+          {
+            representative: ManualBatch
+            batches: ManualBatch[]
+          }
+        >()
+
         for (const batch of manualBatches) {
+          const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
+          let grouped = groupedBatchesByKey.get(key)
+          if (!grouped) {
+            grouped = { representative: batch, batches: [] }
+            groupedBatchesByKey.set(key, grouped)
+          }
+          grouped.batches.push(batch)
+        }
+
+        for (const [key, grouped] of groupedBatchesByKey) {
           if (matchups.length >= limit) break
 
-          const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
           if (seenKeys.has(key)) continue
+          const { representative, batches } = grouped
+          const result = buildHeadToHeadFromManualBatches({
+            batches,
+            categoryId: representative.categoryId,
+            toolAId: representative.toolAId,
+            toolBId: representative.toolBId,
+          })
+          if (!result) continue
+
           seenKeys.add(key)
 
-          const evals = batch.evaluations
-          let aWins = 0
-          let bWins = 0
-          let abstains = 0
-          for (const ev of evals) {
-            if (ev.winnerDecision === 'tool_a') aWins++
-            else if (ev.winnerDecision === 'tool_b') bWins++
-            else abstains++
-          }
-          const decisiveCaseCount = aWins + bWins
-          const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
-          const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
-          const ci = wilsonInterval(aWins, decisiveCaseCount)
-
-          const modelBreakdownMap = new Map<string, HeadToHeadBreakdownEntry>()
-          for (const ev of evals) {
-            const msId = ev.modelSnapshotId
-            let entry = modelBreakdownMap.get(msId)
-            if (!entry) {
-              entry = {
-                id: msId,
-                label: ev.modelSnapshot.name,
-                tier: ev.modelSnapshot.tier as ModelTier,
-                aWins: 0,
-                bWins: 0,
-                abstains: 0,
-                otherToolCount: 0,
-                decisiveCaseCount: 0,
-                aWinRate: 0,
-              }
-              modelBreakdownMap.set(msId, entry)
-            }
-            if (ev.winnerDecision === 'tool_a') {
-              entry.aWins++
-              entry.decisiveCaseCount++
-            } else if (ev.winnerDecision === 'tool_b') {
-              entry.bWins++
-              entry.decisiveCaseCount++
-            } else entry.abstains++
-          }
-
-          const modelBreakdown = Array.from(modelBreakdownMap.values()).map((e) => ({
-            ...e,
-            aWinRate: e.decisiveCaseCount > 0 ? e.aWins / e.decisiveCaseCount : 0,
-          }))
-
-          const result: HeadToHeadResult = {
-            toolAId: batch.toolAId,
-            toolBId: batch.toolBId,
-            categoryId: batch.categoryId,
-            aWins,
-            bWins,
-            abstains,
-            otherToolCount: 0,
-            decisiveCaseCount,
-            aWinRate,
-            bWinRate,
-            ciLow: ci.low,
-            ciHigh: ci.high,
-            weightedAWins: aWins,
-            weightedBWins: bWins,
-            weightedAWinRate: aWinRate,
-            modelBreakdown,
-            promptBreakdown: [],
-            meetsPublicationThreshold: decisiveCaseCount >= 30,
-          }
-
           matchups.push({
-            category: batch.category,
+            category: representative.category,
             toolA: {
-              id: batch.toolA.id,
-              name: batch.toolA.name,
-              slug: batch.toolA.slug,
-              logoUrl: batch.toolA.logoUrl,
+              id: representative.toolA.id,
+              name: representative.toolA.name,
+              slug: representative.toolA.slug,
+              logoUrl: representative.toolA.logoUrl,
             },
             toolB: {
-              id: batch.toolB.id,
-              name: batch.toolB.name,
-              slug: batch.toolB.slug,
-              logoUrl: batch.toolB.logoUrl,
+              id: representative.toolB.id,
+              name: representative.toolB.name,
+              slug: representative.toolB.slug,
+              logoUrl: representative.toolB.logoUrl,
             },
             result,
           })

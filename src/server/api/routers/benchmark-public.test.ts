@@ -40,6 +40,7 @@ async function seedCompletedManualBatch(args: {
   winnerToolId: string
   promptTemplateId: string
   modelSnapshotId: string
+  createdAt?: Date
 }) {
   const {
     db,
@@ -50,6 +51,7 @@ async function seedCompletedManualBatch(args: {
     winnerToolId,
     promptTemplateId,
     modelSnapshotId,
+    createdAt,
   } = args
 
   const [toolAId, toolBId] = toolOneId < toolTwoId ? [toolOneId, toolTwoId] : [toolTwoId, toolOneId]
@@ -68,6 +70,7 @@ async function seedCompletedManualBatch(args: {
         status: 'completed',
         totalEvaluations: 1,
         completedEvaluations: 1,
+        createdAt,
       })
       .returning(),
   )
@@ -527,6 +530,7 @@ describe('benchmark public routers', () => {
       winnerToolId: clerk.id,
       promptTemplateId: template.id,
       modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
     })
 
     const caller = createTestCaller(null)
@@ -542,6 +546,330 @@ describe('benchmark public routers', () => {
     expect(result.result?.aWins).toBe(1)
     expect(result.result?.bWins).toBe(0)
     expect(result.result?.decisiveCaseCount).toBe(1)
+  })
+
+  it('keeps manual fallback scoped by season, window, and model tier', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-manual-scope',
+          name: 'Benchmark Manual Scope',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const targetSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-scope-target',
+          name: 'Season Manual Scope Target',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const otherSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-scope-other',
+          name: 'Season Manual Scope Other',
+          status: 'active',
+          createdAt: new Date('2026-03-09T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Manual Scope LLM',
+          slug: 'manual-scope-llm',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4o',
+          modelId: 'openai/gpt-4o',
+        })
+        .returning(),
+    )
+    const modelSnapshotRows = await db
+      .insert(benchmarkModelSnapshots)
+      .values([
+        {
+          llmId: llm.id,
+          name: `${llm.name} Frontier`,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'manual-scope-frontier',
+        },
+        {
+          llmId: llm.id,
+          name: `${llm.name} Mid`,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'mid',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'manual-scope-mid',
+        },
+      ])
+      .returning()
+    const frontierSnapshot = first(modelSnapshotRows)
+    const midSnapshot = first(modelSnapshotRows.slice(1))
+
+    await db.insert(benchmarkSeasonModels).values([
+      { seasonId: targetSeason.id, modelSnapshotId: frontierSnapshot.id },
+      { seasonId: targetSeason.id, modelSnapshotId: midSnapshot.id },
+      { seasonId: otherSeason.id, modelSnapshotId: frontierSnapshot.id },
+    ])
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-manual-scope',
+          name: 'Match Compare Manual Scope',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: targetSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: supabase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: frontierSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: targetSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: frontierSnapshot.id,
+      createdAt: new Date('2026-02-01T12:00:00.000Z'),
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: targetSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: midSnapshot.id,
+      createdAt: new Date('2026-03-10T13:00:00.000Z'),
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: otherSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: frontierSnapshot.id,
+      createdAt: new Date('2026-03-10T14:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      seasonId: targetSeason.id,
+      windowType: 'run_day',
+      anchorDate: '2026-03-10',
+      modelTier: 'frontier',
+    })
+
+    expect(result.result?.decisiveCaseCount).toBe(1)
+    expect(result.result?.aWins).toBe(0)
+    expect(result.result?.bWins).toBe(1)
+  })
+
+  it('aggregates manual featured matchups across batches for the same pair', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-featured-manual-aggregate',
+          name: 'Benchmark Featured Manual Aggregate',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const season = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-featured-manual-aggregate',
+          name: 'Season Featured Manual Aggregate',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Featured Aggregate LLM',
+          slug: 'featured-aggregate-llm',
+          provider: 'anthropic',
+          company: 'Anthropic',
+          modelFamily: 'Sonnet',
+          modelVersion: '4.6',
+          modelId: 'anthropic/claude-sonnet-4.6',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'featured-manual-aggregate-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: season.id,
+      modelSnapshotId: modelSnapshot.id,
+    })
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-featured-aggregate',
+          name: 'Match Compare Featured Aggregate',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-09T12:00:00.000Z'),
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: supabase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 12,
+    })
+
+    expect(featured).toHaveLength(1)
+    expect(featured[0]?.result.decisiveCaseCount).toBe(2)
+    expect(featured[0]?.result.aWins).toBe(1)
+    expect(featured[0]?.result.bWins).toBe(1)
   })
 
   it('keeps manual featured fallback scoped to requested category group', async () => {
