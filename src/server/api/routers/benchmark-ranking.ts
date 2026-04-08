@@ -16,9 +16,9 @@ import {
   tools,
 } from '~/server/db/schema'
 import {
-  type DecisionRow,
   computeCategoryGroupRanking,
   computeCategoryRanking,
+  type DecisionRow,
   fetchDecisions,
   prepareScoringContext,
   rankFromDecisions,
@@ -240,12 +240,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
       if (!seasonId) return { rankings: [] }
 
-      const scoringCtx = await prepareScoringContext(
-        ctx.db,
-        seasonId,
-        input.windowType,
-        anchorDate,
-      )
+      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, input.windowType, anchorDate)
       if (scoringCtx.runIds.length === 0) return { rankings: [] }
 
       const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, categoryIds)
