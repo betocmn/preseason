@@ -6,11 +6,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Privacy Policy',
     description: 'How HL Tech Consulting collects, uses, and protects your information.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Privacy Policy',
     description: 'How HL Tech Consulting collects, uses, and protects your information.',
+    images: ['/opengraph-image'],
   },
 }
 

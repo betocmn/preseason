@@ -6,11 +6,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'About',
     description: 'Learn about Preseason and our mission to track what tools AI models recommend.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'About',
     description: 'Learn about Preseason and our mission to track what tools AI models recommend.',
+    images: ['/opengraph-image'],
   },
 }
 

@@ -24,11 +24,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const prompt = await caller.prompt.getBySlug({ slug, level })
     const title = prompt.title
     const description = prompt.description ?? `Prompt: ${prompt.title}`
+    const imagePath = `/prompts/${encodeURIComponent(level)}/${encodeURIComponent(slug)}/opengraph-image`
     return {
       title,
       description,
-      openGraph: { title, description, type: 'article' },
-      twitter: { card: 'summary_large_image', title, description },
+      openGraph: { title, description, type: 'article', images: [imagePath] },
+      twitter: { card: 'summary_large_image', title, description, images: [imagePath] },
     }
   } catch {
     return { title: 'Prompt' }

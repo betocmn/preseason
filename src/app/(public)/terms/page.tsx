@@ -6,11 +6,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Terms & Conditions',
     description: 'Basic terms for using Preseason by HL Tech Consulting.',
+    images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Terms & Conditions',
     description: 'Basic terms for using Preseason by HL Tech Consulting.',
+    images: ['/opengraph-image'],
   },
 }
 
