@@ -4,10 +4,9 @@ import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import {
   anchorDateSchema,
-  findAllBenchmarkSeasonIds,
   findBenchmarkSeasonId,
   findLatestPublishedBenchmarkSeasonId,
-  findPublishedBenchmarkSeasonIds,
+  findPublicManualBenchmarkSeasonIds,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import type { db as DatabaseInstance } from '~/server/db'
@@ -289,12 +288,14 @@ export const benchmarkMatchRouter = createTRPCRouter({
       } else {
         const defaultSeasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
         if (!defaultSeasonId) {
+          const manualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
           const manualResult = await buildManualHeadToHead(
             ctx.db,
             category.id,
             toolA.id,
             toolB.id,
             {
+              seasonIds: manualSeasonIds,
               windowType: input.windowType,
               anchorDate,
               promptLevel: input.promptLevel,
@@ -325,7 +326,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // Otherwise, fall back to manual match batch data
       const manualSeasonIds = hasExplicitSeasonId
         ? [seasonId]
-        : await findPublishedBenchmarkSeasonIds(ctx.db, anchorDate)
+        : await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
       const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id, {
         seasonIds: manualSeasonIds,
         windowType: input.windowType,
@@ -353,9 +354,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const matchups: MatchupEntry[] = []
       const seenKeys = new Set<string>()
 
-      // ---------------------------------------------------------------
-      // 1. Auto-generated benchmark matchups (top 2 per category)
-      // ---------------------------------------------------------------
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
       let subs: { id: string; name: string; slug: string }[] = []
@@ -371,87 +369,14 @@ export const benchmarkMatchRouter = createTRPCRouter({
         subs = group?.subcategories ?? []
       }
 
-      if (seasonId) {
-        if (!input?.categorySlug) {
-          subs = await ctx.db.query.subcategories.findMany({
-            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-          })
-        }
-
-        const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
-
-        if (scoringCtx.runIds.length > 0) {
-          const allCategoryIds = subs.map((s) => s.id)
-          const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
-
-          const decisionsByCategory = new Map<string, DecisionRow[]>()
-          for (const d of allDecisions) {
-            let list = decisionsByCategory.get(d.categoryId)
-            if (!list) {
-              list = []
-              decisionsByCategory.set(d.categoryId, list)
-            }
-            list.push(d)
-          }
-
-          for (const sub of subs) {
-            if (matchups.length >= limit) break
-
-            const catDecisions = decisionsByCategory.get(sub.id) ?? []
-            const ranking = rankFromDecisions(
-              catDecisions,
-              scoringCtx.weightConfigs,
-              sub.id,
-              'trailing_28d',
-              anchorDate,
-            )
-
-            if (ranking.items.length < 2) continue
-
-            const [top1, top2] = ranking.items
-            if (!top1 || !top2) continue
-
-            const key = matchupKey(sub.id, top1.toolId, top2.toolId)
-            seenKeys.add(key)
-
-            const result = headToHeadFromDecisions(
-              catDecisions,
-              scoringCtx.weightConfigs,
-              top1.toolId,
-              top2.toolId,
-              sub.id,
-            )
-
-            matchups.push({
-              category: sub,
-              toolA: {
-                id: top1.toolId,
-                name: top1.toolName,
-                slug: top1.toolSlug,
-                logoUrl: top1.toolLogoUrl,
-              },
-              toolB: {
-                id: top2.toolId,
-                name: top2.toolName,
-                slug: top2.toolSlug,
-                logoUrl: top2.toolLogoUrl,
-              },
-              result,
-            })
-          }
-        }
-      }
-
       // ---------------------------------------------------------------
-      // 2. Fill remaining slots with manual match batches
+      // 1. Recent completed manual matchups
       // ---------------------------------------------------------------
       if (matchups.length < limit) {
         const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
         const remainingSlots = limit - matchups.length
         const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
-        const eligibleManualSeasonIds = seasonId
-          ? await findPublishedBenchmarkSeasonIds(ctx.db, anchorDate)
-          : await findAllBenchmarkSeasonIds(ctx.db)
+        const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
         const manualBaseConditions = [
           eq(matchBatches.triggerMode, 'manual'),
           eq(matchBatches.status, 'completed'),
@@ -620,6 +545,81 @@ export const benchmarkMatchRouter = createTRPCRouter({
                 result,
               })
             }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------
+      // 2. Fill remaining slots with auto-generated benchmark matchups
+      // ---------------------------------------------------------------
+      if (matchups.length < limit && seasonId) {
+        if (!input?.categorySlug) {
+          subs = await ctx.db.query.subcategories.findMany({
+            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+          })
+        }
+
+        const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
+
+        if (scoringCtx.runIds.length > 0) {
+          const allCategoryIds = subs.map((s) => s.id)
+          const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
+
+          const decisionsByCategory = new Map<string, DecisionRow[]>()
+          for (const d of allDecisions) {
+            let list = decisionsByCategory.get(d.categoryId)
+            if (!list) {
+              list = []
+              decisionsByCategory.set(d.categoryId, list)
+            }
+            list.push(d)
+          }
+
+          for (const sub of subs) {
+            if (matchups.length >= limit) break
+
+            const catDecisions = decisionsByCategory.get(sub.id) ?? []
+            const ranking = rankFromDecisions(
+              catDecisions,
+              scoringCtx.weightConfigs,
+              sub.id,
+              'trailing_28d',
+              anchorDate,
+            )
+
+            if (ranking.items.length < 2) continue
+
+            const [top1, top2] = ranking.items
+            if (!top1 || !top2) continue
+
+            const key = matchupKey(sub.id, top1.toolId, top2.toolId)
+            if (seenKeys.has(key)) continue
+            seenKeys.add(key)
+
+            const result = headToHeadFromDecisions(
+              catDecisions,
+              scoringCtx.weightConfigs,
+              top1.toolId,
+              top2.toolId,
+              sub.id,
+            )
+
+            matchups.push({
+              category: sub,
+              toolA: {
+                id: top1.toolId,
+                name: top1.toolName,
+                slug: top1.toolSlug,
+                logoUrl: top1.toolLogoUrl,
+              },
+              toolB: {
+                id: top2.toolId,
+                name: top2.toolName,
+                slug: top2.toolSlug,
+                logoUrl: top2.toolLogoUrl,
+              },
+              result,
+            })
           }
         }
       }

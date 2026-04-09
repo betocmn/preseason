@@ -1088,6 +1088,152 @@ describe('benchmark public routers', () => {
     expect(result.result?.decisiveCaseCount).toBe(1)
   })
 
+  it('includes manual fallback from the latest active benchmark season', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+
+    const toolRows = await db
+      .insert(tools)
+      .values([
+        { name: 'Clerk', slug: 'clerk' },
+        { name: 'Supabase', slug: 'supabase' },
+      ])
+      .returning()
+    const clerk = first(toolRows)
+    const supabase = first(toolRows.slice(1))
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-manual-active-fallback',
+          name: 'Benchmark Manual Active Fallback',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const publishedSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-active-fallback-published',
+          name: 'Season Manual Active Fallback Published',
+          status: 'completed',
+          createdAt: new Date('2026-03-09T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const activeSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-manual-active-fallback-active',
+          name: 'Season Manual Active Fallback Active',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    await db.insert(benchmarkRuns).values({
+      seasonId: publishedSeason.id,
+      scheduledFor: '2026-03-09',
+      status: 'published',
+      qcStatus: 'passed',
+    })
+
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Active Fallback LLM',
+          slug: 'active-fallback-llm',
+          provider: 'openai',
+          company: 'OpenAI',
+          modelFamily: 'GPT',
+          modelVersion: '4o',
+          modelId: 'openai/gpt-4o',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'active-fallback-snapshot',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkSeasonModels).values([
+      { seasonId: publishedSeason.id, modelSnapshotId: modelSnapshot.id },
+      { seasonId: activeSeason.id, modelSnapshotId: modelSnapshot.id },
+    ])
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-active-fallback',
+          name: 'Match Compare Active Fallback',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: activeSeason.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-03-10T12:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.result).not.toBeNull()
+    expect(result.result?.aWins).toBe(1)
+    expect(result.result?.bWins).toBe(0)
+    expect(result.result?.decisiveCaseCount).toBe(1)
+  })
+
   it('aggregates manual featured matchups across batches for the same pair', async () => {
     const db = getTestDb()
     const group = first(
@@ -1239,6 +1385,135 @@ describe('benchmark public routers', () => {
     expect(featured[0]?.result.bWins).toBe(1)
   })
 
+  it('prioritizes recent manual featured matchups ahead of benchmark rankings', async () => {
+    const fixture = await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+    const todayDate = today.toISOString().slice(0, 10)
+    const yesterdayDate = yesterday.toISOString().slice(0, 10)
+
+    const databaseCategory = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: fixture.authCategory.categoryId,
+          name: 'Database',
+          slug: 'database',
+          displayOrder: 2,
+        })
+        .returning(),
+    )
+
+    const [firebase, pocketbase] = await db
+      .insert(tools)
+      .values([
+        { name: 'Firebase', slug: 'firebase' },
+        { name: 'Pocketbase', slug: 'pocketbase' },
+      ])
+      .returning()
+
+    const secondPromptVersion = first(
+      await db
+        .insert(benchmarkPromptVersions)
+        .values({
+          promptId: fixture.promptVersion.promptId,
+          slug: 'build-a-saas-app-featured-priority',
+          level: fixture.promptVersion.level,
+          version: 2,
+          contentMd: fixture.promptVersion.contentMd,
+          contentHash: 'benchmark-public-featured-priority',
+          promptContractVersion: fixture.promptVersion.promptContractVersion,
+          systemPromptSnapshot: fixture.promptVersion.systemPromptSnapshot,
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkPromptVersionCategories).values({
+      promptVersionId: secondPromptVersion.id,
+      categoryId: fixture.authCategory.id,
+      displayOrder: 1,
+    })
+
+    const secondModelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: fixture.modelSnapshot.llmId,
+          name: 'Claude Opus Featured Priority',
+          provider: fixture.modelSnapshot.provider,
+          company: fixture.modelSnapshot.company,
+          modelFamily: fixture.modelSnapshot.modelFamily,
+          modelVersion: fixture.modelSnapshot.modelVersion,
+          tier: fixture.modelSnapshot.tier,
+          requestedModelId: 'claude-3-opus-featured-priority',
+          temperature: fixture.modelSnapshot.temperature,
+          snapshotKey: 'benchmark-public-featured-priority-snapshot',
+        })
+        .returning(),
+    )
+
+    await seedSeasonDecision({
+      db,
+      seasonId: fixture.freshSeason.id,
+      promptVersionId: fixture.promptVersion.id,
+      modelSnapshotId: fixture.modelSnapshot.id,
+      categoryId: fixture.authCategory.id,
+      toolId: fixture.clerk.id,
+      rawToolName: 'Clerk',
+      scheduledFor: todayDate,
+    })
+    await seedSeasonDecision({
+      db,
+      seasonId: fixture.freshSeason.id,
+      promptVersionId: secondPromptVersion.id,
+      modelSnapshotId: secondModelSnapshot.id,
+      categoryId: fixture.authCategory.id,
+      toolId: fixture.supabase.id,
+      rawToolName: 'Supabase',
+      scheduledFor: yesterdayDate,
+    })
+
+    const template = first(
+      await db
+        .insert(matchPromptTemplates)
+        .values({
+          slug: 'match-compare-featured-priority',
+          name: 'Match Compare Featured Priority',
+          templateMd: 'Compare {{TOOL_A}} and {{TOOL_B}}.',
+          schemaVersion: 'match-v2',
+          isActive: true,
+        })
+        .returning(),
+    )
+
+    const recentBatchCreatedAt = new Date()
+    recentBatchCreatedAt.setUTCDate(recentBatchCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: fixture.freshSeason.id,
+      categoryId: databaseCategory.id,
+      toolOneId: firebase.id,
+      toolTwoId: pocketbase.id,
+      winnerToolId: firebase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: fixture.modelSnapshot.id,
+      createdAt: recentBatchCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 1,
+    })
+
+    expect(featured).toHaveLength(1)
+    const entry = featured[0]
+    expect(entry?.category.slug).toBe('database')
+    expect([entry?.toolA.slug, entry?.toolB.slug].sort()).toEqual(['firebase', 'pocketbase'])
+  })
+
   it('ignores exploration manual featured matchups when benchmark seasons are unpublished', async () => {
     const db = getTestDb()
     const group = first(
@@ -1380,7 +1655,7 @@ describe('benchmark public routers', () => {
     expect(featured).toEqual([])
   })
 
-  it('keeps manual featured fallback limited to published benchmark seasons', async () => {
+  it('includes active-season manual featured matchups alongside published benchmark seasons', async () => {
     const db = getTestDb()
     const group = first(
       await db
@@ -1537,9 +1812,11 @@ describe('benchmark public routers', () => {
       limit: 12,
     })
 
-    expect(featured).toHaveLength(1)
-    const pair = [featured[0]?.toolA.slug, featured[0]?.toolB.slug].sort()
-    expect(pair).toEqual(['clerk', 'supabase'])
+    expect(featured).toHaveLength(2)
+    const pairs = featured
+      .map((entry) => [entry.toolA.slug, entry.toolB.slug].sort().join(':'))
+      .sort()
+    expect(pairs).toEqual(['clerk:supabase', 'firebase:pocketbase'])
   })
 
   it('keeps scanning manual pairs when earlier candidates have no decisive cases', async () => {
