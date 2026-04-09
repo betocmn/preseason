@@ -39,7 +39,7 @@ export function MatchesPageContent({ initialItems }: MatchesPageContentProps) {
     return (
       <EmptyState
         title="No benchmark matchups yet"
-        description="Head-to-head matchups are generated from benchmark ranking data. Check back after benchmark runs have completed."
+        description="Head-to-head matchups come from recent manual match batches and benchmark ranking data. Check back after benchmark runs or new manual matches complete."
       />
     )
   }

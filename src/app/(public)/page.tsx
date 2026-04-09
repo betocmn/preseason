@@ -130,7 +130,7 @@ export default async function HomePage() {
           ) : (
             <EmptyState
               title="No benchmark matchups yet"
-              description="Head-to-head matchups are generated from benchmark data. Check back after benchmark runs complete."
+              description="Head-to-head matchups come from recent manual match batches and benchmark data. Check back after benchmark runs or new manual matches complete."
             />
           )}
         </section>
