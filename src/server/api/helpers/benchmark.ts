@@ -75,6 +75,24 @@ export async function findPublishedBenchmarkSeasonIds(
   return rows.map((row) => row.id)
 }
 
+export async function findPublicManualBenchmarkSeasonIds(
+  database: DatabaseClient,
+  anchorDate?: string,
+) {
+  const publishedSeasonIds = await findPublishedBenchmarkSeasonIds(database, anchorDate)
+
+  if (publishedSeasonIds.length === 0) {
+    return findAllBenchmarkSeasonIds(database)
+  }
+
+  const activeSeasonId = await findLatestActiveBenchmarkSeasonId(database)
+  if (!activeSeasonId || publishedSeasonIds.includes(activeSeasonId)) {
+    return publishedSeasonIds
+  }
+
+  return [...publishedSeasonIds, activeSeasonId]
+}
+
 export async function findBenchmarkSeasonId(database: DatabaseClient, seasonId: string) {
   const rows = await database
     .select({ id: benchmarkSeasons.id })
