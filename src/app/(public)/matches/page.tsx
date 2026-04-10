@@ -41,8 +41,7 @@ export default async function MatchesPage() {
       </div>
 
       <p className="mb-6 text-sm text-muted-foreground">
-        Auto-generated matchups between the top tools in each category, based on benchmark case
-        decisions.
+        Recent manual matchups and benchmark head-to-heads between the top tools in each category.
       </p>
 
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading matches...</p>}>
