@@ -228,13 +228,15 @@ async function seedBenchmarkPublicFixture() {
       .returning(),
   )
 
-  const [clerk, supabase] = await db
+  const toolRows = await db
     .insert(tools)
     .values([
       { name: 'Clerk', slug: 'clerk' },
       { name: 'Supabase', slug: 'supabase' },
     ])
     .returning()
+  const clerk = first(toolRows)
+  const supabase = first(toolRows.slice(1))
 
   const protocol = first(
     await db
@@ -1406,13 +1408,15 @@ describe('benchmark public routers', () => {
         .returning(),
     )
 
-    const [firebase, pocketbase] = await db
+    const toolRows = await db
       .insert(tools)
       .values([
         { name: 'Firebase', slug: 'firebase' },
         { name: 'Pocketbase', slug: 'pocketbase' },
       ])
       .returning()
+    const firebase = first(toolRows)
+    const pocketbase = first(toolRows.slice(1))
 
     const secondPromptVersion = first(
       await db
