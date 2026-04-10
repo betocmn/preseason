@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import {
   anchorDateSchema,
+  findAllBenchmarkSeasonIds,
   findBenchmarkSeasonId,
   findLatestPublishedBenchmarkSeasonId,
   findPublicManualBenchmarkSeasonIds,
