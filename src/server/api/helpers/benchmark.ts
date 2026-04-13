@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import type { db } from '~/server/db'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 
@@ -125,18 +126,45 @@ export type BenchmarkCronRunTarget = {
   runId?: string
 }
 
+export type BenchmarkCronRunIdle = {
+  kind: 'idle'
+  reason: 'no_active_season' | 'waiting_for_next_run_window'
+  seasonId?: string
+  latestScheduledFor?: string
+  nextEligibleAt?: string
+}
+
+export type BenchmarkCronRunResolution =
+  | (BenchmarkCronRunTarget & { kind: 'run' })
+  | BenchmarkCronRunIdle
+
 function formatScheduledFor(date: Date): string {
   const [scheduledFor] = date.toISOString().split('T')
   return scheduledFor ?? date.toISOString()
 }
 
+function parseScheduledForStart(scheduledFor: string) {
+  return new Date(`${scheduledFor}T00:00:00.000Z`)
+}
+
+function getNextEligibleRunAt(scheduledFor: string) {
+  const nextEligibleAt = parseScheduledForStart(scheduledFor)
+  nextEligibleAt.setUTCHours(
+    nextEligibleAt.getUTCHours() + serverSettings.benchmark.newRunIntervalHours,
+  )
+  return nextEligibleAt
+}
+
 export async function resolveBenchmarkCronRunTarget(
   database: DatabaseClient,
   options: ResolveBenchmarkCronRunTargetOptions = {},
-): Promise<BenchmarkCronRunTarget | null> {
+): Promise<BenchmarkCronRunResolution> {
   const seasonId = await findLatestActiveBenchmarkSeasonId(database)
   if (!seasonId) {
-    return null
+    return {
+      kind: 'idle',
+      reason: 'no_active_season',
+    }
   }
 
   const currentTime = options.now ?? new Date()
@@ -159,6 +187,7 @@ export async function resolveBenchmarkCronRunTarget(
 
   if (runToResume) {
     return {
+      kind: 'run',
       seasonId,
       scheduledFor: runToResume.scheduledFor,
       source: 'unfinished',
@@ -166,7 +195,36 @@ export async function resolveBenchmarkCronRunTarget(
     }
   }
 
+  const latestRun = await database
+    .select({
+      scheduledFor: benchmarkRuns.scheduledFor,
+    })
+    .from(benchmarkRuns)
+    .where(eq(benchmarkRuns.seasonId, seasonId))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkRuns.createdAt),
+      desc(benchmarkRuns.id),
+    )
+    .limit(1)
+
+  const latestScheduledFor = latestRun[0]?.scheduledFor
+  if (latestScheduledFor) {
+    const nextEligibleAt = getNextEligibleRunAt(latestScheduledFor)
+
+    if (currentTime < nextEligibleAt) {
+      return {
+        kind: 'idle',
+        reason: 'waiting_for_next_run_window',
+        seasonId,
+        latestScheduledFor,
+        nextEligibleAt: nextEligibleAt.toISOString(),
+      }
+    }
+  }
+
   return {
+    kind: 'run',
     seasonId,
     scheduledFor: formatScheduledFor(currentTime),
     source: 'today',

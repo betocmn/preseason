@@ -2,10 +2,21 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
+const benchmarkNewRunIntervalHours = 24
 const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
 const matchRequestTimeoutMs = 2 * 60 * 1000
+
+if (
+  benchmarkNewRunIntervalHours < 24 ||
+  !Number.isInteger(benchmarkNewRunIntervalHours) ||
+  benchmarkNewRunIntervalHours % 24 !== 0
+) {
+  throw new Error(
+    'benchmarkNewRunIntervalHours must be a whole-number multiple of 24 because benchmark runs are unique per UTC date.',
+  )
+}
 
 const backgroundSmokePromptSelections = [
   { slug: 'real-estate-website', level: 'beginner' },
@@ -33,6 +44,9 @@ export const serverSettings = {
     // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
     // Bound benchmark cron work so each invocation stays short and resumable.
     cronMaxDurationSeconds: benchmarkCronMaxDurationSeconds,
+    // Fresh benchmark runs start only after this many hours have elapsed since the
+    // latest run date for the active season.
+    newRunIntervalHours: benchmarkNewRunIntervalHours,
     casesPerCronInvocation: 1,
     // Stop retrying a case after this many attempts to avoid burning API credits.
     maxCaseAttempts: 3,

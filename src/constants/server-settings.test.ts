@@ -11,6 +11,11 @@ describe('serverSettings.benchmark', () => {
   it('sets a positive max case attempt limit', () => {
     expect(serverSettings.benchmark.maxCaseAttempts).toBeGreaterThanOrEqual(2)
   })
+
+  it('starts fresh runs on whole-day cadence intervals', () => {
+    expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThanOrEqual(24)
+    expect(serverSettings.benchmark.newRunIntervalHours % 24).toBe(0)
+  })
 })
 
 describe('serverSettings.contact', () => {
