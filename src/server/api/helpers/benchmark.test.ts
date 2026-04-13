@@ -50,12 +50,15 @@ describe('resolveBenchmarkCronRunTarget', () => {
     await cleanTestDatabase()
   })
 
-  it('returns null when there is no active benchmark season', async () => {
+  it('returns an idle resolution when there is no active benchmark season', async () => {
     const db = getTestDb()
 
     const target = await resolveBenchmarkCronRunTarget(db)
 
-    expect(target).toBeNull()
+    expect(target).toEqual({
+      kind: 'idle',
+      reason: 'no_active_season',
+    })
   })
 
   it("resumes the oldest unfinished run before creating today's run", async () => {
@@ -73,6 +76,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     expect(target).toMatchObject({
+      kind: 'run',
       seasonId: season.id,
       scheduledFor: '2026-03-25',
       source: 'unfinished',
@@ -112,6 +116,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     expect(target).toMatchObject({
+      kind: 'run',
       seasonId: season.id,
       runId: olderRunningRun.id,
       scheduledFor: olderRunningRun.scheduledFor,
@@ -134,10 +139,37 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     expect(target).toMatchObject({
+      kind: 'run',
       seasonId: season.id,
       scheduledFor: '2026-03-26',
       source: 'today',
     })
-    expect(target?.runId).toBeUndefined()
+    if (target.kind !== 'run') {
+      throw new Error('Expected a runnable benchmark target')
+    }
+    expect(target.runId).toBeUndefined()
+  })
+
+  it('waits for the configured cadence before starting a fresh run', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    await db.insert(benchmarkRuns).values({
+      seasonId: season.id,
+      scheduledFor: '2026-03-25',
+      status: 'published',
+    })
+
+    const target = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-25T12:00:00.000Z'),
+    })
+
+    expect(target).toEqual({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId: season.id,
+      latestScheduledFor: '2026-03-25',
+      nextEligibleAt: '2026-03-26T00:00:00.000Z',
+    })
   })
 })
