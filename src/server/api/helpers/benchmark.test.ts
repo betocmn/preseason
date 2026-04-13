@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import { resolveBenchmarkCronRunTarget } from './benchmark'
+import { getNextEligibleBenchmarkRunAt, resolveBenchmarkCronRunTarget } from './benchmark'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -169,7 +169,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
       latestScheduledFor: '2026-03-25',
-      nextEligibleAt: '2026-03-26T00:00:00.000Z',
+      nextEligibleAt: getNextEligibleBenchmarkRunAt('2026-03-25').toISOString(),
     })
   })
 })

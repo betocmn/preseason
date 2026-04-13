@@ -147,12 +147,21 @@ function parseScheduledForStart(scheduledFor: string) {
   return new Date(`${scheduledFor}T00:00:00.000Z`)
 }
 
-function getNextEligibleRunAt(scheduledFor: string) {
+export function getNextEligibleBenchmarkRunAt(
+  scheduledFor: string,
+  newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
+) {
   const nextEligibleAt = parseScheduledForStart(scheduledFor)
-  nextEligibleAt.setUTCHours(
-    nextEligibleAt.getUTCHours() + serverSettings.benchmark.newRunIntervalHours,
-  )
+  nextEligibleAt.setUTCHours(nextEligibleAt.getUTCHours() + newRunIntervalHours)
   return nextEligibleAt
+}
+
+export function isBenchmarkRunDue(
+  currentTime: Date,
+  latestScheduledFor: string,
+  newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
+) {
+  return currentTime >= getNextEligibleBenchmarkRunAt(latestScheduledFor, newRunIntervalHours)
 }
 
 export async function resolveBenchmarkCronRunTarget(
@@ -210,9 +219,9 @@ export async function resolveBenchmarkCronRunTarget(
 
   const latestScheduledFor = latestRun[0]?.scheduledFor
   if (latestScheduledFor) {
-    const nextEligibleAt = getNextEligibleRunAt(latestScheduledFor)
+    const nextEligibleAt = getNextEligibleBenchmarkRunAt(latestScheduledFor)
 
-    if (currentTime < nextEligibleAt) {
+    if (!isBenchmarkRunDue(currentTime, latestScheduledFor)) {
       return {
         kind: 'idle',
         reason: 'waiting_for_next_run_window',
