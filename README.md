@@ -10,7 +10,9 @@ frozen benchmark protocol.
 Each active benchmark season freezes a panel of prompt versions and model
 snapshots. The cron route at `/api/cron/benchmark-run` executes every prompt x
 model case for the active season, parses a strict benchmark appendix, stores
-case results and case decisions, and records QC outcomes.
+case results and case decisions, and records QC outcomes. The dispatcher runs
+every minute, while fresh benchmark runs start on the cadence configured in
+`src/constants/server-settings.ts`.
 
 Admins review unresolved tool candidates, manage seasons and weight configs, and
 publish runs that pass QC. Public rankings and matches read only from published

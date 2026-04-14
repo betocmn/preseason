@@ -21,8 +21,18 @@ export async function GET(request: Request) {
 
   try {
     const runTarget = await resolveBenchmarkCronRunTarget(db)
-    if (!runTarget) {
-      return NextResponse.json({ ok: true, message: 'No active benchmark season' })
+    if (runTarget.kind === 'idle') {
+      if (runTarget.reason === 'no_active_season') {
+        return NextResponse.json({ ok: true, message: 'No active benchmark season' })
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: 'No benchmark run due yet',
+        seasonId: runTarget.seasonId,
+        latestScheduledFor: runTarget.latestScheduledFor,
+        nextEligibleAt: runTarget.nextEligibleAt,
+      })
     }
 
     const summary = await runBenchmark(runTarget.seasonId, runTarget.scheduledFor, {

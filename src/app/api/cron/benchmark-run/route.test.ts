@@ -82,7 +82,10 @@ describe('GET /api/cron/benchmark-run', () => {
   })
 
   it('returns an idle response when no active benchmark season exists', async () => {
-    resolveBenchmarkCronRunTargetMock.mockResolvedValue(null)
+    resolveBenchmarkCronRunTargetMock.mockResolvedValue({
+      kind: 'idle',
+      reason: 'no_active_season',
+    })
 
     const response = await GET(makeRequest())
     const body = (await response.json()) as { ok: boolean; message: string }
@@ -94,6 +97,7 @@ describe('GET /api/cron/benchmark-run', () => {
 
   it('resumes an unfinished run and passes maxCases to the runner', async () => {
     resolveBenchmarkCronRunTargetMock.mockResolvedValue({
+      kind: 'run',
       seasonId: 'season-1',
       scheduledFor: '2026-03-25',
       source: 'unfinished',
@@ -136,6 +140,7 @@ describe('GET /api/cron/benchmark-run', () => {
 
   it('returns a published summary when a run auto-publishes after QC passes', async () => {
     resolveBenchmarkCronRunTargetMock.mockResolvedValue({
+      kind: 'run',
       seasonId: 'season-1',
       scheduledFor: '2026-03-26',
       source: 'today',
@@ -168,5 +173,34 @@ describe('GET /api/cron/benchmark-run', () => {
     expect(body.summary.status).toBe('published')
     expect(body.summary.hasRemainingWork).toBe(false)
     expect(body.summary.scheduledFor).toBe('2026-03-26')
+  })
+
+  it('returns an idle response when the next run window has not opened yet', async () => {
+    resolveBenchmarkCronRunTargetMock.mockResolvedValue({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId: 'season-1',
+      latestScheduledFor: '2026-03-26',
+      nextEligibleAt: '2026-03-28T00:00:00.000Z',
+    })
+
+    const response = await GET(makeRequest())
+    const body = (await response.json()) as {
+      ok: boolean
+      message: string
+      seasonId: string
+      latestScheduledFor: string
+      nextEligibleAt: string
+    }
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({
+      ok: true,
+      message: 'No benchmark run due yet',
+      seasonId: 'season-1',
+      latestScheduledFor: '2026-03-26',
+      nextEligibleAt: '2026-03-28T00:00:00.000Z',
+    })
+    expect(runBenchmarkMock).not.toHaveBeenCalled()
   })
 })
