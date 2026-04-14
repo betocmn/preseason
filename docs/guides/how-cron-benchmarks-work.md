@@ -29,12 +29,12 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work (or starts today) for the newest active season | Every minute | `* * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when the configured cadence window opens for the newest active season | Every minute | `* * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
 
 In practice:
 
-- Benchmark cron assembles one logical daily run across many short invocations
+- Benchmark cron assembles one logical run per configured cadence window across many short invocations
 - Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the background dispatcher that keeps queued match batches moving
 
@@ -58,7 +58,9 @@ src/server/llm/match/parser.ts
 1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
 2. The route loads the newest `active` benchmark season.
 3. Benchmark cron targets the oldest unfinished run first and only starts a new
-   UTC day when no unfinished work exists.
+   run when no unfinished work exists and
+   `serverSettings.benchmark.newRunIntervalHours` has elapsed since the latest
+   run date.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
 5. Run initialization is serialized with a Postgres advisory lock so snapshot
