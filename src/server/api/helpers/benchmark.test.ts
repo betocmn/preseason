@@ -124,7 +124,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
-  it('starts today when no unfinished benchmark runs remain', async () => {
+  it('starts the next eligible run after the cadence window opens', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
@@ -135,13 +135,13 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
+      now: new Date('2026-03-27T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-26',
+      scheduledFor: '2026-03-27',
       source: 'today',
     })
     if (target.kind !== 'run') {
