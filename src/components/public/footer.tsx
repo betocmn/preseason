@@ -5,7 +5,6 @@ const navLinks = [
   { href: '/matches', label: 'Matches' },
   { href: '/rankings', label: 'Rankings' },
   { href: '/prompts', label: 'Prompts' },
-  { href: '/critics', label: 'Critics' },
   { href: '/methodology', label: 'Methodology' },
   { href: '/contact', label: 'Contact' },
 ]
