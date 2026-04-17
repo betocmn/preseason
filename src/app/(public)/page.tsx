@@ -2,7 +2,6 @@ export const revalidate = 3600 // 1 hour
 
 import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
-import { CommentaryFeed } from '~/components/public/commentary-feed'
 import { EmptyState } from '~/components/public/empty-state'
 import { PercentageBar } from '~/components/public/percentage-bar'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
@@ -26,10 +25,9 @@ export default async function HomePage() {
     { revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds },
   )
 
-  const [promptsResult, featuredMatchups, recentComments] = await Promise.all([
+  const [promptsResult, featuredMatchups] = await Promise.all([
     getCachedPrompts(),
-    caller.benchmarkMatch.listFeatured({ limit: 6 }),
-    caller.comment.listRecent({ limit: 5 }),
+    caller.benchmarkMatch.listFeatured({ limit: 12 }),
   ])
 
   return (
@@ -134,23 +132,6 @@ export default async function HomePage() {
             />
           )}
         </section>
-
-        {/* Verified Critics */}
-        {recentComments.items.length > 0 && (
-          <section>
-            <div className="mb-4">
-              <h2 className="text-base font-semibold">Latest Verified Critics</h2>
-            </div>
-            <CommentaryFeed comments={recentComments.items} />
-            <div className="mt-3 text-center">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/critics" className="text-xs text-muted-foreground">
-                  View all critics &rarr;
-                </Link>
-              </Button>
-            </div>
-          </section>
-        )}
       </div>
     </div>
   )
