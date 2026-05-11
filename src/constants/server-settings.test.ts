@@ -13,6 +13,7 @@ describe('serverSettings.benchmark', () => {
   })
 
   it('starts fresh runs on whole-day cadence intervals', () => {
+    expect(serverSettings.benchmark.newRunIntervalHours).toBe(14 * 24)
     expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThanOrEqual(24)
     expect(serverSettings.benchmark.newRunIntervalHours % 24).toBe(0)
   })
