@@ -29,14 +29,15 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when the two-week cadence window opens for the newest active season | Every minute | `* * * * *` |
-| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when the two-week cadence window opens for the newest active season | Every 14-day cron tick, with the app-level cadence guard enforcing two weeks between fresh runs | `0 0 */14 * *` |
+| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Weekly on Mondays | `0 0 * * 1` |
+| `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Every 30 minutes | `*/30 * * * *` |
 
 In practice:
 
-- Benchmark cron assembles one logical run per two-week cadence window across many short invocations
+- Benchmark cron starts at most one fresh logical run per two-week cadence window
 - Benchmark invocations are expected to overlap and safely claim different cases
-- Match cron is the background dispatcher that keeps queued match batches moving
+- Match cron is the weekly background dispatcher that keeps queued match batches moving
 
 ## File Structure
 
