@@ -2,7 +2,7 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
-const benchmarkNewRunIntervalHours = 48
+const benchmarkNewRunIntervalHours = 14 * 24
 const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000

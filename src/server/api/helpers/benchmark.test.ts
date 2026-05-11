@@ -135,13 +135,13 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-27T12:00:00.000Z'),
+      now: new Date('2026-04-08T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-27',
+      scheduledFor: '2026-04-08',
       source: 'today',
     })
     if (target.kind !== 'run') {
