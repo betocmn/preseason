@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 
 type VercelConfig = {
   crons?: Array<{
@@ -40,5 +41,14 @@ describe('vercel cron config', () => {
     expect(cronByPath.get('/api/cron/benchmark-run')).toBe('0 * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 * * 1')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
+  })
+
+  it('keeps benchmark cron ticks more frequent than the fresh-run cadence', () => {
+    const config = readCronConfig()
+    const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
+
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('0 * * * *')
+    expect(serverSettings.benchmark.newRunIntervalHours).toBe(14 * 24)
+    expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThan(1)
   })
 })
