@@ -16,7 +16,7 @@ practical questions:
 These points are already true in the current codebase:
 
 - Benchmark cron is already chunked, resumable, and overlap-safe.
-  - `vercel.json` runs `/api/cron/benchmark-run` on the biweekly production schedule.
+  - `vercel.json` runs `/api/cron/benchmark-run` hourly.
   - Fresh logical benchmark runs are additionally gated by
     `serverSettings.benchmark.newRunIntervalHours`, currently `336` hours.
   - Each invocation processes `1` benchmark case by default.
@@ -27,7 +27,7 @@ These points are already true in the current codebase:
   - `/api/cron/benchmark-run` exports `maxDuration = 800`.
 - Match cron already exists.
   - `vercel.json` runs `/api/cron/match-run` weekly.
-  - `vercel.json` runs `/api/cron/tool-candidate-review` every `30` minutes.
+  - `vercel.json` runs `/api/cron/tool-candidate-review` hourly.
 - Benchmark runs auto-publish when final QC passes.
   - New passing runs do not need a manual publish click.
 - Public benchmark pages only read `published` runs.
@@ -70,8 +70,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines weekly and biweekly cron schedules, plus tool candidate
-    review every `30` minutes.
+  - This repo defines hourly and weekly cron schedules.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.
@@ -145,21 +144,22 @@ Current seeded reference data produces:
 Current benchmark cron capacity:
 
 - `1` case per invocation by default
-- one scheduled invocation on the biweekly production cadence
-- scheduled production capacity is intentionally low because the product cadence
-  now controls when benchmark work runs
+- one scheduled invocation per hour
+- `24` scheduled invocations per day
+- `336` scheduled invocations per two-week benchmark cadence window
 
 That means:
 
 - one full `900` case benchmark run needs `900` invocations
-- the scheduled biweekly cron is not intended to rapidly complete an initial
-  full benchmark run by itself
+- hourly cron-only completion time is about `37.5` days for a full `900` case
+  run at the default one-case-per-invocation capacity
 
 ### What This Means For Your Demo
 
 If you freeze a season and do nothing else:
 
-- the first published run may not complete before the next scheduled cron window
+- the first published run will likely not complete within one two-week cadence
+  window
 
 If you want first public data inside `12` hours, you should manually trigger
 extra benchmark cron invocations immediately after freezing.
