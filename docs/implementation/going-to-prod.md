@@ -16,7 +16,7 @@ practical questions:
 These points are already true in the current codebase:
 
 - Benchmark cron is already chunked, resumable, and overlap-safe.
-  - `vercel.json` runs `/api/cron/benchmark-run` hourly.
+  - `vercel.json` runs `/api/cron/benchmark-run` every `6` minutes.
   - Fresh logical benchmark runs are additionally gated by
     `serverSettings.benchmark.newRunIntervalHours`, currently `336` hours.
   - Each invocation processes `1` benchmark case by default.
@@ -70,7 +70,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines hourly and weekly cron schedules.
+  - This repo defines frequent, hourly, and weekly cron schedules.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.
@@ -144,22 +144,22 @@ Current seeded reference data produces:
 Current benchmark cron capacity:
 
 - `1` case per invocation by default
-- one scheduled invocation per hour
-- `24` scheduled invocations per day
-- `336` scheduled invocations per two-week benchmark cadence window
+- one scheduled invocation every `6` minutes
+- `240` scheduled invocations per day
+- `3360` scheduled invocations per two-week benchmark cadence window
 
 That means:
 
 - one full `900` case benchmark run needs `900` invocations
-- hourly cron-only completion time is about `37.5` days for a full `900` case
-  run at the default one-case-per-invocation capacity
+- cron-only completion time is about `3.75` days for a full `900` case run at
+  the default one-case-per-invocation capacity
 
 ### What This Means For Your Demo
 
 If you freeze a season and do nothing else:
 
-- the first published run will likely not complete within one two-week cadence
-  window
+- the first published run should complete comfortably within one two-week
+  cadence window
 
 If you want first public data inside `12` hours, you should manually trigger
 extra benchmark cron invocations immediately after freezing.

@@ -124,6 +124,36 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
+  it('resumes a multi-day unfinished run instead of starting the next cadence run', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    const [unfinishedRun] = await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-25',
+        status: 'pending',
+      })
+      .returning({ id: benchmarkRuns.id, scheduledFor: benchmarkRuns.scheduledFor })
+
+    if (!unfinishedRun) {
+      throw new Error('Expected unfinished benchmark run')
+    }
+
+    const target = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-04-12T12:00:00.000Z'),
+    })
+
+    expect(target).toMatchObject({
+      kind: 'run',
+      seasonId: season.id,
+      runId: unfinishedRun.id,
+      scheduledFor: unfinishedRun.scheduledFor,
+      source: 'unfinished',
+    })
+  })
+
   it('starts the next eligible run after the cadence window opens', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)

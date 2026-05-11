@@ -38,17 +38,24 @@ describe('vercel cron config', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('0 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/6 * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 * * 1')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
   })
 
-  it('keeps benchmark cron ticks more frequent than the fresh-run cadence', () => {
+  it('keeps enough benchmark cron capacity to drain the reference run before the next cadence', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
+    const benchmarkCronMinutes = 6
+    const referenceBenchmarkCaseCount = 900
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('0 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/6 * * * *')
     expect(serverSettings.benchmark.newRunIntervalHours).toBe(14 * 24)
-    expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThan(1)
+    expect(
+      (serverSettings.benchmark.newRunIntervalHours *
+        60 *
+        serverSettings.benchmark.casesPerCronInvocation) /
+        benchmarkCronMinutes,
+    ).toBeGreaterThan(referenceBenchmarkCaseCount)
   })
 })
