@@ -26,7 +26,7 @@ These points are already true in the current codebase:
   - Stale case recovery uses an `11` minute threshold.
   - `/api/cron/benchmark-run` exports `maxDuration = 800`.
 - Match cron already exists.
-  - `vercel.json` runs `/api/cron/match-run` weekly.
+  - `vercel.json` runs `/api/cron/match-run` every other day.
   - `vercel.json` runs `/api/cron/tool-candidate-review` hourly.
 - Benchmark runs auto-publish when final QC passes.
   - New passing runs do not need a manual publish click.
@@ -70,7 +70,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines frequent, hourly, and weekly cron schedules.
+  - This repo defines frequent, hourly, and every-other-day cron schedules.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.

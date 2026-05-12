@@ -39,7 +39,7 @@ describe('vercel cron config', () => {
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
     expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/6 * * * *')
-    expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 * * 1')
+    expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 */2 * *')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
   })
 
@@ -57,5 +57,20 @@ describe('vercel cron config', () => {
         serverSettings.benchmark.casesPerCronInvocation) /
         benchmarkCronMinutes,
     ).toBeGreaterThan(referenceBenchmarkCaseCount)
+  })
+
+  it('keeps enough match cron capacity to drain a reference batch before the next benchmark run', () => {
+    const config = readCronConfig()
+    const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
+    const matchCronDays = 2
+    const referenceSeededModelCount = 20
+    const referenceMatchEvaluationCount =
+      (referenceSeededModelCount - serverSettings.match.excludedRequestedModelIds.length) * 2
+
+    expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 */2 * *')
+    expect(
+      (serverSettings.benchmark.newRunIntervalHours / 24 / matchCronDays) *
+        serverSettings.match.cronEvaluationsPerInvocation,
+    ).toBeGreaterThanOrEqual(referenceMatchEvaluationCount)
   })
 })
