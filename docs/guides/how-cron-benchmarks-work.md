@@ -29,14 +29,16 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when the configured cadence window opens for the newest active season | Every minute | `* * * * *` |
-| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every 15 minutes | `*/15 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when the two-week cadence window opens for the newest active season | Every 6 minutes, with the app-level cadence guard enforcing two weeks between fresh runs | `*/6 * * * *` |
+| `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Every other day | `0 0 */2 * *` |
+| `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 
 In practice:
 
-- Benchmark cron assembles one logical run per configured cadence window across many short invocations
+- Benchmark cron starts at most one fresh logical run per two-week cadence window
+  and otherwise resumes unfinished benchmark work across cron ticks and calendar days
 - Benchmark invocations are expected to overlap and safely claim different cases
-- Match cron is the background dispatcher that keeps queued match batches moving
+- Match cron is the every-other-day background dispatcher that keeps queued match batches moving
 
 ## File Structure
 
@@ -60,7 +62,7 @@ src/server/llm/match/parser.ts
 3. Benchmark cron targets the oldest unfinished run first and only starts a new
    run when no unfinished work exists and
    `serverSettings.benchmark.newRunIntervalHours` has elapsed since the latest
-   run date.
+   run date. The default is `336` hours, or two weeks.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
 5. Run initialization is serialized with a Postgres advisory lock so snapshot

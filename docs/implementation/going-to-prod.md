@@ -16,16 +16,18 @@ practical questions:
 These points are already true in the current codebase:
 
 - Benchmark cron is already chunked, resumable, and overlap-safe.
-  - `vercel.json` runs `/api/cron/benchmark-run` every minute.
+  - `vercel.json` runs `/api/cron/benchmark-run` every `6` minutes.
+  - Fresh logical benchmark runs are additionally gated by
+    `serverSettings.benchmark.newRunIntervalHours`, currently `336` hours.
   - Each invocation processes `1` benchmark case by default.
-  - Unfinished runs are resumed before a new day is started.
+  - Unfinished runs are resumed before a new benchmark run is started.
   - Overlapping cron or manual invocations safely claim different cases from the
     same run.
   - Stale case recovery uses an `11` minute threshold.
   - `/api/cron/benchmark-run` exports `maxDuration = 800`.
 - Match cron already exists.
-  - `vercel.json` runs `/api/cron/match-run` every `15` minutes.
-  - `vercel.json` runs `/api/cron/tool-candidate-review` every `30` minutes.
+  - `vercel.json` runs `/api/cron/match-run` every other day.
+  - `vercel.json` runs `/api/cron/tool-candidate-review` hourly.
 - Benchmark runs auto-publish when final QC passes.
   - New passing runs do not need a manual publish click.
 - Public benchmark pages only read `published` runs.
@@ -68,7 +70,7 @@ These are the remaining manual setup items:
 ### Vercel
 
 - Use Vercel `Pro` or `Enterprise`.
-  - This repo defines cron schedules every `1`, `15`, and `30` minutes.
+  - This repo defines frequent, hourly, and every-other-day cron schedules.
   - Vercel Hobby rejects cron schedules that run more than once per day.
 - Only the production deployment should be treated as the live benchmark
   target.
@@ -142,21 +144,22 @@ Current seeded reference data produces:
 Current benchmark cron capacity:
 
 - `1` case per invocation by default
-- one invocation every minute
-- `1440` scheduled invocations per day
-- `1440` cases/day of base scheduled capacity
+- one scheduled invocation every `6` minutes
+- `240` scheduled invocations per day
+- `3360` scheduled invocations per two-week benchmark cadence window
 
 That means:
 
 - one full `900` case benchmark run needs `900` invocations
-- cron-only completion time is about `15h` after season freeze
+- cron-only completion time is about `3.75` days for a full `900` case run at
+  the default one-case-per-invocation capacity
 
 ### What This Means For Your Demo
 
 If you freeze a season and do nothing else:
 
-- the first published run should still happen in less than `24` hours
-- it still may not happen within `12` hours
+- the first published run should complete comfortably within one two-week
+  cadence window
 
 If you want first public data inside `12` hours, you should manually trigger
 extra benchmark cron invocations immediately after freezing.
@@ -165,8 +168,9 @@ Two workable options:
 
 1. Recommended: manually call `/api/cron/benchmark-run` with a small fixed
    overlap, for example `2-4` concurrent invocations, until the run finishes.
-2. If you want to stay conservative, keep the default minute cron and manually
-   add a small burst of extra invocations right after freeze.
+2. If you want to stay conservative, manually add a small burst of extra
+   invocations right after freeze and let the scheduled cadence handle future
+   runs.
 
 Unlike the old run-level worker, the current runner is safe to overlap. It
 claims work at the case level, so concurrent invocations do not double-spend
