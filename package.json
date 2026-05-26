@@ -24,6 +24,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "preview": "next build && next start",
+    "setup": "pnpm install && supabase start && pnpm run db:migrate && pnpm run db:seed && pnpm run db:seed-dev",
     "start": "next start",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
