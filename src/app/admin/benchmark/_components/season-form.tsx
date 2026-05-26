@@ -58,7 +58,7 @@ export function SeasonForm({ protocols }: { protocols: Protocol[] }) {
   const createMutation = api.benchmarkAdmin.createSeason.useMutation({
     onSuccess: () => {
       toast.success('Season created')
-      loadFreshBenchmarkAdminPage('/beto-admin/benchmark')
+      loadFreshBenchmarkAdminPage('/admin/benchmark')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -141,11 +141,7 @@ export function SeasonForm({ protocols }: { protocols: Protocol[] }) {
           <Button type="submit" disabled={createMutation.isPending}>
             {createMutation.isPending ? 'Creating...' : 'Create Season'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/beto-admin/benchmark')}
-          >
+          <Button type="button" variant="outline" onClick={() => router.push('/admin/benchmark')}>
             Cancel
           </Button>
         </div>

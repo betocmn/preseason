@@ -64,16 +64,16 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant={status === undefined ? 'default' : 'outline'} size="sm">
-          <Link href="/beto-admin/benchmark/tool-candidates">All</Link>
+          <Link href="/admin/benchmark/tool-candidates">All</Link>
         </Button>
         <Button asChild variant={status === 'pending' ? 'default' : 'outline'} size="sm">
-          <Link href="/beto-admin/benchmark/tool-candidates?status=pending">Pending</Link>
+          <Link href="/admin/benchmark/tool-candidates?status=pending">Pending</Link>
         </Button>
         <Button asChild variant={status === 'approved' ? 'default' : 'outline'} size="sm">
-          <Link href="/beto-admin/benchmark/tool-candidates?status=approved">Approved</Link>
+          <Link href="/admin/benchmark/tool-candidates?status=approved">Approved</Link>
         </Button>
         <Button asChild variant={status === 'rejected' ? 'default' : 'outline'} size="sm">
-          <Link href="/beto-admin/benchmark/tool-candidates?status=rejected">Rejected</Link>
+          <Link href="/admin/benchmark/tool-candidates?status=rejected">Rejected</Link>
         </Button>
       </div>
 
@@ -172,7 +172,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
             {page > 1 && (
               <Button asChild variant="outline" size="sm">
                 <Link
-                  href={`/beto-admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page - 1) }).toString()}`}
+                  href={`/admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page - 1) }).toString()}`}
                 >
                   Previous
                 </Link>
@@ -181,7 +181,7 @@ export default async function ToolCandidatesPage({ searchParams }: PageProps) {
             {page < totalPages && (
               <Button asChild variant="outline" size="sm">
                 <Link
-                  href={`/beto-admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page + 1) }).toString()}`}
+                  href={`/admin/benchmark/tool-candidates?${new URLSearchParams({ ...(status ? { status } : {}), page: String(page + 1) }).toString()}`}
                 >
                   Next
                 </Link>

@@ -74,7 +74,7 @@ export default async function MatchBatchDetailPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <Button asChild variant="ghost" className="-ml-3 w-fit">
-            <Link href="/beto-admin/matches">
+            <Link href="/admin/matches">
               <ArrowLeft />
               Back to Matches
             </Link>
