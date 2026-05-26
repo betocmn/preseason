@@ -49,7 +49,12 @@ pnpm run dev
 App is at <http://localhost:3000>. Full setup details, including the env
 var table and troubleshooting, are in [`docs/SETUP.md`](docs/SETUP.md).
 
+## Deploy and self-host
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fbetocmn%2Fpreseason&env=DATABASE_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,OPENROUTER_API_KEY,CRON_SECRET&envDescription=See%20.env.example&envLink=https%3A%2F%2Fgithub.com%2Fbetocmn%2Fpreseason%2Fblob%2Fmain%2F.env.example)
+
+Deployment paths (Vercel + Supabase, Docker Compose, or BYO infra) are in
+[`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
 ## How it works
 
