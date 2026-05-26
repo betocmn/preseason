@@ -31,7 +31,7 @@ export default async function ToolsPage() {
           <p className="text-muted-foreground">Manage tools tracked by Preseason.</p>
         </div>
         <Button asChild>
-          <Link href="/beto-admin/tools/new">
+          <Link href="/admin/tools/new">
             <Plus className="mr-2 h-4 w-4" />
             New Tool
           </Link>
@@ -93,7 +93,7 @@ export default async function ToolsPage() {
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button asChild variant="ghost" size="icon" title="Edit">
-                      <Link href={`/beto-admin/tools/${tool.id}/edit`}>
+                      <Link href={`/admin/tools/${tool.id}/edit`}>
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>

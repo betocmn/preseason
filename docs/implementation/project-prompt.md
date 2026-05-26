@@ -377,13 +377,13 @@ ALTER TABLE preseason_tool
 - `/login`, `/signup`: OTP auth flows.
 - `(fallback) /api/health/db`: health check.
 
-### Admin area (`/beto-admin`, `/admin` redirects)
+### Admin area (`/admin`, `/admin` redirects)
 
 - route protected by `admin` role.
-- `/admin` redirects to `/beto-admin/tools`.
-- `/beto-admin/tools`: list + create/edit/delete tools, subcategories, verification flag.
-- `/beto-admin/critics`: list/create/edit/verify critics + active/inactive state.
-- `/beto-admin/matches`: list active/settled matches + create match form + settle action.
+- `/admin` redirects to `/admin/tools`.
+- `/admin/tools`: list + create/edit/delete tools, subcategories, verification flag.
+- `/admin/critics`: list/create/edit/verify critics + active/inactive state.
+- `/admin/matches`: list active/settled matches + create match form + settle action.
 
 ### Provider area (`/provider`)
 

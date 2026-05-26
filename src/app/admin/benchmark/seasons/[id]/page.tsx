@@ -177,7 +177,7 @@ export default async function SeasonDetailPage({ params }: PageProps) {
                     <TableCell>{run.qcStatus ?? '-'}</TableCell>
                     <TableCell>
                       <Button asChild variant="ghost" size="icon" title="View">
-                        <Link href={`/beto-admin/benchmark/runs/${run.id}`}>
+                        <Link href={`/admin/benchmark/runs/${run.id}`}>
                           <Eye className="h-4 w-4" />
                         </Link>
                       </Button>

@@ -135,7 +135,7 @@ export function CriticForm({ critic }: CriticFormProps) {
   const createMutation = api.critic.adminCreate.useMutation({
     onSuccess: () => {
       toast.success('Critic created')
-      router.push('/beto-admin/critics')
+      router.push('/admin/critics')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -143,7 +143,7 @@ export function CriticForm({ critic }: CriticFormProps) {
   const updateMutation = api.critic.adminUpdate.useMutation({
     onSuccess: () => {
       toast.success('Critic updated')
-      router.push('/beto-admin/critics')
+      router.push('/admin/critics')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -465,11 +465,7 @@ export function CriticForm({ critic }: CriticFormProps) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : isEditing ? 'Update Critic' : 'Create Critic'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/beto-admin/critics')}
-          >
+          <Button type="button" variant="outline" onClick={() => router.push('/admin/critics')}>
             Cancel
           </Button>
         </div>

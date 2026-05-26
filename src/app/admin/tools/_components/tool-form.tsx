@@ -91,7 +91,7 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
   const createMutation = api.tool.create.useMutation({
     onSuccess: () => {
       toast.success('Tool created')
-      router.push('/beto-admin/tools')
+      router.push('/admin/tools')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -99,7 +99,7 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
   const updateMutation = api.tool.update.useMutation({
     onSuccess: () => {
       toast.success('Tool updated')
-      router.push('/beto-admin/tools')
+      router.push('/admin/tools')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -319,7 +319,7 @@ export function ToolForm({ tool, subcategories }: ToolFormProps) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : isEditing ? 'Update Tool' : 'Create Tool'}
           </Button>
-          <Button type="button" variant="outline" onClick={() => router.push('/beto-admin/tools')}>
+          <Button type="button" variant="outline" onClick={() => router.push('/admin/tools')}>
             Cancel
           </Button>
         </div>

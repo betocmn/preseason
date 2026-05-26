@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await getServerUser()
 
   if (!user) {
-    redirect('/login?redirectTo=/beto-admin')
+    redirect('/login?redirectTo=/admin')
   }
 
   const profile = await db.query.userProfiles.findFirst({
@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen bg-muted/40">
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r bg-background lg:flex">
         <div className="flex h-16 items-center border-b px-6">
-          <Link href="/beto-admin">
+          <Link href="/admin">
             <Image
               src="/preseason-brand/preseason-logo.svg"
               alt="Preseason"

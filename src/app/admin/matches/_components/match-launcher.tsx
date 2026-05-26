@@ -170,7 +170,7 @@ export function MatchLauncher({ launchContext }: { launchContext: MatchLaunchCon
       toast.success(
         result.createdCount === 1 ? '1 match queued' : `${result.createdCount} matches queued`,
       )
-      loadFreshAdminPage('/beto-admin/matches')
+      loadFreshAdminPage('/admin/matches')
     },
     onError: (error) => {
       toast.error(error.message)
