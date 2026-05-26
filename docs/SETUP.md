@@ -1,7 +1,7 @@
 # Local Setup
 
-This guide covers the full local development setup. For a one-command demo
-path, see the [`Quick start`](../README.md#quick-start) in the README.
+This guide covers the full local development setup. For the shortest command
+summary, see the [`Quick start`](../README.md#quick-start) in the README.
 
 ## Prerequisites
 

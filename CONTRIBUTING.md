@@ -17,8 +17,8 @@ new tools in the catalog, a fresh dashboard, or a whole new feature.
 
 ## Set up
 
-Local setup is documented in [`docs/SETUP.md`](docs/SETUP.md). The short
-version is `pnpm install && supabase start && pnpm run db:migrate && pnpm run db:seed && pnpm run dev`.
+Local setup is documented in [`docs/SETUP.md`](docs/SETUP.md), including the
+Supabase CLI values that must be copied into `.env.local` before migrations.
 
 If you run into setup friction, please open an issue — we treat setup
 failures as bugs in the docs.
