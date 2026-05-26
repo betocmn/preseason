@@ -109,20 +109,16 @@ templates render.
 
 ---
 
-## PR 5: One-Click Deploy & Self-Hosting Guide `[TODO]`
+## PR 5: One-Click Deploy Guide `[TODO]`
 
 **Goal:** Make it trivial for someone reading the HN post to spin up their
 own instance.
 
 ### Scope
 
-- Add `docs/SELF_HOSTING.md` with three deployment paths:
-  - **Vercel + Supabase Cloud** (recommended easy path) — step-by-step with
-    `Deploy to Vercel` button URL pre-wired to the repo
-  - **Local self-hosted with Docker Compose** — provide a `docker-compose.yml`
-    that brings up Postgres + the Next.js app
-  - **Bring your own infrastructure** — list the env vars and external
-    services required (Postgres, OpenRouter, optional Supabase Auth)
+- Add `docs/SELF_HOSTING.md` with the supported Vercel + Supabase Cloud
+  deployment path and a clear note that Docker/plain Postgres self-hosting is
+  deferred until Supabase-compatible auth and seed flows are designed.
 - Add the `Deploy to Vercel` button to README
 - Add a "Configuration" section listing every env var, what it does, whether
   it's required, and how to obtain it

@@ -1,14 +1,14 @@
-# Self-Hosting
+# Deployment
 
-This guide documents three deployment paths:
+Preseason currently supports one launch-ready deployment path:
 
-1. Vercel + Supabase Cloud (recommended)
-2. Docker Compose local stack (community-supported)
-3. Bring-your-own infrastructure
+- Vercel for the Next.js app
+- Supabase Cloud for Postgres and Auth
+- OpenRouter for model calls
 
 For environment variable details, see [`docs/CONFIGURATION.md`](CONFIGURATION.md).
 
-## 1) Vercel + Supabase Cloud (Recommended)
+## Vercel + Supabase Cloud
 
 This is the lowest-friction production path.
 
@@ -32,72 +32,25 @@ This is the lowest-friction production path.
   referer headers.
 - Use pooled Postgres connection strings in production where possible.
 
-## 2) Docker Compose (Community-Supported)
+## Not Supported Yet
 
-`docker-compose.yml` provides a Postgres 16 + Next.js stack for local and
-small self-managed environments.
+Docker Compose and plain Postgres self-hosting are intentionally not supported
+yet. Preseason currently depends on Supabase Auth behavior and seed data that
+touches Supabase-managed `auth.users` / `auth.identities` tables, so a
+Postgres-only Compose stack is not a reliable launch path.
 
-### What this stack includes
+For local development, use the Supabase CLI flow in [`docs/SETUP.md`](SETUP.md).
 
-- `db`: PostgreSQL 16
-- `app`: Next.js runtime, migrations, seed, and server startup
+Future Docker/self-hosting support should include:
 
-### What this stack does not include
-
-- Supabase Auth/Storage/Realtime services
+- Supabase-compatible auth services or an app-level auth abstraction
+- A seed path that works outside Supabase-managed schemas
 - Managed cron scheduler
-- Production hardening (TLS termination, WAF, autoscaling)
-
-You can still run the app by pointing Supabase-related environment variables to
-an existing Supabase project.
-
-### Steps
-
-1. Copy env template:
-
-```bash
-cp .env.example .env.compose
-```
-
-2. Edit `.env.compose` with real values. `DATABASE_URL` is ignored by Compose
-   and replaced with the container-local Postgres URL.
-3. Start the stack:
-
-```bash
-docker compose up --build
-```
-
-4. Open <http://localhost:3000>.
-
-To stop:
-
-```bash
-docker compose down
-```
-
-To reset database volume:
-
-```bash
-docker compose down -v
-```
-
-## 3) Bring Your Own Infrastructure
-
-For AWS/GCP/Azure/Fly.io/Render/Kubernetes style deployments:
-
-1. Provision Postgres 16+.
-2. Deploy the Next.js app as a long-running service (Node 22).
-3. Set all required environment variables.
-4. Run migrations (`pnpm run db:migrate`) before first traffic.
-5. Seed baseline data (`pnpm run db:seed`) and optional demo data
-   (`pnpm run db:seed-dev`).
-6. Add an external scheduler that hits
-   `/api/cron/benchmark-run` with `CRON_SECRET`.
-7. Add monitoring/logging (health checks, request errors, cron failures).
+- TLS, logging, backups, and operational hardening
 
 ## Recommended Production Checklist
 
-- Use managed Postgres backups + point-in-time recovery.
+- Enable Supabase backups + point-in-time recovery where appropriate.
 - Rotate `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY`, and `CRON_SECRET`.
 - Restrict cron endpoint access to known IPs or trusted scheduler where
   possible.
