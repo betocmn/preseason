@@ -40,8 +40,12 @@ Preseason exists so anyone can:
 ## Quick start
 
 ```bash
-cp .env.example .env.local      # then fill in Supabase + OpenRouter keys
-pnpm run setup && pnpm dev
+pnpm run setup                  # installs deps and starts local Supabase
+cp .env.example .env.local      # fill with `supabase status` + OpenRouter key
+pnpm run db:migrate
+pnpm run db:seed
+pnpm run db:seed-dev
+pnpm run dev
 ```
 
 App is at <http://localhost:3000>. Full setup details, including the env

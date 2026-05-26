@@ -15,9 +15,23 @@ This is the lowest-friction production path.
 ### Steps
 
 1. Create a Supabase project.
-2. Run database setup once:
-   - `pnpm run db:migrate`
-   - `pnpm run db:seed`
+2. Run database setup once with the production Supabase connection string:
+
+```bash
+export DATABASE_URL="postgresql://..."
+export SEED_ADMIN_EMAIL="admin@example.com"
+export SEED_ADMIN_NAME="Admin"
+
+pnpm install
+pnpm exec tsx src/server/db/pre-migrate.ts
+pnpm exec drizzle-kit migrate
+pnpm exec tsx src/server/db/post-migrate.ts
+pnpm exec tsx src/server/db/seed.ts
+```
+
+Do not use the package `db:migrate` / `db:seed` scripts for production setup;
+they intentionally load `.env.local` for local development.
+
 3. Deploy with the pre-filled Vercel button:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fbetocmn%2Fpreseason&env=DATABASE_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,OPENROUTER_API_KEY,CRON_SECRET&envDescription=See%20.env.example&envLink=https%3A%2F%2Fgithub.com%2Fbetocmn%2Fpreseason%2Fblob%2Fmain%2F.env.example)
