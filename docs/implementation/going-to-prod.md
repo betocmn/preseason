@@ -260,7 +260,7 @@ pnpm exec tsx src/server/db/seed.ts
 
 This seeds:
 
-- `humberto.mn@gmail.com` as an admin user profile
+- An admin user profile (email/name controlled by `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` env vars; defaults to `admin@example.com`)
 - category groups and subcategories
 - tools and aliases
 - LLM catalog rows
