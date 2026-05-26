@@ -12,7 +12,7 @@ This roadmap covers what we plan to ship next in the open-source project.
 
 ### 1) Launch Readiness
 
-- Improve first-run setup and self-hosting reliability
+- Improve first-run setup and supported deployment reliability
 - Publish clear operational checklists for maintainers
 - Tighten CI and security scanning defaults
 
@@ -48,7 +48,7 @@ management, season freezing UX, and scoring presentation.
 
 ### Hosting/Operations Hardening
 
-- Stronger Docker self-hosting path
+- Docker/self-hosting support with Supabase-compatible auth and seed flows
 - Better production diagnostics
 - Documented upgrade playbooks between schema/protocol revisions
 
