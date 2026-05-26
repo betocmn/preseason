@@ -35,7 +35,7 @@ export default async function BenchmarkSeasonsPage() {
           <p className="text-muted-foreground">Manage benchmark seasons and their panels.</p>
         </div>
         <Button asChild>
-          <Link href="/beto-admin/benchmark/new">
+          <Link href="/admin/benchmark/new">
             <Plus className="mr-2 h-4 w-4" />
             New Season
           </Link>
@@ -68,7 +68,7 @@ export default async function BenchmarkSeasonsPage() {
                 <TableCell>{season.runCount}</TableCell>
                 <TableCell>
                   <Button asChild variant="ghost" size="icon" title="View">
-                    <Link href={`/beto-admin/benchmark/seasons/${season.id}`}>
+                    <Link href={`/admin/benchmark/seasons/${season.id}`}>
                       <Eye className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -88,10 +88,10 @@ export default async function BenchmarkSeasonsPage() {
 
       <div className="flex gap-3">
         <Button asChild variant="outline">
-          <Link href="/beto-admin/benchmark/tool-candidates">Tool Candidates</Link>
+          <Link href="/admin/benchmark/tool-candidates">Tool Candidates</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/beto-admin/benchmark/weight-configs">Weight Configs</Link>
+          <Link href="/admin/benchmark/weight-configs">Weight Configs</Link>
         </Button>
       </div>
     </div>

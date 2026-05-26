@@ -5,7 +5,7 @@ describe('adminNavItems', () => {
   it('includes the matches admin section', () => {
     expect(adminNavItems).toContainEqual(
       expect.objectContaining({
-        href: '/beto-admin/matches',
+        href: '/admin/matches',
         label: 'Matches',
       }),
     )

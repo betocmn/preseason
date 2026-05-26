@@ -79,7 +79,7 @@ export function LlmForm({ llm }: LlmFormProps) {
   const createMutation = api.llm.create.useMutation({
     onSuccess: () => {
       toast.success('LLM created')
-      router.push('/beto-admin/llms')
+      router.push('/admin/llms')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -87,7 +87,7 @@ export function LlmForm({ llm }: LlmFormProps) {
   const updateMutation = api.llm.update.useMutation({
     onSuccess: () => {
       toast.success('LLM updated')
-      router.push('/beto-admin/llms')
+      router.push('/admin/llms')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -239,7 +239,7 @@ export function LlmForm({ llm }: LlmFormProps) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : isEditing ? 'Update LLM' : 'Create LLM'}
           </Button>
-          <Button type="button" variant="outline" onClick={() => router.push('/beto-admin/llms')}>
+          <Button type="button" variant="outline" onClick={() => router.push('/admin/llms')}>
             Cancel
           </Button>
         </div>

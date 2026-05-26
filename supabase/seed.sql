@@ -1,12 +1,17 @@
 -- Seed auth users for local development (OTP login)
 -- App data (user profiles) is seeded via `pnpm db:seed` after migrations
+--
+-- Note: This file is read by `supabase db reset` and cannot read env vars.
+-- It seeds a default `admin@example.com` auth user; the matching profile is
+-- then created by `pnpm db:seed`, which honors SEED_ADMIN_EMAIL / SEED_ADMIN_NAME.
+-- If you override those env vars, the TS seed will create a second profile.
 
 DO $$
 DECLARE
   user_id uuid;
   user_email text;
 BEGIN
-  FOR user_email IN SELECT unnest(ARRAY['humberto.mn@gmail.com'])
+  FOR user_email IN SELECT unnest(ARRAY['admin@example.com'])
   LOOP
     IF EXISTS (SELECT 1 FROM auth.users WHERE email = user_email) THEN
       CONTINUE;

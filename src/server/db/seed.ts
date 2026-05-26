@@ -32,7 +32,12 @@ let db!: SeedDatabase
 // SEED DATA
 // ============================================================================
 
-const ADMIN_USERS = [{ email: 'humberto.mn@gmail.com', displayName: 'Beto' }]
+const ADMIN_USERS = [
+  {
+    email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com',
+    displayName: process.env.SEED_ADMIN_NAME ?? 'Admin',
+  },
+]
 
 const CATEGORY_GROUPS = [
   {

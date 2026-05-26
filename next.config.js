@@ -10,14 +10,6 @@ const config = {
   outputFileTracingIncludes: {
     '/*': ['./src/server/llm/prompts/**/*.md'],
   },
-  async rewrites() {
-    return [
-      {
-        source: '/beto-admin/:path*',
-        destination: '/admin/:path*',
-      },
-    ]
-  },
 }
 
 export default config

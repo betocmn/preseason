@@ -59,7 +59,7 @@ These are the remaining manual setup items:
 - Tool candidate review cron does not auto-resolve unknown tool names.
   - It only writes AI suggestions.
   - An admin still needs to approve or reject candidates in
-    `/beto-admin/benchmark/tool-candidates`.
+    `/admin/benchmark/tool-candidates`.
   - Approval auto-replays unresolved decisions.
 - Critics and comments are not created automatically.
   - The homepage "Latest Verified Critics" section stays empty until you add
@@ -260,7 +260,7 @@ pnpm exec tsx src/server/db/seed.ts
 
 This seeds:
 
-- `humberto.mn@gmail.com` as an admin user profile
+- An admin user profile (email/name controlled by `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` env vars; defaults to `admin@example.com`)
 - category groups and subcategories
 - tools and aliases
 - LLM catalog rows
@@ -324,13 +324,13 @@ After the production deploy:
 1. open the site
 2. confirm the public homepage loads
 3. log in at `/login`
-4. confirm `/beto-admin` opens successfully
+4. confirm `/admin` opens successfully
 
 ### 8. Create And Activate A Weight Config
 
 Open:
 
-- `/beto-admin/benchmark/weight-configs`
+- `/admin/benchmark/weight-configs`
 
 Create one if needed, then make sure exactly one config is active.
 
@@ -340,7 +340,7 @@ A simple first production config is uniform `1 / 1 / 1`.
 
 Open:
 
-- `/beto-admin/benchmark`
+- `/admin/benchmark`
 
 Then:
 
@@ -415,7 +415,7 @@ curl -sS \
 
 Then actively review:
 
-- `/beto-admin/benchmark/tool-candidates`
+- `/admin/benchmark/tool-candidates`
 
 Important:
 
@@ -427,9 +427,9 @@ Important:
 
 Monitor:
 
-- `/beto-admin/benchmark`
-- `/beto-admin/benchmark/seasons/<seasonId>`
-- `/beto-admin/benchmark/runs/<runId>`
+- `/admin/benchmark`
+- `/admin/benchmark/seasons/<seasonId>`
+- `/admin/benchmark/runs/<runId>`
 
 Healthy first-run outcome:
 
@@ -447,7 +447,7 @@ Most likely causes:
 
 Recovery path:
 
-1. approve tool candidates in `/beto-admin/benchmark/tool-candidates`
+1. approve tool candidates in `/admin/benchmark/tool-candidates`
 2. let approval auto-replay unresolved decisions
 3. open the run detail page
 4. click `Retry Failed Cases`
@@ -480,7 +480,7 @@ If your demo is tomorrow and you want the fewest moving parts:
 2. seed production reference data
 3. insert benchmark protocol row
 4. deploy to Vercel production with env vars
-5. log into `/beto-admin`
+5. log into `/admin`
 6. create one active weight config
 7. create season
 8. freeze season

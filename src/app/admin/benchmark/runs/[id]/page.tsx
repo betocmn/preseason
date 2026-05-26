@@ -73,7 +73,7 @@ export default async function RunDetailPage({ params }: PageProps) {
           <p className="text-muted-foreground">
             Season:{' '}
             <Link
-              href={`/beto-admin/benchmark/seasons/${run.season.id}`}
+              href={`/admin/benchmark/seasons/${run.season.id}`}
               className="underline hover:no-underline"
             >
               {run.season.name}
@@ -262,7 +262,7 @@ export default async function RunDetailPage({ params }: PageProps) {
       )}
 
       <Button asChild variant="outline">
-        <Link href={`/beto-admin/benchmark/seasons/${run.season.id}`}>Back to Season</Link>
+        <Link href={`/admin/benchmark/seasons/${run.season.id}`}>Back to Season</Link>
       </Button>
     </div>
   )

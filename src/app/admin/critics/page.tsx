@@ -31,7 +31,7 @@ export default async function CriticsPage() {
           <p className="text-muted-foreground">Manage critics on Preseason.</p>
         </div>
         <Button asChild>
-          <Link href="/beto-admin/critics/new">
+          <Link href="/admin/critics/new">
             <Plus className="mr-2 h-4 w-4" />
             New Critic
           </Link>
@@ -92,7 +92,7 @@ export default async function CriticsPage() {
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button asChild variant="ghost" size="icon" title="Edit">
-                      <Link href={`/beto-admin/critics/${critic.id}/edit`}>
+                      <Link href={`/admin/critics/${critic.id}/edit`}>
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>

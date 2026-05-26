@@ -26,7 +26,7 @@ export default async function LlmsPage() {
           <p className="text-muted-foreground">Manage LLMs used in benchmark seasons.</p>
         </div>
         <Button asChild>
-          <Link href="/beto-admin/llms/new">
+          <Link href="/admin/llms/new">
             <Plus className="mr-2 h-4 w-4" />
             New LLM
           </Link>
@@ -75,7 +75,7 @@ export default async function LlmsPage() {
                   <div className="flex items-center gap-1">
                     <ToggleLlmActiveButton llmId={llm.id} isActive={llm.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
-                      <Link href={`/beto-admin/llms/${llm.id}/edit`}>
+                      <Link href={`/admin/llms/${llm.id}/edit`}>
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>

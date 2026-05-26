@@ -77,7 +77,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
   const createMutation = api.prompt.create.useMutation({
     onSuccess: () => {
       toast.success('Prompt created')
-      router.push('/beto-admin/prompts')
+      router.push('/admin/prompts')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -85,7 +85,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
   const updateMutation = api.prompt.update.useMutation({
     onSuccess: () => {
       toast.success('Prompt updated')
-      router.push('/beto-admin/prompts')
+      router.push('/admin/prompts')
     },
     onError: (err) => toast.error(err.message),
   })
@@ -259,11 +259,7 @@ export function PromptForm({ prompt }: PromptFormProps) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : isEditing ? 'Update Prompt' : 'Create Prompt'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/beto-admin/prompts')}
-          >
+          <Button type="button" variant="outline" onClick={() => router.push('/admin/prompts')}>
             Cancel
           </Button>
         </div>
