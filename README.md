@@ -3,6 +3,7 @@
 **Track what tools and services LLMs recommend for vibe-coding prompts.**
 
 [![CI](https://github.com/betocmn/preseason/actions/workflows/ci.yml/badge.svg)](https://github.com/betocmn/preseason/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/betocmn/preseason/actions/workflows/codeql.yml/badge.svg)](https://github.com/betocmn/preseason/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
