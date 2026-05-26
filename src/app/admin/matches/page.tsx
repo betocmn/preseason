@@ -102,7 +102,7 @@ export default async function AdminMatchesPage() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/beto-admin/benchmark">Open Benchmark Seasons</Link>
+              <Link href="/admin/benchmark">Open Benchmark Seasons</Link>
             </Button>
           </CardContent>
         </Card>
@@ -119,7 +119,7 @@ export default async function AdminMatchesPage() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/beto-admin/benchmark">Open Benchmark Seasons</Link>
+              <Link href="/admin/benchmark">Open Benchmark Seasons</Link>
             </Button>
           </CardContent>
         </Card>
@@ -169,7 +169,7 @@ export default async function AdminMatchesPage() {
                     <TableCell>{batch.promptTemplate.name}</TableCell>
                     <TableCell>
                       <Button asChild variant="ghost" size="icon" title="View">
-                        <Link href={`/beto-admin/matches/${batch.id}`}>
+                        <Link href={`/admin/matches/${batch.id}`}>
                           <Eye className="h-4 w-4" />
                         </Link>
                       </Button>

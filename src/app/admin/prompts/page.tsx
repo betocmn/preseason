@@ -26,7 +26,7 @@ export default async function PromptsPage() {
           <p className="text-muted-foreground">Manage prompts used in benchmark seasons.</p>
         </div>
         <Button asChild>
-          <Link href="/beto-admin/prompts/new">
+          <Link href="/admin/prompts/new">
             <Plus className="mr-2 h-4 w-4" />
             New Prompt
           </Link>
@@ -81,7 +81,7 @@ export default async function PromptsPage() {
                   <div className="flex items-center gap-1">
                     <TogglePromptActiveButton promptId={prompt.id} isActive={prompt.isActive} />
                     <Button asChild variant="ghost" size="icon" title="Edit">
-                      <Link href={`/beto-admin/prompts/${prompt.id}/edit`}>
+                      <Link href={`/admin/prompts/${prompt.id}/edit`}>
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>

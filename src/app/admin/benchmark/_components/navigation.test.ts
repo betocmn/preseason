@@ -28,9 +28,9 @@ describe('loadFreshBenchmarkAdminPage', () => {
 
     vi.stubGlobal('window', { location })
 
-    loadFreshBenchmarkAdminPage('/beto-admin/benchmark')
+    loadFreshBenchmarkAdminPage('/admin/benchmark')
 
-    expect(location.assign).toHaveBeenCalledWith('/beto-admin/benchmark')
+    expect(location.assign).toHaveBeenCalledWith('/admin/benchmark')
     expect(location.reload).not.toHaveBeenCalled()
   })
 })

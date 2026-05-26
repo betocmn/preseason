@@ -2,6 +2,7 @@
   "name": "preseason",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "next build",
@@ -23,6 +24,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "preview": "next build && next start",
+    "setup": "pnpm install && supabase start",
     "start": "next start",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

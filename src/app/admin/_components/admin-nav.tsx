@@ -6,12 +6,12 @@ import { usePathname } from 'next/navigation'
 import { cn } from '~/lib/utils'
 
 export const adminNavItems = [
-  { href: '/beto-admin/tools', label: 'Tools', icon: Wrench },
-  { href: '/beto-admin/llms', label: 'LLMs', icon: Brain },
-  { href: '/beto-admin/prompts', label: 'Prompts', icon: MessageSquare },
-  { href: '/beto-admin/critics', label: 'Critics', icon: UserCheck },
-  { href: '/beto-admin/benchmark', label: 'Benchmark', icon: FlaskConical },
-  { href: '/beto-admin/matches', label: 'Matches', icon: Scale },
+  { href: '/admin/tools', label: 'Tools', icon: Wrench },
+  { href: '/admin/llms', label: 'LLMs', icon: Brain },
+  { href: '/admin/prompts', label: 'Prompts', icon: MessageSquare },
+  { href: '/admin/critics', label: 'Critics', icon: UserCheck },
+  { href: '/admin/benchmark', label: 'Benchmark', icon: FlaskConical },
+  { href: '/admin/matches', label: 'Matches', icon: Scale },
 ]
 
 export function AdminNav() {
