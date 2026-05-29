@@ -1,8 +1,14 @@
 {
   "name": "preseason",
   "version": "0.1.0",
+  "description": "Open-source benchmark tracking which tools and services LLMs recommend for vibe-coding prompts.",
   "private": true,
   "license": "MIT",
+  "homepage": "https://preseason.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/betocmn/preseason.git"
+  },
   "type": "module",
   "scripts": {
     "build": "next build",
