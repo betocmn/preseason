@@ -64,5 +64,4 @@ Do not mutate an active season in place.
 
 ## Related Docs
 
-- [how-benchmarks-work.md](/Users/betocmn/Sites/conductor/workspaces/preseason/salvador/docs/guides/how-benchmarks-work.md)
-- [going-to-prod.md](/Users/betocmn/Sites/conductor/workspaces/preseason/salvador/docs/implementation/going-to-prod.md)
+- [how-benchmarks-work.md](how-benchmarks-work.md)
