@@ -25,13 +25,12 @@ failures as bugs in the docs.
 
 ## Project layout
 
-- `src/app/` — Next.js App Router pages (public, admin, provider, auth)
+- `src/app/` — Next.js App Router pages (public, admin, auth)
 - `src/server/` — Drizzle schema (`db/`) and tRPC routers (`api/`)
 - `src/components/` — React components (shadcn/ui under `ui/`)
 - `src/lib/` — small utilities (Supabase clients, helpers)
 - `src/constants/server-settings.ts` — global non-frontend constants
 - `docs/guides/` — deep-dive guides on individual subsystems
-- `docs/implementation/` — internal planning docs (less polished, still useful context)
 
 ## Branching, commits, and PRs
 

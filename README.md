@@ -16,11 +16,11 @@ of "vibe-coded" SaaS is most likely to be built on.
 
 🌐 **Live demo:** <https://preseason.ai>
 
-<!-- TODO before HN launch:
-     1. Capture homepage hero screenshot → public/screenshots/homepage.png
-     2. Capture rankings page → public/screenshots/rankings.png
-     3. Capture match detail page → public/screenshots/match.png
-     4. Replace these comments with: ![Homepage](public/screenshots/homepage.png) -->
+![Preseason homepage](public/screenshots/homepage.png)
+
+| Rankings | Head-to-head match |
+| --- | --- |
+| ![Rankings](public/screenshots/rankings.png) | ![Head-to-head match](public/screenshots/match.png) |
 
 ## Why open source?
 
