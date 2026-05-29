@@ -40,8 +40,8 @@ export default async function HomePage() {
               What <span className="italic">agents</span> want
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              We track what tools AI models pick across thousands of prompts at every level, from
-              vibe coding beginners to expert engineers.
+              We track what tools AI models pick across a frozen panel of vibe-coding prompts at
+              every level, from beginners to expert engineers.
             </p>
           </div>
 
