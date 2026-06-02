@@ -1,0 +1,457 @@
+import { TRPCError } from '@trpc/server'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { z } from 'zod'
+import { requireRole } from '~/server/api/helpers/auth'
+import { paginationInputSchema } from '~/server/api/helpers/pagination'
+import {
+  loadToolSearchCatalog,
+  rankToolSearchCatalog,
+  stripToolSearchRelations,
+} from '~/server/api/helpers/tool-search'
+import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
+import { subcategories, toolAliases, toolCategories, tools } from '~/server/db/schema'
+
+const logoPathSchema = z
+  .string()
+  .max(512)
+  .refine((value) => value.startsWith('/'), {
+    message: 'Logo path must start with "/"',
+  })
+
+function normalizeAlias(alias: string): string {
+  return alias.toLowerCase().trim()
+}
+
+function deduplicateAliases(aliases: string[]): string[] {
+  const seen = new Set<string>()
+  return aliases.filter((alias) => {
+    const normalized = normalizeAlias(alias)
+    if (seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
+}
+
+const createToolInput = z.object({
+  name: z.string().min(1).max(255),
+  slug: z.string().min(1).max(255),
+  description: z.string().max(5000).optional(),
+  website: z.string().url().max(512).optional(),
+  logoUrl: logoPathSchema.optional(),
+  isVerified: z.boolean().optional(),
+  providerUserId: z.string().uuid().nullable().optional(),
+  aliases: z.array(z.string().min(1).max(255)).max(50).optional(),
+  categoryIds: z.array(z.string().uuid()).max(50).optional(),
+})
+
+const updateToolInput = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1).max(255).optional(),
+    slug: z.string().min(1).max(255).optional(),
+    description: z.string().max(5000).nullable().optional(),
+    website: z.string().url().max(512).nullable().optional(),
+    logoUrl: logoPathSchema.nullable().optional(),
+    isVerified: z.boolean().optional(),
+    providerUserId: z.string().uuid().nullable().optional(),
+    aliases: z.array(z.string().min(1).max(255)).max(50).nullable().optional(),
+    categoryIds: z.array(z.string().uuid()).max(50).optional(),
+  })
+  .refine(
+    (input) =>
+      input.name !== undefined ||
+      input.slug !== undefined ||
+      input.description !== undefined ||
+      input.website !== undefined ||
+      input.logoUrl !== undefined ||
+      input.isVerified !== undefined ||
+      input.providerUserId !== undefined ||
+      input.aliases !== undefined ||
+      input.categoryIds !== undefined,
+    {
+      message: 'At least one field is required',
+      path: ['id'],
+    },
+  )
+
+type Database = typeof import('~/server/db').db
+
+async function validateCategoryIds(db: Database, categoryIds: string[]) {
+  if (categoryIds.length === 0) return
+  const existing = await db
+    .select({ id: subcategories.id })
+    .from(subcategories)
+    .where(inArray(subcategories.id, categoryIds))
+
+  const existingIds = new Set(existing.map((row) => row.id))
+  const missingIds = categoryIds.filter((id) => !existingIds.has(id))
+  if (missingIds.length > 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'One or more category IDs are invalid',
+    })
+  }
+}
+
+async function getToolWithCategories(db: Database, toolId: string) {
+  return db.query.tools.findFirst({
+    where: eq(tools.id, toolId),
+    with: {
+      toolCategories: {
+        with: {
+          category: {
+            with: {
+              categoryGroup: true,
+            },
+          },
+        },
+      },
+      toolAliases: {
+        columns: { alias: true },
+      },
+    },
+  })
+}
+
+export const toolRouter = createTRPCRouter({
+  listNames: publicProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({ slug: tools.slug, name: tools.name })
+      .from(tools)
+      .orderBy(asc(tools.name))
+  }),
+
+  getById: publicProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const tool = await getToolWithCategories(ctx.db, input.id)
+      if (!tool) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool not found',
+        })
+      }
+      return tool
+    }),
+
+  list: publicProcedure
+    .input(
+      paginationInputSchema.extend({
+        categorySlug: z.string().min(1).max(100).optional(),
+        verifiedOnly: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      let categoryId: string | undefined
+      if (input.categorySlug) {
+        const category = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.categorySlug),
+        })
+        if (!category) {
+          return {
+            items: [],
+            total: 0,
+            limit: input.limit,
+            offset: input.offset,
+          }
+        }
+        categoryId = category.id
+      }
+
+      let categoryToolIds: string[] | undefined
+      if (categoryId) {
+        const rows = await ctx.db
+          .select({ toolId: toolCategories.toolId })
+          .from(toolCategories)
+          .where(eq(toolCategories.categoryId, categoryId))
+        categoryToolIds = rows.map((row) => row.toolId)
+        if (categoryToolIds.length === 0) {
+          return {
+            items: [],
+            total: 0,
+            limit: input.limit,
+            offset: input.offset,
+          }
+        }
+      }
+
+      const where = and(
+        categoryToolIds ? inArray(tools.id, categoryToolIds) : undefined,
+        input.verifiedOnly ? eq(tools.isVerified, true) : undefined,
+      )
+
+      const countResult = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(tools)
+        .where(where)
+      const total = Number(countResult[0]?.count ?? 0)
+
+      const items = await ctx.db.query.tools.findMany({
+        where,
+        orderBy: [asc(tools.name)],
+        limit: input.limit,
+        offset: input.offset,
+        with: {
+          toolCategories: {
+            with: {
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      return {
+        items,
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      }
+    }),
+
+  getBySlug: publicProcedure
+    .input(z.object({ slug: z.string().min(1).max(255) }))
+    .query(async ({ ctx, input }) => {
+      const tool = await ctx.db.query.tools.findFirst({
+        where: eq(tools.slug, input.slug),
+        with: {
+          toolCategories: {
+            with: {
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
+            },
+          },
+        },
+      })
+      if (!tool) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool not found',
+        })
+      }
+      return tool
+    }),
+
+  search: publicProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(255),
+        limit: z.number().int().min(1).max(50).default(10),
+        categoryId: z.string().uuid().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const catalog = await loadToolSearchCatalog(ctx.db)
+      return rankToolSearchCatalog(catalog, input).map((result) =>
+        stripToolSearchRelations(result.tool),
+      )
+    }),
+
+  listMine: protectedProcedure
+    .input(
+      paginationInputSchema.extend({
+        providerUserId: z.string().uuid().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const profile = await requireRole(ctx.db, ctx.user.id, ['provider', 'admin'])
+      const providerUserId =
+        profile.role === 'admin' ? (input.providerUserId ?? ctx.user.id) : ctx.user.id
+
+      const countResult = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(tools)
+        .where(eq(tools.providerUserId, providerUserId))
+      const total = Number(countResult[0]?.count ?? 0)
+
+      const items = await ctx.db.query.tools.findMany({
+        where: eq(tools.providerUserId, providerUserId),
+        orderBy: [asc(tools.name)],
+        limit: input.limit,
+        offset: input.offset,
+        with: {
+          toolCategories: {
+            with: {
+              category: {
+                with: {
+                  categoryGroup: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      return {
+        items,
+        total,
+        limit: input.limit,
+        offset: input.offset,
+      }
+    }),
+
+  create: protectedProcedure.input(createToolInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+    const categoryIds = [...new Set(input.categoryIds ?? [])]
+    await validateCategoryIds(ctx.db, categoryIds)
+
+    const tool = await ctx.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(tools)
+        .values({
+          name: input.name,
+          slug: input.slug,
+          description: input.description,
+          website: input.website,
+          logoUrl: input.logoUrl,
+          isVerified: input.isVerified ?? false,
+          providerUserId: input.providerUserId ?? null,
+        })
+        .returning()
+
+      const row = inserted[0]
+      if (!row) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create tool',
+        })
+      }
+
+      if (categoryIds.length > 0) {
+        await tx.insert(toolCategories).values(
+          categoryIds.map((categoryId, index) => ({
+            toolId: row.id,
+            categoryId,
+            isPrimary: index === 0,
+          })),
+        )
+      }
+
+      if (input.aliases && input.aliases.length > 0) {
+        const uniqueAliases = deduplicateAliases(input.aliases)
+        await tx.insert(toolAliases).values(
+          uniqueAliases.map((alias) => ({
+            toolId: row.id,
+            alias,
+            normalizedAlias: normalizeAlias(alias),
+            source: 'admin',
+          })),
+        )
+      }
+
+      return row
+    })
+
+    return getToolWithCategories(ctx.db, tool.id)
+  }),
+
+  update: protectedProcedure.input(updateToolInput).mutation(async ({ ctx, input }) => {
+    await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+    const existing = await ctx.db.query.tools.findFirst({
+      where: eq(tools.id, input.id),
+    })
+    if (!existing) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Tool not found',
+      })
+    }
+
+    const categoryIds = input.categoryIds ? [...new Set(input.categoryIds)] : undefined
+    if (categoryIds) {
+      await validateCategoryIds(ctx.db, categoryIds)
+    }
+
+    const { id, categoryIds: _categoryIds, aliases, ...rest } = input
+
+    await ctx.db.transaction(async (tx) => {
+      if (Object.keys(rest).length > 0) {
+        await tx.update(tools).set(rest).where(eq(tools.id, id))
+      }
+
+      if (aliases !== undefined) {
+        await tx.delete(toolAliases).where(eq(toolAliases.toolId, id))
+        if (aliases && aliases.length > 0) {
+          const uniqueAliases = deduplicateAliases(aliases)
+          await tx.insert(toolAliases).values(
+            uniqueAliases.map((alias) => ({
+              toolId: id,
+              alias,
+              normalizedAlias: normalizeAlias(alias),
+              source: 'admin',
+            })),
+          )
+        }
+      }
+
+      if (categoryIds) {
+        await tx.delete(toolCategories).where(eq(toolCategories.toolId, id))
+        if (categoryIds.length > 0) {
+          await tx.insert(toolCategories).values(
+            categoryIds.map((categoryId, index) => ({
+              toolId: id,
+              categoryId,
+              isPrimary: index === 0,
+            })),
+          )
+        }
+      }
+    })
+
+    const updated = await getToolWithCategories(ctx.db, id)
+    if (!updated) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Tool not found',
+      })
+    }
+    return updated
+  }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const deleted = await ctx.db.delete(tools).where(eq(tools.id, input.id)).returning()
+      if (!deleted[0]) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool not found',
+        })
+      }
+
+      return {
+        success: true,
+        id: deleted[0].id,
+      }
+    }),
+
+  verify: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireRole(ctx.db, ctx.user.id, ['admin'])
+
+      const updated = await ctx.db
+        .update(tools)
+        .set({ isVerified: true })
+        .where(eq(tools.id, input.id))
+        .returning()
+
+      if (!updated[0]) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool not found',
+        })
+      }
+
+      return updated[0]
+    }),
+})

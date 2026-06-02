@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/cron/benchmark-run", "schedule": "*/6 * * * *" },
+    { "path": "/api/cron/match-run", "schedule": "0 0 */2 * *" },
+    { "path": "/api/cron/tool-candidate-review", "schedule": "0 * * * *" }
+  ]
+}
