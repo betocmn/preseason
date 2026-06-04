@@ -1,30 +1,60 @@
 # Preseason
 
-**Track what tools and services LLMs recommend for vibe-coding prompts.**
+**Measure which developer tools LLMs recommend when asked to build real web apps.**
 
 [![CI](https://github.com/betocmn/preseason/actions/workflows/ci.yml/badge.svg)](https://github.com/betocmn/preseason/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/betocmn/preseason/actions/workflows/codeql.yml/badge.svg)](https://github.com/betocmn/preseason/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Preseason is an open-source benchmark that watches what tools today's LLMs
-push when you ask them to build a real web app. We freeze a panel of prompts
-and models, run every prompt × model combination on a schedule, parse a
-strict appendix from each response, and publish rankings, head-to-head
-matchups, and methodology notes — so you can see which tools the next wave
-of "vibe-coded" SaaS is most likely to be built on.
+Preseason is an open-source benchmark that measures which developer tools
+LLMs recommend when asked to build real web apps.
+
+We run a fixed set of web-app prompts against a fixed panel of models, parse
+each answer for recommended tools and services, then publish rankings,
+head-to-head comparisons, and methodology notes.
+
+The goal is to make AI-driven developer-tool recommendations inspectable,
+reproducible, and contestable, so you can see which tools AI coding assistants
+are most likely to put in front of developers.
 
 🌐 **Live demo:** <https://preseason.ai>
 
 ![Preseason homepage](public/screenshots/homepage.png)
 
+## What it tracks
+
+Preseason currently tracks recommendations across categories like:
+
+- databases
+- auth
+- hosting
+- analytics
+- payments
+- email
+- background jobs
+- UI/component libraries
+- observability
+- AI/model providers
+
+For each prompt × model run, we record whether the model recommended a known
+tool, no tool, or an invalid/unrecognized answer.
+
+## Example questions Preseason can answer
+
+- Which database does each model recommend most often for a new SaaS app?
+- Does GPT-4.1 prefer Supabase, Firebase, Neon, or plain Postgres?
+- Which tools win head-to-head when two options appear in similar prompts?
+- Are some models more likely to recommend "no tool" or hallucinate unknown
+  tools?
+
 ## Why open source?
 
 Recommendations from AI coding assistants shape developer tool adoption
 faster than blog posts or Twitter threads. If a foundation model quietly
-favours one database or hosting provider, that preference scales to every
+favors one database or hosting provider, that preference scales to every
 developer using it. We think the methodology behind that should be open,
-reproducible, and contestable — not a private dashboard.
+reproducible, and contestable, not a private dashboard.
 
 Preseason exists so anyone can:
 
@@ -32,6 +62,16 @@ Preseason exists so anyone can:
   snapshots that are inspectable in this repo
 - Run **their own** benchmark on their own prompts or model panel
 - Submit **issues** when results look off and have an open paper trail
+
+## Current limitations
+
+- The benchmark measures recommendations, not whether a tool is objectively
+  better.
+- Results depend on the frozen prompt set and model snapshots.
+- Tool-name parsing is intentionally strict; unknown names go to review instead
+  of being guessed.
+- The project is early, so rankings should be treated as directional rather
+  than definitive.
 
 ## Quick start
 
@@ -83,16 +123,16 @@ prompt × model combination, requires the model to produce a strict
 machine-readable appendix, parses each response into a case decision
 (`tool` / `none` / `invalid`), and publishes runs that pass QC.
 
-Public pages — rankings, category indexes, head-to-head matches — only
-read from published benchmark data. Unrecognised tool names are held in a
+Public pages, including rankings, category indexes, and head-to-head matches,
+only read from published benchmark data. Unrecognized tool names are held in a
 candidate queue for admin review rather than guessed at.
 
 ## Tech stack
 
 - **[Next.js 15](https://nextjs.org)** (App Router, React Server Components)
-- **[tRPC v11](https://trpc.io)** — typed API
+- **[tRPC v11](https://trpc.io)**: typed API
 - **[Drizzle ORM](https://orm.drizzle.team/)** + **[Supabase](https://supabase.com)** (Postgres + email-OTP auth)
-- **[OpenRouter](https://openrouter.ai)** — model gateway
+- **[OpenRouter](https://openrouter.ai)**: model gateway
 - **[Tailwind CSS v4](https://tailwindcss.com)** + **[shadcn/ui](https://ui.shadcn.com)**
 - **[Vitest](https://vitest.dev)** + Testcontainers for an integration-tested Postgres
 - **[Biome](https://biomejs.dev)** for lint + format
@@ -100,15 +140,17 @@ candidate queue for admin review rather than guessed at.
 ## Documentation
 
 ### Get started
-- [`docs/SETUP.md`](docs/SETUP.md) — local development environment
-- [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) — supported deployment path
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every env var explained
+
+- [`docs/SETUP.md`](docs/SETUP.md): local development environment
+- [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md): supported deployment path
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md): every env var explained
 
 ### Learn more
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system overview
-- [`docs/CONCEPTS.md`](docs/CONCEPTS.md) — glossary of project terms
-- [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md) — how rankings are produced
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what's planned next
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): system overview
+- [`docs/CONCEPTS.md`](docs/CONCEPTS.md): glossary of project terms
+- [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md): how rankings are produced
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): what's planned next
 
 ### Deep dives
 - [How Benchmarks Work](docs/guides/how-benchmarks-work.md)
@@ -132,6 +174,6 @@ go through [`SECURITY.md`](SECURITY.md).
 
 ## License
 
-[MIT](LICENSE) — see the `LICENSE` file. Third-party tool logos under
+[MIT](LICENSE). See the `LICENSE` file. Third-party tool logos under
 `public/logos/` are used under nominative fair use; see
 [`docs/LOGO_POLICY.md`](docs/LOGO_POLICY.md).
