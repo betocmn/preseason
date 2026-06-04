@@ -18,10 +18,6 @@ of "vibe-coded" SaaS is most likely to be built on.
 
 ![Preseason homepage](public/screenshots/homepage.png)
 
-| Rankings | Head-to-head match |
-| --- | --- |
-| ![Rankings](public/screenshots/rankings.png) | ![Head-to-head match](public/screenshots/match.png) |
-
 ## Why open source?
 
 Recommendations from AI coding assistants shape developer tool adoption
