@@ -1,7 +1,7 @@
 {
   "name": "preseason",
   "version": "0.1.0",
-  "description": "Open-source benchmark tracking which tools and services LLMs recommend for vibe-coding prompts.",
+  "description": "Open-source benchmark for which dev tools LLMs recommend when building web apps.",
   "private": true,
   "license": "MIT",
   "homepage": "https://preseason.ai",
