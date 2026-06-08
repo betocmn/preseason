@@ -1,5 +1,6 @@
 'use client'
 
+import { Github } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -51,6 +52,17 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
+          <Button variant="ghost" size="sm" className="w-9 px-0" asChild>
+            <a
+              href="https://github.com/betocmn/preseason/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View source on GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          </Button>
+
           <ThemeToggle />
           <Button size="sm" asChild className="hidden md:inline-flex">
             <Link href="/contact">Contact</Link>
