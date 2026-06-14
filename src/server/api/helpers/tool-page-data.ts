@@ -51,6 +51,8 @@ type HeadToHeadAggregateRow = {
   b_wins: number
   abstains: number
   other_tool_count: number
+  weighted_a_wins: number
+  weighted_b_wins: number
 }
 
 function uuidList(values: string[]) {
@@ -161,33 +163,59 @@ async function fetchHeadToHeadAggregates(
   return db.execute<HeadToHeadAggregateRow>(sql`
     with pairs(category_id, tool_a_id, tool_b_id) as (
       values ${pairValues}
+    ),
+    decision_rows as (
+      select
+        p.category_id,
+        p.tool_a_id,
+        p.tool_b_id,
+        d.decision_type,
+        d.tool_id,
+        case ms.tier
+          when 'frontier' then coalesce(w.frontier_weight, 1)
+          when 'mid' then coalesce(w.mid_weight, 1)
+          when 'small' then coalesce(w.small_weight, 1)
+        end::float8 as weight
+      from pairs p
+      inner join preseason_benchmark_case_decision d on d.category_id = p.category_id
+      inner join preseason_benchmark_case_result cr on d.case_result_id = cr.id
+      inner join preseason_benchmark_run r on cr.run_id = r.id
+      inner join preseason_benchmark_case c on cr.case_id = c.id
+      inner join preseason_benchmark_model_snapshot ms on c.model_snapshot_id = ms.id
+      left join preseason_benchmark_model_weight_config w on r.weight_config_id = w.id
+      where cr.run_id in (${uuidList(runIds)})
+        and cr.status = 'completed'
+        and d.resolution_status = 'resolved'
+        and d.decision_type != 'invalid'
     )
     select
-      p.category_id,
-      p.tool_b_id,
+      category_id,
+      tool_b_id,
       count(*) filter (
-        where d.decision_type = 'tool' and d.tool_id = p.tool_a_id
+        where decision_type = 'tool' and tool_id = tool_a_id
       )::int as a_wins,
       count(*) filter (
-        where d.decision_type = 'tool' and d.tool_id = p.tool_b_id
+        where decision_type = 'tool' and tool_id = tool_b_id
       )::int as b_wins,
       count(*) filter (
-        where d.decision_type = 'none'
+        where decision_type = 'none'
       )::int as abstains,
       count(*) filter (
-        where d.decision_type = 'tool'
-          and d.tool_id is not null
-          and d.tool_id != p.tool_a_id
-          and d.tool_id != p.tool_b_id
-      )::int as other_tool_count
-    from pairs p
-    inner join preseason_benchmark_case_decision d on d.category_id = p.category_id
-    inner join preseason_benchmark_case_result cr on d.case_result_id = cr.id
-    where cr.run_id in (${uuidList(runIds)})
-      and cr.status = 'completed'
-      and d.resolution_status = 'resolved'
-      and d.decision_type != 'invalid'
-    group by p.category_id, p.tool_b_id
+        where decision_type = 'tool'
+          and tool_id is not null
+          and tool_id != tool_a_id
+          and tool_id != tool_b_id
+      )::int as other_tool_count,
+      coalesce(
+        sum(weight) filter (where decision_type = 'tool' and tool_id = tool_a_id),
+        0
+      )::float8 as weighted_a_wins,
+      coalesce(
+        sum(weight) filter (where decision_type = 'tool' and tool_id = tool_b_id),
+        0
+      )::float8 as weighted_b_wins
+    from decision_rows
+    group by category_id, tool_a_id, tool_b_id
   `)
 }
 
@@ -320,6 +348,10 @@ export async function getToolBenchmarkPageData(
     const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
     const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
     const ci = wilsonInterval(aWins, decisiveCaseCount)
+    const weightedAWins = Number(result?.weighted_a_wins ?? 0)
+    const weightedBWins = Number(result?.weighted_b_wins ?? 0)
+    const weightedDecisive = weightedAWins + weightedBWins
+    const weightedAWinRate = weightedDecisive > 0 ? weightedAWins / weightedDecisive : 0
 
     return {
       category: {
@@ -352,9 +384,9 @@ export async function getToolBenchmarkPageData(
         bWinRate,
         ciLow: ci.low,
         ciHigh: ci.high,
-        weightedAWins: aWins,
-        weightedBWins: bWins,
-        weightedAWinRate: aWinRate,
+        weightedAWins,
+        weightedBWins,
+        weightedAWinRate,
         modelBreakdown: [],
         promptBreakdown: [],
         meetsPublicationThreshold: decisiveCaseCount >= 30,
