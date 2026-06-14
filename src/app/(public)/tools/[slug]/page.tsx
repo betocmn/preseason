@@ -14,6 +14,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { getToolBenchmarkPageData } from '~/server/api/helpers/tool-page-data'
+import { db } from '~/server/db'
 import { publicApi } from '~/trpc/server'
 
 type Props = {
@@ -52,10 +54,9 @@ export default async function ToolDetailPage({ params }: Props) {
     }
   })()
 
-  const [comments, rankingsData, matchups] = await Promise.all([
+  const [comments, benchmarkData] = await Promise.all([
     caller.comment.listByTarget({ targetType: 'tool', targetId: tool.id }),
-    caller.benchmarkRanking.byTool({ toolSlug: slug }),
-    caller.benchmarkMatch.listByTool({ toolSlug: slug }),
+    getToolBenchmarkPageData(db, tool),
   ])
 
   const toolCategories = tool.toolCategories?.map((tc) => tc.category) ?? []
@@ -104,10 +105,10 @@ export default async function ToolDetailPage({ params }: Props) {
       </div>
 
       {/* Rankings */}
-      <ToolRankingSummary rankings={rankingsData.rankings} />
+      <ToolRankingSummary rankings={benchmarkData.rankings} />
 
       {/* Matchups */}
-      <ToolMatchupList matchups={matchups} />
+      <ToolMatchupList matchups={benchmarkData.matchups} />
 
       {/* Comments */}
       <Card>

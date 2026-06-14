@@ -448,7 +448,9 @@ export function rankFromDecisions(
     (a, b) =>
       b.weightedSupportRate - a.weightedSupportRate ||
       b.ciLow - a.ciLow ||
-      b.rawSupportCount - a.rawSupportCount,
+      b.rawSupportCount - a.rawSupportCount ||
+      a.toolName.localeCompare(b.toolName) ||
+      a.toolId.localeCompare(b.toolId),
   )
 
   return {
@@ -767,7 +769,9 @@ async function computeRankingForCategoryIds(
     (a, b) =>
       b.weightedSupportRate - a.weightedSupportRate ||
       b.ciLow - a.ciLow ||
-      b.rawSupportCount - a.rawSupportCount,
+      b.rawSupportCount - a.rawSupportCount ||
+      a.toolName.localeCompare(b.toolName) ||
+      a.toolId.localeCompare(b.toolId),
   )
 
   return {
