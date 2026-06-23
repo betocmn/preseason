@@ -20,6 +20,11 @@ import {
   AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS,
   AI_DEVTOOLS_TOOLS,
 } from './ai-devtools-catalog'
+import {
+  DEVTOOLS_EXPANSION_SUBCATEGORIES,
+  DEVTOOLS_EXPANSION_TOOL_CATEGORY_ASSIGNMENTS,
+  DEVTOOLS_EXPANSION_TOOLS,
+} from './devtools-expansion-catalog'
 import { PROMPT_CORPUS } from './prompt-corpus'
 import * as schema from './schema'
 
@@ -124,6 +129,14 @@ const SUBCATEGORY_GROUP_MAP: Record<string, string> = {
   'llm-coding-agents': 'devtools',
   'llm-observability': 'devtools',
   'llm-evals': 'devtools',
+  'backend-language': 'devtools',
+  'backend-framework': 'devtools',
+  'agent-frameworks': 'devtools',
+  'agentic-web-search': 'devtools',
+  'vector-db': 'devtools',
+  'llm-gateway': 'devtools',
+  'ai-code-review': 'devtools',
+  'browser-automation': 'devtools',
 }
 
 const CORE_SUBCATEGORIES = [
@@ -261,11 +274,11 @@ const CORE_SUBCATEGORIES = [
     description: 'Continuous integration and deployment',
   },
   {
-    name: 'Background Jobs',
+    name: 'Background Jobs / Queues',
     slug: 'jobs',
     icon: 'clock',
     displayOrder: 20,
-    description: 'Background job processing and task queues',
+    description: 'Background job processing, task queues, and durable workflows',
   },
   {
     name: 'Notifications',
@@ -276,7 +289,11 @@ const CORE_SUBCATEGORIES = [
   },
 ]
 
-export const SUBCATEGORIES = [...CORE_SUBCATEGORIES, ...AI_DEVTOOLS_SUBCATEGORIES]
+export const SUBCATEGORIES = [
+  ...CORE_SUBCATEGORIES,
+  ...AI_DEVTOOLS_SUBCATEGORIES,
+  ...DEVTOOLS_EXPANSION_SUBCATEGORIES,
+]
 
 const CORE_TOOLS = [
   // Auth
@@ -996,7 +1013,7 @@ const CORE_TOOLS = [
   },
 ]
 
-export const TOOLS = [...CORE_TOOLS, ...AI_DEVTOOLS_TOOLS]
+export const TOOLS = [...CORE_TOOLS, ...AI_DEVTOOLS_TOOLS, ...DEVTOOLS_EXPANSION_TOOLS]
 
 // Map tool slugs to their category slugs (with isPrimary flag)
 const CORE_TOOL_CATEGORY_ASSIGNMENTS: Array<{
@@ -1139,6 +1156,7 @@ const CORE_TOOL_CATEGORY_ASSIGNMENTS: Array<{
 export const TOOL_CATEGORY_ASSIGNMENTS = [
   ...CORE_TOOL_CATEGORY_ASSIGNMENTS,
   ...AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS,
+  ...DEVTOOLS_EXPANSION_TOOL_CATEGORY_ASSIGNMENTS,
 ]
 
 const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
