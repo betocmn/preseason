@@ -33,6 +33,7 @@ function normalizeRankingFilters(
   const promptLevel = searchParams.get('promptLevel') ?? undefined
   const modelTier = searchParams.get('modelTier') ?? undefined
   const modelSnapshotId = searchParams.get('modelSnapshotId') ?? undefined
+  const dateRange = searchParams.get('dateRange') ?? undefined
 
   return {
     promptLevel: (['beginner', 'intermediate', 'advanced'] as const).find(
@@ -40,6 +41,7 @@ function normalizeRankingFilters(
     ),
     modelTier: (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier),
     modelSnapshotId: normalizeModelSnapshotId(modelFilters, modelSnapshotId),
+    dateRange: (['1m', '3m', '6m'] as const).find((range) => range === dateRange),
   }
 }
 
@@ -49,7 +51,8 @@ export function RankingDetailContent(props: RankingDetailContentProps) {
     new URLSearchParams(searchParams.toString()),
     props.modelFilters,
   )
-  const hasFilters = !!filters.promptLevel || !!filters.modelTier || !!filters.modelSnapshotId
+  const hasFilters =
+    !!filters.promptLevel || !!filters.modelTier || !!filters.modelSnapshotId || !!filters.dateRange
 
   const groupQuery = api.benchmarkRanking.byCategoryGroup.useQuery(
     {

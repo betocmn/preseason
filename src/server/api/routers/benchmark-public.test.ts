@@ -427,7 +427,7 @@ describe('benchmark public routers', () => {
     const caller = createTestCaller(null)
     const result = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
-      windowType: 'run_day',
+      dateRange: 'all',
       anchorDate: '2026-03-10',
     })
 
@@ -453,7 +453,7 @@ describe('benchmark public routers', () => {
     const caller = createTestCaller(null)
     const result = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
-      windowType: 'run_day',
+      dateRange: 'all',
       anchorDate: '2026-03-10',
     })
 
@@ -2315,7 +2315,7 @@ describe('benchmark public routers', () => {
 
     const modelAFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
-      windowType: 'trailing_7d',
+      dateRange: 'all',
       anchorDate: '2026-03-10',
       modelSnapshotId: modelSnapshotA.id,
     })
@@ -2324,7 +2324,7 @@ describe('benchmark public routers', () => {
 
     const modelFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
-      windowType: 'trailing_7d',
+      dateRange: 'all',
       anchorDate: '2026-03-10',
       modelSnapshotId: modelSnapshotB.id,
     })
@@ -2520,7 +2520,7 @@ describe('benchmark public routers', () => {
     const caller = createTestCaller(null)
     const result = await caller.benchmarkRanking.byCategoryGroup({
       groupSlug: 'devtools',
-      windowType: 'trailing_7d',
+      dateRange: 'all',
       anchorDate: '2026-03-10',
     })
 
@@ -2543,7 +2543,7 @@ describe('benchmark public routers', () => {
       caller.benchmarkRanking.byCategory({
         categorySlug: 'auth',
         seasonId: fixture.explorationSeason.id,
-        windowType: 'run_day',
+        dateRange: 'all',
         anchorDate: '2026-03-10',
       }),
     ).rejects.toMatchObject({

@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, FlaskConical, Layers, Tag } from 'lucide-react'
+import { Bot, CalendarRange, FlaskConical, Layers, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -68,6 +68,10 @@ export function BenchmarkRankingFilters({
   const effectivePromptLevel = searchParams.get('promptLevel') ?? currentPromptLevel
   const effectiveModelTier = searchParams.get('modelTier') ?? currentModelTier
   const modelSnapshotParam = searchParams.get('modelSnapshotId') ?? currentModelSnapshotId
+
+  const dateRangeParam = searchParams.get('dateRange')
+  const effectiveDateRange =
+    (['1m', '3m', '6m'] as const).find((r) => r === dateRangeParam) ?? 'all'
 
   const normalizedModelSnapshotId =
     modelSnapshotParam && modelLookup.has(modelSnapshotParam) ? modelSnapshotParam : undefined
@@ -193,6 +197,34 @@ export function BenchmarkRankingFilters({
             <SelectItem value="frontier">Frontier</SelectItem>
             <SelectItem value="mid">Mid</SelectItem>
             <SelectItem value="small">Small</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <CalendarRange className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={effectiveDateRange}
+          onValueChange={(val) => {
+            navigate({ dateRange: val === 'all' ? undefined : val })
+          }}
+        >
+          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+            <span className="truncate">
+              {effectiveDateRange === '1m'
+                ? 'Last Month'
+                : effectiveDateRange === '3m'
+                  ? 'Last 3 Months'
+                  : effectiveDateRange === '6m'
+                    ? 'Last 6 Months'
+                    : 'All Time'}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="1m">Last Month</SelectItem>
+            <SelectItem value="3m">Last 3 Months</SelectItem>
+            <SelectItem value="6m">Last 6 Months</SelectItem>
           </SelectContent>
         </Select>
       </div>

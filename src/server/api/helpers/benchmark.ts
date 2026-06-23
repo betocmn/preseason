@@ -18,6 +18,18 @@ export const anchorDateSchema = z
     message: 'anchorDate must be a real calendar date',
   })
 
+/**
+ * Returns the YYYY-MM-DD date that is `months` calendar months before `anchorDate`
+ * (UTC). Used to translate the public rankings date-range filter
+ * (last month / 3 / 6 months) into a `scheduledFor` lower bound.
+ */
+export function monthsAgo(anchorDate: string, months: number): string {
+  const [year, month, day] = anchorDate.split('-').map(Number)
+  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1))
+  date.setUTCMonth(date.getUTCMonth() - months)
+  return formatScheduledFor(date)
+}
+
 export async function findLatestActiveBenchmarkSeasonId(database: DatabaseClient) {
   const rows = await database
     .select({ id: benchmarkSeasons.id })
