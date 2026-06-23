@@ -12,6 +12,7 @@ import {
   benchmarkModelSnapshots,
   benchmarkSeasonModels,
   categories,
+  llms,
   subcategories,
   tools,
 } from '~/server/db/schema'
@@ -34,6 +35,42 @@ const tierFiltersSchema = z.object({
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
   modelSnapshotId: z.string().uuid().optional(),
 })
+
+type ModelFilterRow = {
+  modelSnapshotId: string
+  company: string
+  modelFamily: string
+  modelVersion: string
+  modelName: string
+}
+
+function groupModelFilterRows(rows: ModelFilterRow[]): ModelFilterCompany[] {
+  const companyMap = new Map<string, { name: string; families: Map<string, ModelFilterFamily> }>()
+  for (const row of rows) {
+    let company = companyMap.get(row.company)
+    if (!company) {
+      company = { name: row.company, families: new Map<string, ModelFilterFamily>() }
+      companyMap.set(row.company, company)
+    }
+
+    let family = company.families.get(row.modelFamily)
+    if (!family) {
+      family = { name: row.modelFamily, models: [] }
+      company.families.set(row.modelFamily, family)
+    }
+
+    family.models.push({
+      id: row.modelSnapshotId,
+      version: row.modelVersion,
+      name: row.modelName,
+    })
+  }
+
+  return Array.from(companyMap.values()).map((company) => ({
+    name: company.name,
+    families: Array.from(company.families.values()),
+  }))
+}
 
 async function resolveSeasonId(
   db: Parameters<typeof findBenchmarkSeasonId>[0],
@@ -212,7 +249,11 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
 
       if (!seasonId) {
-        return { seasonId: null, companies: [] as ModelFilterCompany[] }
+        return {
+          seasonId: null,
+          companies: [] as ModelFilterCompany[],
+          archived: [] as ModelFilterCompany[],
+        }
       }
 
       const rows = await ctx.db
@@ -222,12 +263,14 @@ export const benchmarkRankingRouter = createTRPCRouter({
           modelFamily: benchmarkModelSnapshots.modelFamily,
           modelVersion: benchmarkModelSnapshots.modelVersion,
           modelName: benchmarkModelSnapshots.name,
+          isActive: llms.isActive,
         })
         .from(benchmarkSeasonModels)
         .innerJoin(
           benchmarkModelSnapshots,
           eq(benchmarkSeasonModels.modelSnapshotId, benchmarkModelSnapshots.id),
         )
+        .innerJoin(llms, eq(benchmarkModelSnapshots.llmId, llms.id))
         .where(eq(benchmarkSeasonModels.seasonId, seasonId))
         .orderBy(
           asc(benchmarkModelSnapshots.company),
@@ -236,36 +279,11 @@ export const benchmarkRankingRouter = createTRPCRouter({
           asc(benchmarkModelSnapshots.name),
         )
 
-      const companyMap = new Map<
-        string,
-        { name: string; families: Map<string, ModelFilterFamily> }
-      >()
-      for (const row of rows) {
-        let company = companyMap.get(row.company)
-        if (!company) {
-          company = { name: row.company, families: new Map<string, ModelFilterFamily>() }
-          companyMap.set(row.company, company)
-        }
-
-        let family = company.families.get(row.modelFamily)
-        if (!family) {
-          family = { name: row.modelFamily, models: [] }
-          company.families.set(row.modelFamily, family)
-        }
-
-        family.models.push({
-          id: row.modelSnapshotId,
-          version: row.modelVersion,
-          name: row.modelName,
-        })
+      return {
+        seasonId,
+        companies: groupModelFilterRows(rows.filter((row) => row.isActive)),
+        archived: groupModelFilterRows(rows.filter((row) => !row.isActive)),
       }
-
-      const companies: ModelFilterCompany[] = Array.from(companyMap.values()).map((company) => ({
-        name: company.name,
-        families: Array.from(company.families.values()),
-      }))
-
-      return { seasonId, companies }
     }),
 
   byTool: publicProcedure
