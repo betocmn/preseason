@@ -69,6 +69,7 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'hosting',
       'analytics',
       'ui-components',
+      'jobs',
     ],
     variants: {
       beginner: {
@@ -126,6 +127,7 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'storage',
       'hosting',
       'search',
+      'jobs',
     ],
     variants: {
       beginner: {
@@ -454,10 +456,16 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'llm-coding-agents',
       'llm-observability',
       'llm-evals',
+      'agent-frameworks',
+      'agentic-web-search',
+      'vector-db',
+      'llm-gateway',
+      'browser-automation',
       'auth',
       'database',
       'hosting',
       'search',
+      'jobs',
     ],
     variants: {
       beginner: {
@@ -488,6 +496,11 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'llm-coding-agents',
       'llm-observability',
       'llm-evals',
+      'agent-frameworks',
+      'agentic-web-search',
+      'vector-db',
+      'llm-gateway',
+      'browser-automation',
       'api',
       'database',
       'hosting',
@@ -514,9 +527,46 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       },
     },
   },
+  {
+    title: 'AI Engineering Workflow',
+    slug: 'ai-engineering-workflow',
+    expectedCategories: [
+      'llm-coding-agents',
+      'ai-code-review',
+      'testing',
+      'ci-cd',
+      'llm-gateway',
+      'llm-observability',
+      'llm-evals',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'AI-assisted engineering setup with a coding agent, AI code review, tests, and CI',
+        contentMd:
+          'Set up an AI-assisted engineering workflow for a small software team. Recommend the agentic IDE or coding agent the team should use day to day, an AI code review tool for pull requests, how they should run automated tests and continuous integration, and a way to access LLMs across providers. Keep it simple and practical.',
+      },
+      intermediate: {
+        description:
+          'Team AI engineering workflow with code review, CI gates, an LLM gateway, and evals',
+        contentMd:
+          'Design an AI-assisted engineering workflow for a growing software team shipping to production. Cover the agentic IDE / coding-agent setup developers use, automated AI code review on pull requests, the testing and CI pipeline that gates merges, a shared LLM gateway for routing across model providers, and the observability and evaluation tooling the team uses to monitor and regression-test the AI features it builds.',
+      },
+      advanced: {
+        description:
+          'Org-wide AI engineering toolchain with review gates, gateway, and eval/observability pipelines',
+        contentMd:
+          'Define a production-grade AI-assisted engineering workflow for a software organization with multiple teams. Specify the agentic IDE / ADE and coding-agent strategy for parallel agent work, mandatory AI code review integrated into pull requests with human sign-off, a testing and CI/CD pipeline with quality gates, a centralized LLM gateway providing routing, rate limiting, caching, and cost controls across providers, and the observability plus evaluation pipelines that trace, monitor, and regression-test LLM behavior before changes ship. Address governance, auditability, and how the toolchain scales across teams without fragmenting standards.',
+      },
+    },
+  },
 ]
 
 export const PROMPT_SLUGS = PROMPT_SCENARIOS.map((scenario) => scenario.slug)
+
+// Choosing a backend language and framework is implied by every scenario, so these
+// two categories are attached to all prompts to give them broad ranking coverage.
+const UNIVERSAL_CATEGORIES = ['backend-language', 'backend-framework']
 
 export const PROMPT_CORPUS: SeedPrompt[] = PROMPT_SCENARIOS.flatMap((scenario) =>
   PROMPT_LEVELS.map((level) => ({
@@ -525,7 +575,7 @@ export const PROMPT_CORPUS: SeedPrompt[] = PROMPT_SCENARIOS.flatMap((scenario) =
     level,
     description: scenario.variants[level].description,
     contentMd: scenario.variants[level].contentMd,
-    expectedCategories: [...scenario.expectedCategories],
+    expectedCategories: [...new Set([...scenario.expectedCategories, ...UNIVERSAL_CATEGORIES])],
     isActive: true,
   })),
 )
