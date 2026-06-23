@@ -105,7 +105,10 @@ describe('seed catalog integrity', () => {
       'ai-code-review',
       'browser-automation',
     ]) {
-      expect(uniqueToolsByCategory.get(slug)?.size ?? 0, `coverage for "${slug}"`).toBeGreaterThanOrEqual(6)
+      expect(
+        uniqueToolsByCategory.get(slug)?.size ?? 0,
+        `coverage for "${slug}"`,
+      ).toBeGreaterThanOrEqual(6)
     }
   })
 
