@@ -414,3 +414,26 @@ UPDATE "preseason_prompt"
 SET "expected_categories" = array_append("expected_categories", 'jobs'), "updatedAt" = now()
 WHERE "slug" IN ('saas-application', 'ecommerce-store', 'ai-support-agent-platform')
   AND NOT ('jobs' = ANY("expected_categories"));
+--> statement-breakpoint
+
+-- 8. Reconcile benchmark metadata for already-frozen prompt versions.
+-- Changing expected_categories above does NOT change a prompt's content hash, but
+-- freezePromptVersion() (src/server/llm/benchmark/prompt-freezer.ts) compares the eligible
+-- category set + order against the existing frozen version and refuses to re-freeze identical
+-- content with different metadata ("already has frozen content with different benchmark
+-- metadata"). Without this, freezing the next benchmark season would fail. Rebuild each frozen
+-- version's category rows to mirror its prompt's now-updated expected_categories, in the same
+-- order freezeSeason() resolves them (array order, 1-based displayOrder). No-op on a fresh /
+-- pre-launch database that has no frozen versions yet. Frozen prompt *content* is never touched.
+DELETE FROM "preseason_benchmark_prompt_version_category"
+WHERE "prompt_version_id" IN (SELECT "id" FROM "preseason_benchmark_prompt_version");
+--> statement-breakpoint
+
+INSERT INTO "preseason_benchmark_prompt_version_category"
+  ("id", "prompt_version_id", "category_id", "display_order")
+SELECT gen_random_uuid(), pv.id, c.id, ec.ord::int
+FROM "preseason_benchmark_prompt_version" pv
+JOIN "preseason_prompt" p ON p.id = pv.prompt_id
+CROSS JOIN LATERAL unnest(p."expected_categories") WITH ORDINALITY AS ec(slug, ord)
+JOIN "preseason_category" c ON c.slug = ec.slug
+ON CONFLICT ("prompt_version_id", "category_id") DO NOTHING;
