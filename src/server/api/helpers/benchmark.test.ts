@@ -219,4 +219,15 @@ describe('monthsAgo', () => {
     expect(monthsAgo('2026-01-15', 1)).toBe('2025-12-15')
     expect(monthsAgo('2026-02-10', 12)).toBe('2025-02-10')
   })
+
+  it('clamps month-end anchors to the target month', () => {
+    expect(monthsAgo('2026-03-31', 1)).toBe('2026-02-28')
+    expect(monthsAgo('2026-05-31', 1)).toBe('2026-04-30')
+    expect(monthsAgo('2026-03-30', 1)).toBe('2026-02-28')
+  })
+
+  it('preserves leap days when the target month has one', () => {
+    expect(monthsAgo('2024-03-31', 1)).toBe('2024-02-29')
+    expect(monthsAgo('2025-03-31', 1)).toBe('2025-02-28')
+  })
 })
