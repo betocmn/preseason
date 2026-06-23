@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import { getNextEligibleBenchmarkRunAt, resolveBenchmarkCronRunTarget } from './benchmark'
+import {
+  getNextEligibleBenchmarkRunAt,
+  monthsAgo,
+  resolveBenchmarkCronRunTarget,
+} from './benchmark'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -201,5 +205,18 @@ describe('resolveBenchmarkCronRunTarget', () => {
       latestScheduledFor: '2026-03-25',
       nextEligibleAt: getNextEligibleBenchmarkRunAt('2026-03-25').toISOString(),
     })
+  })
+})
+
+describe('monthsAgo', () => {
+  it('subtracts whole months within the same year', () => {
+    expect(monthsAgo('2026-06-23', 1)).toBe('2026-05-23')
+    expect(monthsAgo('2026-06-23', 3)).toBe('2026-03-23')
+    expect(monthsAgo('2026-06-23', 6)).toBe('2025-12-23')
+  })
+
+  it('crosses year boundaries', () => {
+    expect(monthsAgo('2026-01-15', 1)).toBe('2025-12-15')
+    expect(monthsAgo('2026-02-10', 12)).toBe('2025-02-10')
   })
 })

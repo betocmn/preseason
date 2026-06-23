@@ -2245,6 +2245,8 @@ describe('benchmark public routers', () => {
           modelFamily: 'GPT',
           modelVersion: '5',
           modelId: 'openai/gpt-5',
+          // Archived (superseded) model: still in the season, but grouped under Archived.
+          isActive: false,
         },
       ])
       .returning()
@@ -2308,10 +2310,13 @@ describe('benchmark public routers', () => {
     const modelFilters = await caller.benchmarkRanking.listModelFilters({
       anchorDate: '2026-03-10',
     })
-    expect(modelFilters.companies.map((company) => company.name)).toEqual(['Anthropic', 'OpenAI'])
+    // Active models are grouped by company; the archived (GPT-5) model is separated out.
+    expect(modelFilters.companies.map((company) => company.name)).toEqual(['Anthropic'])
     expect(modelFilters.companies[0]?.families[0]?.name).toBe('Sonnet')
     expect(modelFilters.companies[0]?.families[0]?.models[0]?.id).toBe(modelSnapshotA.id)
     expect(modelFilters.companies[0]?.families[0]?.models[0]?.version).toBe('4.6')
+    expect(modelFilters.archived.map((company) => company.name)).toEqual(['OpenAI'])
+    expect(modelFilters.archived[0]?.families[0]?.models[0]?.id).toBe(modelSnapshotB.id)
 
     const modelAFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
