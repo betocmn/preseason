@@ -159,8 +159,9 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
 
   // Backend Framework
   {
+    // Slug matches the existing canonical tool in prod (avoids a duplicate / name clash).
     name: 'Next.js',
-    slug: 'nextjs',
+    slug: 'next-js',
     website: 'https://nextjs.org',
     description: 'React framework for full-stack web apps with SSR and API routes',
     aliases: ['Next', 'NextJS', 'Next JS'],
@@ -693,7 +694,7 @@ export const DEVTOOLS_EXPANSION_TOOL_CATEGORY_ASSIGNMENTS: AiDevtoolsToolCategor
   { toolSlug: 'kotlin', categorySlug: 'backend-language', isPrimary: true },
 
   // Backend Framework
-  { toolSlug: 'nextjs', categorySlug: 'backend-framework', isPrimary: true },
+  { toolSlug: 'next-js', categorySlug: 'backend-framework', isPrimary: true },
   { toolSlug: 'django', categorySlug: 'backend-framework', isPrimary: true },
   { toolSlug: 'rails', categorySlug: 'backend-framework', isPrimary: true },
   { toolSlug: 'laravel', categorySlug: 'backend-framework', isPrimary: true },

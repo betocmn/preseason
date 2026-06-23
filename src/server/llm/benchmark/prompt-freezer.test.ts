@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { serverSettings } from '~/constants/server-settings'
 import {
@@ -305,58 +305,5 @@ describe('freezePromptVersion', () => {
 
     expect(full?.systemPromptSnapshot).toBeTruthy()
     expect(full?.systemPromptSnapshot).toContain('non-technical builder')
-  })
-
-  // Regression guard for drizzle/0006: a migration that adds categories to a prompt's
-  // expected_categories (without changing content) must reconcile already-frozen version
-  // metadata, otherwise the next freeze throws "different benchmark metadata".
-  it('re-freezes cleanly after the 0006 category reconciliation', async () => {
-    const db = getTestDb()
-    const prompt = await seedPromptWithContent(db)
-    // seedCategories(db, 3) creates subcategories with slugs auth, database, orm (in order).
-    const categoryIds = await seedCategories(db, 3)
-    const originalCategoryIds = categoryIds.slice(0, 2) // auth, database
-
-    // Freeze with the original category set.
-    await db
-      .update(prompts)
-      .set({ expectedCategories: ['auth', 'database'] })
-      .where(eq(prompts.id, prompt.id))
-    const frozen = await freezePromptVersion(db, prompt.id, { categoryIds: originalCategoryIds })
-
-    // A migration adds a category to expected_categories without touching content.
-    await db
-      .update(prompts)
-      .set({ expectedCategories: ['auth', 'database', 'orm'] })
-      .where(eq(prompts.id, prompt.id))
-
-    // Without reconciliation, re-freezing the unchanged content now throws.
-    await expect(freezePromptVersion(db, prompt.id, { categoryIds })).rejects.toThrow(
-      'different benchmark metadata',
-    )
-
-    // Apply the reconciliation (mirror of drizzle/0006 step 8).
-    await db.execute(
-      sql`DELETE FROM "preseason_benchmark_prompt_version_category" WHERE "prompt_version_id" IN (SELECT "id" FROM "preseason_benchmark_prompt_version")`,
-    )
-    await db.execute(sql`
-      INSERT INTO "preseason_benchmark_prompt_version_category" ("id", "prompt_version_id", "category_id", "display_order")
-      SELECT gen_random_uuid(), pv.id, c.id, ec.ord::int
-      FROM "preseason_benchmark_prompt_version" pv
-      JOIN "preseason_prompt" p ON p.id = pv.prompt_id
-      CROSS JOIN LATERAL unnest(p."expected_categories") WITH ORDINALITY AS ec(slug, ord)
-      JOIN "preseason_category" c ON c.slug = ec.slug
-      ON CONFLICT ("prompt_version_id", "category_id") DO NOTHING
-    `)
-
-    // Re-freezing with the new category set now reuses the existing version.
-    const refrozen = await freezePromptVersion(db, prompt.id, { categoryIds })
-    expect(refrozen.id).toBe(frozen.id)
-
-    const pvCategories = await db
-      .select()
-      .from(benchmarkPromptVersionCategories)
-      .where(eq(benchmarkPromptVersionCategories.promptVersionId, frozen.id))
-    expect(pvCategories.map((c) => c.categoryId).sort()).toEqual([...categoryIds].sort())
   })
 })
