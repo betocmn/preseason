@@ -24,10 +24,14 @@ export const anchorDateSchema = z
  * (last month / 3 / 6 months) into a `scheduledFor` lower bound.
  */
 export function monthsAgo(anchorDate: string, months: number): string {
-  const [year, month, day] = anchorDate.split('-').map(Number)
-  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1))
-  date.setUTCMonth(date.getUTCMonth() - months)
-  return formatScheduledFor(date)
+  const [year = 1970, month = 1, day = 1] = anchorDate.split('-').map(Number)
+  const targetMonthIndex = month - 1 - months
+  const targetYear = year + Math.floor(targetMonthIndex / 12)
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+  const targetDay = Math.min(day, lastDayOfTargetMonth)
+
+  return formatScheduledFor(new Date(Date.UTC(targetYear, targetMonth, targetDay)))
 }
 
 export async function findLatestActiveBenchmarkSeasonId(database: DatabaseClient) {
