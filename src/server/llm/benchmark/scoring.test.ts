@@ -911,6 +911,96 @@ describe('computeCategoryRanking', () => {
 
     expect(result.items[0]?.trend).toBe(0)
   })
+
+  it('restricts decisions to the startDate window', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    // One all-Clerk run per month (9 decisions each).
+    for (const scheduledFor of ['2026-01-10', '2026-02-10', '2026-03-10']) {
+      await seedPublishedRun(
+        db,
+        fixture,
+        scheduledFor,
+        fixture.caseRows.map((_, i) => ({
+          caseIndex: i,
+          categoryId: fixture.authCat.id,
+          decisionType: 'tool' as const,
+          toolId: fixture.clerk.id,
+          rawToolName: 'Clerk',
+        })),
+      )
+    }
+
+    const allTime = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'season_to_date',
+      anchorDate: '2026-03-10',
+    })
+    expect(allTime.totalEligibleDecisions).toBe(27)
+
+    const lastMonth = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'season_to_date',
+      anchorDate: '2026-03-10',
+      startDate: '2026-02-15',
+    })
+    // Only the 2026-03-10 run falls within [2026-02-15, 2026-03-10].
+    expect(lastMonth.totalEligibleDecisions).toBe(9)
+  })
+
+  it('computes trend from the preceding date-range period', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    // Previous period (Feb): Clerk wins all 9 decisions.
+    await seedPublishedRun(
+      db,
+      fixture,
+      '2026-02-10',
+      fixture.caseRows.map((_, i) => ({
+        caseIndex: i,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool' as const,
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      })),
+    )
+
+    // Current period (Mar): Clerk wins only 3 of 9 decisions.
+    await seedPublishedRun(
+      db,
+      fixture,
+      '2026-03-10',
+      fixture.caseRows.map((_, i) => ({
+        caseIndex: i,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool' as const,
+        toolId: i < 3 ? fixture.clerk.id : fixture.supabase.id,
+        rawToolName: i < 3 ? 'Clerk' : 'Supabase',
+      })),
+    )
+
+    const result = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      seasonId: fixture.season.id,
+      windowType: 'season_to_date',
+      anchorDate: '2026-03-10',
+      startDate: '2026-03-01',
+      previousStartDate: '2026-02-01',
+    })
+
+    // Current window holds only the Mar run; the Feb run is the trend baseline.
+    expect(result.totalEligibleDecisions).toBe(9)
+    const clerkItem = requireValue(
+      result.items.find((item) => item.toolSlug === 'clerk'),
+      'Expected Clerk item in ranking results',
+    )
+    // Clerk fell from 9/9 to 3/9 → negative trend.
+    expect(clerkItem.trend).toBeLessThan(0)
+  })
 })
 
 describe('computeHeadToHead', () => {
