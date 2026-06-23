@@ -22,6 +22,7 @@ type CategoryGroup = {
 type BenchmarkRankingFiltersProps = {
   groups: CategoryGroup[]
   modelFilters: ModelFilterCompany[]
+  archivedModelFilters?: ModelFilterCompany[]
   currentGroup?: string
   currentSub?: string
   currentPromptLevel?: string
@@ -34,6 +35,7 @@ type BenchmarkRankingFiltersProps = {
 export function BenchmarkRankingFilters({
   groups,
   modelFilters,
+  archivedModelFilters = [],
   currentGroup,
   currentSub,
   currentPromptLevel,
@@ -46,7 +48,7 @@ export function BenchmarkRankingFilters({
   const searchParams = useSearchParams()
 
   const modelLookup = new Map(
-    modelFilters.flatMap((company) =>
+    [...modelFilters, ...archivedModelFilters].flatMap((company) =>
       company.families.flatMap((family) =>
         family.models.map((model) => [
           model.id,
@@ -227,6 +229,23 @@ export function BenchmarkRankingFilters({
                 )}
               </SelectGroup>
             ))}
+            {archivedModelFilters.length > 0 && (
+              <SelectGroup>
+                <SelectSeparator />
+                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Archived
+                </SelectLabel>
+                {archivedModelFilters.flatMap((company) =>
+                  company.families.flatMap((family) =>
+                    family.models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <span className="pl-2">{`${company.name} · ${family.name} - ${model.version}`}</span>
+                      </SelectItem>
+                    )),
+                  ),
+                )}
+              </SelectGroup>
+            )}
           </SelectContent>
         </Select>
       </div>
