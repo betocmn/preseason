@@ -1,13 +1,20 @@
 -- Custom SQL migration file, put your code below! --
 
--- Add a batch of devtool tracking categories + tools and wire them into the
--- benchmark prompt panel. Mirrors src/server/db/devtools-expansion-catalog.ts,
--- the `jobs`/`llm-coding-agents` renames in seed.ts / ai-devtools-catalog.ts, and
--- the prompt edits in prompt-corpus.ts. Idempotent (safe to re-run): every insert
--- uses ON CONFLICT DO NOTHING and every prompt update is guarded against re-adding.
--- Runs before db:seed on a fresh database, so it must not assume seeded reference data:
--- it ensures the parent `devtools` group exists, and assignments to existing tools /
--- categories that the seed creates later are backfilled idempotently by db:seed.
+-- Add a batch of devtool tracking categories + tools, and add NEW benchmark prompt
+-- scenarios that surface them. Mirrors src/server/db/devtools-expansion-catalog.ts,
+-- the `jobs`/`llm-coding-agents` renames in seed.ts / ai-devtools-catalog.ts, and the
+-- new scenarios in prompt-corpus.ts.
+--
+-- Purely ADDITIVE and safe on a live, published benchmark: it never edits the
+-- expected_categories of existing (already-frozen) prompts and never touches frozen
+-- prompt versions or their category metadata, so published rankings and the next
+-- season freeze are unaffected. The new categories get benchmarked via the new
+-- prompt scenarios (new slugs => new content hashes => fresh frozen versions).
+--
+-- Idempotent (safe to re-run): every insert uses ON CONFLICT DO NOTHING. Runs before
+-- db:seed on a fresh database, so it must not assume seeded reference data: it ensures
+-- the parent `devtools` group exists, and cross-assignments to existing tools the seed
+-- creates later are backfilled idempotently by db:seed.
 
 -- 0. Ensure the parent `devtools` category group exists (no-op once seeded).
 INSERT INTO "preseason_category_group"
@@ -69,7 +76,7 @@ FROM (VALUES
   ('Elixir', 'elixir', 'Functional language on the Erlang VM for scalable concurrent systems', 'https://elixir-lang.org'),
   ('Kotlin', 'kotlin', 'Modern JVM language used for backend and Android development', 'https://kotlinlang.org'),
   -- Backend Framework
-  ('Next.js', 'nextjs', 'React framework for full-stack web apps with SSR and API routes', 'https://nextjs.org'),
+  ('Next.js', 'next-js', 'React framework for full-stack web apps with SSR and API routes', 'https://nextjs.org'),
   ('Django', 'django', 'Batteries-included Python web framework', 'https://www.djangoproject.com'),
   ('Ruby on Rails', 'rails', 'Convention-over-configuration web framework for Ruby', 'https://rubyonrails.org'),
   ('Laravel', 'laravel', 'Expressive PHP web application framework', 'https://laravel.com'),
@@ -169,9 +176,9 @@ FROM (VALUES
   ('go', 'Golang'),
   ('csharp', 'C Sharp'),
   ('csharp', 'CSharp'),
-  ('nextjs', 'Next'),
-  ('nextjs', 'NextJS'),
-  ('nextjs', 'Next JS'),
+  ('next-js', 'Next'),
+  ('next-js', 'NextJS'),
+  ('next-js', 'Next JS'),
   ('rails', 'Rails'),
   ('rails', 'RoR'),
   ('spring-boot', 'Spring'),
@@ -241,7 +248,7 @@ FROM (VALUES
   ('elixir', 'backend-language', true),
   ('kotlin', 'backend-language', true),
   -- Backend Framework
-  ('nextjs', 'backend-framework', true),
+  ('next-js', 'backend-framework', true),
   ('django', 'backend-framework', true),
   ('rails', 'backend-framework', true),
   ('laravel', 'backend-framework', true),
@@ -345,95 +352,49 @@ JOIN "preseason_category" c ON c.slug = v.category_slug
 ON CONFLICT ("tool_id", "category_id") DO NOTHING;
 --> statement-breakpoint
 
--- 6. New benchmark scenario covering AI Code Review + the agentic engineering toolchain.
---    Backend language/framework categories are added by the global update in step 7.
+-- 6. New benchmark prompt scenarios that surface the new categories. These are NEW prompts
+--    (new slugs => new content hashes), so freezing the next season creates fresh frozen
+--    versions and never conflicts with the existing frozen versions of the live prompts.
+--    Existing prompts are intentionally left untouched. Mirrors src/server/db/prompt-corpus.ts.
 INSERT INTO "preseason_prompt"
   ("id", "title", "slug", "level", "description", "content_md", "expected_categories", "is_active", "createdAt")
-SELECT gen_random_uuid(), v.title, v.slug, v.level::"prompt_level", v.description, v.content_md,
-  ARRAY['llm-coding-agents', 'ai-code-review', 'testing', 'ci-cd', 'llm-gateway', 'llm-observability', 'llm-evals']::text[],
-  true, now()
+SELECT gen_random_uuid(), v.title, v.slug, v.level::"prompt_level", v.description, v.content_md, v.expected_categories, true, now()
 FROM (VALUES
   ('AI Engineering Workflow', 'ai-engineering-workflow', 'beginner',
    'AI-assisted engineering setup with a coding agent, AI code review, tests, and CI',
-   'Set up an AI-assisted engineering workflow for a small software team. Recommend the agentic IDE or coding agent the team should use day to day, an AI code review tool for pull requests, how they should run automated tests and continuous integration, and a way to access LLMs across providers. Keep it simple and practical.'),
+   'Set up an AI-assisted engineering workflow for a small software team. Recommend the agentic IDE or coding agent the team should use day to day, an AI code review tool for pull requests, how they should run automated tests and continuous integration, and a way to access LLMs across providers. Keep it simple and practical.',
+   ARRAY['llm-coding-agents','ai-code-review','testing','ci-cd','llm-gateway','llm-observability','llm-evals']::text[]),
   ('AI Engineering Workflow', 'ai-engineering-workflow', 'intermediate',
    'Team AI engineering workflow with code review, CI gates, an LLM gateway, and evals',
-   'Design an AI-assisted engineering workflow for a growing software team shipping to production. Cover the agentic IDE / coding-agent setup developers use, automated AI code review on pull requests, the testing and CI pipeline that gates merges, a shared LLM gateway for routing across model providers, and the observability and evaluation tooling the team uses to monitor and regression-test the AI features it builds.'),
+   'Design an AI-assisted engineering workflow for a growing software team shipping to production. Cover the agentic IDE / coding-agent setup developers use, automated AI code review on pull requests, the testing and CI pipeline that gates merges, a shared LLM gateway for routing across model providers, and the observability and evaluation tooling the team uses to monitor and regression-test the AI features it builds.',
+   ARRAY['llm-coding-agents','ai-code-review','testing','ci-cd','llm-gateway','llm-observability','llm-evals']::text[]),
   ('AI Engineering Workflow', 'ai-engineering-workflow', 'advanced',
    'Org-wide AI engineering toolchain with review gates, gateway, and eval/observability pipelines',
-   'Define a production-grade AI-assisted engineering workflow for a software organization with multiple teams. Specify the agentic IDE / ADE and coding-agent strategy for parallel agent work, mandatory AI code review integrated into pull requests with human sign-off, a testing and CI/CD pipeline with quality gates, a centralized LLM gateway providing routing, rate limiting, caching, and cost controls across providers, and the observability plus evaluation pipelines that trace, monitor, and regression-test LLM behavior before changes ship. Address governance, auditability, and how the toolchain scales across teams without fragmenting standards.')
-) AS v(title, slug, level, description, content_md)
+   'Define a production-grade AI-assisted engineering workflow for a software organization with multiple teams. Specify the agentic IDE / ADE and coding-agent strategy for parallel agent work, mandatory AI code review integrated into pull requests with human sign-off, a testing and CI/CD pipeline with quality gates, a centralized LLM gateway providing routing, rate limiting, caching, and cost controls across providers, and the observability plus evaluation pipelines that trace, monitor, and regression-test LLM behavior before changes ship. Address governance, auditability, and how the toolchain scales across teams without fragmenting standards.',
+   ARRAY['llm-coding-agents','ai-code-review','testing','ci-cd','llm-gateway','llm-observability','llm-evals']::text[]),
+  ('Full-Stack Web App', 'full-stack-web-app', 'beginner',
+   'Full-stack business web app — pick a backend language, framework, database, and hosting',
+   'Build a full-stack web application for a small business with a customer-facing site and a simple admin area. Choose the backend programming language, web framework, database, and hosting platform, and explain how the pieces fit together for user accounts, data storage, and background tasks like sending emails.',
+   ARRAY['backend-language','backend-framework','database','orm','auth','hosting','api','jobs']::text[]),
+  ('Full-Stack Web App', 'full-stack-web-app', 'intermediate',
+   'Production full-stack app with API, data layer, background jobs, and deployment',
+   'Build a production-bound full-stack web application with authenticated users, a relational data model, a REST or RPC API, background job processing, and a deployment target. Choose the backend language and framework, the database and data-access layer, and justify how the stack handles authentication, persistence, asynchronous work, and hosting.',
+   ARRAY['backend-language','backend-framework','database','orm','auth','hosting','api','jobs']::text[]),
+  ('Full-Stack Web App', 'full-stack-web-app', 'advanced',
+   'Production-grade full-stack stack with backend language/framework, data layer, queues, and deploy strategy',
+   'Design a production-grade full-stack web application. Choose the backend programming language and framework, the relational database and ORM, the API layer, authentication, the background job and queue system, and the hosting platform. Define data-model boundaries, asynchronous processing for long-running work, observability, and a deployment and migration strategy that supports schema evolution without downtime. Justify each stack choice for maintainability and scale.',
+   ARRAY['backend-language','backend-framework','database','orm','auth','hosting','api','jobs']::text[]),
+  ('AI Agent Application', 'ai-agent-application', 'beginner',
+   'AI agent app with retrieval, web search, and multi-provider LLM access',
+   'Build an AI agent application that answers user questions using your own documents and the live web. Choose an agent framework, a vector database for retrieval, a web search API for fresh information, and a way to call LLMs across providers. Include a backend language and framework, a database, and hosting.',
+   ARRAY['ai','agent-frameworks','agentic-web-search','vector-db','llm-gateway','browser-automation','llm-observability','llm-evals','backend-language','backend-framework','database','hosting']::text[]),
+  ('AI Agent Application', 'ai-agent-application', 'intermediate',
+   'Agentic app with RAG, web search, browser automation, an LLM gateway, and evals',
+   'Build an AI agent application that combines retrieval over a private knowledge base with live web search and tool use, including browser automation for tasks the agent performs on the web. Choose the agent framework, vector database, web search API, and an LLM gateway for routing across providers, plus observability and evaluation tooling. Specify the backend language and framework, database, and hosting.',
+   ARRAY['ai','agent-frameworks','agentic-web-search','vector-db','llm-gateway','browser-automation','llm-observability','llm-evals','backend-language','backend-framework','database','hosting']::text[]),
+  ('AI Agent Application', 'ai-agent-application', 'advanced',
+   'Production agentic app: framework, vector DB, web search, browser automation, gateway, observability, evals',
+   'Design a production-grade agentic AI application: an agent framework orchestrating retrieval over a vector database, live web search, browser automation, and multi-step tool use, served through an LLM gateway that handles routing, caching, rate limiting, and cost controls across providers. Define the backend language and framework, database, and hosting. Add tracing and observability plus evaluation pipelines that measure groundedness, tool-call correctness, and regression risk before changes ship, and address failure handling for retrieval, search, and browser tasks.',
+   ARRAY['ai','agent-frameworks','agentic-web-search','vector-db','llm-gateway','browser-automation','llm-observability','llm-evals','backend-language','backend-framework','database','hosting']::text[])
+) AS v(title, slug, level, description, content_md, expected_categories)
 ON CONFLICT ("slug", "level") DO NOTHING;
---> statement-breakpoint
-
--- 7. Wire the new categories into the benchmark prompt panel. Each update is guarded so
---    re-running never duplicates a slug. Backend language/framework apply to every prompt.
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'backend-language'), "updatedAt" = now()
-WHERE NOT ('backend-language' = ANY("expected_categories"));
---> statement-breakpoint
-
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'backend-framework'), "updatedAt" = now()
-WHERE NOT ('backend-framework' = ANY("expected_categories"));
---> statement-breakpoint
-
--- AI-app categories on the two AI product scenarios.
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'agent-frameworks'), "updatedAt" = now()
-WHERE "slug" IN ('ai-support-agent-platform', 'ai-revenue-ops-copilot')
-  AND NOT ('agent-frameworks' = ANY("expected_categories"));
---> statement-breakpoint
-
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'agentic-web-search'), "updatedAt" = now()
-WHERE "slug" IN ('ai-support-agent-platform', 'ai-revenue-ops-copilot')
-  AND NOT ('agentic-web-search' = ANY("expected_categories"));
---> statement-breakpoint
-
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'vector-db'), "updatedAt" = now()
-WHERE "slug" IN ('ai-support-agent-platform', 'ai-revenue-ops-copilot')
-  AND NOT ('vector-db' = ANY("expected_categories"));
---> statement-breakpoint
-
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'llm-gateway'), "updatedAt" = now()
-WHERE "slug" IN ('ai-support-agent-platform', 'ai-revenue-ops-copilot')
-  AND NOT ('llm-gateway' = ANY("expected_categories"));
---> statement-breakpoint
-
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'browser-automation'), "updatedAt" = now()
-WHERE "slug" IN ('ai-support-agent-platform', 'ai-revenue-ops-copilot')
-  AND NOT ('browser-automation' = ANY("expected_categories"));
---> statement-breakpoint
-
--- Background jobs / queues on the scenarios with heavy async work.
-UPDATE "preseason_prompt"
-SET "expected_categories" = array_append("expected_categories", 'jobs'), "updatedAt" = now()
-WHERE "slug" IN ('saas-application', 'ecommerce-store', 'ai-support-agent-platform')
-  AND NOT ('jobs' = ANY("expected_categories"));
---> statement-breakpoint
-
--- 8. Reconcile benchmark metadata for already-frozen prompt versions.
--- Changing expected_categories above does NOT change a prompt's content hash, but
--- freezePromptVersion() (src/server/llm/benchmark/prompt-freezer.ts) compares the eligible
--- category set + order against the existing frozen version and refuses to re-freeze identical
--- content with different metadata ("already has frozen content with different benchmark
--- metadata"). Without this, freezing the next benchmark season would fail. Rebuild each frozen
--- version's category rows to mirror its prompt's now-updated expected_categories, in the same
--- order freezeSeason() resolves them (array order, 1-based displayOrder). No-op on a fresh /
--- pre-launch database that has no frozen versions yet. Frozen prompt *content* is never touched.
-DELETE FROM "preseason_benchmark_prompt_version_category"
-WHERE "prompt_version_id" IN (SELECT "id" FROM "preseason_benchmark_prompt_version");
---> statement-breakpoint
-
-INSERT INTO "preseason_benchmark_prompt_version_category"
-  ("id", "prompt_version_id", "category_id", "display_order")
-SELECT gen_random_uuid(), pv.id, c.id, ec.ord::int
-FROM "preseason_benchmark_prompt_version" pv
-JOIN "preseason_prompt" p ON p.id = pv.prompt_id
-CROSS JOIN LATERAL unnest(p."expected_categories") WITH ORDINALITY AS ec(slug, ord)
-JOIN "preseason_category" c ON c.slug = ec.slug
-ON CONFLICT ("prompt_version_id", "category_id") DO NOTHING;

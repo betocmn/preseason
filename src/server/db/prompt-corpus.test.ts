@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { PROMPT_CORPUS, PROMPT_LEVELS, PROMPT_SLUGS } from './prompt-corpus'
 
 describe('PROMPT_CORPUS', () => {
-  it('contains 54 prompt variants across all levels', () => {
-    expect(PROMPT_CORPUS).toHaveLength(54)
+  it('contains 60 prompt variants across all levels', () => {
+    expect(PROMPT_CORPUS).toHaveLength(60)
   })
 
-  it('contains 18 prompts for each level', () => {
+  it('contains 20 prompts for each level', () => {
     const countsByLevel = Object.fromEntries(
       PROMPT_LEVELS.map((level) => [
         level,
@@ -15,9 +15,9 @@ describe('PROMPT_CORPUS', () => {
     )
 
     expect(countsByLevel).toEqual({
-      beginner: 18,
-      intermediate: 18,
-      advanced: 18,
+      beginner: 20,
+      intermediate: 20,
+      advanced: 20,
     })
   })
 

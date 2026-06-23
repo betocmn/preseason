@@ -69,7 +69,6 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'hosting',
       'analytics',
       'ui-components',
-      'jobs',
     ],
     variants: {
       beginner: {
@@ -127,7 +126,6 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'storage',
       'hosting',
       'search',
-      'jobs',
     ],
     variants: {
       beginner: {
@@ -456,16 +454,10 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'llm-coding-agents',
       'llm-observability',
       'llm-evals',
-      'agent-frameworks',
-      'agentic-web-search',
-      'vector-db',
-      'llm-gateway',
-      'browser-automation',
       'auth',
       'database',
       'hosting',
       'search',
-      'jobs',
     ],
     variants: {
       beginner: {
@@ -496,11 +488,6 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       'llm-coding-agents',
       'llm-observability',
       'llm-evals',
-      'agent-frameworks',
-      'agentic-web-search',
-      'vector-db',
-      'llm-gateway',
-      'browser-automation',
       'api',
       'database',
       'hosting',
@@ -560,13 +547,80 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       },
     },
   },
+  {
+    title: 'Full-Stack Web App',
+    slug: 'full-stack-web-app',
+    expectedCategories: [
+      'backend-language',
+      'backend-framework',
+      'database',
+      'orm',
+      'auth',
+      'hosting',
+      'api',
+      'jobs',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'Full-stack business web app — pick a backend language, framework, database, and hosting',
+        contentMd:
+          'Build a full-stack web application for a small business with a customer-facing site and a simple admin area. Choose the backend programming language, web framework, database, and hosting platform, and explain how the pieces fit together for user accounts, data storage, and background tasks like sending emails.',
+      },
+      intermediate: {
+        description:
+          'Production full-stack app with API, data layer, background jobs, and deployment',
+        contentMd:
+          'Build a production-bound full-stack web application with authenticated users, a relational data model, a REST or RPC API, background job processing, and a deployment target. Choose the backend language and framework, the database and data-access layer, and justify how the stack handles authentication, persistence, asynchronous work, and hosting.',
+      },
+      advanced: {
+        description:
+          'Production-grade full-stack stack with backend language/framework, data layer, queues, and deploy strategy',
+        contentMd:
+          'Design a production-grade full-stack web application. Choose the backend programming language and framework, the relational database and ORM, the API layer, authentication, the background job and queue system, and the hosting platform. Define data-model boundaries, asynchronous processing for long-running work, observability, and a deployment and migration strategy that supports schema evolution without downtime. Justify each stack choice for maintainability and scale.',
+      },
+    },
+  },
+  {
+    title: 'AI Agent Application',
+    slug: 'ai-agent-application',
+    expectedCategories: [
+      'ai',
+      'agent-frameworks',
+      'agentic-web-search',
+      'vector-db',
+      'llm-gateway',
+      'browser-automation',
+      'llm-observability',
+      'llm-evals',
+      'backend-language',
+      'backend-framework',
+      'database',
+      'hosting',
+    ],
+    variants: {
+      beginner: {
+        description: 'AI agent app with retrieval, web search, and multi-provider LLM access',
+        contentMd:
+          'Build an AI agent application that answers user questions using your own documents and the live web. Choose an agent framework, a vector database for retrieval, a web search API for fresh information, and a way to call LLMs across providers. Include a backend language and framework, a database, and hosting.',
+      },
+      intermediate: {
+        description:
+          'Agentic app with RAG, web search, browser automation, an LLM gateway, and evals',
+        contentMd:
+          'Build an AI agent application that combines retrieval over a private knowledge base with live web search and tool use, including browser automation for tasks the agent performs on the web. Choose the agent framework, vector database, web search API, and an LLM gateway for routing across providers, plus observability and evaluation tooling. Specify the backend language and framework, database, and hosting.',
+      },
+      advanced: {
+        description:
+          'Production agentic app: framework, vector DB, web search, browser automation, gateway, observability, evals',
+        contentMd:
+          'Design a production-grade agentic AI application: an agent framework orchestrating retrieval over a vector database, live web search, browser automation, and multi-step tool use, served through an LLM gateway that handles routing, caching, rate limiting, and cost controls across providers. Define the backend language and framework, database, and hosting. Add tracing and observability plus evaluation pipelines that measure groundedness, tool-call correctness, and regression risk before changes ship, and address failure handling for retrieval, search, and browser tasks.',
+      },
+    },
+  },
 ]
 
 export const PROMPT_SLUGS = PROMPT_SCENARIOS.map((scenario) => scenario.slug)
-
-// Choosing a backend language and framework is implied by every scenario, so these
-// two categories are attached to all prompts to give them broad ranking coverage.
-const UNIVERSAL_CATEGORIES = ['backend-language', 'backend-framework']
 
 export const PROMPT_CORPUS: SeedPrompt[] = PROMPT_SCENARIOS.flatMap((scenario) =>
   PROMPT_LEVELS.map((level) => ({
@@ -575,7 +629,7 @@ export const PROMPT_CORPUS: SeedPrompt[] = PROMPT_SCENARIOS.flatMap((scenario) =
     level,
     description: scenario.variants[level].description,
     contentMd: scenario.variants[level].contentMd,
-    expectedCategories: [...new Set([...scenario.expectedCategories, ...UNIVERSAL_CATEGORIES])],
+    expectedCategories: [...scenario.expectedCategories],
     isActive: true,
   })),
 )
