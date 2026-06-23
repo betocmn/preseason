@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, FlaskConical, Layers, Tag } from 'lucide-react'
+import { Bot, CalendarRange, FlaskConical, Layers, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -22,6 +22,7 @@ type CategoryGroup = {
 type BenchmarkRankingFiltersProps = {
   groups: CategoryGroup[]
   modelFilters: ModelFilterCompany[]
+  archivedModelFilters?: ModelFilterCompany[]
   currentGroup?: string
   currentSub?: string
   currentPromptLevel?: string
@@ -34,6 +35,7 @@ type BenchmarkRankingFiltersProps = {
 export function BenchmarkRankingFilters({
   groups,
   modelFilters,
+  archivedModelFilters = [],
   currentGroup,
   currentSub,
   currentPromptLevel,
@@ -46,7 +48,7 @@ export function BenchmarkRankingFilters({
   const searchParams = useSearchParams()
 
   const modelLookup = new Map(
-    modelFilters.flatMap((company) =>
+    [...modelFilters, ...archivedModelFilters].flatMap((company) =>
       company.families.flatMap((family) =>
         family.models.map((model) => [
           model.id,
@@ -66,6 +68,10 @@ export function BenchmarkRankingFilters({
   const effectivePromptLevel = searchParams.get('promptLevel') ?? currentPromptLevel
   const effectiveModelTier = searchParams.get('modelTier') ?? currentModelTier
   const modelSnapshotParam = searchParams.get('modelSnapshotId') ?? currentModelSnapshotId
+
+  const dateRangeParam = searchParams.get('dateRange')
+  const effectiveDateRange =
+    (['1m', '3m', '6m'] as const).find((r) => r === dateRangeParam) ?? 'all'
 
   const normalizedModelSnapshotId =
     modelSnapshotParam && modelLookup.has(modelSnapshotParam) ? modelSnapshotParam : undefined
@@ -196,6 +202,34 @@ export function BenchmarkRankingFilters({
       </div>
 
       <div className="flex items-center gap-2">
+        <CalendarRange className="h-4 w-4 text-muted-foreground" />
+        <Select
+          value={effectiveDateRange}
+          onValueChange={(val) => {
+            navigate({ dateRange: val === 'all' ? undefined : val })
+          }}
+        >
+          <SelectTrigger className="h-9 w-[160px] border-border/60 bg-background/80 text-sm">
+            <span className="truncate">
+              {effectiveDateRange === '1m'
+                ? 'Last Month'
+                : effectiveDateRange === '3m'
+                  ? 'Last 3 Months'
+                  : effectiveDateRange === '6m'
+                    ? 'Last 6 Months'
+                    : 'All Time'}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="1m">Last Month</SelectItem>
+            <SelectItem value="3m">Last 3 Months</SelectItem>
+            <SelectItem value="6m">Last 6 Months</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-muted-foreground" />
         <Select
           value={normalizedModelSnapshotId ?? 'all'}
@@ -227,6 +261,23 @@ export function BenchmarkRankingFilters({
                 )}
               </SelectGroup>
             ))}
+            {archivedModelFilters.length > 0 && (
+              <SelectGroup>
+                <SelectSeparator />
+                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Archived
+                </SelectLabel>
+                {archivedModelFilters.flatMap((company) =>
+                  company.families.flatMap((family) =>
+                    family.models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <span className="pl-2">{`${company.name} · ${family.name} - ${model.version}`}</span>
+                      </SelectItem>
+                    )),
+                  ),
+                )}
+              </SelectGroup>
+            )}
           </SelectContent>
         </Select>
       </div>

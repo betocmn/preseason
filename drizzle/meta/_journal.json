@@ -36,6 +36,13 @@
       "when": 1775672121075,
       "tag": "0004_salty_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782195736204,
+      "tag": "0005_update_model_catalog",
+      "breakpoints": true
     }
   ]
 }

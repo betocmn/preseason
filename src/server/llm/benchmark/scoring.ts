@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schema from '~/server/db/schema'
 import {
@@ -25,6 +25,15 @@ type ModelSelectionFilters = {
   modelSnapshotId?: string
 }
 
+// Calendar date-range bounds for the public "last month / 3 / 6 / all time" filter.
+// When `startDate` is set, only runs with scheduledFor in [startDate, anchorDate] count.
+// When `previousStartDate` is set, the trend baseline is the preceding period
+// [previousStartDate, startDate).
+type DateRangeFilters = {
+  startDate?: string // YYYY-MM-DD inclusive lower bound
+  previousStartDate?: string // YYYY-MM-DD inclusive lower bound of the prior period
+}
+
 export type ScoringFilters = {
   categoryId: string
   seasonId: string
@@ -32,7 +41,8 @@ export type ScoringFilters = {
   anchorDate: string // YYYY-MM-DD
   promptLevel?: PromptLevel
   modelTier?: ModelTier
-} & ModelSelectionFilters
+} & ModelSelectionFilters &
+  DateRangeFilters
 
 export type ToolRankingEntry = {
   toolId: string
@@ -80,7 +90,8 @@ type RankingFilters = {
   anchorDate: string
   promptLevel?: PromptLevel
   modelTier?: ModelTier
-} & ModelSelectionFilters
+} & ModelSelectionFilters &
+  DateRangeFilters
 
 export type HeadToHeadResult = {
   toolAId: string
@@ -176,6 +187,7 @@ async function getPublishedRunIds(
   db: DatabaseClient,
   seasonId: string,
   anchorDate: string,
+  startDate?: string,
 ): Promise<string[]> {
   const rows = await db
     .select({ id: benchmarkRuns.id })
@@ -185,6 +197,33 @@ async function getPublishedRunIds(
         eq(benchmarkRuns.seasonId, seasonId),
         eq(benchmarkRuns.status, 'published'),
         lte(benchmarkRuns.scheduledFor, anchorDate),
+        startDate ? gte(benchmarkRuns.scheduledFor, startDate) : undefined,
+      ),
+    )
+    .orderBy(desc(benchmarkRuns.scheduledFor))
+
+  return rows.map((r) => r.id)
+}
+
+/**
+ * Published run ids in the half-open interval [startDate, endDateExclusive).
+ * Used to build the trend baseline for the preceding date-range period.
+ */
+async function getPublishedRunIdsBetween(
+  db: DatabaseClient,
+  seasonId: string,
+  startDate: string,
+  endDateExclusive: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: benchmarkRuns.id })
+    .from(benchmarkRuns)
+    .where(
+      and(
+        eq(benchmarkRuns.seasonId, seasonId),
+        eq(benchmarkRuns.status, 'published'),
+        gte(benchmarkRuns.scheduledFor, startDate),
+        lt(benchmarkRuns.scheduledFor, endDateExclusive),
       ),
     )
     .orderBy(desc(benchmarkRuns.scheduledFor))
@@ -592,6 +631,8 @@ export async function computeCategoryRanking(
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
     modelSnapshotId: filters.modelSnapshotId,
+    startDate: filters.startDate,
+    previousStartDate: filters.previousStartDate,
   })
 }
 
@@ -611,6 +652,8 @@ export async function computeCategoryGroupRanking(
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
     modelSnapshotId: filters.modelSnapshotId,
+    startDate: filters.startDate,
+    previousStartDate: filters.previousStartDate,
   })
 }
 
@@ -621,7 +664,12 @@ async function computeRankingForCategoryIds(
     resultCategoryId: string
   },
 ): Promise<CategoryRankingResult> {
-  const publishedRunIds = await getPublishedRunIds(db, filters.seasonId, filters.anchorDate)
+  const publishedRunIds = await getPublishedRunIds(
+    db,
+    filters.seasonId,
+    filters.anchorDate,
+    filters.startDate,
+  )
   const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
 
   if (runIds.length === 0) {
@@ -697,12 +745,21 @@ async function computeRankingForCategoryIds(
     }
   }
 
-  // Compute trend from previous window
+  // Compute trend from the previous window. For calendar date ranges the baseline is
+  // the preceding period [previousStartDate, startDate); otherwise it's the run-count
+  // window immediately before the current one. season_to_date (all time) has no baseline.
   const trendMap = new Map<string, number>()
   const previousRunIds =
-    filters.windowType === 'season_to_date'
-      ? []
-      : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
+    filters.previousStartDate && filters.startDate
+      ? await getPublishedRunIdsBetween(
+          db,
+          filters.seasonId,
+          filters.previousStartDate,
+          filters.startDate,
+        )
+      : filters.windowType === 'season_to_date'
+        ? []
+        : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
   let hasPreviousWindowTrendBaseline = false
 
   if (previousRunIds.length > 0) {

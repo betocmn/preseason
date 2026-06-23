@@ -1149,7 +1149,9 @@ const LLMS = CURATED_LLM_CATALOG.map((entry) => ({
   modelFamily: entry.modelFamily,
   modelVersion: entry.modelVersion,
   modelId: entry.modelId,
-  isActive: true,
+  // Archived (superseded) models stay in the catalog but seed as inactive so they're
+  // excluded from new benchmark seasons while their historical results keep counting.
+  isActive: !entry.archived,
 }))
 
 export const PROMPTS = PROMPT_CORPUS
@@ -1324,7 +1326,7 @@ async function seedLlms() {
           modelFamily: llm.modelFamily,
           modelVersion: llm.modelVersion,
           modelId: llm.modelId,
-          isActive: true,
+          isActive: llm.isActive,
         },
       })
   }
