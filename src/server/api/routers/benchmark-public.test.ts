@@ -2457,6 +2457,34 @@ describe('benchmark public routers', () => {
     expect(result.result?.bWins).toBe(0)
   })
 
+  it('does not include future manual history in head-to-head fallback', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: new Date('2026-04-15T00:00:00.000Z'),
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.result).toBeNull()
+  })
+
   it('returns model filter hierarchy and applies model filters to rankings', async () => {
     const db = getTestDb()
     const group = first(

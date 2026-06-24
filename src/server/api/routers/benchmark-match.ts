@@ -453,6 +453,7 @@ async function resolveHeadToHeadWithHistoricalFallback(
     toolBId: string
     seasonIds: string[]
     primary: HeadToHeadResult | null
+    anchorDate: string
     promptLevel?: PromptLevel
     modelTier?: ModelTier
   },
@@ -468,6 +469,7 @@ async function resolveHeadToHeadWithHistoricalFallback(
     {
       seasonIds: args.seasonIds,
       windowType: 'season_to_date',
+      anchorDate: args.anchorDate,
       promptLevel: args.promptLevel,
       modelTier: args.modelTier,
     },
@@ -554,6 +556,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
             toolBId: toolB.id,
             seasonIds: manualSeasonIds,
             primary: manualResult,
+            anchorDate,
             promptLevel: input.promptLevel,
             modelTier: input.modelTier,
           })
@@ -596,6 +599,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         toolBId: toolB.id,
         seasonIds: manualSeasonIds,
         primary: manualResult ?? benchmarkResult,
+        anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
       })
