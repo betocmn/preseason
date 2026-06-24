@@ -26,7 +26,10 @@ export const metadata: Metadata = {
 export default async function MatchesPage() {
   await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
-  const matchups = await caller.benchmarkMatch.listFeatured()
+  const matchups = await caller.benchmarkMatch.listFeatured({
+    limit: 50,
+    includeHistorical: true,
+  })
 
   return (
     <div className="container py-8">
