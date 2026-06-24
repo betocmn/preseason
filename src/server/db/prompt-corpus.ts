@@ -514,6 +514,110 @@ const PROMPT_SCENARIOS: PromptScenario[] = [
       },
     },
   },
+  {
+    title: 'AI Engineering Workflow',
+    slug: 'ai-engineering-workflow',
+    expectedCategories: [
+      'llm-coding-agents',
+      'ai-code-review',
+      'testing',
+      'ci-cd',
+      'llm-gateway',
+      'llm-observability',
+      'llm-evals',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'AI-assisted engineering setup with a coding agent, AI code review, tests, and CI',
+        contentMd:
+          'Set up an AI-assisted engineering workflow for a small software team. Recommend the agentic IDE or coding agent the team should use day to day, an AI code review tool for pull requests, how they should run automated tests and continuous integration, and a way to access LLMs across providers. Keep it simple and practical.',
+      },
+      intermediate: {
+        description:
+          'Team AI engineering workflow with code review, CI gates, an LLM gateway, and evals',
+        contentMd:
+          'Design an AI-assisted engineering workflow for a growing software team shipping to production. Cover the agentic IDE / coding-agent setup developers use, automated AI code review on pull requests, the testing and CI pipeline that gates merges, a shared LLM gateway for routing across model providers, and the observability and evaluation tooling the team uses to monitor and regression-test the AI features it builds.',
+      },
+      advanced: {
+        description:
+          'Org-wide AI engineering toolchain with review gates, gateway, and eval/observability pipelines',
+        contentMd:
+          'Define a production-grade AI-assisted engineering workflow for a software organization with multiple teams. Specify the agentic IDE / ADE and coding-agent strategy for parallel agent work, mandatory AI code review integrated into pull requests with human sign-off, a testing and CI/CD pipeline with quality gates, a centralized LLM gateway providing routing, rate limiting, caching, and cost controls across providers, and the observability plus evaluation pipelines that trace, monitor, and regression-test LLM behavior before changes ship. Address governance, auditability, and how the toolchain scales across teams without fragmenting standards.',
+      },
+    },
+  },
+  {
+    title: 'Full-Stack Web App',
+    slug: 'full-stack-web-app',
+    expectedCategories: [
+      'backend-language',
+      'backend-framework',
+      'database',
+      'orm',
+      'auth',
+      'hosting',
+      'api',
+      'jobs',
+    ],
+    variants: {
+      beginner: {
+        description:
+          'Full-stack business web app — pick a backend language, framework, database, and hosting',
+        contentMd:
+          'Build a full-stack web application for a small business with a customer-facing site and a simple admin area. Choose the backend programming language, web framework, database, and hosting platform, and explain how the pieces fit together for user accounts, data storage, and background tasks like sending emails.',
+      },
+      intermediate: {
+        description:
+          'Production full-stack app with API, data layer, background jobs, and deployment',
+        contentMd:
+          'Build a production-bound full-stack web application with authenticated users, a relational data model, a REST or RPC API, background job processing, and a deployment target. Choose the backend language and framework, the database and data-access layer, and justify how the stack handles authentication, persistence, asynchronous work, and hosting.',
+      },
+      advanced: {
+        description:
+          'Production-grade full-stack stack with backend language/framework, data layer, queues, and deploy strategy',
+        contentMd:
+          'Design a production-grade full-stack web application. Choose the backend programming language and framework, the relational database and ORM, the API layer, authentication, the background job and queue system, and the hosting platform. Define data-model boundaries, asynchronous processing for long-running work, observability, and a deployment and migration strategy that supports schema evolution without downtime. Justify each stack choice for maintainability and scale.',
+      },
+    },
+  },
+  {
+    title: 'AI Agent Application',
+    slug: 'ai-agent-application',
+    expectedCategories: [
+      'ai',
+      'agent-frameworks',
+      'agentic-web-search',
+      'vector-db',
+      'llm-gateway',
+      'browser-automation',
+      'llm-observability',
+      'llm-evals',
+      'backend-language',
+      'backend-framework',
+      'database',
+      'hosting',
+    ],
+    variants: {
+      beginner: {
+        description: 'AI agent app with retrieval, web search, and multi-provider LLM access',
+        contentMd:
+          'Build an AI agent application that answers user questions using your own documents and the live web. Choose an agent framework, a vector database for retrieval, a web search API for fresh information, and a way to call LLMs across providers. Include a backend language and framework, a database, and hosting.',
+      },
+      intermediate: {
+        description:
+          'Agentic app with RAG, web search, browser automation, an LLM gateway, and evals',
+        contentMd:
+          'Build an AI agent application that combines retrieval over a private knowledge base with live web search and tool use, including browser automation for tasks the agent performs on the web. Choose the agent framework, vector database, web search API, and an LLM gateway for routing across providers, plus observability and evaluation tooling. Specify the backend language and framework, database, and hosting.',
+      },
+      advanced: {
+        description:
+          'Production agentic app: framework, vector DB, web search, browser automation, gateway, observability, evals',
+        contentMd:
+          'Design a production-grade agentic AI application: an agent framework orchestrating retrieval over a vector database, live web search, browser automation, and multi-step tool use, served through an LLM gateway that handles routing, caching, rate limiting, and cost controls across providers. Define the backend language and framework, database, and hosting. Add tracing and observability plus evaluation pipelines that measure groundedness, tool-call correctness, and regression risk before changes ship, and address failure handling for retrieval, search, and browser tasks.',
+      },
+    },
+  },
 ]
 
 export const PROMPT_SLUGS = PROMPT_SCENARIOS.map((scenario) => scenario.slug)

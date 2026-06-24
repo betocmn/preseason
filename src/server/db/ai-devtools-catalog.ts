@@ -29,11 +29,13 @@ export type AiDevtoolsPlannedMatchup = {
 
 export const AI_DEVTOOLS_SUBCATEGORIES: AiDevtoolsSubcategory[] = [
   {
-    name: 'LLM Coding Agents',
+    // Slug stays `llm-coding-agents` so existing rankings, prompts, and URLs keep working.
+    name: 'Agentic IDE / ADEs',
     slug: 'llm-coding-agents',
-    icon: 'terminal',
+    icon: 'panels-top-left',
     displayOrder: 22,
-    description: 'AI coding agents for terminal, editor, and autonomous code workflows',
+    description:
+      'Agentic IDEs and development environments — coding agents and multi-agent orchestration',
   },
   {
     name: 'LLM Observability',
