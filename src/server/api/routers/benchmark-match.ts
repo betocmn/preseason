@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, gte, inArray, lt, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, or, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import {
@@ -38,6 +38,7 @@ type MatchupEntry = {
   toolA: { id: string; name: string; slug: string; logoUrl: string | null }
   toolB: { id: string; name: string; slug: string; logoUrl: string | null }
   result: HeadToHeadResult
+  status: 'active' | 'historical'
 }
 
 function matchupKey(categoryId: string, toolAId: string, toolBId: string) {
@@ -231,6 +232,267 @@ async function buildManualHeadToHead(
   })
 }
 
+type ManualCollectMode = 'within' | 'before'
+
+/**
+ * Returns true when the given category group slug is exposed on the public
+ * site. Used to keep listing and detail endpoints from surfacing matchups
+ * from non-public category groups via hand-edited URLs.
+ */
+function isPublicCategoryGroup(slug: string | undefined | null): slug is string {
+  return !!slug && serverSettings.publicSite.categoryGroupSlugs.includes(slug)
+}
+
+/**
+ * Scans completed manual match batches for distinct tool pairs and appends
+ * head-to-head matchup entries to `matchups`.
+ *
+ * - `mode: 'within'` collects pairs whose batches fall inside the trailing
+ *   window `[windowStartInclusive, windowEndExclusive)` (active matchups).
+ * - `mode: 'before'` collects pairs whose batches are older than
+ *   `windowStartInclusive` (historical matchups), skipping any pair already
+ *   present in `seenKeys` so active pairs are not duplicated.
+ *
+ * Pairs are scanned in reverse-chronological order and de-duplicated via
+ * `seenKeys`, which is mutated alongside `matchups`.
+ */
+async function collectManualMatchups(args: {
+  db: typeof DatabaseInstance
+  eligibleManualSeasonIds: string[]
+  scopedSubcategoryIds: string[] | null
+  windowEndExclusive: Date
+  windowStartInclusive: Date | null
+  mode: ManualCollectMode
+  seenKeys: Set<string>
+  matchups: MatchupEntry[]
+  status: 'active' | 'historical'
+  cap: number
+}): Promise<void> {
+  const {
+    db,
+    eligibleManualSeasonIds,
+    scopedSubcategoryIds,
+    windowEndExclusive,
+    windowStartInclusive,
+    mode,
+    seenKeys,
+    matchups,
+    status,
+    cap,
+  } = args
+
+  if (scopedSubcategoryIds && scopedSubcategoryIds.length === 0) return
+  if (eligibleManualSeasonIds.length === 0) return
+  if (mode === 'before' && !windowStartInclusive) return
+
+  const windowConditions: Array<SQL | undefined> = [
+    lt(matchBatches.createdAt, windowEndExclusive),
+    mode === 'within'
+      ? windowStartInclusive
+        ? gte(matchBatches.createdAt, windowStartInclusive)
+        : undefined
+      : lt(matchBatches.createdAt, windowStartInclusive as Date),
+  ]
+
+  const baseConditions: Array<SQL | undefined> = [
+    eq(matchBatches.triggerMode, 'manual'),
+    eq(matchBatches.status, 'completed'),
+    inArray(matchBatches.seasonId, eligibleManualSeasonIds),
+    ...windowConditions,
+    scopedSubcategoryIds ? inArray(matchBatches.categoryId, scopedSubcategoryIds) : undefined,
+  ]
+
+  const scanPageSize = Math.min(
+    serverSettings.benchmark.featuredMatchups.manualPairScanMaxRows,
+    Math.max(cap, cap * serverSettings.benchmark.featuredMatchups.manualPairScanMultiplier),
+  )
+
+  const attemptedPairKeys = new Set<string>()
+  let scanBeforeCreatedAt: Date | null = null
+  let scanBeforeId: string | null = null
+
+  while (matchups.length < cap) {
+    const whereClause =
+      scanBeforeCreatedAt && scanBeforeId
+        ? and(
+            ...baseConditions,
+            or(
+              lt(matchBatches.createdAt, scanBeforeCreatedAt),
+              and(
+                eq(matchBatches.createdAt, scanBeforeCreatedAt),
+                lt(matchBatches.id, scanBeforeId),
+              ),
+            ),
+          )
+        : and(...baseConditions)
+
+    const manualPairRows: Array<{
+      id: string
+      createdAt: Date
+      categoryId: string
+      toolAId: string
+      toolBId: string
+    }> = await db.query.matchBatches.findMany({
+      where: whereClause,
+      columns: {
+        id: true,
+        createdAt: true,
+        categoryId: true,
+        toolAId: true,
+        toolBId: true,
+      },
+      orderBy: [desc(matchBatches.createdAt), desc(matchBatches.id)],
+      limit: scanPageSize,
+    })
+
+    if (manualPairRows.length === 0) break
+
+    const lastRow = manualPairRows[manualPairRows.length - 1]
+    if (!lastRow) break
+    scanBeforeCreatedAt = lastRow.createdAt
+    scanBeforeId = lastRow.id
+
+    const selectedPairs: Array<{ categoryId: string; toolAId: string; toolBId: string }> = []
+    const selectedPairKeys = new Set<string>()
+    for (const row of manualPairRows) {
+      const key = matchupKey(row.categoryId, row.toolAId, row.toolBId)
+      if (seenKeys.has(key) || attemptedPairKeys.has(key) || selectedPairKeys.has(key)) continue
+
+      selectedPairKeys.add(key)
+      attemptedPairKeys.add(key)
+      selectedPairs.push({
+        categoryId: row.categoryId,
+        toolAId: row.toolAId,
+        toolBId: row.toolBId,
+      })
+    }
+
+    if (selectedPairs.length === 0) continue
+
+    const selectedPairConditions = selectedPairs.map((pair) =>
+      and(
+        eq(matchBatches.categoryId, pair.categoryId),
+        or(
+          and(eq(matchBatches.toolAId, pair.toolAId), eq(matchBatches.toolBId, pair.toolBId)),
+          and(eq(matchBatches.toolAId, pair.toolBId), eq(matchBatches.toolBId, pair.toolAId)),
+        ),
+      ),
+    )
+
+    const manualBatches = await db.query.matchBatches.findMany({
+      where: and(and(...baseConditions), or(...selectedPairConditions)),
+      orderBy: [desc(matchBatches.createdAt)],
+      with: {
+        category: true,
+        toolA: true,
+        toolB: true,
+        evaluations: {
+          where: eq(matchEvaluations.status, 'completed'),
+          with: { modelSnapshot: true },
+        },
+      },
+    })
+
+    type ManualBatch = (typeof manualBatches)[number]
+    const groupedBatchesByKey = new Map<
+      string,
+      {
+        representative: ManualBatch
+        batches: ManualBatch[]
+      }
+    >()
+
+    for (const batch of manualBatches) {
+      const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
+      let grouped = groupedBatchesByKey.get(key)
+      if (!grouped) {
+        grouped = { representative: batch, batches: [] }
+        groupedBatchesByKey.set(key, grouped)
+      }
+      grouped.batches.push(batch)
+    }
+
+    for (const [key, grouped] of groupedBatchesByKey) {
+      if (matchups.length >= cap) break
+      if (seenKeys.has(key)) continue
+
+      const { representative, batches } = grouped
+      const result = buildHeadToHeadFromManualBatches({
+        batches,
+        categoryId: representative.categoryId,
+        toolAId: representative.toolAId,
+        toolBId: representative.toolBId,
+      })
+      if (!result) continue
+
+      seenKeys.add(key)
+
+      matchups.push({
+        category: representative.category,
+        toolA: {
+          id: representative.toolA.id,
+          name: representative.toolA.name,
+          slug: representative.toolA.slug,
+          logoUrl: representative.toolA.logoUrl,
+        },
+        toolB: {
+          id: representative.toolB.id,
+          name: representative.toolB.name,
+          slug: representative.toolB.slug,
+          logoUrl: representative.toolB.logoUrl,
+        },
+        result,
+        status,
+      })
+    }
+  }
+}
+
+/**
+ * Returns a head-to-head result, falling back to a `season_to_date` manual
+ * aggregate when the primary result has no decisive cases. This lets the match
+ * detail page surface historical data for pairs that no longer have activity
+ * within the requested trailing window.
+ */
+async function resolveHeadToHeadWithHistoricalFallback(
+  database: typeof DatabaseInstance,
+  args: {
+    categoryId: string
+    toolAId: string
+    toolBId: string
+    seasonIds: string[]
+    primary: HeadToHeadResult | null
+    windowType: WindowType
+    anchorDate: string
+    promptLevel?: PromptLevel
+    modelTier?: ModelTier
+  },
+): Promise<HeadToHeadResult | null> {
+  if (args.primary && args.primary.decisiveCaseCount > 0) return args.primary
+  // Only broaden to all-time history for the default trailing_28d window.
+  // Narrower windows (run_day, trailing_7d) are explicit dated requests and
+  // should return null/zero when nothing happened in that span; season_to_date
+  // already covers the full season so no fallback is needed.
+  if (args.windowType !== 'trailing_28d') return args.primary
+  if (args.seasonIds.length === 0) return args.primary
+
+  const historical = await buildManualHeadToHead(
+    database,
+    args.categoryId,
+    args.toolAId,
+    args.toolBId,
+    {
+      seasonIds: args.seasonIds,
+      windowType: 'season_to_date',
+      anchorDate: args.anchorDate,
+      promptLevel: args.promptLevel,
+      modelTier: args.modelTier,
+    },
+  )
+
+  return historical && historical.decisiveCaseCount > 0 ? historical : args.primary
+}
+
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure
     .input(
@@ -258,6 +520,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const [category, toolA, toolB] = await Promise.all([
         ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.categorySlug),
+          with: { categoryGroup: true },
         }),
         ctx.db.query.tools.findFirst({
           where: eq(tools.slug, input.toolASlug),
@@ -274,6 +537,12 @@ export const benchmarkMatchRouter = createTRPCRouter({
           toolB: toolB ?? null,
           result: null,
         }
+      }
+
+      // Keep the public detail endpoint from surfacing matchups (including
+      // historical fallback) for subcategories in non-public category groups.
+      if (!isPublicCategoryGroup(category.categoryGroup?.slug)) {
+        return { category, toolA, toolB, result: null }
       }
 
       let seasonId = input.seasonId
@@ -303,7 +572,18 @@ export const benchmarkMatchRouter = createTRPCRouter({
               modelTier: input.modelTier,
             },
           )
-          return { category, toolA, toolB, result: manualResult }
+          const result = await resolveHeadToHeadWithHistoricalFallback(ctx.db, {
+            categoryId: category.id,
+            toolAId: toolA.id,
+            toolBId: toolB.id,
+            seasonIds: manualSeasonIds,
+            primary: manualResult,
+            windowType: input.windowType,
+            anchorDate,
+            promptLevel: input.promptLevel,
+            modelTier: input.modelTier,
+          })
+          return { category, toolA, toolB, result }
         }
         seasonId = defaultSeasonId
       }
@@ -336,7 +616,19 @@ export const benchmarkMatchRouter = createTRPCRouter({
         modelTier: input.modelTier,
       })
 
-      return { category, toolA, toolB, result: manualResult ?? benchmarkResult }
+      const result = await resolveHeadToHeadWithHistoricalFallback(ctx.db, {
+        categoryId: category.id,
+        toolAId: toolA.id,
+        toolBId: toolB.id,
+        seasonIds: manualSeasonIds,
+        primary: manualResult ?? benchmarkResult,
+        windowType: input.windowType,
+        anchorDate,
+        promptLevel: input.promptLevel,
+        modelTier: input.modelTier,
+      })
+
+      return { category, toolA, toolB, result }
     }),
 
   listFeatured: publicProcedure
@@ -344,12 +636,15 @@ export const benchmarkMatchRouter = createTRPCRouter({
       z
         .object({
           categorySlug: z.string().min(1).max(100).optional(),
+          subcategorySlug: z.string().min(1).max(100).optional(),
           limit: z.number().int().min(1).max(50).default(12),
+          includeHistorical: z.boolean().default(false),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12
+      const includeHistorical = input?.includeHistorical ?? false
       const anchorDate = new Date().toISOString().slice(0, 10)
 
       const matchups: MatchupEntry[] = []
@@ -358,7 +653,34 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
       let subs: { id: string; name: string; slug: string }[] = []
-      if (input?.categorySlug) {
+      if (input?.subcategorySlug) {
+        // Constrain the subcategory lookup to the selected group (if any) so a
+        // stale or hand-edited URL can't surface matchups from another group.
+        if (input?.categorySlug) {
+          const group = await ctx.db.query.categories.findFirst({
+            where: eq(categories.slug, input.categorySlug),
+            with: {
+              subcategories: {
+                orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+              },
+            },
+          })
+          // Reject non-public groups and unresolved groups: treat the filter as
+          // empty rather than surfacing private matchups.
+          subs = isPublicCategoryGroup(group?.slug)
+            ? group.subcategories.filter((s) => s.slug === input.subcategorySlug)
+            : []
+        } else {
+          // Subcategory-only filter (no group): resolve the slug but constrain
+          // it to public category groups so a hand-edited URL like
+          // `?sub=private-sub` can't surface non-public matchups.
+          const subcategory = await ctx.db.query.subcategories.findFirst({
+            where: eq(subcategories.slug, input.subcategorySlug),
+            with: { categoryGroup: true },
+          })
+          subs = isPublicCategoryGroup(subcategory?.categoryGroup?.slug) ? [subcategory] : []
+        }
+      } else if (input?.categorySlug) {
         const group = await ctx.db.query.categories.findFirst({
           where: eq(categories.slug, input.categorySlug),
           with: {
@@ -367,199 +689,50 @@ export const benchmarkMatchRouter = createTRPCRouter({
             },
           },
         })
-        subs = group?.subcategories ?? []
+        // Reject non-public groups so `?group=private-group` can't bypass the
+        // public allowlist that the unfiltered and subcategory-only paths use.
+        subs = isPublicCategoryGroup(group?.slug) ? group.subcategories : []
+      } else {
+        // No explicit category scope: limit to public category groups so the
+        // unfiltered listing never surfaces matchups from groups that the
+        // filters and rankings endpoints intentionally hide.
+        const publicGroups = await ctx.db.query.categories.findMany({
+          where: inArray(categories.slug, [...serverSettings.publicSite.categoryGroupSlugs]),
+          with: {
+            subcategories: {
+              orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+            },
+          },
+        })
+        subs = publicGroups.flatMap((g) => g.subcategories)
       }
 
+      const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
+      const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
+      const scopedSubcategoryIds = subs.map((sub) => sub.id)
+
       // ---------------------------------------------------------------
-      // 1. Recent completed manual matchups
+      // 1. Recent completed manual matchups (active)
       // ---------------------------------------------------------------
       if (matchups.length < limit) {
-        const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
-        const remainingSlots = limit - matchups.length
-        const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
-        const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
-        const manualBaseConditions = [
-          eq(matchBatches.triggerMode, 'manual'),
-          eq(matchBatches.status, 'completed'),
-          inArray(matchBatches.seasonId, eligibleManualSeasonIds),
-          lt(matchBatches.createdAt, windowBounds.endExclusive),
-          windowBounds.startInclusive
-            ? gte(matchBatches.createdAt, windowBounds.startInclusive)
-            : undefined,
-          scopedSubcategoryIds ? inArray(matchBatches.categoryId, scopedSubcategoryIds) : undefined,
-        ]
-
-        if (
-          !(scopedSubcategoryIds && scopedSubcategoryIds.length === 0) &&
-          eligibleManualSeasonIds.length > 0
-        ) {
-          const scanPageSize = Math.min(
-            serverSettings.benchmark.featuredMatchups.manualPairScanMaxRows,
-            Math.max(
-              remainingSlots,
-              remainingSlots * serverSettings.benchmark.featuredMatchups.manualPairScanMultiplier,
-            ),
-          )
-
-          const attemptedPairKeys = new Set<string>()
-          let scanBeforeCreatedAt: Date | null = null
-          let scanBeforeId: string | null = null
-
-          while (matchups.length < limit) {
-            const whereClause =
-              scanBeforeCreatedAt && scanBeforeId
-                ? and(
-                    ...manualBaseConditions,
-                    or(
-                      lt(matchBatches.createdAt, scanBeforeCreatedAt),
-                      and(
-                        eq(matchBatches.createdAt, scanBeforeCreatedAt),
-                        lt(matchBatches.id, scanBeforeId),
-                      ),
-                    ),
-                  )
-                : and(...manualBaseConditions)
-
-            const manualPairRows: Array<{
-              id: string
-              createdAt: Date
-              categoryId: string
-              toolAId: string
-              toolBId: string
-            }> = await ctx.db.query.matchBatches.findMany({
-              where: whereClause,
-              columns: {
-                id: true,
-                createdAt: true,
-                categoryId: true,
-                toolAId: true,
-                toolBId: true,
-              },
-              orderBy: [desc(matchBatches.createdAt), desc(matchBatches.id)],
-              limit: scanPageSize,
-            })
-
-            if (manualPairRows.length === 0) break
-
-            const lastRow = manualPairRows[manualPairRows.length - 1]
-            if (!lastRow) break
-            scanBeforeCreatedAt = lastRow.createdAt
-            scanBeforeId = lastRow.id
-
-            const selectedPairs: Array<{ categoryId: string; toolAId: string; toolBId: string }> =
-              []
-            const selectedPairKeys = new Set<string>()
-            for (const row of manualPairRows) {
-              const key = matchupKey(row.categoryId, row.toolAId, row.toolBId)
-              if (seenKeys.has(key) || attemptedPairKeys.has(key) || selectedPairKeys.has(key))
-                continue
-
-              selectedPairKeys.add(key)
-              attemptedPairKeys.add(key)
-              selectedPairs.push({
-                categoryId: row.categoryId,
-                toolAId: row.toolAId,
-                toolBId: row.toolBId,
-              })
-            }
-
-            if (selectedPairs.length === 0) continue
-
-            const selectedPairConditions = selectedPairs.map((pair) =>
-              and(
-                eq(matchBatches.categoryId, pair.categoryId),
-                or(
-                  and(
-                    eq(matchBatches.toolAId, pair.toolAId),
-                    eq(matchBatches.toolBId, pair.toolBId),
-                  ),
-                  and(
-                    eq(matchBatches.toolAId, pair.toolBId),
-                    eq(matchBatches.toolBId, pair.toolAId),
-                  ),
-                ),
-              ),
-            )
-
-            const manualBatches = await ctx.db.query.matchBatches.findMany({
-              where: and(and(...manualBaseConditions), or(...selectedPairConditions)),
-              orderBy: [desc(matchBatches.createdAt)],
-              with: {
-                category: true,
-                toolA: true,
-                toolB: true,
-                evaluations: {
-                  where: eq(matchEvaluations.status, 'completed'),
-                  with: { modelSnapshot: true },
-                },
-              },
-            })
-
-            type ManualBatch = (typeof manualBatches)[number]
-            const groupedBatchesByKey = new Map<
-              string,
-              {
-                representative: ManualBatch
-                batches: ManualBatch[]
-              }
-            >()
-
-            for (const batch of manualBatches) {
-              const key = matchupKey(batch.categoryId, batch.toolAId, batch.toolBId)
-              let grouped = groupedBatchesByKey.get(key)
-              if (!grouped) {
-                grouped = { representative: batch, batches: [] }
-                groupedBatchesByKey.set(key, grouped)
-              }
-              grouped.batches.push(batch)
-            }
-
-            for (const [key, grouped] of groupedBatchesByKey) {
-              if (matchups.length >= limit) break
-
-              if (seenKeys.has(key)) continue
-              const { representative, batches } = grouped
-              const result = buildHeadToHeadFromManualBatches({
-                batches,
-                categoryId: representative.categoryId,
-                toolAId: representative.toolAId,
-                toolBId: representative.toolBId,
-              })
-              if (!result) continue
-
-              seenKeys.add(key)
-
-              matchups.push({
-                category: representative.category,
-                toolA: {
-                  id: representative.toolA.id,
-                  name: representative.toolA.name,
-                  slug: representative.toolA.slug,
-                  logoUrl: representative.toolA.logoUrl,
-                },
-                toolB: {
-                  id: representative.toolB.id,
-                  name: representative.toolB.name,
-                  slug: representative.toolB.slug,
-                  logoUrl: representative.toolB.logoUrl,
-                },
-                result,
-              })
-            }
-          }
-        }
+        await collectManualMatchups({
+          db: ctx.db,
+          eligibleManualSeasonIds,
+          scopedSubcategoryIds,
+          windowEndExclusive: windowBounds.endExclusive,
+          windowStartInclusive: windowBounds.startInclusive,
+          mode: 'within',
+          seenKeys,
+          matchups,
+          status: 'active',
+          cap: limit,
+        })
       }
 
       // ---------------------------------------------------------------
       // 2. Fill remaining slots with auto-generated benchmark matchups
       // ---------------------------------------------------------------
       if (matchups.length < limit && seasonId) {
-        if (!input?.categorySlug) {
-          subs = await ctx.db.query.subcategories.findMany({
-            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-          })
-        }
-
         const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
 
         if (scoringCtx.runIds.length > 0) {
@@ -620,9 +793,30 @@ export const benchmarkMatchRouter = createTRPCRouter({
                 logoUrl: top2.toolLogoUrl,
               },
               result,
+              status: 'active',
             })
           }
         }
+      }
+
+      // ---------------------------------------------------------------
+      // 3. Historical manual matchups (no longer in the active window)
+      // ---------------------------------------------------------------
+      if (includeHistorical) {
+        const historicalCap =
+          matchups.length + serverSettings.benchmark.featuredMatchups.historicalMatchupsMax
+        await collectManualMatchups({
+          db: ctx.db,
+          eligibleManualSeasonIds,
+          scopedSubcategoryIds,
+          windowEndExclusive: windowBounds.endExclusive,
+          windowStartInclusive: windowBounds.startInclusive,
+          mode: 'before',
+          seenKeys,
+          matchups,
+          status: 'historical',
+          cap: historicalCap,
+        })
       }
 
       return matchups
