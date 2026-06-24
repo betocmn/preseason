@@ -65,6 +65,33 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
+  it('waits for the current day start hour before a season first run', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-25T03:00:00.000Z'),
+    })
+
+    expect(earlyTarget).toEqual({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId: season.id,
+      nextEligibleAt: '2026-03-25T12:00:00.000Z',
+    })
+
+    const dueTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-25T12:00:00.000Z'),
+    })
+
+    expect(dueTarget).toMatchObject({
+      kind: 'run',
+      seasonId: season.id,
+      scheduledFor: '2026-03-25',
+      source: 'today',
+    })
+  })
+
   it("resumes the oldest unfinished run before creating today's run", async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
