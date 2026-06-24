@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
 import { categories, subcategories } from '~/server/db/schema'
@@ -168,6 +169,7 @@ export const categoryRouter = createTRPCRouter({
 
   listGroups: publicProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.query.categories.findMany({
+      where: inArray(categories.slug, [...serverSettings.publicSite.categoryGroupSlugs]),
       orderBy: [asc(categories.displayOrder), asc(categories.name)],
       with: { subcategories: true },
     })

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
+import { serverSettings } from '~/constants/server-settings'
 import type { ModelFilterCompany, ModelFilterFamily } from '~/lib/model-filters'
 import {
   anchorDateSchema,
@@ -139,6 +140,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         anchorDate,
       )
       const groups = await ctx.db.query.categories.findMany({
+        where: inArray(categories.slug, [...serverSettings.publicSite.categoryGroupSlugs]),
         orderBy: [asc(categories.displayOrder), asc(categories.name)],
         with: {
           subcategories: {
@@ -249,6 +251,9 @@ export const benchmarkRankingRouter = createTRPCRouter({
         input.dateRange,
         anchorDate,
       )
+      if (!serverSettings.publicSite.categoryGroupSlugs.includes(input.groupSlug)) {
+        return { categoryGroup: null, ranking: null }
+      }
       const group = await ctx.db.query.categories.findFirst({
         where: eq(categories.slug, input.groupSlug),
         with: {

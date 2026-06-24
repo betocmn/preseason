@@ -108,9 +108,8 @@ describe('categoryRouter', () => {
 
     const caller = createTestCaller(null)
     const groups = await caller.category.listGroups()
-    expect(groups).toHaveLength(2)
-    expect(groups[0]?.slug).toBe('salestech')
-    expect(groups[1]?.slug).toBe('devtools')
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.slug).toBe('devtools')
 
     const bySlug = await caller.category.getGroupBySlug({ slug: 'devtools' })
     expect(bySlug.name).toBe('Devtools')
