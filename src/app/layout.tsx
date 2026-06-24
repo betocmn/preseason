@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 })
 
-const siteDescription = 'Track what tools LLMs recommend for vibe-coding prompts'
+const siteDescription = 'Track what devtools LLMs recommend for vibe-coding prompts'
 
 export const metadata: Metadata = {
   metadataBase: new URL(

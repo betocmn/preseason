@@ -40,8 +40,8 @@ export default async function HomePage() {
               What <span className="italic">agents</span> want
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              We track what tools AI models pick across a frozen panel of vibe-coding prompts at
-              every level, from beginners to expert engineers.
+              We track which developer tools AI models pick across a frozen panel of vibe-coding
+              prompts at every level, from beginners to expert engineers.
             </p>
           </div>
 
@@ -55,7 +55,7 @@ export default async function HomePage() {
           ) : (
             <EmptyState
               title="No prompts yet"
-              description="Prompts are vibe-coding scenarios used to test what tools LLMs recommend."
+              description="Prompts are vibe-coding scenarios used to test which devtools LLMs recommend."
             />
           )}
         </section>
