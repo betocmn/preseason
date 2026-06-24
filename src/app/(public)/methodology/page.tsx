@@ -4,16 +4,16 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Methodology',
-  description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
+  description: 'How Preseason benchmarks devtool recommendations and publishes public rankings.',
   openGraph: {
     title: 'Methodology',
-    description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
+    description: 'How Preseason benchmarks devtool recommendations and publishes public rankings.',
     images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Methodology',
-    description: 'How Preseason benchmarks tool recommendations and publishes public rankings.',
+    description: 'How Preseason benchmarks devtool recommendations and publishes public rankings.',
     images: ['/opengraph-image'],
   },
 }
@@ -64,8 +64,10 @@ export default function MethodologyPage() {
             season, so each case can be reproduced and audited later.
           </P>
           <P>
-            The current corpus is intentionally focused on web application and SaaS-style scenarios,
-            which is important context when interpreting category leaders.
+            The current corpus is intentionally focused on developer tools (devtools) for web
+            application and SaaS-style scenarios, which is important context when interpreting
+            category leaders. The underlying data model supports additional category groups for
+            future domain packs, but only devtools is benchmarked and surfaced publicly today.
           </P>
         </Section>
 
@@ -144,7 +146,8 @@ export default function MethodologyPage() {
           <P>
             That makes the benchmark useful for questions like &ldquo;what do frontier models prefer
             for advanced requests?&rdquo; without pretending the answer generalizes to every product
-            category or engineering context.
+            category or engineering context. Public rankings currently cover devtools categories
+            only; other groups remain in the data model for future expansion.
           </P>
         </Section>
 

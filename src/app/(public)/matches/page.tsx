@@ -9,16 +9,16 @@ import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Matches',
-  description: 'Benchmark match-ups between top tools based on LLM recommendations.',
+  description: 'Benchmark match-ups between top devtools based on LLM recommendations.',
   openGraph: {
     title: 'Matches',
-    description: 'Benchmark match-ups between top tools based on LLM recommendations.',
+    description: 'Benchmark match-ups between top devtools based on LLM recommendations.',
     images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Matches',
-    description: 'Benchmark match-ups between top tools based on LLM recommendations.',
+    description: 'Benchmark match-ups between top devtools based on LLM recommendations.',
     images: ['/opengraph-image'],
   },
 }
@@ -41,7 +41,8 @@ export default async function MatchesPage() {
       </div>
 
       <p className="mb-6 text-sm text-muted-foreground">
-        Recent manual matchups and benchmark head-to-heads between the top tools in each category.
+        Recent manual matchups and benchmark head-to-heads between the top devtools in each
+        category.
       </p>
 
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading matches...</p>}>

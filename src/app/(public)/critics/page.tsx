@@ -8,16 +8,16 @@ import { publicApi } from '~/trpc/server'
 
 export const metadata: Metadata = {
   title: 'Critics',
-  description: 'Verified critics who provide expert commentary on tool recommendations.',
+  description: 'Verified critics who provide expert commentary on devtool recommendations.',
   openGraph: {
     title: 'Critics',
-    description: 'Verified critics who provide expert commentary on tool recommendations.',
+    description: 'Verified critics who provide expert commentary on devtool recommendations.',
     images: ['/opengraph-image'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Critics',
-    description: 'Verified critics who provide expert commentary on tool recommendations.',
+    description: 'Verified critics who provide expert commentary on devtool recommendations.',
     images: ['/opengraph-image'],
   },
 }
