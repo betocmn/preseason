@@ -473,6 +473,160 @@ export const promptRouter = createTRPCRouter({
       }))
     }),
 
+  getToolRankings: publicProcedure
+    .input(
+      z.object({
+        promptId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const empty: {
+        subcategories: { id: string; name: string; slug: string; displayOrder: number }[]
+        rankings: {
+          tool: { id: string; name: string; slug: string; logoUrl: string | null }
+          totalCount: number
+          perCategory: { categoryId: string; count: number }[]
+        }[]
+      } = { subcategories: [], rankings: [] }
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
+      if (!seasonId) return empty
+
+      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
+      if (runIds.length === 0) return empty
+
+      const pvCandidates = (
+        await ctx.db
+          .selectDistinct({
+            pvId: benchmarkPromptVersions.id,
+            createdAt: benchmarkPromptVersions.createdAt,
+          })
+          .from(benchmarkCaseDecisions)
+          .innerJoin(
+            benchmarkCaseResults,
+            eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+          )
+          .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+          .innerJoin(
+            benchmarkPromptVersions,
+            eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+          )
+          .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
+          .where(
+            and(
+              eq(benchmarkCases.seasonId, seasonId),
+              inArray(benchmarkCaseResults.runId, runIds),
+              eq(benchmarkCaseDecisions.decisionType, 'tool'),
+              isNotNull(benchmarkCaseDecisions.toolId),
+              eq(benchmarkPromptVersions.promptId, input.promptId),
+              eq(benchmarkPromptVersions.isActive, true),
+            ),
+          )
+      ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+
+      const pv = pvCandidates[0]
+      if (!pv) return empty
+
+      const decisionRows = await ctx.db
+        .select({
+          toolId: benchmarkCaseDecisions.toolId,
+          toolName: tools.name,
+          toolSlug: tools.slug,
+          toolLogoUrl: tools.logoUrl,
+          categoryId: benchmarkCaseDecisions.categoryId,
+          categoryName: subcategories.name,
+          categorySlug: subcategories.slug,
+          categoryDisplayOrder: subcategories.displayOrder,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(benchmarkCaseDecisions)
+        .innerJoin(
+          benchmarkCaseResults,
+          eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+        )
+        .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+        .innerJoin(tools, eq(benchmarkCaseDecisions.toolId, tools.id))
+        .innerJoin(subcategories, eq(benchmarkCaseDecisions.categoryId, subcategories.id))
+        .where(
+          and(
+            inArray(benchmarkCaseResults.runId, runIds),
+            eq(benchmarkCases.promptVersionId, pv.pvId),
+            eq(benchmarkCaseDecisions.decisionType, 'tool'),
+            isNotNull(benchmarkCaseDecisions.toolId),
+          ),
+        )
+        .groupBy(
+          benchmarkCaseDecisions.toolId,
+          tools.name,
+          tools.slug,
+          tools.logoUrl,
+          benchmarkCaseDecisions.categoryId,
+          subcategories.name,
+          subcategories.slug,
+          subcategories.displayOrder,
+        )
+
+      const toolMap = new Map<
+        string,
+        {
+          tool: { id: string; name: string; slug: string; logoUrl: string | null }
+          totalCount: number
+          perCategory: Map<string, number>
+        }
+      >()
+      const categoryMap = new Map<
+        string,
+        { id: string; name: string; slug: string; displayOrder: number }
+      >()
+
+      for (const row of decisionRows) {
+        const toolId = row.toolId
+        if (!toolId) continue
+        let entry = toolMap.get(toolId)
+        if (!entry) {
+          entry = {
+            tool: {
+              id: toolId,
+              name: row.toolName,
+              slug: row.toolSlug,
+              logoUrl: row.toolLogoUrl,
+            },
+            totalCount: 0,
+            perCategory: new Map<string, number>(),
+          }
+          toolMap.set(toolId, entry)
+        }
+        entry.totalCount += row.count
+        entry.perCategory.set(row.categoryId, row.count)
+
+        if (!categoryMap.has(row.categoryId)) {
+          categoryMap.set(row.categoryId, {
+            id: row.categoryId,
+            name: row.categoryName,
+            slug: row.categorySlug,
+            displayOrder: row.categoryDisplayOrder,
+          })
+        }
+      }
+
+      const subcategoryList = [...categoryMap.values()].sort(
+        (a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name),
+      )
+
+      const rankings = [...toolMap.values()]
+        .map((entry) => ({
+          tool: entry.tool,
+          totalCount: entry.totalCount,
+          perCategory: [...entry.perCategory.entries()].map(([categoryId, count]) => ({
+            categoryId,
+            count,
+          })),
+        }))
+        .sort((a, b) => b.totalCount - a.totalCount)
+
+      return { subcategories: subcategoryList, rankings }
+    }),
+
   listWithTopTools: publicProcedure
     .input(
       z.object({
