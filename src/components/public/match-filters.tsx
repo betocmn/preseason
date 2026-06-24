@@ -1,6 +1,6 @@
 'use client'
 
-import { Package, Tag } from 'lucide-react'
+import { Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -17,28 +17,17 @@ type CategoryGroup = {
   subcategories: { slug: string; name: string }[]
 }
 
-type ToolOption = {
-  slug: string
-  name: string
-}
-
 type MatchFiltersProps = {
   groups: CategoryGroup[]
-  tools: ToolOption[]
   currentGroup?: string
   currentSub?: string
-  currentTool?: string
 }
 
-export function MatchFilters({
-  groups,
-  tools,
-  currentGroup,
-  currentSub,
-  currentTool,
-}: MatchFiltersProps) {
+export function MatchFilters({ groups, currentGroup, currentSub }: MatchFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const effectiveGroup = searchParams.get('group') ?? currentGroup
+  const effectiveSub = searchParams.get('sub') ?? currentSub
 
   function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -53,18 +42,18 @@ export function MatchFilters({
     router.replace(qs ? `/matches?${qs}` : '/matches')
   }
 
-  const categoryValue = currentSub
-    ? `${currentGroup}:${currentSub}`
-    : currentGroup
-      ? currentGroup
+  const categoryValue = effectiveSub
+    ? `${effectiveGroup}:${effectiveSub}`
+    : effectiveGroup
+      ? effectiveGroup
       : 'all'
 
   const categoryLabel = (() => {
-    if (!currentGroup) return 'All Categories'
-    const group = groups.find((g) => g.slug === currentGroup)
+    if (!effectiveGroup) return 'All Categories'
+    const group = groups.find((g) => g.slug === effectiveGroup)
     if (!group) return 'All Categories'
-    if (currentSub) {
-      const sub = group.subcategories.find((s) => s.slug === currentSub)
+    if (effectiveSub) {
+      const sub = group.subcategories.find((s) => s.slug === effectiveSub)
       return sub ? `${group.name} / ${sub.name}` : group.name
     }
     return `All ${group.name}`
@@ -78,12 +67,12 @@ export function MatchFilters({
           value={categoryValue}
           onValueChange={(val) => {
             if (val === 'all') {
-              navigate({ category: undefined, sub: undefined })
+              navigate({ group: undefined, sub: undefined })
             } else if (val.includes(':')) {
               const [groupSlug, subSlug] = val.split(':')
-              navigate({ category: groupSlug, sub: subSlug })
+              navigate({ group: groupSlug, sub: subSlug })
             } else {
-              navigate({ category: val, sub: undefined })
+              navigate({ group: val, sub: undefined })
             }
           }}
         >
@@ -107,30 +96,6 @@ export function MatchFilters({
                   </SelectItem>
                 ))}
               </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Package className="h-4 w-4 text-muted-foreground" />
-        <Select
-          value={currentTool ?? 'all'}
-          onValueChange={(val) => navigate({ tool: val === 'all' ? undefined : val })}
-        >
-          <SelectTrigger className="h-9 w-[200px] border-border/60 bg-background/80 text-sm">
-            <span className="truncate">
-              {currentTool
-                ? (tools.find((t) => t.slug === currentTool)?.name ?? 'All Tools')
-                : 'All Tools'}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tools</SelectItem>
-            {tools.map((tool) => (
-              <SelectItem key={tool.slug} value={tool.slug}>
-                {tool.name}
-              </SelectItem>
             ))}
           </SelectContent>
         </Select>

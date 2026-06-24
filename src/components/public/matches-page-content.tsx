@@ -21,19 +21,30 @@ function matchSlug(categorySlug: string, toolASlug: string, toolBSlug: string) {
 
 export function MatchesPageContent({ initialItems }: MatchesPageContentProps) {
   const searchParams = useSearchParams()
-  const category = searchParams.get('category') ?? undefined
-  const safeCategory =
-    category && category.length >= 1 && category.length <= 100 ? category : undefined
-  const { data, isFetching } = api.benchmarkMatch.listFeatured.useQuery(
-    safeCategory ? { categorySlug: safeCategory } : undefined,
-    { enabled: !!safeCategory },
-  )
+  const group = searchParams.get('group') ?? undefined
+  const sub = searchParams.get('sub') ?? undefined
+  const safeStr = (value: string | undefined) =>
+    value && value.length >= 1 && value.length <= 100 ? value : undefined
+  const safeGroup = safeStr(group)
+  const safeSub = safeStr(sub)
 
-  if (safeCategory && !data && isFetching) {
+  const queryInput = {
+    limit: 50,
+    includeHistorical: true,
+    ...(safeGroup ? { categorySlug: safeGroup } : {}),
+    ...(safeSub ? { subcategorySlug: safeSub } : {}),
+  }
+  const hasFilters = !!(safeGroup || safeSub)
+
+  const { data, isFetching } = api.benchmarkMatch.listFeatured.useQuery(queryInput, {
+    enabled: hasFilters,
+  })
+
+  if (hasFilters && !data && isFetching) {
     return <p className="text-sm text-muted-foreground">Loading matches...</p>
   }
 
-  const items = safeCategory ? (data ?? []) : initialItems
+  const items = hasFilters ? (data ?? []) : initialItems
 
   if (items.length === 0) {
     return (
@@ -44,67 +55,107 @@ export function MatchesPageContent({ initialItems }: MatchesPageContentProps) {
     )
   }
 
+  const activeItems = items.filter((m) => m.status === 'active')
+  const historicalItems = items.filter((m) => m.status === 'historical')
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((m) => {
-        const slug = matchSlug(m.category.slug, m.toolA.slug, m.toolB.slug)
-        const decisive = m.result.decisiveCaseCount
-        const insufficient = !m.result.meetsPublicationThreshold
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {activeItems.map((m) => (
+          <MatchCard key={matchSlug(m.category.slug, m.toolA.slug, m.toolB.slug)} matchup={m} />
+        ))}
+      </div>
 
-        return (
-          <Card key={slug} className="transition-colors hover:bg-accent/50">
-            <Link href={`/matches/${slug}`}>
-              <CardContent className="p-4">
-                <div className="mb-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {m.category.name}
-                  </Badge>
-                </div>
-
-                <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                  <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
-                    {m.toolA.logoUrl && (
-                      <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} size={20} />
-                    )}
-                    <AvatarFallback className="text-[10px]">
-                      {m.toolA.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  {m.toolA.name}
-                  <span className="text-muted-foreground">vs</span>
-                  <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
-                    {m.toolB.logoUrl && (
-                      <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} size={20} />
-                    )}
-                    <AvatarFallback className="text-[10px]">
-                      {m.toolB.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  {m.toolB.name}
-                </div>
-
-                {decisive > 0 ? (
-                  <PercentageBar
-                    valueA={m.result.aWins}
-                    valueB={m.result.bWins}
-                    labelA={m.toolA.name}
-                    labelB={m.toolB.name}
-                    size="sm"
-                  />
-                ) : (
-                  <p className="text-xs text-muted-foreground">No decisive cases yet</p>
-                )}
-
-                {insufficient && decisive > 0 && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {decisive} decisive case{decisive !== 1 ? 's' : ''} (30 needed)
-                  </p>
-                )}
-              </CardContent>
-            </Link>
-          </Card>
-        )
-      })}
+      {historicalItems.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">Historical matches</h2>
+            <span className="text-xs text-muted-foreground">
+              No longer active in the last 28 days
+            </span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {historicalItems.map((m) => (
+              <MatchCard
+                key={matchSlug(m.category.slug, m.toolA.slug, m.toolB.slug)}
+                matchup={m}
+                historical
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function MatchCard({
+  matchup: m,
+  historical = false,
+}: {
+  matchup: MatchItem
+  historical?: boolean
+}) {
+  const slug = matchSlug(m.category.slug, m.toolA.slug, m.toolB.slug)
+  const decisive = m.result.decisiveCaseCount
+  const insufficient = !m.result.meetsPublicationThreshold
+
+  return (
+    <Card className={`transition-colors hover:bg-accent/50${historical ? ' opacity-80' : ''}`}>
+      <Link href={`/matches/${slug}`}>
+        <CardContent className="p-4">
+          <div className="mb-2 flex items-center gap-1.5">
+            <Badge variant="secondary" className="text-xs">
+              {m.category.name}
+            </Badge>
+            {historical && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                Historical
+              </Badge>
+            )}
+          </div>
+
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
+              {m.toolA.logoUrl && (
+                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} size={20} />
+              )}
+              <AvatarFallback className="text-[10px]">
+                {m.toolA.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {m.toolA.name}
+            <span className="text-muted-foreground">vs</span>
+            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
+              {m.toolB.logoUrl && (
+                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} size={20} />
+              )}
+              <AvatarFallback className="text-[10px]">
+                {m.toolB.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {m.toolB.name}
+          </div>
+
+          {decisive > 0 ? (
+            <PercentageBar
+              valueA={m.result.aWins}
+              valueB={m.result.bWins}
+              labelA={m.toolA.name}
+              labelB={m.toolB.name}
+              size="sm"
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">No decisive cases yet</p>
+          )}
+
+          {insufficient && decisive > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {decisive} decisive case{decisive !== 1 ? 's' : ''} (30 needed)
+            </p>
+          )}
+        </CardContent>
+      </Link>
+    </Card>
   )
 }
