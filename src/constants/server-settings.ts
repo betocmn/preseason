@@ -86,6 +86,9 @@ export const serverSettings = {
     featuredMatchups: {
       manualPairScanMultiplier: 8,
       manualPairScanMaxRows: 400,
+      // Maximum number of historical (no longer active) manual matchups to
+      // surface on the public matches listing after active matchups.
+      historicalMatchupsMax: 200,
     },
   },
   match: {
