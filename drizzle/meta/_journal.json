@@ -43,6 +43,13 @@
       "when": 1782195736204,
       "tag": "0005_update_model_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782215216298,
+      "tag": "0006_add_devtools_categories",
+      "breakpoints": true
     }
   ]
 }
