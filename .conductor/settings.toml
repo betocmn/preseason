@@ -1,0 +1,7 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+file_include_globs = ".env\n.env.local\n"
+
+[scripts]
+setup = "pnpm install"
+run = "pnpm run dev --port \"$CONDUCTOR_PORT\""
+run_mode = "concurrent"
