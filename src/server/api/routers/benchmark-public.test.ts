@@ -2457,6 +2457,96 @@ describe('benchmark public routers', () => {
     expect(result.result?.bWins).toBe(0)
   })
 
+  it('does not broaden narrow windows with the historical fallback', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
+
+    const historicalCreatedAt = new Date()
+    historicalCreatedAt.setUTCDate(historicalCreatedAt.getUTCDate() - 60)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: historicalCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'run_day',
+    })
+
+    expect(result.result).toBeNull()
+  })
+
+  it('returns empty featured matchups when subcategory slug does not belong to the selected group', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
+
+    const otherGroup = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Other', slug: 'other-group', displayOrder: 2 })
+        .returning(),
+    )
+    const otherSub = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: otherGroup.id,
+          name: 'Other Sub',
+          slug: 'other-sub',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+
+    const now = new Date()
+    const recentCreatedAt = new Date(now)
+    recentCreatedAt.setUTCDate(recentCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: otherSub.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const mismatched = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      subcategorySlug: 'other-sub',
+      limit: 50,
+      includeHistorical: true,
+    })
+
+    expect(mismatched).toEqual([])
+  })
+
   it('does not include future manual history in head-to-head fallback', async () => {
     const fixture = await seedHistoricalManualFixture()
     const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
