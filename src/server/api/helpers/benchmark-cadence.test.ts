@@ -35,6 +35,11 @@ describe('benchmark run cadence helpers', () => {
     expect(isBenchmarkRunDue(nextEligibleAt, '2026-03-25')).toBe(true)
   })
 
+  it('keeps delayed fresh runs closed until the current day start hour', () => {
+    expect(isBenchmarkRunDue(new Date('2026-03-27T11:59:59.999Z'), '2026-03-25')).toBe(false)
+    expect(isBenchmarkRunDue(new Date('2026-03-27T12:00:00.000Z'), '2026-03-25')).toBe(true)
+  })
+
   it('supports cadence overrides for future tuning', () => {
     const nextEligibleAt = getNextEligibleBenchmarkRunAt('2026-03-25', 72)
 

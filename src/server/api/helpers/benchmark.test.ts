@@ -184,6 +184,40 @@ describe('resolveBenchmarkCronRunTarget', () => {
     expect(target.runId).toBeUndefined()
   })
 
+  it('waits for the current day start hour after a missed cadence window', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    await db.insert(benchmarkRuns).values({
+      seasonId: season.id,
+      scheduledFor: '2026-03-25',
+      status: 'completed',
+    })
+
+    const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-27T03:00:00.000Z'),
+    })
+
+    expect(earlyTarget).toEqual({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId: season.id,
+      latestScheduledFor: '2026-03-25',
+      nextEligibleAt: '2026-03-27T12:00:00.000Z',
+    })
+
+    const dueTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-27T12:00:00.000Z'),
+    })
+
+    expect(dueTarget).toMatchObject({
+      kind: 'run',
+      seasonId: season.id,
+      scheduledFor: '2026-03-27',
+      source: 'today',
+    })
+  })
+
   it('waits for the configured cadence before starting a fresh run', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
