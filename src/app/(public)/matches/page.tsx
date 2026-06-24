@@ -3,6 +3,7 @@ export const revalidate = 3600 // 1 hour
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { MatchFilters } from '~/components/public/match-filters'
 import { MatchesPageContent } from '~/components/public/matches-page-content'
 import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
@@ -26,10 +27,20 @@ export const metadata: Metadata = {
 export default async function MatchesPage() {
   await deferToRequestWhenDatabaseUnavailable()
   const caller = await publicApi()
-  const matchups = await caller.benchmarkMatch.listFeatured({
-    limit: 50,
-    includeHistorical: true,
-  })
+
+  const [matchups, categoryGroups] = await Promise.all([
+    caller.benchmarkMatch.listFeatured({ limit: 50, includeHistorical: true }),
+    caller.category.listGroups(),
+  ])
+
+  const groups = categoryGroups.map((g) => ({
+    slug: g.slug,
+    name: g.name,
+    subcategories: g.subcategories
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((s) => ({ slug: s.slug, name: s.name })),
+  }))
 
   return (
     <div className="container py-8">
@@ -48,9 +59,15 @@ export default async function MatchesPage() {
         category.
       </p>
 
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading matches...</p>}>
-        <MatchesPageContent initialItems={matchups} />
+      <Suspense fallback={null}>
+        <MatchFilters groups={groups} />
       </Suspense>
+
+      <div className="mt-6">
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading matches...</p>}>
+          <MatchesPageContent initialItems={matchups} />
+        </Suspense>
+      </div>
     </div>
   )
 }

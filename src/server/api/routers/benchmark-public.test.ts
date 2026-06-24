@@ -2358,6 +2358,72 @@ describe('benchmark public routers', () => {
     expect(featured.every((entry) => entry.status === 'active')).toBe(true)
   })
 
+  it('scopes featured matchups to a single subcategory when subcategorySlug is provided', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const {
+      db,
+      season,
+      authCategory,
+      clerk,
+      supabase,
+      firebase,
+      pocketbase,
+      template,
+      modelSnapshot,
+    } = fixture
+
+    const dbCategory = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: authCategory.categoryId,
+          name: 'Database',
+          slug: 'database',
+          displayOrder: 2,
+        })
+        .returning(),
+    )
+
+    const now = new Date()
+    const recentCreatedAt = new Date(now)
+    recentCreatedAt.setUTCDate(recentCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: authCategory.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: dbCategory.id,
+      toolOneId: firebase.id,
+      toolTwoId: pocketbase.id,
+      winnerToolId: firebase.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const scoped = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      subcategorySlug: 'auth',
+      limit: 50,
+      includeHistorical: true,
+    })
+
+    expect(scoped).toHaveLength(1)
+    expect(scoped[0]?.category.slug).toBe('auth')
+    expect([scoped[0]?.toolA.slug, scoped[0]?.toolB.slug].sort()).toEqual(['clerk', 'supabase'])
+  })
+
   it('falls back to all-time manual history when the trailing window has no decisive cases', async () => {
     const fixture = await seedHistoricalManualFixture()
     const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
