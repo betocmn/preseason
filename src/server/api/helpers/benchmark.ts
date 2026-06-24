@@ -163,6 +163,15 @@ function parseScheduledForStart(scheduledFor: string) {
   return new Date(`${scheduledFor}T00:00:00.000Z`)
 }
 
+function getBenchmarkRunStartAt(
+  scheduledFor: string,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+) {
+  const startAt = parseScheduledForStart(scheduledFor)
+  startAt.setUTCHours(newRunStartUtcHour, 0, 0, 0)
+  return startAt
+}
+
 export function getNextEligibleBenchmarkRunAt(
   scheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
@@ -170,16 +179,38 @@ export function getNextEligibleBenchmarkRunAt(
 ) {
   const nextEligibleAt = parseScheduledForStart(scheduledFor)
   nextEligibleAt.setUTCHours(nextEligibleAt.getUTCHours() + newRunIntervalHours)
-  nextEligibleAt.setUTCHours(newRunStartUtcHour, 0, 0, 0)
-  return nextEligibleAt
+  return getBenchmarkRunStartAt(formatScheduledFor(nextEligibleAt), newRunStartUtcHour)
+}
+
+export function getBenchmarkRunDueAt(
+  currentTime: Date,
+  latestScheduledFor: string,
+  newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+) {
+  const cadenceEligibleAt = getNextEligibleBenchmarkRunAt(
+    latestScheduledFor,
+    newRunIntervalHours,
+    newRunStartUtcHour,
+  )
+  const currentDateStartAt = getBenchmarkRunStartAt(
+    formatScheduledFor(currentTime),
+    newRunStartUtcHour,
+  )
+
+  return currentDateStartAt > cadenceEligibleAt ? currentDateStartAt : cadenceEligibleAt
 }
 
 export function isBenchmarkRunDue(
   currentTime: Date,
   latestScheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
 ) {
-  return currentTime >= getNextEligibleBenchmarkRunAt(latestScheduledFor, newRunIntervalHours)
+  return (
+    currentTime >=
+    getBenchmarkRunDueAt(currentTime, latestScheduledFor, newRunIntervalHours, newRunStartUtcHour)
+  )
 }
 
 export async function resolveBenchmarkCronRunTarget(
@@ -237,7 +268,7 @@ export async function resolveBenchmarkCronRunTarget(
 
   const latestScheduledFor = latestRun[0]?.scheduledFor
   if (latestScheduledFor) {
-    const nextEligibleAt = getNextEligibleBenchmarkRunAt(latestScheduledFor)
+    const nextEligibleAt = getBenchmarkRunDueAt(currentTime, latestScheduledFor)
 
     if (!isBenchmarkRunDue(currentTime, latestScheduledFor)) {
       return {
