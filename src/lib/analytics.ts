@@ -9,10 +9,30 @@ function isProtectedAnalyticsPath(pathname: string) {
   )
 }
 
-export function filterAnalyticsEvent(event: BeforeSendEvent): BeforeSendEvent | null {
-  const { pathname } = new URL(event.url, analyticsUrlBase)
+function isProtectedAnalyticsTarget(value: string) {
+  if (!value.startsWith('/') && !value.startsWith('http://') && !value.startsWith('https://')) {
+    return false
+  }
 
-  if (isProtectedAnalyticsPath(pathname)) {
+  try {
+    const { pathname } = new URL(value, analyticsUrlBase)
+    return isProtectedAnalyticsPath(pathname)
+  } catch {
+    return false
+  }
+}
+
+function hasProtectedAnalyticsSearchParam(searchParams: URLSearchParams) {
+  return [...searchParams.values()].some((value) => isProtectedAnalyticsTarget(value))
+}
+
+export function filterAnalyticsEvent(event: BeforeSendEvent): BeforeSendEvent | null {
+  const url = new URL(event.url, analyticsUrlBase)
+
+  if (
+    isProtectedAnalyticsPath(url.pathname) ||
+    hasProtectedAnalyticsSearchParam(url.searchParams)
+  ) {
     return null
   }
 

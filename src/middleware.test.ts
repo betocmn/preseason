@@ -8,8 +8,8 @@ describe('isVercelAnalyticsRoute', () => {
   })
 
   it('matches a configured Vercel analytics base path', () => {
-    expect(isVercelAnalyticsRoute('/va-path/view', '/va-path')).toBe(true)
-    expect(isVercelAnalyticsRoute('/va-path/view', 'va-path/')).toBe(true)
+    expect(isVercelAnalyticsRoute('/va-path/insights/view', '/va-path')).toBe(true)
+    expect(isVercelAnalyticsRoute('/va-path/insights/view', 'va-path/')).toBe(true)
   })
 
   it('does not match protected app routes', () => {
@@ -17,8 +17,53 @@ describe('isVercelAnalyticsRoute', () => {
     expect(isVercelAnalyticsRoute('/admin/view', '/va-path')).toBe(false)
   })
 
+  it('only matches insights under a configured base path', () => {
+    expect(isVercelAnalyticsRoute('/admin/insights/view', '/admin')).toBe(true)
+    expect(isVercelAnalyticsRoute('/admin', '/admin')).toBe(false)
+    expect(isVercelAnalyticsRoute('/admin/benchmark/runs/run_123', '/admin')).toBe(false)
+  })
+
   it('ignores an invalid root analytics base path', () => {
     expect(isVercelAnalyticsRoute('/admin', '/')).toBe(false)
+  })
+
+  it('matches endpoints configured by Vercel analytics client config', () => {
+    const clientConfig = JSON.stringify({
+      analytics: {
+        scriptSrc: '/va/script.js',
+        viewEndpoint: '/va/view',
+        eventEndpoint: '/va/event',
+      },
+    })
+
+    expect(isVercelAnalyticsRoute('/va/script.js', '', clientConfig)).toBe(true)
+    expect(isVercelAnalyticsRoute('/va/view', '', clientConfig)).toBe(true)
+    expect(isVercelAnalyticsRoute('/va/event', '', clientConfig)).toBe(true)
+    expect(isVercelAnalyticsRoute('/va/view/extra', '', clientConfig)).toBe(false)
+  })
+
+  it('matches same-origin absolute endpoints configured by Vercel analytics client config', () => {
+    const clientConfig = JSON.stringify({
+      analytics: {
+        viewEndpoint: 'https://preseason.ai/va/view',
+      },
+    })
+
+    expect(isVercelAnalyticsRoute('/va/view', '', clientConfig, 'https://preseason.ai')).toBe(true)
+    expect(isVercelAnalyticsRoute('/va/view', '', clientConfig, 'https://example.com')).toBe(false)
+  })
+
+  it('matches base paths configured by Vercel analytics client config', () => {
+    const clientConfig = JSON.stringify({ analytics: { basePath: '/observability' } })
+
+    expect(isVercelAnalyticsRoute('/observability/insights/view', '', clientConfig)).toBe(true)
+    expect(isVercelAnalyticsRoute('/observability/view', '', clientConfig)).toBe(false)
+  })
+
+  it('matches deprecated endpoint config as an intake prefix', () => {
+    const clientConfig = JSON.stringify({ analytics: { endpoint: '/observability/insights' } })
+
+    expect(isVercelAnalyticsRoute('/observability/insights/view', '', clientConfig)).toBe(true)
   })
 })
 
