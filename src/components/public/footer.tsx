@@ -10,8 +10,8 @@ const navLinks = [
 ]
 
 const legalLinks = [
-  { href: '/privacy', label: 'Privacy Policy' },
-  { href: '/terms', label: 'Terms & Conditions' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
 ]
 
 export function Footer() {
@@ -53,10 +53,10 @@ export function Footer() {
         {/* Divider */}
         <div className="my-5 border-t border-border/40" />
 
-        {/* Bottom row: copyright + legal */}
+        {/* Bottom row: copyright + legal on the left, X icon on the right */}
         <div className="flex flex-col items-start gap-3 text-xs text-muted-foreground/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} Preseason. All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p>&copy; {new Date().getFullYear()} Preseason. All rights reserved.</p>
             {legalLinks.map((link) => (
               <Link
                 key={link.href}
@@ -66,28 +66,28 @@ export function Footer() {
                 {link.label}
               </Link>
             ))}
-            <a
-              href="https://x.com/betocmn"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="@betocmn on X"
-              className="inline-flex flex-shrink-0 items-center gap-1.5 font-mono opacity-70 transition-opacity hover:text-foreground hover:opacity-100"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                aria-hidden="true"
-                className="box-content rounded-full border border-border bg-background p-1"
-              >
-                <path
-                  fill="currentColor"
-                  d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-                />
-              </svg>
-              <span>@betocmn</span>
-            </a>
           </div>
+          <a
+            href="https://x.com/betocmn"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="@betocmn on X"
+            className="inline-flex flex-shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              aria-hidden="true"
+              className="box-content rounded-full border border-border bg-background p-1"
+            >
+              <path
+                fill="currentColor"
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+              />
+            </svg>
+            <span className="sr-only">@betocmn on X</span>
+          </a>
         </div>
       </div>
     </footer>
