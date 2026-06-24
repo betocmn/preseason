@@ -10,6 +10,13 @@ const vercelAnalyticsClientConfigPathKeys = [
   'sessionEndpoint',
 ] as const
 
+function getVercelAnalyticsClientConfig() {
+  return (
+    process.env.VERCEL_OBSERVABILITY_CLIENT_CONFIG ??
+    process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG
+  )
+}
+
 function normalizePathPrefix(path: string | undefined, requestOrigin?: string) {
   if (!path) return undefined
   let pathToNormalize = path
@@ -120,7 +127,7 @@ function getVercelAnalyticsRoutes(
 export function isVercelAnalyticsRoute(
   pathname: string,
   analyticsBasePath = process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_BASEPATH,
-  analyticsClientConfig = process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG,
+  analyticsClientConfig = getVercelAnalyticsClientConfig(),
   requestOrigin?: string,
 ) {
   const { pathPrefixes, paths } = getVercelAnalyticsRoutes(
