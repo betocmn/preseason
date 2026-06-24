@@ -515,6 +515,241 @@ async function addPublishedRunsForPrimaryPrompt(
   context.publishedRunIds.push(...runs.map((run) => run.id))
 }
 
+type ToolRankingFixtureContext = {
+  seasonId: string
+  modelSnapshotId: string
+  primaryCaseId: string
+  requestedModelId: string
+  provider: string
+  publishedRunIds: string[]
+  groupId: string
+  subcategoryAId: string
+  subcategoryBId: string
+  subcategoryASlug: string
+  subcategoryBSlug: string
+  subcategoryAName: string
+  subcategoryBName: string
+  tool1Id: string
+  tool2Id: string
+  tool3Id: string
+  promptId: string
+}
+
+type ToolDecisionSpec = {
+  category: 'A' | 'B'
+  tool: 1 | 2 | 3
+}
+
+async function seedPromptToolRankingFixture(decisions: ToolDecisionSpec[]) {
+  const db = getTestDb()
+  const group = first(
+    await db
+      .insert(categories)
+      .values({ name: 'Rankings Group', slug: 'rankings-group', displayOrder: 1 })
+      .returning(),
+  )
+  const subcategoryA = first(
+    await db
+      .insert(subcategories)
+      .values({
+        categoryId: group.id,
+        name: 'Subcategory A',
+        slug: 'subcategory-a',
+        displayOrder: 1,
+      })
+      .returning(),
+  )
+  const subcategoryB = first(
+    await db
+      .insert(subcategories)
+      .values({
+        categoryId: group.id,
+        name: 'Subcategory B',
+        slug: 'subcategory-b',
+        displayOrder: 2,
+      })
+      .returning(),
+  )
+  const tool1 = first(
+    await db.insert(tools).values({ name: 'Tool One', slug: 'tool-one' }).returning(),
+  )
+  const tool2 = first(
+    await db.insert(tools).values({ name: 'Tool Two', slug: 'tool-two' }).returning(),
+  )
+  const tool3 = first(
+    await db.insert(tools).values({ name: 'Tool Three', slug: 'tool-three' }).returning(),
+  )
+
+  const protocol = first(
+    await db
+      .insert(benchmarkProtocols)
+      .values({
+        slug: 'benchmark-rankings',
+        name: 'Rankings Benchmark',
+        mode: 'benchmark',
+        parserVersion: '1.0',
+        scoringVersion: '1.0',
+        promptContractVersion: '1.0',
+      })
+      .returning(),
+  )
+  const season = first(
+    await db
+      .insert(benchmarkSeasons)
+      .values({
+        protocolId: protocol.id,
+        slug: 'rankings-season',
+        name: 'Rankings Season',
+        status: 'active',
+      })
+      .returning(),
+  )
+  const llm = first(
+    await db
+      .insert(llms)
+      .values({
+        name: 'Rankings LLM',
+        slug: 'rankings-llm',
+        provider: 'openrouter',
+        company: 'Fixture',
+        modelFamily: 'fixture',
+        modelVersion: '1',
+        modelId: 'fixture/rankings',
+      })
+      .returning(),
+  )
+  const modelSnapshot = first(
+    await db
+      .insert(benchmarkModelSnapshots)
+      .values({
+        llmId: llm.id,
+        name: llm.name,
+        provider: llm.provider,
+        company: llm.company,
+        modelFamily: llm.modelFamily,
+        modelVersion: llm.modelVersion,
+        requestedModelId: llm.modelId,
+        tier: 'mid',
+        snapshotKey: `snapshot-${crypto.randomUUID()}`,
+      })
+      .returning(),
+  )
+
+  await db.insert(benchmarkSeasonModels).values({
+    seasonId: season.id,
+    modelSnapshotId: modelSnapshot.id,
+  })
+
+  const prompt = first(
+    await db
+      .insert(prompts)
+      .values({
+        title: 'Rankings Prompt',
+        slug: 'rankings-prompt',
+        level: 'beginner',
+        description: 'Rankings prompt description',
+        contentMd: '# Rankings Prompt',
+        isActive: true,
+      })
+      .returning(),
+  )
+  const promptVersion = first(
+    await db
+      .insert(benchmarkPromptVersions)
+      .values({
+        promptId: prompt.id,
+        slug: prompt.slug,
+        level: prompt.level,
+        version: 1,
+        contentMd: prompt.contentMd ?? '# Rankings Prompt',
+        contentHash: createHash('sha256').update(`${prompt.slug}:beginner`).digest('hex'),
+        promptContractVersion: '1.0',
+        isActive: true,
+      })
+      .returning(),
+  )
+  await db.insert(benchmarkSeasonPrompts).values({
+    seasonId: season.id,
+    promptVersionId: promptVersion.id,
+  })
+  const benchmarkCase = first(
+    await db
+      .insert(benchmarkCases)
+      .values({
+        seasonId: season.id,
+        promptVersionId: promptVersion.id,
+        modelSnapshotId: modelSnapshot.id,
+      })
+      .returning(),
+  )
+
+  const categoryById = { A: subcategoryA.id, B: subcategoryB.id } as const
+  const toolById = { 1: tool1.id, 2: tool2.id, 3: tool3.id } as const
+
+  const publishedRunIds: string[] = []
+  for (const [index, decision] of decisions.entries()) {
+    const runDate = new Date('2026-03-20T00:00:00.000Z')
+    runDate.setUTCDate(runDate.getUTCDate() + index)
+    const scheduledFor = runDate.toISOString().slice(0, 10)
+    const run = first(
+      await db
+        .insert(benchmarkRuns)
+        .values({
+          seasonId: season.id,
+          scheduledFor,
+          status: 'published',
+          qcStatus: 'passed',
+        })
+        .returning(),
+    )
+    const caseResult = first(
+      await db
+        .insert(benchmarkCaseResults)
+        .values({
+          seasonId: season.id,
+          runId: run.id,
+          caseId: benchmarkCase.id,
+          status: 'completed',
+          requestedModelId: llm.modelId,
+          returnedModelId: llm.modelId,
+          provider: llm.provider,
+          parserVersion: 'strict-v1',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkCaseDecisions).values({
+      caseResultId: caseResult.id,
+      categoryId: categoryById[decision.category],
+      decisionType: 'tool',
+      toolId: toolById[decision.tool],
+      resolutionStatus: 'resolved',
+    })
+    publishedRunIds.push(run.id)
+  }
+
+  return {
+    context: {
+      seasonId: season.id,
+      modelSnapshotId: modelSnapshot.id,
+      primaryCaseId: benchmarkCase.id,
+      requestedModelId: llm.modelId,
+      provider: llm.provider,
+      publishedRunIds,
+      groupId: group.id,
+      subcategoryAId: subcategoryA.id,
+      subcategoryBId: subcategoryB.id,
+      subcategoryASlug: subcategoryA.slug,
+      subcategoryBSlug: subcategoryB.slug,
+      subcategoryAName: subcategoryA.name,
+      subcategoryBName: subcategoryB.name,
+      tool1Id: tool1.id,
+      tool2Id: tool2.id,
+      tool3Id: tool3.id,
+      promptId: prompt.id,
+    } satisfies ToolRankingFixtureContext,
+  }
+}
+
 describe('promptRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -1084,5 +1319,88 @@ describe('promptRouter', () => {
       expectedOrder.remaining.slice(5, 10).map((item) => item.id),
     )
     expect(thirdPage.hasMore).toBe(false)
+  })
+
+  it('getToolRankings returns empty when no published benchmark season exists', async () => {
+    const caller = createTestCaller(null)
+    const result = await caller.prompt.getToolRankings({
+      promptId: '00000000-0000-0000-0000-000000000000',
+    })
+
+    expect(result.subcategories).toEqual([])
+    expect(result.rankings).toEqual([])
+  })
+
+  it('getToolRankings aggregates per-tool and per-subcategory recommendation counts', async () => {
+    const caller = createTestCaller(null)
+    const { context } = await seedPromptToolRankingFixture([
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 2 },
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 3 },
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 2 },
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 2 },
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 3 },
+    ])
+
+    const result = await caller.prompt.getToolRankings({ promptId: context.promptId })
+
+    expect(result.subcategories).toEqual([
+      {
+        id: context.subcategoryAId,
+        name: context.subcategoryAName,
+        slug: context.subcategoryASlug,
+        displayOrder: 1,
+      },
+      {
+        id: context.subcategoryBId,
+        name: context.subcategoryBName,
+        slug: context.subcategoryBSlug,
+        displayOrder: 2,
+      },
+    ])
+
+    expect(result.rankings).toHaveLength(3)
+    expect(result.rankings.map((entry) => entry.tool.id)).toEqual([
+      context.tool1Id,
+      context.tool2Id,
+      context.tool3Id,
+    ])
+
+    const tool1 = result.rankings.find((entry) => entry.tool.id === context.tool1Id)
+    expect(tool1?.totalCount).toBe(5)
+    expect(tool1?.perCategory).toEqual([{ categoryId: context.subcategoryAId, count: 5 }])
+
+    const tool2 = result.rankings.find((entry) => entry.tool.id === context.tool2Id)
+    expect(tool2?.totalCount).toBe(3)
+    expect(tool2?.perCategory).toEqual([{ categoryId: context.subcategoryBId, count: 3 }])
+
+    const tool3 = result.rankings.find((entry) => entry.tool.id === context.tool3Id)
+    expect(tool3?.totalCount).toBe(2)
+    expect(tool3?.perCategory).toEqual([{ categoryId: context.subcategoryBId, count: 2 }])
+  })
+
+  it('getToolRankings splits counts across subcategories for a shared tool', async () => {
+    const caller = createTestCaller(null)
+    const { context } = await seedPromptToolRankingFixture([
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 1 },
+      { category: 'A', tool: 1 },
+      { category: 'B', tool: 2 },
+    ])
+
+    const result = await caller.prompt.getToolRankings({ promptId: context.promptId })
+
+    const tool1 = result.rankings.find((entry) => entry.tool.id === context.tool1Id)
+    expect(tool1?.totalCount).toBe(3)
+    expect(tool1?.perCategory).toContainEqual({ categoryId: context.subcategoryAId, count: 2 })
+    expect(tool1?.perCategory).toContainEqual({ categoryId: context.subcategoryBId, count: 1 })
+
+    expect(result.subcategories.map((sub) => sub.id).sort()).toEqual(
+      [context.subcategoryAId, context.subcategoryBId].sort(),
+    )
   })
 })
