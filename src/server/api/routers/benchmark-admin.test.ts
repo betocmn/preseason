@@ -159,6 +159,73 @@ async function seedAiPromptAndCategories(adminCaller: ReturnType<typeof createTe
   }
 }
 
+async function seedExpandedDevtoolsPrompt(
+  adminCaller: ReturnType<typeof createTestCaller>,
+  groupId: string,
+) {
+  const categoryInputs = [
+    { name: 'Backend Language', slug: 'backend-language', icon: 'braces', displayOrder: 25 },
+    {
+      name: 'Backend Framework',
+      slug: 'backend-framework',
+      icon: 'layout-template',
+      displayOrder: 26,
+    },
+    { name: 'Agent Frameworks', slug: 'agent-frameworks', icon: 'bot', displayOrder: 27 },
+    {
+      name: 'Agentic Web Search',
+      slug: 'agentic-web-search',
+      icon: 'globe',
+      displayOrder: 28,
+    },
+    { name: 'Vector Database', slug: 'vector-db', icon: 'boxes', displayOrder: 29 },
+    { name: 'LLM Gateway / Routing', slug: 'llm-gateway', icon: 'route', displayOrder: 30 },
+    {
+      name: 'AI Code Review',
+      slug: 'ai-code-review',
+      icon: 'git-pull-request',
+      displayOrder: 31,
+    },
+    {
+      name: 'Browser Automation',
+      slug: 'browser-automation',
+      icon: 'mouse-pointer-click',
+      displayOrder: 32,
+    },
+  ]
+
+  for (const categoryInput of categoryInputs) {
+    await adminCaller.category.create({
+      ...categoryInput,
+      categoryId: groupId,
+      description: `${categoryInput.name} tools`,
+    })
+  }
+
+  const db = getTestDb()
+  const { prompts } = await import('~/server/db/schema')
+  const [prompt] = await db
+    .insert(prompts)
+    .values({
+      title: 'AI Agent Application',
+      slug: 'ai-agent-application',
+      level: 'advanced',
+      description: 'Agentic app with expanded devtool coverage',
+      expectedCategories: categoryInputs.map((category) => category.slug),
+      contentMd:
+        '# Build an AI agent app\n\nInclude agent frameworks, search, vectors, gateways, code review, and browser automation.',
+      isActive: true,
+    })
+    .returning()
+
+  if (!prompt) throw new Error('Failed to seed expanded prompt')
+
+  return {
+    prompt,
+    expectedCategorySlugs: categoryInputs.map((category) => category.slug),
+  }
+}
+
 describe('benchmarkAdminRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -315,6 +382,68 @@ describe('benchmarkAdminRouter', () => {
     } catch (err) {
       expect((err as TRPCError).code).toBe('BAD_REQUEST')
     }
+  })
+
+  it('starts a new expanded season without mutating prior frozen prompt metadata', async () => {
+    const { authUser } = await seedUser({ role: 'admin' })
+    const caller = createTestCaller(authUser)
+    const protocol = await seedProtocol()
+    const seeded = await seedPromptAndCategory(caller)
+
+    const oldSeason = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-dev-2',
+      name: 'Season dev-2',
+    })
+
+    await caller.benchmarkAdmin.freezeSeason({ seasonId: oldSeason.id })
+    const oldDetailBefore = await caller.benchmarkAdmin.getSeasonById({ id: oldSeason.id })
+    const oldPromptBefore = oldDetailBefore.seasonPrompts[0]?.promptVersion
+    const oldFrozenCategorySlugsBefore =
+      oldPromptBefore?.categories.map((category) => category.category.slug) ?? []
+
+    expect(oldFrozenCategorySlugsBefore).toEqual(['auth'])
+
+    const expanded = await seedExpandedDevtoolsPrompt(caller, seeded.group.id)
+    const completed = await caller.benchmarkAdmin.completeSeason({ seasonId: oldSeason.id })
+    const newSeason = await caller.benchmarkAdmin.createSeason({
+      protocolId: protocol.id,
+      slug: 'season-dev-3',
+      name: 'Season dev-3',
+    })
+
+    const freezeResult = await caller.benchmarkAdmin.freezeSeason({ seasonId: newSeason.id })
+
+    expect(completed.status).toBe('completed')
+    expect(freezeResult.promptVersionCount).toBe(2)
+    expect(freezeResult.modelSnapshotCount).toBe(1)
+    expect(freezeResult.caseCount).toBe(2)
+
+    const oldDetailAfter = await caller.benchmarkAdmin.getSeasonById({ id: oldSeason.id })
+    const oldPromptAfter = oldDetailAfter.seasonPrompts[0]?.promptVersion
+
+    expect(oldDetailAfter.status).toBe('completed')
+    expect(oldPromptAfter?.id).toBe(oldPromptBefore?.id)
+    expect(oldPromptAfter?.categories.map((category) => category.category.slug)).toEqual(
+      oldFrozenCategorySlugsBefore,
+    )
+
+    const newDetail = await caller.benchmarkAdmin.getSeasonById({ id: newSeason.id })
+    const expandedPromptVersion = newDetail.seasonPrompts.find(
+      (seasonPrompt) => seasonPrompt.promptVersion.promptId === expanded.prompt.id,
+    )?.promptVersion
+
+    expect(newDetail.status).toBe('active')
+    expect(newDetail.seasonPrompts).toHaveLength(2)
+    expect(newDetail.seasonModels).toHaveLength(1)
+    expect(expandedPromptVersion?.categories.map((category) => category.category.slug)).toEqual(
+      expanded.expectedCategorySlugs,
+    )
+
+    const seasons = await caller.benchmarkAdmin.listSeasons()
+    expect(
+      seasons.filter((season) => season.status === 'active').map((season) => season.slug),
+    ).toEqual(['season-dev-3'])
   })
 
   // ---------------------------------------------------------------------------

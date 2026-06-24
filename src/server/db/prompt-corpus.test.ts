@@ -38,4 +38,23 @@ describe('PROMPT_CORPUS', () => {
       expect(prompt.isActive).toBe(true)
     }
   })
+
+  it('covers the expanded devtools categories in active prompts', () => {
+    const promptCategorySlugs = new Set(
+      PROMPT_CORPUS.flatMap((prompt) => prompt.expectedCategories),
+    )
+
+    for (const categorySlug of [
+      'backend-language',
+      'backend-framework',
+      'agent-frameworks',
+      'agentic-web-search',
+      'vector-db',
+      'llm-gateway',
+      'ai-code-review',
+      'browser-automation',
+    ]) {
+      expect(promptCategorySlugs.has(categorySlug), `missing ${categorySlug}`).toBe(true)
+    }
+  })
 })
