@@ -281,6 +281,16 @@ export async function resolveBenchmarkCronRunTarget(
     }
   }
 
+  const currentDateStartAt = getBenchmarkRunStartAt(formatScheduledFor(currentTime))
+  if (currentTime < currentDateStartAt) {
+    return {
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId,
+      nextEligibleAt: currentDateStartAt.toISOString(),
+    }
+  }
+
   return {
     kind: 'run',
     seasonId,
