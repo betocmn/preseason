@@ -66,7 +66,7 @@ export function PromptToolRanking({
   if (rankings.length === 0) return null
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6 mt-6">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base">Tool Rankings</CardTitle>
