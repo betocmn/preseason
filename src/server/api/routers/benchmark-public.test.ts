@@ -2696,6 +2696,151 @@ describe('benchmark public routers', () => {
     expect(featured).toEqual([])
   })
 
+  it('hides featured matchups when categorySlug references a non-public group', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, clerk, supabase, template, modelSnapshot } = fixture
+
+    const privateGroup = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Private', slug: 'private-group', displayOrder: 5 })
+        .returning(),
+    )
+    const privateSub = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: privateGroup.id,
+          name: 'Private Sub',
+          slug: 'private-sub',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+
+    const now = new Date()
+    const recentCreatedAt = new Date(now)
+    recentCreatedAt.setUTCDate(recentCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: privateSub.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'private-group',
+      limit: 50,
+      includeHistorical: true,
+    })
+
+    expect(featured).toEqual([])
+  })
+
+  it('hides featured matchups when categorySlug and subcategorySlug reference a non-public group', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, clerk, supabase, template, modelSnapshot } = fixture
+
+    const privateGroup = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Private', slug: 'private-group', displayOrder: 5 })
+        .returning(),
+    )
+    const privateSub = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: privateGroup.id,
+          name: 'Private Sub',
+          slug: 'private-sub',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+
+    const now = new Date()
+    const recentCreatedAt = new Date(now)
+    recentCreatedAt.setUTCDate(recentCreatedAt.getUTCDate() - 1)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: privateSub.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: recentCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const featured = await caller.benchmarkMatch.listFeatured({
+      categorySlug: 'private-group',
+      subcategorySlug: 'private-sub',
+      limit: 50,
+      includeHistorical: true,
+    })
+
+    expect(featured).toEqual([])
+  })
+
+  it('hides head-to-head results for subcategories in non-public category groups', async () => {
+    const fixture = await seedHistoricalManualFixture()
+    const { db, season, clerk, supabase, template, modelSnapshot } = fixture
+
+    const privateGroup = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Private', slug: 'private-group', displayOrder: 5 })
+        .returning(),
+    )
+    const privateSub = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: privateGroup.id,
+          name: 'Private Sub',
+          slug: 'private-sub',
+          displayOrder: 1,
+        })
+        .returning(),
+    )
+
+    const historicalCreatedAt = new Date()
+    historicalCreatedAt.setUTCDate(historicalCreatedAt.getUTCDate() - 60)
+
+    await seedCompletedManualBatch({
+      db,
+      seasonId: season.id,
+      categoryId: privateSub.id,
+      toolOneId: clerk.id,
+      toolTwoId: supabase.id,
+      winnerToolId: clerk.id,
+      promptTemplateId: template.id,
+      modelSnapshotId: modelSnapshot.id,
+      createdAt: historicalCreatedAt,
+    })
+
+    const caller = createTestCaller(null)
+    const result = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'private-sub',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+    })
+
+    expect(result.result).toBeNull()
+  })
+
   it('does not include future manual history in head-to-head fallback', async () => {
     const fixture = await seedHistoricalManualFixture()
     const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture

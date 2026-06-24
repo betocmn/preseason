@@ -235,6 +235,15 @@ async function buildManualHeadToHead(
 type ManualCollectMode = 'within' | 'before'
 
 /**
+ * Returns true when the given category group slug is exposed on the public
+ * site. Used to keep listing and detail endpoints from surfacing matchups
+ * from non-public category groups via hand-edited URLs.
+ */
+function isPublicCategoryGroup(slug: string | undefined | null): slug is string {
+  return !!slug && serverSettings.publicSite.categoryGroupSlugs.includes(slug)
+}
+
+/**
  * Scans completed manual match batches for distinct tool pairs and appends
  * head-to-head matchup entries to `matchups`.
  *
@@ -511,6 +520,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const [category, toolA, toolB] = await Promise.all([
         ctx.db.query.subcategories.findFirst({
           where: eq(subcategories.slug, input.categorySlug),
+          with: { categoryGroup: true },
         }),
         ctx.db.query.tools.findFirst({
           where: eq(tools.slug, input.toolASlug),
@@ -527,6 +537,12 @@ export const benchmarkMatchRouter = createTRPCRouter({
           toolB: toolB ?? null,
           result: null,
         }
+      }
+
+      // Keep the public detail endpoint from surfacing matchups (including
+      // historical fallback) for subcategories in non-public category groups.
+      if (!isPublicCategoryGroup(category.categoryGroup?.slug)) {
+        return { category, toolA, toolB, result: null }
       }
 
       let seasonId = input.seasonId
@@ -649,9 +665,11 @@ export const benchmarkMatchRouter = createTRPCRouter({
               },
             },
           })
-          // If the group was specified but doesn't resolve, treat the filter as
-          // empty rather than falling back to a global subcategory lookup.
-          subs = (group?.subcategories ?? []).filter((s) => s.slug === input.subcategorySlug)
+          // Reject non-public groups and unresolved groups: treat the filter as
+          // empty rather than surfacing private matchups.
+          subs = isPublicCategoryGroup(group?.slug)
+            ? group.subcategories.filter((s) => s.slug === input.subcategorySlug)
+            : []
         } else {
           // Subcategory-only filter (no group): resolve the slug but constrain
           // it to public category groups so a hand-edited URL like
@@ -660,11 +678,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
             where: eq(subcategories.slug, input.subcategorySlug),
             with: { categoryGroup: true },
           })
-          const groupSlug = subcategory?.categoryGroup?.slug
-          subs =
-            groupSlug && serverSettings.publicSite.categoryGroupSlugs.includes(groupSlug)
-              ? [subcategory]
-              : []
+          subs = isPublicCategoryGroup(subcategory?.categoryGroup?.slug) ? [subcategory] : []
         }
       } else if (input?.categorySlug) {
         const group = await ctx.db.query.categories.findFirst({
@@ -675,7 +689,9 @@ export const benchmarkMatchRouter = createTRPCRouter({
             },
           },
         })
-        subs = group?.subcategories ?? []
+        // Reject non-public groups so `?group=private-group` can't bypass the
+        // public allowlist that the unfiltered and subcategory-only paths use.
+        subs = isPublicCategoryGroup(group?.slug) ? group.subcategories : []
       } else {
         // No explicit category scope: limit to public category groups so the
         // unfiltered listing never surfaces matchups from groups that the
