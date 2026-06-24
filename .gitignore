@@ -44,6 +44,7 @@ yarn-error.log*
 
 # conductor
 .context
+.conductor/settings.local.toml
 
 # agents
 .agents
