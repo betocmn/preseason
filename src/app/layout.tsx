@@ -1,7 +1,7 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
+import { Analytics } from '~/components/analytics'
 import { Toaster } from '~/components/ui/sonner'
 import { TRPCReactProvider } from '~/trpc/react'
 import '~/app/globals.css'
