@@ -83,11 +83,6 @@ export default async function PromptDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <PromptToolRanking
-        subcategories={toolRankings.subcategories}
-        rankings={toolRankings.rankings}
-      />
-
       {prompt.description && (
         <Card className="mb-6">
           <CardHeader className="pb-3">
@@ -134,6 +129,11 @@ export default async function PromptDetailPage({ params }: Props) {
           description="Prompt content is not available at this time."
         />
       )}
+
+      <PromptToolRanking
+        subcategories={toolRankings.subcategories}
+        rankings={toolRankings.rankings}
+      />
 
       <Card className="mt-6">
         <CardHeader className="pb-3">
