@@ -640,19 +640,18 @@ export const benchmarkMatchRouter = createTRPCRouter({
       if (input?.subcategorySlug) {
         // Constrain the subcategory lookup to the selected group (if any) so a
         // stale or hand-edited URL can't surface matchups from another group.
-        const group = input?.categorySlug
-          ? await ctx.db.query.categories.findFirst({
-              where: eq(categories.slug, input.categorySlug),
-              with: {
-                subcategories: {
-                  orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-                },
+        if (input?.categorySlug) {
+          const group = await ctx.db.query.categories.findFirst({
+            where: eq(categories.slug, input.categorySlug),
+            with: {
+              subcategories: {
+                orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
               },
-            })
-          : null
-        const groupSubs = group?.subcategories ?? null
-        if (groupSubs) {
-          subs = groupSubs.filter((s) => s.slug === input.subcategorySlug)
+            },
+          })
+          // If the group was specified but doesn't resolve, treat the filter as
+          // empty rather than falling back to a global subcategory lookup.
+          subs = (group?.subcategories ?? []).filter((s) => s.slug === input.subcategorySlug)
         } else {
           const subcategory = await ctx.db.query.subcategories.findFirst({
             where: eq(subcategories.slug, input.subcategorySlug),
@@ -669,12 +668,24 @@ export const benchmarkMatchRouter = createTRPCRouter({
           },
         })
         subs = group?.subcategories ?? []
+      } else {
+        // No explicit category scope: limit to public category groups so the
+        // unfiltered listing never surfaces matchups from groups that the
+        // filters and rankings endpoints intentionally hide.
+        const publicGroups = await ctx.db.query.categories.findMany({
+          where: inArray(categories.slug, [...serverSettings.publicSite.categoryGroupSlugs]),
+          with: {
+            subcategories: {
+              orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+            },
+          },
+        })
+        subs = publicGroups.flatMap((g) => g.subcategories)
       }
 
       const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
       const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
-      const hasCategoryScope = !!(input?.categorySlug || input?.subcategorySlug)
-      const scopedSubcategoryIds = hasCategoryScope ? subs.map((sub) => sub.id) : null
+      const scopedSubcategoryIds = subs.map((sub) => sub.id)
 
       // ---------------------------------------------------------------
       // 1. Recent completed manual matchups (active)
@@ -698,12 +709,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // 2. Fill remaining slots with auto-generated benchmark matchups
       // ---------------------------------------------------------------
       if (matchups.length < limit && seasonId) {
-        if (!hasCategoryScope) {
-          subs = await ctx.db.query.subcategories.findMany({
-            orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
-          })
-        }
-
         const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
 
         if (scoringCtx.runIds.length > 0) {
