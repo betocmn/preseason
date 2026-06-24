@@ -608,6 +608,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       z
         .object({
           categorySlug: z.string().min(1).max(100).optional(),
+          subcategorySlug: z.string().min(1).max(100).optional(),
           limit: z.number().int().min(1).max(50).default(12),
           includeHistorical: z.boolean().default(false),
         })
@@ -624,7 +625,12 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
       let subs: { id: string; name: string; slug: string }[] = []
-      if (input?.categorySlug) {
+      if (input?.subcategorySlug) {
+        const subcategory = await ctx.db.query.subcategories.findFirst({
+          where: eq(subcategories.slug, input.subcategorySlug),
+        })
+        subs = subcategory ? [subcategory] : []
+      } else if (input?.categorySlug) {
         const group = await ctx.db.query.categories.findFirst({
           where: eq(categories.slug, input.categorySlug),
           with: {
@@ -638,7 +644,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
       const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
-      const scopedSubcategoryIds = input?.categorySlug ? subs.map((sub) => sub.id) : null
+      const hasCategoryScope = !!(input?.categorySlug || input?.subcategorySlug)
+      const scopedSubcategoryIds = hasCategoryScope ? subs.map((sub) => sub.id) : null
 
       // ---------------------------------------------------------------
       // 1. Recent completed manual matchups (active)
@@ -662,7 +669,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // 2. Fill remaining slots with auto-generated benchmark matchups
       // ---------------------------------------------------------------
       if (matchups.length < limit && seasonId) {
-        if (!input?.categorySlug) {
+        if (!hasCategoryScope) {
           subs = await ctx.db.query.subcategories.findMany({
             orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
           })

@@ -21,21 +21,30 @@ function matchSlug(categorySlug: string, toolASlug: string, toolBSlug: string) {
 
 export function MatchesPageContent({ initialItems }: MatchesPageContentProps) {
   const searchParams = useSearchParams()
-  const category = searchParams.get('category') ?? undefined
-  const safeCategory =
-    category && category.length >= 1 && category.length <= 100 ? category : undefined
-  const { data, isFetching } = api.benchmarkMatch.listFeatured.useQuery(
-    safeCategory
-      ? { categorySlug: safeCategory, limit: 50, includeHistorical: true }
-      : { limit: 50, includeHistorical: true },
-    { enabled: !!safeCategory },
-  )
+  const group = searchParams.get('group') ?? undefined
+  const sub = searchParams.get('sub') ?? undefined
+  const safeStr = (value: string | undefined) =>
+    value && value.length >= 1 && value.length <= 100 ? value : undefined
+  const safeGroup = safeStr(group)
+  const safeSub = safeStr(sub)
 
-  if (safeCategory && !data && isFetching) {
+  const queryInput = {
+    limit: 50,
+    includeHistorical: true,
+    ...(safeGroup ? { categorySlug: safeGroup } : {}),
+    ...(safeSub ? { subcategorySlug: safeSub } : {}),
+  }
+  const hasFilters = !!(safeGroup || safeSub)
+
+  const { data, isFetching } = api.benchmarkMatch.listFeatured.useQuery(queryInput, {
+    enabled: hasFilters,
+  })
+
+  if (hasFilters && !data && isFetching) {
     return <p className="text-sm text-muted-foreground">Loading matches...</p>
   }
 
-  const items = safeCategory ? (data ?? []) : initialItems
+  const items = hasFilters ? (data ?? []) : initialItems
 
   if (items.length === 0) {
     return (
