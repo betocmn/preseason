@@ -42,6 +42,32 @@ describe('isVercelAnalyticsRoute', () => {
     expect(isVercelAnalyticsRoute('/va/view/extra', '', clientConfig)).toBe(false)
   })
 
+  it('reads Vercel analytics client config from the server env variable', () => {
+    const originalConfig = process.env.VERCEL_OBSERVABILITY_CLIENT_CONFIG
+    const originalPublicConfig = process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG
+
+    try {
+      process.env.VERCEL_OBSERVABILITY_CLIENT_CONFIG = JSON.stringify({
+        analytics: { viewEndpoint: '/va/view' },
+      })
+      delete process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG
+
+      expect(isVercelAnalyticsRoute('/va/view', '')).toBe(true)
+    } finally {
+      if (originalConfig === undefined) {
+        delete process.env.VERCEL_OBSERVABILITY_CLIENT_CONFIG
+      } else {
+        process.env.VERCEL_OBSERVABILITY_CLIENT_CONFIG = originalConfig
+      }
+
+      if (originalPublicConfig === undefined) {
+        delete process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG
+      } else {
+        process.env.NEXT_PUBLIC_VERCEL_OBSERVABILITY_CLIENT_CONFIG = originalPublicConfig
+      }
+    }
+  })
+
   it('matches same-origin absolute endpoints configured by Vercel analytics client config', () => {
     const clientConfig = JSON.stringify({
       analytics: {
