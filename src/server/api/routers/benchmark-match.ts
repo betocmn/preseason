@@ -453,12 +453,18 @@ async function resolveHeadToHeadWithHistoricalFallback(
     toolBId: string
     seasonIds: string[]
     primary: HeadToHeadResult | null
+    windowType: WindowType
     anchorDate: string
     promptLevel?: PromptLevel
     modelTier?: ModelTier
   },
 ): Promise<HeadToHeadResult | null> {
   if (args.primary && args.primary.decisiveCaseCount > 0) return args.primary
+  // Only broaden to all-time history for the default trailing_28d window.
+  // Narrower windows (run_day, trailing_7d) are explicit dated requests and
+  // should return null/zero when nothing happened in that span; season_to_date
+  // already covers the full season so no fallback is needed.
+  if (args.windowType !== 'trailing_28d') return args.primary
   if (args.seasonIds.length === 0) return args.primary
 
   const historical = await buildManualHeadToHead(
@@ -556,6 +562,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
             toolBId: toolB.id,
             seasonIds: manualSeasonIds,
             primary: manualResult,
+            windowType: input.windowType,
             anchorDate,
             promptLevel: input.promptLevel,
             modelTier: input.modelTier,
@@ -599,6 +606,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         toolBId: toolB.id,
         seasonIds: manualSeasonIds,
         primary: manualResult ?? benchmarkResult,
+        windowType: input.windowType,
         anchorDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
@@ -630,10 +638,27 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       let subs: { id: string; name: string; slug: string }[] = []
       if (input?.subcategorySlug) {
-        const subcategory = await ctx.db.query.subcategories.findFirst({
-          where: eq(subcategories.slug, input.subcategorySlug),
-        })
-        subs = subcategory ? [subcategory] : []
+        // Constrain the subcategory lookup to the selected group (if any) so a
+        // stale or hand-edited URL can't surface matchups from another group.
+        const group = input?.categorySlug
+          ? await ctx.db.query.categories.findFirst({
+              where: eq(categories.slug, input.categorySlug),
+              with: {
+                subcategories: {
+                  orderBy: [asc(subcategories.displayOrder), asc(subcategories.name)],
+                },
+              },
+            })
+          : null
+        const groupSubs = group?.subcategories ?? null
+        if (groupSubs) {
+          subs = groupSubs.filter((s) => s.slug === input.subcategorySlug)
+        } else {
+          const subcategory = await ctx.db.query.subcategories.findFirst({
+            where: eq(subcategories.slug, input.subcategorySlug),
+          })
+          subs = subcategory ? [subcategory] : []
+        }
       } else if (input?.categorySlug) {
         const group = await ctx.db.query.categories.findFirst({
           where: eq(categories.slug, input.categorySlug),
