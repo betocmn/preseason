@@ -35,11 +35,19 @@ const backgroundSmokePromptSelections = [
   level: PromptLevel
 }[]
 
+// Category groups surfaced on the public website. The data model still holds
+// other groups for future domain packs, but only these are exposed publicly
+// while the corpus is devtools-focused.
+const publicCategoryGroupSlugs: readonly string[] = ['devtools']
+
 export const serverSettings = {
   homepage: {
     promptCarouselPageSize: 5,
     promptCarouselRevalidateSeconds: 3_600,
     promptCarouselSnapshotMaxRunIds: 1_000,
+  },
+  publicSite: {
+    categoryGroupSlugs: publicCategoryGroupSlugs,
   },
   contact: {
     maxSubmissionsPerIp: 3,
