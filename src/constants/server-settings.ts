@@ -2,7 +2,8 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
-const benchmarkNewRunIntervalHours = 14 * 24
+const benchmarkNewRunIntervalHours = 24
+const benchmarkNewRunStartUtcHour = 12
 const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
@@ -16,6 +17,14 @@ if (
   throw new Error(
     'benchmarkNewRunIntervalHours must be a whole-number multiple of 24 because benchmark runs are unique per UTC date.',
   )
+}
+
+if (
+  !Number.isInteger(benchmarkNewRunStartUtcHour) ||
+  benchmarkNewRunStartUtcHour < 0 ||
+  benchmarkNewRunStartUtcHour > 23
+) {
+  throw new Error('benchmarkNewRunStartUtcHour must be a whole UTC hour from 0 through 23.')
 }
 
 const backgroundSmokePromptSelections = [
@@ -47,6 +56,8 @@ export const serverSettings = {
     // Fresh benchmark runs start only after this many hours have elapsed since the
     // latest run date for the active season.
     newRunIntervalHours: benchmarkNewRunIntervalHours,
+    // Temporary daily benchmark runs open at this UTC hour.
+    newRunStartUtcHour: benchmarkNewRunStartUtcHour,
     casesPerCronInvocation: 1,
     // Stop retrying a case after this many attempts to avoid burning API credits.
     maxCaseAttempts: 3,
