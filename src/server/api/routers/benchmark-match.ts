@@ -653,10 +653,18 @@ export const benchmarkMatchRouter = createTRPCRouter({
           // empty rather than falling back to a global subcategory lookup.
           subs = (group?.subcategories ?? []).filter((s) => s.slug === input.subcategorySlug)
         } else {
+          // Subcategory-only filter (no group): resolve the slug but constrain
+          // it to public category groups so a hand-edited URL like
+          // `?sub=private-sub` can't surface non-public matchups.
           const subcategory = await ctx.db.query.subcategories.findFirst({
             where: eq(subcategories.slug, input.subcategorySlug),
+            with: { categoryGroup: true },
           })
-          subs = subcategory ? [subcategory] : []
+          const groupSlug = subcategory?.categoryGroup?.slug
+          subs =
+            groupSlug && serverSettings.publicSite.categoryGroupSlugs.includes(groupSlug)
+              ? [subcategory]
+              : []
         }
       } else if (input?.categorySlug) {
         const group = await ctx.db.query.categories.findFirst({
