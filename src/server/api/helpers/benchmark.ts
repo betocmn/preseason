@@ -166,9 +166,11 @@ function parseScheduledForStart(scheduledFor: string) {
 export function getNextEligibleBenchmarkRunAt(
   scheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
 ) {
   const nextEligibleAt = parseScheduledForStart(scheduledFor)
   nextEligibleAt.setUTCHours(nextEligibleAt.getUTCHours() + newRunIntervalHours)
+  nextEligibleAt.setUTCHours(newRunStartUtcHour, 0, 0, 0)
   return nextEligibleAt
 }
 

@@ -38,7 +38,7 @@ describe('vercel cron config', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/6 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 */2 * *')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
   })
@@ -46,11 +46,12 @@ describe('vercel cron config', () => {
   it('keeps enough benchmark cron capacity to drain the reference run before the next cadence', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
-    const benchmarkCronMinutes = 6
-    const referenceBenchmarkCaseCount = 900
+    const benchmarkCronMinutes = 1
+    const referenceBenchmarkCaseCount = 1_200
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/6 * * * *')
-    expect(serverSettings.benchmark.newRunIntervalHours).toBe(14 * 24)
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
+    expect(serverSettings.benchmark.newRunIntervalHours).toBe(24)
+    expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
     expect(
       (serverSettings.benchmark.newRunIntervalHours *
         60 *
@@ -59,18 +60,12 @@ describe('vercel cron config', () => {
     ).toBeGreaterThan(referenceBenchmarkCaseCount)
   })
 
-  it('keeps enough match cron capacity to drain a reference batch before the next benchmark run', () => {
+  it('keeps match cron on the expected bounded dispatcher cadence', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
-    const matchCronDays = 2
-    const referenceSeededModelCount = 20
-    const referenceMatchEvaluationCount =
-      (referenceSeededModelCount - serverSettings.match.excludedRequestedModelIds.length) * 2
 
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 0 */2 * *')
-    expect(
-      (serverSettings.benchmark.newRunIntervalHours / 24 / matchCronDays) *
-        serverSettings.match.cronEvaluationsPerInvocation,
-    ).toBeGreaterThanOrEqual(referenceMatchEvaluationCount)
+    expect(serverSettings.match.cronEvaluationsPerInvocation).toBeGreaterThan(0)
+    expect(serverSettings.match.cronEvaluationsPerInvocation).toBeLessThanOrEqual(4)
   })
 })
