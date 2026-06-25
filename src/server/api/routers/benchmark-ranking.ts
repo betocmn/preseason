@@ -122,6 +122,29 @@ async function resolveSeasonId(
   return findLatestPublishedBenchmarkSeasonId(db, anchorDate)
 }
 
+/**
+ * Resolve the season for public ranking reads. When an explicit `seasonId` is
+ * supplied it is validated and returned. When omitted, `undefined` is returned
+ * so the scoring helpers span every published benchmark season — this keeps the
+ * public date-range filter meaningful even right after a new season launches.
+ */
+async function resolveRankingSeasonId(
+  db: Parameters<typeof findBenchmarkSeasonId>[0],
+  seasonId?: string,
+) {
+  if (seasonId) {
+    const id = await findBenchmarkSeasonId(db, seasonId)
+    if (!id) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'seasonId must reference a benchmark season',
+      })
+    }
+    return id
+  }
+  return undefined
+}
+
 export const benchmarkRankingRouter = createTRPCRouter({
   listIndexGroups: publicProcedure
     .input(
@@ -149,11 +172,11 @@ export const benchmarkRankingRouter = createTRPCRouter({
         },
       })
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       return Promise.all(
         groups.map(async (group) => {
-          if (group.subcategories.length === 0 || !seasonId) {
+          if (group.subcategories.length === 0) {
             return {
               slug: group.slug,
               name: group.name,
@@ -214,10 +237,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { category: null, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
-      if (!seasonId) {
-        return { category, ranking: null }
-      }
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       const ranking = await computeCategoryRanking(ctx.db, {
         categoryId: category.id,
@@ -270,10 +290,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { categoryGroup: group, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
-      if (!seasonId) {
-        return { categoryGroup: group, ranking: null }
-      }
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       const ranking = await computeCategoryGroupRanking(ctx.db, {
         categoryGroupId: group.id,
