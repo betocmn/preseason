@@ -6,7 +6,7 @@ import type { ModelFilterCompany, ModelFilterFamily } from '~/lib/model-filters'
 import {
   anchorDateSchema,
   findBenchmarkSeasonId,
-  findLatestPublishedBenchmarkSeasonId,
+  findPublishedBenchmarkSeasonIds,
   monthsAgo,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
@@ -104,7 +104,7 @@ function groupModelFilterRows(rows: ModelFilterRow[]): ModelFilterCompany[] {
   }))
 }
 
-async function resolveSeasonId(
+async function resolveModelFilterSeasonIds(
   db: Parameters<typeof findBenchmarkSeasonId>[0],
   anchorDate: string,
   seasonId?: string,
@@ -117,9 +117,12 @@ async function resolveSeasonId(
         message: 'seasonId must reference a benchmark season',
       })
     }
-    return id
+    return { seasonId: id, seasonIds: [id] }
   }
-  return findLatestPublishedBenchmarkSeasonId(db, anchorDate)
+  return {
+    seasonId: null,
+    seasonIds: await findPublishedBenchmarkSeasonIds(db, anchorDate),
+  }
 }
 
 /**
@@ -317,9 +320,13 @@ export const benchmarkRankingRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+      const { seasonId, seasonIds } = await resolveModelFilterSeasonIds(
+        ctx.db,
+        anchorDate,
+        input.seasonId,
+      )
 
-      if (!seasonId) {
+      if (seasonIds.length === 0) {
         return {
           seasonId: null,
           companies: [] as ModelFilterCompany[],
@@ -328,7 +335,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const rows = await ctx.db
-        .select({
+        .selectDistinct({
           modelSnapshotId: benchmarkModelSnapshots.id,
           company: benchmarkModelSnapshots.company,
           modelFamily: benchmarkModelSnapshots.modelFamily,
@@ -342,7 +349,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
           eq(benchmarkSeasonModels.modelSnapshotId, benchmarkModelSnapshots.id),
         )
         .innerJoin(llms, eq(benchmarkModelSnapshots.llmId, llms.id))
-        .where(eq(benchmarkSeasonModels.seasonId, seasonId))
+        .where(inArray(benchmarkSeasonModels.seasonId, seasonIds))
         .orderBy(
           asc(benchmarkModelSnapshots.company),
           asc(benchmarkModelSnapshots.modelFamily),
