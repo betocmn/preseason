@@ -705,18 +705,21 @@ const CORE_TOOLS = [
     slug: 'express',
     website: 'https://expressjs.com',
     description: 'Minimal and flexible web framework for Node.js',
+    logoUrl: '/logos/express.png',
   },
   {
     name: 'Fastify',
     slug: 'fastify',
     website: 'https://fastify.dev',
     description: 'Fast and low-overhead web framework for Node.js',
+    logoUrl: '/logos/fastify.png',
   },
   {
     name: 'NestJS',
     slug: 'nestjs',
     website: 'https://nestjs.com',
     description: 'Progressive Node.js framework for scalable server applications',
+    logoUrl: '/logos/nestjs.png',
   },
   // Analytics
   {
@@ -815,6 +818,7 @@ const CORE_TOOLS = [
     slug: 'openrouter',
     website: 'https://openrouter.ai',
     description: 'Unified API for accessing and routing across LLM providers',
+    logoUrl: '/logos/openrouter.png',
   },
   {
     name: 'AI SDK',
@@ -822,12 +826,14 @@ const CORE_TOOLS = [
     website: 'https://ai-sdk.dev',
     description: 'Unified toolkit for text, structured output, and tool calling with LLMs',
     aliases: ['Vercel AI SDK'],
+    logoUrl: '/logos/vercel-ai-sdk.png',
   },
   {
     name: 'LangChain',
     slug: 'langchain',
     website: 'https://js.langchain.com',
     description: 'Framework for building LLM applications and agent workflows',
+    logoUrl: '/logos/langchain.png',
   },
   // Realtime / WebSocket
   {
