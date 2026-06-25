@@ -205,7 +205,11 @@ async function getPublishedRunIds(
         startDate ? gte(benchmarkRuns.scheduledFor, startDate) : undefined,
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
   return rows.map((r) => r.id)
 }
@@ -234,7 +238,11 @@ async function getPublishedRunIdsBetween(
         lt(benchmarkRuns.scheduledFor, endDateExclusive),
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
   return rows.map((r) => r.id)
 }
