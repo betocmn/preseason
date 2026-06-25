@@ -91,6 +91,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://www.typescriptlang.org',
     description: 'Typed superset of JavaScript that compiles to plain JavaScript',
     aliases: ['TS'],
+    logoUrl: '/logos/typescript.png',
   },
   {
     name: 'JavaScript',
@@ -105,6 +106,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://www.python.org',
     description: 'High-level general-purpose language popular for backends and AI',
     aliases: ['Py'],
+    logoUrl: '/logos/python.png',
   },
   {
     name: 'Go',
@@ -112,18 +114,21 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://go.dev',
     description: 'Statically typed compiled language from Google for scalable backends',
     aliases: ['Golang'],
+    logoUrl: '/logos/go.png',
   },
   {
     name: 'Rust',
     slug: 'rust',
     website: 'https://www.rust-lang.org',
     description: 'Systems programming language focused on safety and performance',
+    logoUrl: '/logos/rust.png',
   },
   {
     name: 'Ruby',
     slug: 'ruby',
     website: 'https://www.ruby-lang.org',
     description: 'Dynamic, expressive language designed for programmer productivity',
+    logoUrl: '/logos/ruby.png',
   },
   {
     name: 'Java',
@@ -143,6 +148,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     slug: 'php',
     website: 'https://www.php.net',
     description: 'Server-side scripting language widely used for web backends',
+    logoUrl: '/logos/php.png',
   },
   {
     name: 'Elixir',
@@ -178,12 +184,14 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://rubyonrails.org',
     description: 'Convention-over-configuration web framework for Ruby',
     aliases: ['Rails', 'RoR'],
+    logoUrl: '/logos/rails.png',
   },
   {
     name: 'Laravel',
     slug: 'laravel',
     website: 'https://laravel.com',
     description: 'Expressive PHP web application framework',
+    logoUrl: '/logos/laravel.png',
   },
   {
     name: 'FastAPI',
@@ -299,6 +307,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     slug: 'langgraph',
     website: 'https://www.langchain.com/langgraph',
     description: 'Library for building stateful, multi-actor agent applications',
+    logoUrl: '/logos/langgraph.png',
   },
 
   // Agentic Web Search
@@ -368,12 +377,14 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     slug: 'pinecone',
     website: 'https://www.pinecone.io',
     description: 'Managed vector database for similarity search at scale',
+    logoUrl: '/logos/pinecone.png',
   },
   {
     name: 'Weaviate',
     slug: 'weaviate',
     website: 'https://weaviate.io',
     description: 'Open source AI-native vector database',
+    logoUrl: '/logos/weaviate.png',
   },
   {
     name: 'Qdrant',
@@ -387,6 +398,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://www.trychroma.com',
     description: 'Open source embedding database for AI applications',
     aliases: ['ChromaDB'],
+    logoUrl: '/logos/chroma.png',
   },
   {
     name: 'Milvus',
@@ -419,6 +431,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     slug: 'litellm',
     website: 'https://www.litellm.ai',
     description: 'Open source gateway to call 100+ LLM APIs in OpenAI format',
+    logoUrl: '/logos/litellm.png',
   },
   {
     name: 'Portkey',
@@ -586,6 +599,7 @@ export const DEVTOOLS_EXPANSION_TOOLS: AiDevtoolsTool[] = [
     website: 'https://devin.ai',
     description: 'Autonomous AI software engineer from Cognition',
     aliases: ['Cognition Devin'],
+    logoUrl: '/logos/devin.png',
   },
   {
     name: 'Factory',

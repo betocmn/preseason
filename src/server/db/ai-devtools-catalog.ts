@@ -132,6 +132,14 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     aliases: ['AmpCode'],
   },
   {
+    name: 'GitHub Copilot',
+    slug: 'github-copilot',
+    website: 'https://github.com/features/copilot',
+    description: 'AI pair programmer integrated into editors and GitHub',
+    logoUrl: '/logos/github-copilot.png',
+    aliases: ['Copilot', 'GitHub Copilot'],
+  },
+  {
     name: 'Langfuse',
     slug: 'langfuse',
     website: 'https://langfuse.com',
@@ -182,6 +190,14 @@ export const AI_DEVTOOLS_TOOLS: AiDevtoolsTool[] = [
     logoUrl: '/logos/openlit.png',
   },
   {
+    name: 'Weights & Biases',
+    slug: 'weights-biases',
+    website: 'https://wandb.ai',
+    description: 'ML experiment tracking, evaluation, and LLM observability platform',
+    logoUrl: '/logos/weights-biases.png',
+    aliases: ['W&B', 'Weights and Biases', 'wandb'],
+  },
+  {
     name: 'Promptfoo',
     slug: 'promptfoo',
     website: 'https://www.promptfoo.dev',
@@ -222,6 +238,7 @@ export const AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS: AiDevtoolsToolCategoryAssign
   { toolSlug: 'openhands', categorySlug: 'llm-coding-agents', isPrimary: true },
   { toolSlug: 'opencode', categorySlug: 'llm-coding-agents', isPrimary: true },
   { toolSlug: 'amp-code', categorySlug: 'llm-coding-agents', isPrimary: true },
+  { toolSlug: 'github-copilot', categorySlug: 'llm-coding-agents', isPrimary: true },
   { toolSlug: 'langfuse', categorySlug: 'llm-observability', isPrimary: true },
   { toolSlug: 'langsmith', categorySlug: 'llm-observability', isPrimary: true },
   { toolSlug: 'helicone', categorySlug: 'llm-observability', isPrimary: true },
@@ -229,6 +246,7 @@ export const AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS: AiDevtoolsToolCategoryAssign
   { toolSlug: 'arize-phoenix', categorySlug: 'llm-observability', isPrimary: true },
   { toolSlug: 'langwatch', categorySlug: 'llm-observability', isPrimary: true },
   { toolSlug: 'openlit', categorySlug: 'llm-observability', isPrimary: true },
+  { toolSlug: 'weights-biases', categorySlug: 'llm-observability', isPrimary: true },
   { toolSlug: 'promptfoo', categorySlug: 'llm-evals', isPrimary: true },
   { toolSlug: 'braintrust', categorySlug: 'llm-evals', isPrimary: false },
   { toolSlug: 'langsmith', categorySlug: 'llm-evals', isPrimary: false },
@@ -236,6 +254,7 @@ export const AI_DEVTOOLS_TOOL_CATEGORY_ASSIGNMENTS: AiDevtoolsToolCategoryAssign
   { toolSlug: 'deepeval', categorySlug: 'llm-evals', isPrimary: true },
   { toolSlug: 'patronus-ai', categorySlug: 'llm-evals', isPrimary: true },
   { toolSlug: 'arize-phoenix', categorySlug: 'llm-evals', isPrimary: false },
+  { toolSlug: 'weights-biases', categorySlug: 'llm-evals', isPrimary: false },
 ]
 
 export const AI_DEVTOOLS_MATCHUPS: AiDevtoolsPlannedMatchup[] = [
