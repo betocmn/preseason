@@ -50,6 +50,13 @@
       "when": 1782215216298,
       "tag": "0006_add_devtools_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782300000000,
+      "tag": "0007_add_missing_devtool_entries",
+      "breakpoints": true
     }
   ]
 }

@@ -803,6 +803,14 @@ const CORE_TOOLS = [
     logoUrl: '/logos/hugging-face.png',
   },
   {
+    name: 'Llama',
+    slug: 'llama',
+    website: 'https://www.llama.com',
+    description: 'Meta open-source large language model family',
+    aliases: ['Meta Llama', 'Llama 3'],
+    logoUrl: '/logos/llama.png',
+  },
+  {
     name: 'OpenRouter',
     slug: 'openrouter',
     website: 'https://openrouter.ai',
@@ -1099,6 +1107,7 @@ const CORE_TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'anthropic', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'replicate', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'hugging-face', categorySlug: 'ai', isPrimary: true },
+  { toolSlug: 'llama', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'openrouter', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'vercel-ai-sdk', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'langchain', categorySlug: 'ai', isPrimary: true },
