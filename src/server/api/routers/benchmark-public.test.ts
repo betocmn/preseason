@@ -3089,6 +3089,190 @@ describe('benchmark public routers', () => {
     expect(modelFiltered.ranking?.items[0]?.toolSlug).toBe('supabase')
   })
 
+  it('builds default model filters from every published benchmark season', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+    const tool = first(await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning())
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-model-filter-seasons',
+          name: 'Benchmark Model Filter Seasons',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const olderSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-model-filter-older',
+          name: 'Older Model Filter Season',
+          status: 'active',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const newerSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-model-filter-newer',
+          name: 'Newer Model Filter Season',
+          status: 'active',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const prompt = first(
+      await db
+        .insert(prompts)
+        .values({
+          title: 'Auth filter prompt',
+          slug: 'auth-filter-prompt',
+          level: 'beginner',
+          contentMd: '# Auth filter prompt',
+        })
+        .returning(),
+    )
+    const promptVersion = first(
+      await db
+        .insert(benchmarkPromptVersions)
+        .values({
+          promptId: prompt.id,
+          slug: prompt.slug,
+          level: 'beginner',
+          version: 1,
+          contentMd: prompt.contentMd ?? '# Auth filter prompt',
+          contentHash: 'model-filter-seasons-prompt',
+          promptContractVersion: '1.0',
+          systemPromptSnapshot: 'You are a pragmatic assistant.',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkPromptVersionCategories).values({
+      promptVersionId: promptVersion.id,
+      categoryId: authCategory.id,
+      displayOrder: 1,
+    })
+
+    const llmRows = await db
+      .insert(llms)
+      .values([
+        {
+          name: 'Older Active Model',
+          slug: 'older-active-model',
+          provider: 'test',
+          company: 'OlderCo',
+          modelFamily: 'Legacy',
+          modelVersion: '1',
+          modelId: 'test/older-active-model',
+        },
+        {
+          name: 'Newer Active Model',
+          slug: 'newer-active-model',
+          provider: 'test',
+          company: 'NewerCo',
+          modelFamily: 'Current',
+          modelVersion: '2',
+          modelId: 'test/newer-active-model',
+        },
+      ])
+      .returning()
+    const olderLlm = first(llmRows)
+    const newerLlm = first(llmRows.slice(1))
+    const modelSnapshotRows = await db
+      .insert(benchmarkModelSnapshots)
+      .values([
+        {
+          llmId: olderLlm.id,
+          name: olderLlm.name,
+          provider: olderLlm.provider,
+          company: olderLlm.company,
+          modelFamily: olderLlm.modelFamily,
+          modelVersion: olderLlm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: olderLlm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'model-filter-seasons-older',
+        },
+        {
+          llmId: newerLlm.id,
+          name: newerLlm.name,
+          provider: newerLlm.provider,
+          company: newerLlm.company,
+          modelFamily: newerLlm.modelFamily,
+          modelVersion: newerLlm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: newerLlm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'model-filter-seasons-newer',
+        },
+      ])
+      .returning()
+    const olderModelSnapshot = first(modelSnapshotRows)
+    const newerModelSnapshot = first(modelSnapshotRows.slice(1))
+
+    await seedSeasonDecision({
+      db,
+      seasonId: olderSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: olderModelSnapshot.id,
+      categoryId: authCategory.id,
+      toolId: tool.id,
+      rawToolName: tool.name,
+      scheduledFor: '2026-01-10',
+    })
+    await seedSeasonDecision({
+      db,
+      seasonId: newerSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: newerModelSnapshot.id,
+      categoryId: authCategory.id,
+      toolId: tool.id,
+      rawToolName: tool.name,
+      scheduledFor: '2026-06-20',
+    })
+
+    const caller = createTestCaller(null)
+
+    const allSeasonFilters = await caller.benchmarkRanking.listModelFilters({
+      anchorDate: '2026-06-25',
+    })
+    const allSeasonModelIds = allSeasonFilters.companies.flatMap((company) =>
+      company.families.flatMap((family) => family.models.map((model) => model.id)),
+    )
+    expect(allSeasonFilters.seasonId).toBeNull()
+    expect(allSeasonModelIds).toEqual([newerModelSnapshot.id, olderModelSnapshot.id])
+
+    const newerSeasonFilters = await caller.benchmarkRanking.listModelFilters({
+      seasonId: newerSeason.id,
+      anchorDate: '2026-06-25',
+    })
+    const newerSeasonModelIds = newerSeasonFilters.companies.flatMap((company) =>
+      company.families.flatMap((family) => family.models.map((model) => model.id)),
+    )
+    expect(newerSeasonFilters.seasonId).toBe(newerSeason.id)
+    expect(newerSeasonModelIds).toEqual([newerModelSnapshot.id])
+  })
+
   it('aggregates category group rankings across all subcategories', async () => {
     const db = getTestDb()
     const group = first(
