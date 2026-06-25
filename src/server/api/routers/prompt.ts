@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
@@ -99,6 +99,7 @@ function getDailySlugKey(slug: string, anchorDate: string) {
 async function getPublishedPromptSnapshotRunIds(
   db: typeof database,
   seasonId: string | undefined,
+  anchorDate: string,
   requestedRunIds?: string[],
 ) {
   if (requestedRunIds) {
@@ -112,6 +113,7 @@ async function getPublishedPromptSnapshotRunIds(
           seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
           eq(benchmarkRuns.status, 'published'),
           eq(benchmarkProtocols.mode, 'benchmark'),
+          lte(benchmarkRuns.scheduledFor, anchorDate),
           inArray(benchmarkRuns.id, requestedRunIds),
         ),
       )
@@ -130,6 +132,7 @@ async function getPublishedPromptSnapshotRunIds(
         seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
         eq(benchmarkProtocols.mode, 'benchmark'),
+        lte(benchmarkRuns.scheduledFor, anchorDate),
       ),
     )
     .orderBy(desc(benchmarkRuns.scheduledFor), desc(benchmarkRuns.id))
@@ -399,7 +402,8 @@ export const promptRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined)
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined, anchorDate)
       if (runIds.length === 0) return []
 
       // Resolve the specific prompt version shown on the homepage:
@@ -495,7 +499,8 @@ export const promptRouter = createTRPCRouter({
         }[]
       } = { subcategories: [], rankings: [] }
 
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined)
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined, anchorDate)
       if (runIds.length === 0) return empty
 
       const pvCandidates = (
@@ -647,6 +652,7 @@ export const promptRouter = createTRPCRouter({
       const runIds = await getPublishedPromptSnapshotRunIds(
         ctx.db,
         seasonId,
+        anchorDate,
         input.snapshot?.publishedRunIds,
       )
       if (runIds.length === 0) {
