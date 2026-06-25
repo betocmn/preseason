@@ -705,18 +705,21 @@ const CORE_TOOLS = [
     slug: 'express',
     website: 'https://expressjs.com',
     description: 'Minimal and flexible web framework for Node.js',
+    logoUrl: '/logos/express.png',
   },
   {
     name: 'Fastify',
     slug: 'fastify',
     website: 'https://fastify.dev',
     description: 'Fast and low-overhead web framework for Node.js',
+    logoUrl: '/logos/fastify.png',
   },
   {
     name: 'NestJS',
     slug: 'nestjs',
     website: 'https://nestjs.com',
     description: 'Progressive Node.js framework for scalable server applications',
+    logoUrl: '/logos/nestjs.png',
   },
   // Analytics
   {
@@ -803,10 +806,19 @@ const CORE_TOOLS = [
     logoUrl: '/logos/hugging-face.png',
   },
   {
+    name: 'Llama',
+    slug: 'llama',
+    website: 'https://www.llama.com',
+    description: 'Meta open-source large language model family',
+    aliases: ['Meta Llama', 'Llama 3'],
+    logoUrl: '/logos/llama.png',
+  },
+  {
     name: 'OpenRouter',
     slug: 'openrouter',
     website: 'https://openrouter.ai',
     description: 'Unified API for accessing and routing across LLM providers',
+    logoUrl: '/logos/openrouter.png',
   },
   {
     name: 'AI SDK',
@@ -814,12 +826,14 @@ const CORE_TOOLS = [
     website: 'https://ai-sdk.dev',
     description: 'Unified toolkit for text, structured output, and tool calling with LLMs',
     aliases: ['Vercel AI SDK'],
+    logoUrl: '/logos/vercel-ai-sdk.png',
   },
   {
     name: 'LangChain',
     slug: 'langchain',
     website: 'https://js.langchain.com',
     description: 'Framework for building LLM applications and agent workflows',
+    logoUrl: '/logos/langchain.png',
   },
   // Realtime / WebSocket
   {
@@ -1099,6 +1113,7 @@ const CORE_TOOL_CATEGORY_ASSIGNMENTS: Array<{
   { toolSlug: 'anthropic', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'replicate', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'hugging-face', categorySlug: 'ai', isPrimary: true },
+  { toolSlug: 'llama', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'openrouter', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'vercel-ai-sdk', categorySlug: 'ai', isPrimary: true },
   { toolSlug: 'langchain', categorySlug: 'ai', isPrimary: true },
