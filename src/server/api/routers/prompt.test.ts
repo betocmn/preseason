@@ -898,6 +898,72 @@ async function addPromptToolRankingDecision(
   return run
 }
 
+async function addPromptToolRankingDecisions(
+  context: ToolRankingFixtureContext,
+  decisions: {
+    scheduledFor: string
+    category: 'A' | 'B'
+    tool: 1 | 2 | 3
+  }[],
+) {
+  if (decisions.length === 0) return []
+
+  const db = getTestDb()
+  const runs = await db
+    .insert(benchmarkRuns)
+    .values(
+      decisions.map((decision) => ({
+        seasonId: context.seasonId,
+        scheduledFor: decision.scheduledFor,
+        status: 'published' as const,
+        qcStatus: 'passed' as const,
+      })),
+    )
+    .returning()
+
+  const caseResults = await db
+    .insert(benchmarkCaseResults)
+    .values(
+      runs.map((run) => ({
+        seasonId: context.seasonId,
+        runId: run.id,
+        caseId: context.primaryCaseId,
+        status: 'completed' as const,
+        requestedModelId: context.requestedModelId,
+        returnedModelId: context.requestedModelId,
+        provider: context.provider,
+        parserVersion: 'strict-v1',
+      })),
+    )
+    .returning()
+
+  await db.insert(benchmarkCaseDecisions).values(
+    caseResults.map((caseResult, index) => {
+      const decision = decisions[index]
+      if (!decision) throw new Error('Expected a decision for every case result')
+
+      const categoryId = decision.category === 'A' ? context.subcategoryAId : context.subcategoryBId
+      const toolId =
+        decision.tool === 1
+          ? context.tool1Id
+          : decision.tool === 2
+            ? context.tool2Id
+            : context.tool3Id
+
+      return {
+        caseResultId: caseResult.id,
+        categoryId,
+        decisionType: 'tool' as const,
+        toolId,
+        resolutionStatus: 'resolved' as const,
+      }
+    }),
+  )
+
+  context.publishedRunIds.push(...runs.map((run) => run.id))
+  return runs
+}
+
 describe('promptRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -1595,6 +1661,34 @@ describe('promptRouter', () => {
     const rankings = await caller.prompt.getToolRankings({ promptId: context.promptId })
     expect(rankings.rankings.map((entry) => entry.tool.id)).toEqual([context.tool1Id])
     expect(rankings.rankings[0]?.totalCount).toBe(1)
+  })
+
+  it('uses every published benchmark run for prompt tool counts beyond the homepage snapshot cap', async () => {
+    const caller = createTestCaller(null)
+    const { context } = await seedPromptToolRankingFixture([{ category: 'A', tool: 1 }])
+    const maxSnapshotRunIds = serverSettings.homepage.promptCarouselSnapshotMaxRunIds
+    const scheduledForDates = Array.from({ length: maxSnapshotRunIds }, (_, index) => {
+      const nextDate = new Date('2023-01-01T00:00:00.000Z')
+      nextDate.setUTCDate(nextDate.getUTCDate() + index)
+      return nextDate.toISOString().slice(0, 10)
+    })
+
+    await addPromptToolRankingDecisions(
+      context,
+      scheduledForDates.map((scheduledFor) => ({
+        scheduledFor,
+        category: 'A',
+        tool: 1,
+      })),
+    )
+
+    const expectedCount = maxSnapshotRunIds + 1
+
+    const topTools = await caller.prompt.getTopTools({ promptId: context.promptId })
+    expect(topTools[0]?.count).toBe(expectedCount)
+
+    const rankings = await caller.prompt.getToolRankings({ promptId: context.promptId })
+    expect(rankings.rankings[0]?.totalCount).toBe(expectedCount)
   })
 
   it('getToolRankings splits counts across subcategories for a shared tool', async () => {
