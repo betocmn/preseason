@@ -40,7 +40,7 @@ type PromptCarouselProps = {
 }
 
 type PromptListSnapshot = {
-  seasonId: string
+  seasonId?: string
   publishedRunIds: string[]
 }
 

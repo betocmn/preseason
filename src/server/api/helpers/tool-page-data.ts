@@ -1,5 +1,4 @@
 import { sql } from 'drizzle-orm'
-import { findLatestPublishedBenchmarkSeasonId } from '~/server/api/helpers/benchmark'
 import type { db as database } from '~/server/db'
 import {
   prepareScoringContext,
@@ -234,12 +233,7 @@ export async function getToolBenchmarkPageData(
     return { rankings: [], matchups: [] }
   }
 
-  const seasonId = await findLatestPublishedBenchmarkSeasonId(db, anchorDate)
-  if (!seasonId) {
-    return { rankings: [], matchups: [] }
-  }
-
-  const scoringCtx = await prepareScoringContext(db, seasonId, windowType, anchorDate)
+  const scoringCtx = await prepareScoringContext(db, undefined, windowType, anchorDate)
   if (scoringCtx.runIds.length === 0) {
     return { rankings: [], matchups: [] }
   }

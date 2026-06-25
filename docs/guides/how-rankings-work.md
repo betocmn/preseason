@@ -10,8 +10,9 @@ Public ranking reads now go through:
 - `benchmarkRanking.byCategory`
 - `benchmarkRanking.byCategoryGroup`
 
-Both routers resolve the latest published benchmark season by default and ignore
-exploration-mode seasons.
+Both routers aggregate every published benchmark season by default (they do
+not lock onto a single season) and ignore exploration-mode seasons. An optional
+`seasonId` input can restrict reads to one season.
 
 ## Data Flow
 
@@ -35,7 +36,7 @@ Rankings support four explicit windows:
 | `run_day` | The latest published run only |
 | `trailing_7d` | The last 7 published runs |
 | `trailing_28d` | The last 28 published runs |
-| `season_to_date` | Every published run in the selected season |
+| `season_to_date` | Every published run in the selected season (or every season when no `seasonId` is provided) |
 
 These are slices of published runs, not calendar-day lookbacks over raw rows.
 
@@ -46,7 +47,7 @@ These are slices of published runs, not calendar-day lookbacks over raw rows.
 | Param | Type | Notes |
 |-------|------|-------|
 | `categorySlug` | string | Required subcategory slug such as `auth` |
-| `seasonId` | uuid | Optional; defaults to latest published benchmark season |
+| `seasonId` | uuid | Optional; defaults to aggregating every published benchmark season |
 | `windowType` | enum | Defaults to `trailing_28d` |
 | `anchorDate` | `YYYY-MM-DD` | Optional date for season resolution and window slicing |
 | `promptTier` | enum | Optional `basic`, `intermediate`, or `advanced` |
