@@ -102,7 +102,24 @@ async function getPublishedPromptSnapshotRunIds(
   anchorDate: string,
   requestedRunIds?: string[],
 ) {
-  if (requestedRunIds) {
+  return getPublishedPromptRunIds(db, {
+    seasonId,
+    anchorDate,
+    requestedRunIds,
+    limit: serverSettings.homepage.promptCarouselSnapshotMaxRunIds,
+  })
+}
+
+async function getPublishedPromptRunIds(
+  db: typeof database,
+  options: {
+    seasonId?: string
+    anchorDate: string
+    requestedRunIds?: string[]
+    limit?: number
+  },
+) {
+  if (options.requestedRunIds) {
     const validatedRuns = await db
       .select({ id: benchmarkRuns.id })
       .from(benchmarkRuns)
@@ -110,36 +127,48 @@ async function getPublishedPromptSnapshotRunIds(
       .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
       .where(
         and(
-          seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
+          options.seasonId ? eq(benchmarkRuns.seasonId, options.seasonId) : undefined,
           eq(benchmarkRuns.status, 'published'),
           eq(benchmarkProtocols.mode, 'benchmark'),
-          lte(benchmarkRuns.scheduledFor, anchorDate),
-          inArray(benchmarkRuns.id, requestedRunIds),
+          lte(benchmarkRuns.scheduledFor, options.anchorDate),
+          inArray(benchmarkRuns.id, options.requestedRunIds),
         ),
       )
-      .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.id))
+      .orderBy(
+        asc(benchmarkRuns.scheduledFor),
+        asc(benchmarkSeasons.createdAt),
+        asc(benchmarkRuns.id),
+      )
 
     return validatedRuns.map((run) => run.id)
   }
 
-  const recentPublishedRuns = await db
+  const publishedRunsQuery = db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
     .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
     .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(
       and(
-        seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
+        options.seasonId ? eq(benchmarkRuns.seasonId, options.seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
         eq(benchmarkProtocols.mode, 'benchmark'),
-        lte(benchmarkRuns.scheduledFor, anchorDate),
+        lte(benchmarkRuns.scheduledFor, options.anchorDate),
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor), desc(benchmarkRuns.id))
-    .limit(serverSettings.homepage.promptCarouselSnapshotMaxRunIds)
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
-  // Keep the newest bounded snapshot, but return it oldest-to-newest for a stable canonical shape.
-  return recentPublishedRuns.map((run) => run.id).reverse()
+  const publishedRuns =
+    options.limit === undefined
+      ? await publishedRunsQuery
+      : await publishedRunsQuery.limit(options.limit)
+
+  // Keep the newest bounded snapshot when requested, but return oldest-to-newest for a stable shape.
+  return publishedRuns.map((run) => run.id).reverse()
 }
 
 function comparePromptCandidates(a: PromptCandidateRow, b: PromptCandidateRow, anchorDate: string) {
@@ -403,7 +432,7 @@ export const promptRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = new Date().toISOString().slice(0, 10)
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined, anchorDate)
+      const runIds = await getPublishedPromptRunIds(ctx.db, { anchorDate })
       if (runIds.length === 0) return []
 
       // Resolve the specific prompt version shown on the homepage:
@@ -500,7 +529,7 @@ export const promptRouter = createTRPCRouter({
       } = { subcategories: [], rankings: [] }
 
       const anchorDate = new Date().toISOString().slice(0, 10)
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, undefined, anchorDate)
+      const runIds = await getPublishedPromptRunIds(ctx.db, { anchorDate })
       if (runIds.length === 0) return empty
 
       const pvCandidates = (
