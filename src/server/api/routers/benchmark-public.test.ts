@@ -546,7 +546,7 @@ describe('benchmark public routers', () => {
     await cleanTestDatabase()
   })
 
-  it('uses the latest published benchmark season for rankings when seasonId is omitted', async () => {
+  it('aggregates published benchmark seasons for rankings when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -585,7 +585,7 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.toolSlug).toBe('supabase')
   })
 
-  it('uses the latest published benchmark season for matches when seasonId is omitted', async () => {
+  it('aggregates published benchmark seasons for matches when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -593,12 +593,12 @@ describe('benchmark public routers', () => {
       categorySlug: 'auth',
       toolASlug: 'clerk',
       toolBSlug: 'supabase',
-      windowType: 'run_day',
+      windowType: 'season_to_date',
       anchorDate: '2026-03-10',
     })
 
     expect(result.result?.aWins).toBe(1)
-    expect(result.result?.bWins).toBe(0)
+    expect(result.result?.bWins).toBe(1)
   })
 
   it('falls back to manual match data when no benchmark season is published', async () => {
@@ -3508,6 +3508,31 @@ describe('benchmark public routers', () => {
         })
         .returning(),
     )
+    const explorationProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'exploration-cross-season',
+          name: 'Exploration Cross Season',
+          mode: 'exploration',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const explorationSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: explorationProtocol.id,
+          slug: 'season-cross-exploration',
+          name: 'Cross Season Exploration',
+          status: 'active',
+          createdAt: new Date('2026-06-02T00:00:00.000Z'),
+        })
+        .returning(),
+    )
 
     // Shared prompt + model so both seasons use comparable case dimensions.
     const prompt = first(
@@ -3594,6 +3619,17 @@ describe('benchmark public routers', () => {
       toolId: vercel.id,
       rawToolName: 'Vercel',
       scheduledFor: '2026-06-20',
+    })
+    // Exploration-mode runs should never contribute to public benchmark rankings.
+    await seedSeasonDecision({
+      db,
+      seasonId: explorationSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: hostingCategory.id,
+      toolId: vercel.id,
+      rawToolName: 'Vercel',
+      scheduledFor: '2026-06-21',
     })
 
     const caller = createTestCaller(null)
