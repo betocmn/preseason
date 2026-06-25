@@ -750,6 +750,102 @@ async function seedPromptToolRankingFixture(decisions: ToolDecisionSpec[]) {
   }
 }
 
+async function addExplorationPromptToolDecision(context: ToolRankingFixtureContext) {
+  const db = getTestDb()
+  const primaryCase = await db.query.benchmarkCases.findFirst({
+    where: (table, { eq }) => eq(table.id, context.primaryCaseId),
+  })
+  if (!primaryCase) {
+    throw new Error('Expected prompt ranking fixture to create a primary benchmark case')
+  }
+
+  const protocol = first(
+    await db
+      .insert(benchmarkProtocols)
+      .values({
+        slug: 'exploration-rankings',
+        name: 'Exploration Rankings',
+        mode: 'exploration',
+        parserVersion: '1.0',
+        scoringVersion: '1.0',
+        promptContractVersion: '1.0',
+      })
+      .returning(),
+  )
+  const season = first(
+    await db
+      .insert(benchmarkSeasons)
+      .values({
+        protocolId: protocol.id,
+        slug: 'exploration-rankings-season',
+        name: 'Exploration Rankings Season',
+        status: 'active',
+      })
+      .returning(),
+  )
+  await db.insert(benchmarkSeasonModels).values({
+    seasonId: season.id,
+    modelSnapshotId: context.modelSnapshotId,
+  })
+  await db.insert(benchmarkSeasonPrompts).values({
+    seasonId: season.id,
+    promptVersionId: primaryCase.promptVersionId,
+  })
+
+  const tool = first(
+    await db
+      .insert(tools)
+      .values({ name: 'Exploration Tool', slug: 'exploration-tool' })
+      .returning(),
+  )
+  const benchmarkCase = first(
+    await db
+      .insert(benchmarkCases)
+      .values({
+        seasonId: season.id,
+        promptVersionId: primaryCase.promptVersionId,
+        modelSnapshotId: context.modelSnapshotId,
+      })
+      .returning(),
+  )
+  const run = first(
+    await db
+      .insert(benchmarkRuns)
+      .values({
+        seasonId: season.id,
+        scheduledFor: '2026-03-30',
+        status: 'published',
+        qcStatus: 'passed',
+      })
+      .returning(),
+  )
+  const caseResult = first(
+    await db
+      .insert(benchmarkCaseResults)
+      .values({
+        seasonId: season.id,
+        runId: run.id,
+        caseId: benchmarkCase.id,
+        status: 'completed',
+        requestedModelId: context.requestedModelId,
+        returnedModelId: context.requestedModelId,
+        provider: context.provider,
+        parserVersion: 'strict-v1',
+      })
+      .returning(),
+  )
+
+  await db.insert(benchmarkCaseDecisions).values({
+    caseResultId: caseResult.id,
+    categoryId: context.subcategoryAId,
+    decisionType: 'tool',
+    toolId: tool.id,
+    resolutionStatus: 'resolved',
+  })
+
+  return { run, tool }
+}
+
 describe('promptRouter', () => {
   beforeAll(async () => {
     await setupTestDatabase()
@@ -1167,7 +1263,6 @@ describe('promptRouter', () => {
       throw new Error('Expected first page to include a prompt snapshot')
     }
     expect(firstPage.snapshot).toEqual({
-      seasonId: fixture.context.seasonId,
       publishedRunIds: fixture.context.publishedRunIds,
     })
 
@@ -1273,7 +1368,6 @@ describe('promptRouter', () => {
     }
 
     expect(firstPage.snapshot).toEqual({
-      seasonId: fixture.context.seasonId,
       publishedRunIds: fixture.context.publishedRunIds.slice(-maxSnapshotRunIds),
     })
 
@@ -1381,6 +1475,21 @@ describe('promptRouter', () => {
     const tool3 = result.rankings.find((entry) => entry.tool.id === context.tool3Id)
     expect(tool3?.totalCount).toBe(2)
     expect(tool3?.perCategory).toEqual([{ categoryId: context.subcategoryBId, count: 2 }])
+  })
+
+  it('ignores published exploration runs in prompt tool recommendation counts', async () => {
+    const caller = createTestCaller(null)
+    const { context } = await seedPromptToolRankingFixture([{ category: 'A', tool: 1 }])
+    const exploration = await addExplorationPromptToolDecision(context)
+
+    const topTools = await caller.prompt.getTopTools({ promptId: context.promptId })
+    expect(topTools.map((entry) => entry.tool.id)).toEqual([context.tool1Id])
+    expect(topTools.some((entry) => entry.tool.id === exploration.tool.id)).toBe(false)
+
+    const rankings = await caller.prompt.getToolRankings({ promptId: context.promptId })
+    expect(rankings.rankings.map((entry) => entry.tool.id)).toEqual([context.tool1Id])
+    expect(rankings.rankings[0]?.totalCount).toBe(1)
+    expect(rankings.rankings.some((entry) => entry.tool.id === exploration.tool.id)).toBe(false)
   })
 
   it('getToolRankings splits counts across subcategories for a shared tool', async () => {

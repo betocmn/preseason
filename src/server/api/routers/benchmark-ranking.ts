@@ -385,10 +385,12 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const categoryIds = tool.toolCategories.map((tc) => tc.category.id)
       if (categoryIds.length === 0) return { rankings: [] }
 
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return { rankings: [] }
-
-      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, input.windowType, anchorDate)
+      const scoringCtx = await prepareScoringContext(
+        ctx.db,
+        undefined,
+        input.windowType,
+        anchorDate,
+      )
       if (scoringCtx.runIds.length === 0) return { rankings: [] }
 
       const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, categoryIds)

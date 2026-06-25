@@ -8,7 +8,9 @@ import {
   benchmarkModelSnapshots,
   benchmarkModelWeightConfigs,
   benchmarkPromptVersions,
+  benchmarkProtocols,
   benchmarkRuns,
+  benchmarkSeasons,
   tools,
 } from '~/server/db/schema'
 import type { PromptLevel } from '~/server/llm/prompts'
@@ -75,7 +77,7 @@ export type CategoryRankingResult = {
 
 export type HeadToHeadFilters = {
   categoryId: string
-  seasonId: string
+  seasonId?: string
   toolAId: string
   toolBId: string
   windowType: WindowType
@@ -192,10 +194,13 @@ async function getPublishedRunIds(
   const rows = await db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(
       and(
         seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
         lte(benchmarkRuns.scheduledFor, anchorDate),
         startDate ? gte(benchmarkRuns.scheduledFor, startDate) : undefined,
       ),
@@ -218,10 +223,13 @@ async function getPublishedRunIdsBetween(
   const rows = await db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(
       and(
         seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
         gte(benchmarkRuns.scheduledFor, startDate),
         lt(benchmarkRuns.scheduledFor, endDateExclusive),
       ),
@@ -233,7 +241,7 @@ async function getPublishedRunIdsBetween(
 
 export async function getRunIdsForWindow(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   windowType: WindowType,
   anchorDate: string,
 ): Promise<string[]> {
@@ -371,7 +379,7 @@ export type ScoringContext = {
 
 export async function prepareScoringContext(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   windowType: WindowType,
   anchorDate: string,
 ): Promise<ScoringContext> {
