@@ -6,7 +6,7 @@ import type { ModelFilterCompany, ModelFilterFamily } from '~/lib/model-filters'
 import {
   anchorDateSchema,
   findBenchmarkSeasonId,
-  findLatestPublishedBenchmarkSeasonId,
+  findPublishedBenchmarkSeasonIds,
   monthsAgo,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
@@ -104,7 +104,7 @@ function groupModelFilterRows(rows: ModelFilterRow[]): ModelFilterCompany[] {
   }))
 }
 
-async function resolveSeasonId(
+async function resolveModelFilterSeasonIds(
   db: Parameters<typeof findBenchmarkSeasonId>[0],
   anchorDate: string,
   seasonId?: string,
@@ -117,9 +117,35 @@ async function resolveSeasonId(
         message: 'seasonId must reference a benchmark season',
       })
     }
+    return { seasonId: id, seasonIds: [id] }
+  }
+  return {
+    seasonId: null,
+    seasonIds: await findPublishedBenchmarkSeasonIds(db, anchorDate),
+  }
+}
+
+/**
+ * Resolve the season for public ranking reads. When an explicit `seasonId` is
+ * supplied it is validated and returned. When omitted, `undefined` is returned
+ * so the scoring helpers span every published benchmark season — this keeps the
+ * public date-range filter meaningful even right after a new season launches.
+ */
+async function resolveRankingSeasonId(
+  db: Parameters<typeof findBenchmarkSeasonId>[0],
+  seasonId?: string,
+) {
+  if (seasonId) {
+    const id = await findBenchmarkSeasonId(db, seasonId)
+    if (!id) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'seasonId must reference a benchmark season',
+      })
+    }
     return id
   }
-  return findLatestPublishedBenchmarkSeasonId(db, anchorDate)
+  return undefined
 }
 
 export const benchmarkRankingRouter = createTRPCRouter({
@@ -149,11 +175,11 @@ export const benchmarkRankingRouter = createTRPCRouter({
         },
       })
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       return Promise.all(
         groups.map(async (group) => {
-          if (group.subcategories.length === 0 || !seasonId) {
+          if (group.subcategories.length === 0) {
             return {
               slug: group.slug,
               name: group.name,
@@ -214,10 +240,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { category: null, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
-      if (!seasonId) {
-        return { category, ranking: null }
-      }
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       const ranking = await computeCategoryRanking(ctx.db, {
         categoryId: category.id,
@@ -270,10 +293,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         return { categoryGroup: group, ranking: null }
       }
 
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
-      if (!seasonId) {
-        return { categoryGroup: group, ranking: null }
-      }
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
 
       const ranking = await computeCategoryGroupRanking(ctx.db, {
         categoryGroupId: group.id,
@@ -300,9 +320,13 @@ export const benchmarkRankingRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
-      const seasonId = await resolveSeasonId(ctx.db, anchorDate, input.seasonId)
+      const { seasonId, seasonIds } = await resolveModelFilterSeasonIds(
+        ctx.db,
+        anchorDate,
+        input.seasonId,
+      )
 
-      if (!seasonId) {
+      if (seasonIds.length === 0) {
         return {
           seasonId: null,
           companies: [] as ModelFilterCompany[],
@@ -311,7 +335,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const rows = await ctx.db
-        .select({
+        .selectDistinct({
           modelSnapshotId: benchmarkModelSnapshots.id,
           company: benchmarkModelSnapshots.company,
           modelFamily: benchmarkModelSnapshots.modelFamily,
@@ -325,7 +349,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
           eq(benchmarkSeasonModels.modelSnapshotId, benchmarkModelSnapshots.id),
         )
         .innerJoin(llms, eq(benchmarkModelSnapshots.llmId, llms.id))
-        .where(eq(benchmarkSeasonModels.seasonId, seasonId))
+        .where(inArray(benchmarkSeasonModels.seasonId, seasonIds))
         .orderBy(
           asc(benchmarkModelSnapshots.company),
           asc(benchmarkModelSnapshots.modelFamily),
@@ -368,10 +392,12 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const categoryIds = tool.toolCategories.map((tc) => tc.category.id)
       if (categoryIds.length === 0) return { rankings: [] }
 
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return { rankings: [] }
-
-      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, input.windowType, anchorDate)
+      const scoringCtx = await prepareScoringContext(
+        ctx.db,
+        undefined,
+        input.windowType,
+        anchorDate,
+      )
       if (scoringCtx.runIds.length === 0) return { rankings: [] }
 
       const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, categoryIds)

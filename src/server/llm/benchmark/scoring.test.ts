@@ -832,6 +832,101 @@ describe('computeCategoryRanking', () => {
     expect(result.totalEligibleDecisions).toBe(63)
   })
 
+  it('uses the newest season as a deterministic tie-breaker for same-day all-season windows', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    await seedPublishedRun(db, fixture, '2026-03-10', [
+      {
+        caseIndex: 0,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+        rawToolName: 'Clerk',
+      },
+    ])
+
+    const newerSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: fixture.protocol.id,
+          slug: 'season-2',
+          name: 'Season 2',
+          status: 'active',
+          createdAt: new Date('2999-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const promptVersion = at(fixture.promptVersions, 0)
+    const modelSnapshot = at(fixture.modelSnapshots, 0)
+    await db.insert(benchmarkSeasonPrompts).values({
+      seasonId: newerSeason.id,
+      promptVersionId: promptVersion.id,
+    })
+    await db.insert(benchmarkSeasonModels).values({
+      seasonId: newerSeason.id,
+      modelSnapshotId: modelSnapshot.id,
+    })
+    const newerCase = first(
+      await db
+        .insert(benchmarkCases)
+        .values({
+          seasonId: newerSeason.id,
+          promptVersionId: promptVersion.id,
+          modelSnapshotId: modelSnapshot.id,
+        })
+        .returning(),
+    )
+    const newerRun = first(
+      await db
+        .insert(benchmarkRuns)
+        .values({
+          seasonId: newerSeason.id,
+          scheduledFor: '2026-03-10',
+          status: 'published',
+          weightConfigId: fixture.weightConfig.id,
+          expectedCaseCount: 1,
+          completedCaseCount: 1,
+          failedCaseCount: 0,
+          qcStatus: 'passed',
+        })
+        .returning(),
+    )
+    const newerCaseResult = first(
+      await db
+        .insert(benchmarkCaseResults)
+        .values({
+          runId: newerRun.id,
+          seasonId: newerSeason.id,
+          caseId: newerCase.id,
+          status: 'completed',
+          requestedModelId: 'test-model',
+          returnedModelId: 'test-model',
+          provider: 'test',
+          parserVersion: 'strict-v1',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkCaseDecisions).values({
+      caseResultId: newerCaseResult.id,
+      categoryId: fixture.authCat.id,
+      decisionType: 'tool',
+      toolId: fixture.supabase.id,
+      rawToolName: 'Supabase',
+      resolutionStatus: 'resolved',
+    })
+
+    const result = await computeCategoryRanking(db, {
+      categoryId: fixture.authCat.id,
+      windowType: 'run_day',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(result.totalEligibleDecisions).toBe(1)
+    expect(result.items[0]?.toolSlug).toBe('supabase')
+  })
+
   it('returns neutral trend when no previous published window exists', async () => {
     const db = getTestDb()
     const fixture = await seedScoringFixture(db)

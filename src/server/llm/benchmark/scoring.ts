@@ -8,7 +8,9 @@ import {
   benchmarkModelSnapshots,
   benchmarkModelWeightConfigs,
   benchmarkPromptVersions,
+  benchmarkProtocols,
   benchmarkRuns,
+  benchmarkSeasons,
   tools,
 } from '~/server/db/schema'
 import type { PromptLevel } from '~/server/llm/prompts'
@@ -36,7 +38,7 @@ type DateRangeFilters = {
 
 export type ScoringFilters = {
   categoryId: string
-  seasonId: string
+  seasonId?: string
   windowType: WindowType
   anchorDate: string // YYYY-MM-DD
   promptLevel?: PromptLevel
@@ -75,7 +77,7 @@ export type CategoryRankingResult = {
 
 export type HeadToHeadFilters = {
   categoryId: string
-  seasonId: string
+  seasonId?: string
   toolAId: string
   toolBId: string
   windowType: WindowType
@@ -85,7 +87,7 @@ export type HeadToHeadFilters = {
 } & ModelSelectionFilters
 
 type RankingFilters = {
-  seasonId: string
+  seasonId?: string
   windowType: WindowType
   anchorDate: string
   promptLevel?: PromptLevel
@@ -185,22 +187,29 @@ export function sliceRunIdsForWindow(runIds: string[], windowType: WindowType, o
 
 async function getPublishedRunIds(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   anchorDate: string,
   startDate?: string,
 ): Promise<string[]> {
   const rows = await db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(
       and(
-        eq(benchmarkRuns.seasonId, seasonId),
+        seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
         lte(benchmarkRuns.scheduledFor, anchorDate),
         startDate ? gte(benchmarkRuns.scheduledFor, startDate) : undefined,
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
   return rows.map((r) => r.id)
 }
@@ -211,29 +220,36 @@ async function getPublishedRunIds(
  */
 async function getPublishedRunIdsBetween(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   startDate: string,
   endDateExclusive: string,
 ): Promise<string[]> {
   const rows = await db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
     .where(
       and(
-        eq(benchmarkRuns.seasonId, seasonId),
+        seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
         eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
         gte(benchmarkRuns.scheduledFor, startDate),
         lt(benchmarkRuns.scheduledFor, endDateExclusive),
       ),
     )
-    .orderBy(desc(benchmarkRuns.scheduledFor))
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
   return rows.map((r) => r.id)
 }
 
 export async function getRunIdsForWindow(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   windowType: WindowType,
   anchorDate: string,
 ): Promise<string[]> {
@@ -371,7 +387,7 @@ export type ScoringContext = {
 
 export async function prepareScoringContext(
   db: DatabaseClient,
-  seasonId: string,
+  seasonId: string | undefined,
   windowType: WindowType,
   anchorDate: string,
 ): Promise<ScoringContext> {

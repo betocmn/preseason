@@ -6,7 +6,6 @@ import {
   anchorDateSchema,
   findAllBenchmarkSeasonIds,
   findBenchmarkSeasonId,
-  findLatestPublishedBenchmarkSeasonId,
   findPublicManualBenchmarkSeasonIds,
 } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
@@ -515,7 +514,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
         }),
     )
     .query(async ({ ctx, input }) => {
-      const hasExplicitSeasonId = input.seasonId !== undefined
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const [category, toolA, toolB] = await Promise.all([
         ctx.db.query.subcategories.findFirst({
@@ -555,37 +553,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
           })
         }
         seasonId = benchmarkSeasonId
-      } else {
-        const defaultSeasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-        if (!defaultSeasonId) {
-          const manualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
-          const manualResult = await buildManualHeadToHead(
-            ctx.db,
-            category.id,
-            toolA.id,
-            toolB.id,
-            {
-              seasonIds: manualSeasonIds,
-              windowType: input.windowType,
-              anchorDate,
-              promptLevel: input.promptLevel,
-              modelTier: input.modelTier,
-            },
-          )
-          const result = await resolveHeadToHeadWithHistoricalFallback(ctx.db, {
-            categoryId: category.id,
-            toolAId: toolA.id,
-            toolBId: toolB.id,
-            seasonIds: manualSeasonIds,
-            primary: manualResult,
-            windowType: input.windowType,
-            anchorDate,
-            promptLevel: input.promptLevel,
-            modelTier: input.modelTier,
-          })
-          return { category, toolA, toolB, result }
-        }
-        seasonId = defaultSeasonId
       }
 
       const benchmarkResult = await computeHeadToHead(ctx.db, {
@@ -605,7 +572,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       }
 
       // Otherwise, fall back to manual match batch data
-      const manualSeasonIds = hasExplicitSeasonId
+      const manualSeasonIds = seasonId
         ? [seasonId]
         : await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
       const manualResult = await buildManualHeadToHead(ctx.db, category.id, toolA.id, toolB.id, {
@@ -621,7 +588,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         toolAId: toolA.id,
         toolBId: toolB.id,
         seasonIds: manualSeasonIds,
-        primary: manualResult ?? benchmarkResult,
+        primary: manualResult,
         windowType: input.windowType,
         anchorDate,
         promptLevel: input.promptLevel,
@@ -649,8 +616,6 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       const matchups: MatchupEntry[] = []
       const seenKeys = new Set<string>()
-
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
 
       let subs: { id: string; name: string; slug: string }[] = []
       if (input?.subcategorySlug) {
@@ -732,8 +697,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // ---------------------------------------------------------------
       // 2. Fill remaining slots with auto-generated benchmark matchups
       // ---------------------------------------------------------------
-      if (matchups.length < limit && seasonId) {
-        const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
+      if (matchups.length < limit) {
+        const scoringCtx = await prepareScoringContext(
+          ctx.db,
+          undefined,
+          'trailing_28d',
+          anchorDate,
+        )
 
         if (scoringCtx.runIds.length > 0) {
           const allCategoryIds = subs.map((s) => s.id)
@@ -845,10 +815,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const subs = tool.toolCategories.map((tc) => tc.category)
       if (subs.length === 0) return []
 
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return []
-
-      const scoringCtx = await prepareScoringContext(ctx.db, seasonId, 'trailing_28d', anchorDate)
+      const scoringCtx = await prepareScoringContext(ctx.db, undefined, 'trailing_28d', anchorDate)
       if (scoringCtx.runIds.length === 0) return []
 
       const allCategoryIds = subs.map((s) => s.id)

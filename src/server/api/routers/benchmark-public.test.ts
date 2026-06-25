@@ -29,6 +29,14 @@ function first<T>(rows: T[]): T {
   return row
 }
 
+function at<T>(rows: T[], index: number): T {
+  const row = rows[index]
+  if (row === undefined) {
+    throw new Error(`Expected an item at index ${index}`)
+  }
+  return row
+}
+
 type TestDb = ReturnType<typeof getTestDb>
 
 async function seedCompletedManualBatch(args: {
@@ -538,7 +546,7 @@ describe('benchmark public routers', () => {
     await cleanTestDatabase()
   })
 
-  it('uses the latest published benchmark season for rankings when seasonId is omitted', async () => {
+  it('aggregates published benchmark seasons for rankings when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -577,7 +585,7 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.toolSlug).toBe('supabase')
   })
 
-  it('uses the latest published benchmark season for matches when seasonId is omitted', async () => {
+  it('aggregates published benchmark seasons for matches when seasonId is omitted', async () => {
     await seedBenchmarkPublicFixture()
 
     const caller = createTestCaller(null)
@@ -585,12 +593,12 @@ describe('benchmark public routers', () => {
       categorySlug: 'auth',
       toolASlug: 'clerk',
       toolBSlug: 'supabase',
-      windowType: 'run_day',
+      windowType: 'season_to_date',
       anchorDate: '2026-03-10',
     })
 
     expect(result.result?.aWins).toBe(1)
-    expect(result.result?.bWins).toBe(0)
+    expect(result.result?.bWins).toBe(1)
   })
 
   it('falls back to manual match data when no benchmark season is published', async () => {
@@ -3081,6 +3089,190 @@ describe('benchmark public routers', () => {
     expect(modelFiltered.ranking?.items[0]?.toolSlug).toBe('supabase')
   })
 
+  it('builds default model filters from every published benchmark season', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const authCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Auth', slug: 'auth', displayOrder: 1 })
+        .returning(),
+    )
+    const tool = first(await db.insert(tools).values({ name: 'Clerk', slug: 'clerk' }).returning())
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-model-filter-seasons',
+          name: 'Benchmark Model Filter Seasons',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const olderSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-model-filter-older',
+          name: 'Older Model Filter Season',
+          status: 'active',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const newerSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-model-filter-newer',
+          name: 'Newer Model Filter Season',
+          status: 'active',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const prompt = first(
+      await db
+        .insert(prompts)
+        .values({
+          title: 'Auth filter prompt',
+          slug: 'auth-filter-prompt',
+          level: 'beginner',
+          contentMd: '# Auth filter prompt',
+        })
+        .returning(),
+    )
+    const promptVersion = first(
+      await db
+        .insert(benchmarkPromptVersions)
+        .values({
+          promptId: prompt.id,
+          slug: prompt.slug,
+          level: 'beginner',
+          version: 1,
+          contentMd: prompt.contentMd ?? '# Auth filter prompt',
+          contentHash: 'model-filter-seasons-prompt',
+          promptContractVersion: '1.0',
+          systemPromptSnapshot: 'You are a pragmatic assistant.',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkPromptVersionCategories).values({
+      promptVersionId: promptVersion.id,
+      categoryId: authCategory.id,
+      displayOrder: 1,
+    })
+
+    const llmRows = await db
+      .insert(llms)
+      .values([
+        {
+          name: 'Older Active Model',
+          slug: 'older-active-model',
+          provider: 'test',
+          company: 'OlderCo',
+          modelFamily: 'Legacy',
+          modelVersion: '1',
+          modelId: 'test/older-active-model',
+        },
+        {
+          name: 'Newer Active Model',
+          slug: 'newer-active-model',
+          provider: 'test',
+          company: 'NewerCo',
+          modelFamily: 'Current',
+          modelVersion: '2',
+          modelId: 'test/newer-active-model',
+        },
+      ])
+      .returning()
+    const olderLlm = first(llmRows)
+    const newerLlm = first(llmRows.slice(1))
+    const modelSnapshotRows = await db
+      .insert(benchmarkModelSnapshots)
+      .values([
+        {
+          llmId: olderLlm.id,
+          name: olderLlm.name,
+          provider: olderLlm.provider,
+          company: olderLlm.company,
+          modelFamily: olderLlm.modelFamily,
+          modelVersion: olderLlm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: olderLlm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'model-filter-seasons-older',
+        },
+        {
+          llmId: newerLlm.id,
+          name: newerLlm.name,
+          provider: newerLlm.provider,
+          company: newerLlm.company,
+          modelFamily: newerLlm.modelFamily,
+          modelVersion: newerLlm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: newerLlm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'model-filter-seasons-newer',
+        },
+      ])
+      .returning()
+    const olderModelSnapshot = first(modelSnapshotRows)
+    const newerModelSnapshot = first(modelSnapshotRows.slice(1))
+
+    await seedSeasonDecision({
+      db,
+      seasonId: olderSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: olderModelSnapshot.id,
+      categoryId: authCategory.id,
+      toolId: tool.id,
+      rawToolName: tool.name,
+      scheduledFor: '2026-01-10',
+    })
+    await seedSeasonDecision({
+      db,
+      seasonId: newerSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: newerModelSnapshot.id,
+      categoryId: authCategory.id,
+      toolId: tool.id,
+      rawToolName: tool.name,
+      scheduledFor: '2026-06-20',
+    })
+
+    const caller = createTestCaller(null)
+
+    const allSeasonFilters = await caller.benchmarkRanking.listModelFilters({
+      anchorDate: '2026-06-25',
+    })
+    const allSeasonModelIds = allSeasonFilters.companies.flatMap((company) =>
+      company.families.flatMap((family) => family.models.map((model) => model.id)),
+    )
+    expect(allSeasonFilters.seasonId).toBeNull()
+    expect(allSeasonModelIds).toEqual([newerModelSnapshot.id, olderModelSnapshot.id])
+
+    const newerSeasonFilters = await caller.benchmarkRanking.listModelFilters({
+      seasonId: newerSeason.id,
+      anchorDate: '2026-06-25',
+    })
+    const newerSeasonModelIds = newerSeasonFilters.companies.flatMap((company) =>
+      company.families.flatMap((family) => family.models.map((model) => model.id)),
+    )
+    expect(newerSeasonFilters.seasonId).toBe(newerSeason.id)
+    expect(newerSeasonModelIds).toEqual([newerModelSnapshot.id])
+  })
+
   it('aggregates category group rankings across all subcategories', async () => {
     const db = getTestDb()
     const group = first(
@@ -3281,6 +3473,383 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.weightedSupportRate).toBeCloseTo(0.5, 5)
     expect(result.ranking?.items[0]?.modelCoverage).toBeCloseTo(0.5, 5)
     expect(result.ranking?.items[0]?.promptCoverage).toBeCloseTo(0.5, 5)
+  })
+
+  it('restricts eligible decisions to the selected date-range window', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const hostingCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Hosting', slug: 'hosting', displayOrder: 1 })
+        .returning(),
+    )
+    const vercel = first(
+      await db.insert(tools).values({ name: 'Vercel', slug: 'vercel' }).returning(),
+    )
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-daterange',
+          name: 'Benchmark Date Range',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const season = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-daterange',
+          name: 'Season Date Range',
+          status: 'active',
+          createdAt: new Date('2026-03-10T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    // Four distinct (prompt, model) pairs so each run owns a unique case.
+    const scheduledDates = ['2025-08-10', '2025-11-10', '2026-01-10', '2026-03-09']
+    for (let i = 0; i < scheduledDates.length; i++) {
+      const scheduledFor = at(scheduledDates, i)
+      const llm = first(
+        await db
+          .insert(llms)
+          .values({
+            name: `LLM ${i}`,
+            slug: `llm-${i}`,
+            provider: 'test',
+            company: 'Test',
+            modelFamily: 'Family',
+            modelVersion: `${i}`,
+            modelId: `test/llm-${i}`,
+          })
+          .returning(),
+      )
+      const modelSnapshot = first(
+        await db
+          .insert(benchmarkModelSnapshots)
+          .values({
+            llmId: llm.id,
+            name: llm.name,
+            provider: llm.provider,
+            company: llm.company,
+            modelFamily: llm.modelFamily,
+            modelVersion: llm.modelVersion,
+            tier: 'frontier',
+            requestedModelId: llm.modelId,
+            temperature: 0.2,
+            snapshotKey: `daterange-snapshot-${i}`,
+          })
+          .returning(),
+      )
+      const prompt = first(
+        await db
+          .insert(prompts)
+          .values({
+            title: `Prompt ${i}`,
+            slug: `prompt-daterange-${i}`,
+            level: 'beginner',
+            contentMd: `# Prompt ${i}`,
+          })
+          .returning(),
+      )
+      const promptVersion = first(
+        await db
+          .insert(benchmarkPromptVersions)
+          .values({
+            promptId: prompt.id,
+            slug: prompt.slug,
+            level: 'beginner',
+            version: 1,
+            contentMd: prompt.contentMd ?? `# Prompt ${i}`,
+            contentHash: `daterange-hash-${i}`,
+            promptContractVersion: '1.0',
+            systemPromptSnapshot: 'You are a pragmatic assistant.',
+          })
+          .returning(),
+      )
+      await db.insert(benchmarkPromptVersionCategories).values({
+        promptVersionId: promptVersion.id,
+        categoryId: hostingCategory.id,
+        displayOrder: i + 1,
+      })
+
+      await seedSeasonDecision({
+        db,
+        seasonId: season.id,
+        promptVersionId: promptVersion.id,
+        modelSnapshotId: modelSnapshot.id,
+        categoryId: hostingCategory.id,
+        toolId: vercel.id,
+        rawToolName: 'Vercel',
+        scheduledFor,
+      })
+    }
+
+    const caller = createTestCaller(null)
+
+    const allTime = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: 'all',
+      anchorDate: '2026-03-10',
+    })
+    expect(allTime.ranking?.totalEligibleDecisions).toBe(4)
+    expect(allTime.ranking?.items[0]?.rawEligibleCount).toBe(4)
+
+    const sixMonths = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: '6m',
+      anchorDate: '2026-03-10',
+    })
+    // 6m window starts at 2025-09-10, excluding the 2025-08-10 run.
+    expect(sixMonths.ranking?.totalEligibleDecisions).toBe(3)
+    expect(sixMonths.ranking?.items[0]?.rawEligibleCount).toBe(3)
+
+    const threeMonths = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: '3m',
+      anchorDate: '2026-03-10',
+    })
+    // 3m window starts at 2025-12-10, excluding 2025-08-10 and 2025-11-10.
+    expect(threeMonths.ranking?.totalEligibleDecisions).toBe(2)
+    expect(threeMonths.ranking?.items[0]?.rawEligibleCount).toBe(2)
+
+    const lastMonth = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: '1m',
+      anchorDate: '2026-03-10',
+    })
+    // 1m window starts at 2026-02-10, leaving only the 2026-03-09 run.
+    expect(lastMonth.ranking?.totalEligibleDecisions).toBe(1)
+    expect(lastMonth.ranking?.items[0]?.rawEligibleCount).toBe(1)
+  })
+
+  it('aggregates published runs across all benchmark seasons when seasonId is omitted', async () => {
+    const db = getTestDb()
+    const group = first(
+      await db
+        .insert(categories)
+        .values({ name: 'Devtools', slug: 'devtools', displayOrder: 1 })
+        .returning(),
+    )
+    const hostingCategory = first(
+      await db
+        .insert(subcategories)
+        .values({ categoryId: group.id, name: 'Hosting', slug: 'hosting', displayOrder: 1 })
+        .returning(),
+    )
+    const vercel = first(
+      await db.insert(tools).values({ name: 'Vercel', slug: 'vercel' }).returning(),
+    )
+
+    const protocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'benchmark-cross-season',
+          name: 'Benchmark Cross Season',
+          mode: 'benchmark',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    // An older season whose latest run is superseded by the newer season below.
+    const olderSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-cross-older',
+          name: 'Cross Season Older',
+          status: 'active',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const newerSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: protocol.id,
+          slug: 'season-cross-newer',
+          name: 'Cross Season Newer',
+          status: 'active',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+    const explorationProtocol = first(
+      await db
+        .insert(benchmarkProtocols)
+        .values({
+          slug: 'exploration-cross-season',
+          name: 'Exploration Cross Season',
+          mode: 'exploration',
+          parserVersion: '1.0',
+          scoringVersion: '1.0',
+          promptContractVersion: '1.0',
+        })
+        .returning(),
+    )
+    const explorationSeason = first(
+      await db
+        .insert(benchmarkSeasons)
+        .values({
+          protocolId: explorationProtocol.id,
+          slug: 'season-cross-exploration',
+          name: 'Cross Season Exploration',
+          status: 'active',
+          createdAt: new Date('2026-06-02T00:00:00.000Z'),
+        })
+        .returning(),
+    )
+
+    // Shared prompt + model so both seasons use comparable case dimensions.
+    const prompt = first(
+      await db
+        .insert(prompts)
+        .values({
+          title: 'Deploy app',
+          slug: 'deploy-app',
+          level: 'beginner',
+          contentMd: '# Deploy app',
+        })
+        .returning(),
+    )
+    const promptVersion = first(
+      await db
+        .insert(benchmarkPromptVersions)
+        .values({
+          promptId: prompt.id,
+          slug: prompt.slug,
+          level: 'beginner',
+          version: 1,
+          contentMd: prompt.contentMd ?? '# Deploy app',
+          contentHash: 'cross-season-hash',
+          promptContractVersion: '1.0',
+          systemPromptSnapshot: 'You are a pragmatic assistant.',
+        })
+        .returning(),
+    )
+    await db.insert(benchmarkPromptVersionCategories).values({
+      promptVersionId: promptVersion.id,
+      categoryId: hostingCategory.id,
+      displayOrder: 1,
+    })
+    const llm = first(
+      await db
+        .insert(llms)
+        .values({
+          name: 'Cross Season LLM',
+          slug: 'cross-season-llm',
+          provider: 'test',
+          company: 'Test',
+          modelFamily: 'Family',
+          modelVersion: '1',
+          modelId: 'test/cross-season-llm',
+        })
+        .returning(),
+    )
+    const modelSnapshot = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: llm.id,
+          name: llm.name,
+          provider: llm.provider,
+          company: llm.company,
+          modelFamily: llm.modelFamily,
+          modelVersion: llm.modelVersion,
+          tier: 'frontier',
+          requestedModelId: llm.modelId,
+          temperature: 0.2,
+          snapshotKey: 'cross-season-snapshot',
+        })
+        .returning(),
+    )
+
+    // Older season run from 2026-01-10 (> 6 months before the anchor).
+    await seedSeasonDecision({
+      db,
+      seasonId: olderSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: hostingCategory.id,
+      toolId: vercel.id,
+      rawToolName: 'Vercel',
+      scheduledFor: '2026-01-10',
+    })
+    // Newer season run from 2026-06-20 (< 1 month before the anchor).
+    await seedSeasonDecision({
+      db,
+      seasonId: newerSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: hostingCategory.id,
+      toolId: vercel.id,
+      rawToolName: 'Vercel',
+      scheduledFor: '2026-06-20',
+    })
+    // Exploration-mode runs should never contribute to public benchmark rankings.
+    await seedSeasonDecision({
+      db,
+      seasonId: explorationSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: hostingCategory.id,
+      toolId: vercel.id,
+      rawToolName: 'Vercel',
+      scheduledFor: '2026-06-21',
+    })
+
+    const caller = createTestCaller(null)
+
+    // "All time" spans both seasons instead of only the latest one.
+    const allTime = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: 'all',
+      anchorDate: '2026-06-25',
+    })
+    expect(allTime.ranking?.totalEligibleDecisions).toBe(2)
+
+    // The 6m window (start 2025-12-25) still includes the older run.
+    const sixMonths = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: '6m',
+      anchorDate: '2026-06-25',
+    })
+    expect(sixMonths.ranking?.totalEligibleDecisions).toBe(2)
+
+    // The 1m window (start 2026-05-25) excludes the older season's run.
+    const lastMonth = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      dateRange: '1m',
+      anchorDate: '2026-06-25',
+    })
+    expect(lastMonth.ranking?.totalEligibleDecisions).toBe(1)
+
+    // Explicitly selecting the older season restricts to that season only.
+    const olderOnly = await caller.benchmarkRanking.byCategory({
+      categorySlug: 'hosting',
+      seasonId: olderSeason.id,
+      dateRange: 'all',
+      anchorDate: '2026-06-25',
+    })
+    expect(olderOnly.ranking?.totalEligibleDecisions).toBe(1)
   })
 
   it('rejects non-benchmark season IDs for benchmark rankings', async () => {

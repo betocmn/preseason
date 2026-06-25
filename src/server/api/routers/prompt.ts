@@ -1,20 +1,20 @@
 import { createHash } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
-import {
-  anchorDateSchema,
-  findLatestPublishedBenchmarkSeasonId,
-} from '~/server/api/helpers/benchmark'
+import { anchorDateSchema } from '~/server/api/helpers/benchmark'
 import { createTRPCRouter, protectedProcedure, publicProcedure } from '~/server/api/trpc'
+import type { db as database } from '~/server/db'
 import {
   benchmarkCaseDecisions,
   benchmarkCaseResults,
   benchmarkCases,
   benchmarkPromptVersions,
+  benchmarkProtocols,
   benchmarkRuns,
+  benchmarkSeasons,
   categories,
   prompts,
   subcategories,
@@ -59,7 +59,7 @@ const updatePromptInput = z
   )
 
 const promptListSnapshotSchema = z.object({
-  seasonId: z.string().uuid(),
+  seasonId: z.string().uuid().optional(),
   publishedRunIds: z
     .array(z.string().uuid())
     .min(1)
@@ -97,35 +97,78 @@ function getDailySlugKey(slug: string, anchorDate: string) {
 }
 
 async function getPublishedPromptSnapshotRunIds(
-  db: Parameters<typeof findLatestPublishedBenchmarkSeasonId>[0],
-  seasonId: string,
+  db: typeof database,
+  seasonId: string | undefined,
+  anchorDate: string,
   requestedRunIds?: string[],
 ) {
-  if (requestedRunIds) {
+  return getPublishedPromptRunIds(db, {
+    seasonId,
+    anchorDate,
+    requestedRunIds,
+    limit: serverSettings.homepage.promptCarouselSnapshotMaxRunIds,
+  })
+}
+
+async function getPublishedPromptRunIds(
+  db: typeof database,
+  options: {
+    seasonId?: string
+    anchorDate: string
+    requestedRunIds?: string[]
+    limit?: number
+  },
+) {
+  if (options.requestedRunIds) {
     const validatedRuns = await db
       .select({ id: benchmarkRuns.id })
       .from(benchmarkRuns)
+      .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+      .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
       .where(
         and(
-          eq(benchmarkRuns.seasonId, seasonId),
+          options.seasonId ? eq(benchmarkRuns.seasonId, options.seasonId) : undefined,
           eq(benchmarkRuns.status, 'published'),
-          inArray(benchmarkRuns.id, requestedRunIds),
+          eq(benchmarkProtocols.mode, 'benchmark'),
+          lte(benchmarkRuns.scheduledFor, options.anchorDate),
+          inArray(benchmarkRuns.id, options.requestedRunIds),
         ),
       )
-      .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.id))
+      .orderBy(
+        asc(benchmarkRuns.scheduledFor),
+        asc(benchmarkSeasons.createdAt),
+        asc(benchmarkRuns.id),
+      )
 
     return validatedRuns.map((run) => run.id)
   }
 
-  const recentPublishedRuns = await db
+  const publishedRunsQuery = db
     .select({ id: benchmarkRuns.id })
     .from(benchmarkRuns)
-    .where(and(eq(benchmarkRuns.seasonId, seasonId), eq(benchmarkRuns.status, 'published')))
-    .orderBy(desc(benchmarkRuns.scheduledFor), desc(benchmarkRuns.id))
-    .limit(serverSettings.homepage.promptCarouselSnapshotMaxRunIds)
+    .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
+    .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
+    .where(
+      and(
+        options.seasonId ? eq(benchmarkRuns.seasonId, options.seasonId) : undefined,
+        eq(benchmarkRuns.status, 'published'),
+        eq(benchmarkProtocols.mode, 'benchmark'),
+        lte(benchmarkRuns.scheduledFor, options.anchorDate),
+      ),
+    )
+    .orderBy(
+      desc(benchmarkRuns.scheduledFor),
+      desc(benchmarkSeasons.createdAt),
+      desc(benchmarkRuns.id),
+    )
 
-  // Keep the newest bounded snapshot, but return it oldest-to-newest for a stable canonical shape.
-  return recentPublishedRuns.map((run) => run.id).reverse()
+  const publishedRuns =
+    options.limit === undefined
+      ? await publishedRunsQuery
+      : await publishedRunsQuery.limit(options.limit)
+
+  // Keep the newest bounded snapshot when requested, but return oldest-to-newest for a stable shape.
+  return publishedRuns.map((run) => run.id).reverse()
 }
 
 function comparePromptCandidates(a: PromptCandidateRow, b: PromptCandidateRow, anchorDate: string) {
@@ -389,10 +432,7 @@ export const promptRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = new Date().toISOString().slice(0, 10)
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return []
-
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
+      const runIds = await getPublishedPromptRunIds(ctx.db, { anchorDate })
       if (runIds.length === 0) return []
 
       // Resolve the specific prompt version shown on the homepage:
@@ -421,7 +461,6 @@ export const promptRouter = createTRPCRouter({
           .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
           .where(
             and(
-              eq(benchmarkCases.seasonId, seasonId),
               inArray(benchmarkCaseResults.runId, runIds),
               eq(benchmarkCaseDecisions.decisionType, 'tool'),
               isNotNull(benchmarkCaseDecisions.toolId),
@@ -488,11 +527,9 @@ export const promptRouter = createTRPCRouter({
           perCategory: { categoryId: string; count: number }[]
         }[]
       } = { subcategories: [], rankings: [] }
-      const anchorDate = new Date().toISOString().slice(0, 10)
-      const seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-      if (!seasonId) return empty
 
-      const runIds = await getPublishedPromptSnapshotRunIds(ctx.db, seasonId)
+      const anchorDate = new Date().toISOString().slice(0, 10)
+      const runIds = await getPublishedPromptRunIds(ctx.db, { anchorDate })
       if (runIds.length === 0) return empty
 
       const pvCandidates = (
@@ -514,7 +551,6 @@ export const promptRouter = createTRPCRouter({
           .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
           .where(
             and(
-              eq(benchmarkCases.seasonId, seasonId),
               inArray(benchmarkCaseResults.runId, runIds),
               eq(benchmarkCaseDecisions.decisionType, 'tool'),
               isNotNull(benchmarkCaseDecisions.toolId),
@@ -640,25 +676,22 @@ export const promptRouter = createTRPCRouter({
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
       const homepagePageSize = serverSettings.homepage.promptCarouselPageSize
 
-      let seasonId = input.snapshot?.seasonId ?? null
-
-      if (!seasonId) {
-        seasonId = await findLatestPublishedBenchmarkSeasonId(ctx.db, anchorDate)
-        if (!seasonId) {
-          return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
-        }
-      }
+      const seasonId = input.snapshot?.seasonId
 
       const runIds = await getPublishedPromptSnapshotRunIds(
         ctx.db,
         seasonId,
+        anchorDate,
         input.snapshot?.publishedRunIds,
       )
       if (runIds.length === 0) {
         return { items: [] as PromptWithTopTools[], hasMore: false, snapshot: null }
       }
 
-      const snapshot: PromptListSnapshot = { seasonId, publishedRunIds: runIds }
+      const snapshot: PromptListSnapshot = {
+        publishedRunIds: runIds,
+        ...(seasonId ? { seasonId } : {}),
+      }
 
       const orderedCandidates = (
         await ctx.db
@@ -684,7 +717,7 @@ export const promptRouter = createTRPCRouter({
           .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
           .where(
             and(
-              eq(benchmarkCases.seasonId, seasonId),
+              seasonId ? eq(benchmarkCases.seasonId, seasonId) : undefined,
               inArray(benchmarkCaseResults.runId, runIds),
               eq(benchmarkCaseDecisions.decisionType, 'tool'),
               isNotNull(benchmarkCaseDecisions.toolId),
