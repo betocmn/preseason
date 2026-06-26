@@ -56,7 +56,10 @@ export function PromptsPageContent({ initialItems }: PromptsPageContentProps) {
       {items.map((prompt) => (
         <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
           <CardContent className="p-4">
-            <Badge variant="outline" className={`mb-2 text-[11px] font-normal ${promptLevelClass(prompt.level)}`}>
+            <Badge
+              variant="outline"
+              className={`mb-2 text-[11px] font-normal ${promptLevelClass(prompt.level)}`}
+            >
               {formatPromptLevel(prompt.level)}
             </Badge>
             <h3 className="font-medium">{prompt.title}</h3>
