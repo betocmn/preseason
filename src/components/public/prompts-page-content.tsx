@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { Badge } from '~/components/ui/badge'
 import { Card, CardContent } from '~/components/ui/card'
-import { formatPromptLevel } from '~/lib/prompt-levels'
+import { formatPromptLevel, promptLevelClass } from '~/lib/prompt-levels'
 import type { AppRouter } from '~/server/api/root'
 import { promptLevelEnum } from '~/server/db/schema'
 import { api } from '~/trpc/react'
@@ -56,7 +56,10 @@ export function PromptsPageContent({ initialItems }: PromptsPageContentProps) {
       {items.map((prompt) => (
         <Card key={prompt.id} className="group relative transition-colors hover:bg-accent/50">
           <CardContent className="p-4">
-            <Badge variant="outline" className="mb-2 text-[11px] font-normal">
+            <Badge
+              variant="outline"
+              className={`mb-2 text-[11px] font-normal ${promptLevelClass(prompt.level)}`}
+            >
               {formatPromptLevel(prompt.level)}
             </Badge>
             <h3 className="font-medium">{prompt.title}</h3>
