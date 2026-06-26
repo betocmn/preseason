@@ -1,6 +1,6 @@
+import { HelpCircle } from 'lucide-react'
 import { CiBar } from '~/components/public/ci-bar'
 import { ToolBadge } from '~/components/public/tool-badge'
-import { TrendIndicator } from '~/components/public/trend-indicator'
 import { Badge } from '~/components/ui/badge'
 import {
   Table,
@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
 import { cn } from '~/lib/utils'
 
 export type BenchmarkRankingItem = {
@@ -59,8 +60,29 @@ export function RankingTable({
               <TableHead className="w-12">#</TableHead>
               <TableHead>Tool</TableHead>
               <TableHead className="text-right">Support Rate</TableHead>
-              <TableHead className="hidden text-right md:table-cell">95% CI</TableHead>
-              <TableHead className="text-right">Trend</TableHead>
+              <TableHead className="hidden text-right md:table-cell">
+                <span className="inline-flex items-center justify-end gap-1">
+                  95% CI
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="What does 95% CI mean?"
+                          className="inline-flex text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-left font-normal">
+                        The 95% confidence interval (Wilson) for the support rate. We&apos;re 95%
+                        confident the tool&apos;s true support rate falls within this range — it
+                        narrows as more benchmark decisions are collected.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
+              </TableHead>
               <TableHead className="hidden text-right lg:table-cell">Models</TableHead>
               <TableHead className="hidden text-right lg:table-cell">Prompts</TableHead>
             </TableRow>
@@ -85,9 +107,6 @@ export function RankingTable({
                     </span>
                     <CiBar low={item.ciLow} high={item.ciHigh} />
                   </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <TrendIndicator value={item.trend} size="sm" />
                 </TableCell>
                 <TableCell className="font-mono-data hidden text-right lg:table-cell">
                   {(item.modelCoverage * 100).toFixed(0)}%
