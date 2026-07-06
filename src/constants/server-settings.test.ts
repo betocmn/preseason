@@ -13,7 +13,7 @@ describe('serverSettings.benchmark', () => {
   })
 
   it('starts fresh runs on whole-day cadence intervals', () => {
-    expect(serverSettings.benchmark.newRunIntervalHours).toBe(24)
+    expect(serverSettings.benchmark.newRunIntervalHours).toBe(3 * 24)
     expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThanOrEqual(24)
     expect(serverSettings.benchmark.newRunIntervalHours % 24).toBe(0)
   })
@@ -22,6 +22,17 @@ describe('serverSettings.benchmark', () => {
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
     expect(serverSettings.benchmark.newRunStartUtcHour).toBeGreaterThanOrEqual(0)
     expect(serverSettings.benchmark.newRunStartUtcHour).toBeLessThanOrEqual(23)
+  })
+
+  it('opens fresh benchmark runs on the configured UTC weekdays', () => {
+    expect(serverSettings.benchmark.newRunUtcWeekdays).toEqual([1, 4])
+    expect(new Set(serverSettings.benchmark.newRunUtcWeekdays).size).toBe(
+      serverSettings.benchmark.newRunUtcWeekdays.length,
+    )
+    for (const weekday of serverSettings.benchmark.newRunUtcWeekdays) {
+      expect(weekday).toBeGreaterThanOrEqual(0)
+      expect(weekday).toBeLessThanOrEqual(6)
+    }
   })
 })
 
