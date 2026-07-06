@@ -278,15 +278,16 @@ The benchmark pipeline is being built across 8 PRs:
 7. **Public switchover** — wire public pages to benchmark data
 8. **Legacy cleanup** — remove old exploration pipeline
 
-PRs 1-4 must land first to start shadow mode (running daily alongside the old
-pipeline). PRs 5-6 can be built while shadow data accumulates. PR 7 only ships
-after the launch bar is met (>= 21 published runs, sufficient category coverage).
+PRs 1-4 must land first to start shadow mode (running on the configured cron
+cadence alongside the old pipeline). PRs 5-6 can be built while shadow data
+accumulates. PR 7 only ships after the launch bar is met (>= 21 published runs,
+sufficient category coverage).
 
 ## Launch Bar
 
 The benchmark does not go public until ALL of these are true:
 
-- >= 21 published daily runs in the active season
+- >= 21 published benchmark runs in the active season
 - >= 3 eligible prompt versions per public category
 - >= 100 eligible benchmark decisions per public category
 - >= 3 completed model snapshots per public category

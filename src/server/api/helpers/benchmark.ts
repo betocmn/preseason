@@ -172,14 +172,67 @@ function getBenchmarkRunStartAt(
   return startAt
 }
 
+function isBenchmarkRunWeekday(
+  date: Date,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
+) {
+  return newRunUtcWeekdays.includes(date.getUTCDay())
+}
+
+function getBenchmarkRunWindowAtOrAfter(
+  startAt: Date,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
+) {
+  const startDate = parseScheduledForStart(formatScheduledFor(startAt))
+
+  for (let offsetDays = 0; offsetDays <= 7; offsetDays++) {
+    const candidateDate = new Date(startDate)
+    candidateDate.setUTCDate(startDate.getUTCDate() + offsetDays)
+    const candidateStartAt = getBenchmarkRunStartAt(
+      formatScheduledFor(candidateDate),
+      newRunStartUtcHour,
+    )
+
+    if (candidateStartAt >= startAt && isBenchmarkRunWeekday(candidateStartAt, newRunUtcWeekdays)) {
+      return candidateStartAt
+    }
+  }
+
+  throw new Error('No benchmark run weekday configured')
+}
+
+function getCurrentBenchmarkRunWindowAtOrNext(
+  currentTime: Date,
+  newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
+) {
+  const currentDateStartAt = getBenchmarkRunStartAt(
+    formatScheduledFor(currentTime),
+    newRunStartUtcHour,
+  )
+  if (isBenchmarkRunWeekday(currentDateStartAt, newRunUtcWeekdays)) {
+    return currentDateStartAt
+  }
+
+  const nextDateStartAt = new Date(currentDateStartAt)
+  nextDateStartAt.setUTCDate(currentDateStartAt.getUTCDate() + 1)
+  return getBenchmarkRunWindowAtOrAfter(nextDateStartAt, newRunStartUtcHour, newRunUtcWeekdays)
+}
+
 export function getNextEligibleBenchmarkRunAt(
   scheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
   newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
 ) {
   const nextEligibleAt = parseScheduledForStart(scheduledFor)
   nextEligibleAt.setUTCHours(nextEligibleAt.getUTCHours() + newRunIntervalHours)
-  return getBenchmarkRunStartAt(formatScheduledFor(nextEligibleAt), newRunStartUtcHour)
+  const cadenceStartAt = getBenchmarkRunStartAt(
+    formatScheduledFor(nextEligibleAt),
+    newRunStartUtcHour,
+  )
+  return getBenchmarkRunWindowAtOrAfter(cadenceStartAt, newRunStartUtcHour, newRunUtcWeekdays)
 }
 
 export function getBenchmarkRunDueAt(
@@ -187,15 +240,18 @@ export function getBenchmarkRunDueAt(
   latestScheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
   newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
 ) {
   const cadenceEligibleAt = getNextEligibleBenchmarkRunAt(
     latestScheduledFor,
     newRunIntervalHours,
     newRunStartUtcHour,
+    newRunUtcWeekdays,
   )
-  const currentDateStartAt = getBenchmarkRunStartAt(
-    formatScheduledFor(currentTime),
+  const currentDateStartAt = getCurrentBenchmarkRunWindowAtOrNext(
+    currentTime,
     newRunStartUtcHour,
+    newRunUtcWeekdays,
   )
 
   return currentDateStartAt > cadenceEligibleAt ? currentDateStartAt : cadenceEligibleAt
@@ -206,10 +262,17 @@ export function isBenchmarkRunDue(
   latestScheduledFor: string,
   newRunIntervalHours: number = serverSettings.benchmark.newRunIntervalHours,
   newRunStartUtcHour: number = serverSettings.benchmark.newRunStartUtcHour,
+  newRunUtcWeekdays: readonly number[] = serverSettings.benchmark.newRunUtcWeekdays,
 ) {
   return (
     currentTime >=
-    getBenchmarkRunDueAt(currentTime, latestScheduledFor, newRunIntervalHours, newRunStartUtcHour)
+    getBenchmarkRunDueAt(
+      currentTime,
+      latestScheduledFor,
+      newRunIntervalHours,
+      newRunStartUtcHour,
+      newRunUtcWeekdays,
+    )
   )
 }
 
@@ -281,7 +344,7 @@ export async function resolveBenchmarkCronRunTarget(
     }
   }
 
-  const currentDateStartAt = getBenchmarkRunStartAt(formatScheduledFor(currentTime))
+  const currentDateStartAt = getCurrentBenchmarkRunWindowAtOrNext(currentTime)
   if (currentTime < currentDateStartAt) {
     return {
       kind: 'idle',
