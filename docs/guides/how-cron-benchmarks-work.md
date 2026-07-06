@@ -29,7 +29,7 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a twice-weekly cadence window opens for the newest active season | Every 3 minutes, with the app-level cadence guard opening fresh logical runs Mondays and Thursdays at 12:00 UTC | `*/3 * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a twice-weekly cadence window opens for the newest active season | Every minute, with the app-level cadence guard opening fresh logical runs Mondays and Thursdays at 12:00 UTC | `* * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Mondays and Thursdays at 12:00 UTC | `0 12 * * 1,4` |
 | `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 

@@ -38,7 +38,7 @@ describe('vercel cron config', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/3 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 12 * * 1,4')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
   })
@@ -46,10 +46,10 @@ describe('vercel cron config', () => {
   it('keeps enough benchmark cron capacity to drain the reference run before the next cadence', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
-    const benchmarkCronMinutes = 3
+    const benchmarkCronMinutes = 1
     const referenceBenchmarkCaseCount = 1_200
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('*/3 * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
     expect(serverSettings.benchmark.newRunIntervalHours).toBe(3 * 24)
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
     expect(serverSettings.benchmark.newRunUtcWeekdays).toEqual([1, 4])
