@@ -70,24 +70,24 @@ describe('resolveBenchmarkCronRunTarget', () => {
     const season = await seedActiveBenchmarkSeason(db)
 
     const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-25T03:00:00.000Z'),
+      now: new Date('2026-03-26T03:00:00.000Z'),
     })
 
     expect(earlyTarget).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      nextEligibleAt: '2026-03-25T12:00:00.000Z',
+      nextEligibleAt: '2026-03-26T12:00:00.000Z',
     })
 
     const dueTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-25T12:00:00.000Z'),
+      now: new Date('2026-03-26T12:00:00.000Z'),
     })
 
     expect(dueTarget).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-25',
+      scheduledFor: '2026-03-26',
       source: 'today',
     })
   })
@@ -191,7 +191,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-25',
+      scheduledFor: '2026-03-23',
       status: 'completed',
     })
 
@@ -211,36 +211,36 @@ describe('resolveBenchmarkCronRunTarget', () => {
     expect(target.runId).toBeUndefined()
   })
 
-  it('waits for the current day start hour after a missed cadence window', async () => {
+  it('waits for the configured weekday start hour after the cadence window opens', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-25',
+      scheduledFor: '2026-03-23',
       status: 'completed',
     })
 
     const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-27T03:00:00.000Z'),
+      now: new Date('2026-03-26T03:00:00.000Z'),
     })
 
     expect(earlyTarget).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      latestScheduledFor: '2026-03-25',
-      nextEligibleAt: '2026-03-27T12:00:00.000Z',
+      latestScheduledFor: '2026-03-23',
+      nextEligibleAt: '2026-03-26T12:00:00.000Z',
     })
 
     const dueTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-27T12:00:00.000Z'),
+      now: new Date('2026-03-26T12:00:00.000Z'),
     })
 
     expect(dueTarget).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-27',
+      scheduledFor: '2026-03-26',
       source: 'today',
     })
   })
