@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkCaseDecisions,
   benchmarkCaseResults,
@@ -557,6 +558,30 @@ describe('benchmark public routers', () => {
     })
 
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
+  })
+
+  it('returns curated homepage ranking previews in configured order', async () => {
+    const { authCategory } = await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    await db.insert(subcategories).values({
+      categoryId: authCategory.categoryId,
+      name: 'Database',
+      slug: 'database',
+      displayOrder: 2,
+    })
+
+    const caller = createTestCaller(null)
+    const previews = await caller.benchmarkRanking.listHomepagePreviews({
+      dateRange: 'all',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(previews.map((preview) => preview.slug)).toEqual(['auth', 'database'])
+    expect(previews[0]?.groupSlug).toBe('devtools')
+    expect(previews[0]?.ranking?.items[0]?.toolSlug).toBe('clerk')
+    expect(previews[0]?.ranking?.items.length).toBeLessThanOrEqual(
+      serverSettings.homepage.rankingPreview.toolsPerCategory,
+    )
   })
 
   it('uses an auto-published passing run without requiring publishRun', async () => {

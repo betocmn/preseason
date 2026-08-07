@@ -14,35 +14,29 @@ export default function PublicLoading() {
           <Skeleton className="h-64 w-full rounded-lg" />
         </section>
 
-        {/* Active Matches */}
-        <section>
-          <Skeleton className="mb-4 h-5 w-36" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }, (_, i) => `match-${i}`).map((key) => (
-              <div key={key} className="rounded-lg border p-4">
-                <Skeleton className="mb-2 h-5 w-20" />
-                <div className="mb-3 flex items-center gap-1.5">
-                  <Skeleton className="h-5 w-5 rounded-full" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-6" />
-                  <Skeleton className="h-5 w-5 rounded-full" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-                <Skeleton className="h-4 w-full rounded-full" />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Latest Verified Critics */}
+        {/* Top Devtool Rankings */}
         <section>
           <Skeleton className="mb-4 h-5 w-44" />
-          <div className="space-y-4">
-            {Array.from({ length: 5 }, (_, i) => `comment-${i}`).map((key) => (
-              <div key={key} className="py-4">
-                <Skeleton className="mb-2 h-4 w-48" />
-                <Skeleton className="mb-2 h-14 w-full" />
-                <Skeleton className="h-4 w-32" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, i) => `ranking-${i}`).map((key) => (
+              <div key={key} className="rounded-lg border p-4">
+                <Skeleton className="mb-4 h-5 w-32" />
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }, (_, j) => `${key}-tool-${j}`).map((rowKey) => (
+                    <div
+                      key={rowKey}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-3 w-3" />
+                        <Skeleton className="h-5 w-5 rounded-full" />
+                        <Skeleton className="h-4 w-20" />
+                      </div>
+                      <Skeleton className="h-4 w-10" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="mt-3 h-8 w-full" />
               </div>
             ))}
           </div>

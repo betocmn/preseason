@@ -51,11 +51,34 @@ const backgroundSmokePromptSelections = [
 // while the corpus is devtools-focused.
 const publicCategoryGroupSlugs: readonly string[] = ['devtools']
 
+// Curated for the home rankings preview: AI-native categories HN/Twitter tech
+// audiences care about, plus evergreen infra staples. Order is display order.
+const homepageRankingPreviewSubcategorySlugs: readonly string[] = [
+  'llm-coding-agents',
+  'ai',
+  'agent-frameworks',
+  'vector-db',
+  'auth',
+  'database',
+  'llm-observability',
+  'hosting',
+  'ai-code-review',
+  'orm',
+  'llm-gateway',
+  'payments',
+]
+
 export const serverSettings = {
   homepage: {
     promptCarouselPageSize: 5,
     promptCarouselRevalidateSeconds: 3_600,
     promptCarouselSnapshotMaxRunIds: 1_000,
+    rankingPreview: {
+      groupSlug: 'devtools',
+      subcategorySlugs: homepageRankingPreviewSubcategorySlugs,
+      toolsPerCategory: 5,
+      revalidateSeconds: 3_600,
+    },
   },
   publicSite: {
     categoryGroupSlugs: publicCategoryGroupSlugs,
