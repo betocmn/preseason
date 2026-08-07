@@ -3,12 +3,9 @@ export const revalidate = 3600 // 1 hour
 import { unstable_cache } from 'next/cache'
 import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
-import { PercentageBar } from '~/components/public/percentage-bar'
+import { HomepageRankingsPreview } from '~/components/public/homepage-rankings-preview'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
-import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
-import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
-import { Card, CardContent } from '~/components/ui/card'
 import { serverSettings } from '~/constants/server-settings'
 import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
@@ -18,6 +15,7 @@ export default async function HomePage() {
   const caller = await publicApi()
   const today = new Date().toISOString().slice(0, 10)
   const pageSize = serverSettings.homepage.promptCarouselPageSize
+  const rankingPreviewRevalidate = serverSettings.homepage.rankingPreview.revalidateSeconds
 
   const getCachedPrompts = unstable_cache(
     async () => caller.prompt.listWithTopTools({ limit: pageSize, offset: 0, anchorDate: today }),
@@ -25,9 +23,16 @@ export default async function HomePage() {
     { revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds },
   )
 
-  const [promptsResult, featuredMatchups] = await Promise.all([
+  const getCachedRankingPreviews = unstable_cache(
+    async () =>
+      caller.benchmarkRanking.listHomepagePreviews({ dateRange: 'all', anchorDate: today }),
+    ['homepage-ranking-previews', today],
+    { revalidate: rankingPreviewRevalidate },
+  )
+
+  const [promptsResult, rankingPreviews] = await Promise.all([
     getCachedPrompts(),
-    caller.benchmarkMatch.listFeatured({ limit: 12 }),
+    getCachedRankingPreviews(),
   ])
 
   return (
@@ -60,75 +65,29 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* Featured Matchups */}
+        {/* Devtool Rankings Preview */}
         <section>
           <div className="mb-4">
-            <h2 className="text-base font-semibold">Active Matches</h2>
+            <h2 className="text-base font-semibold">Top Devtool Rankings</h2>
           </div>
-          {featuredMatchups.length > 0 ? (
+          {rankingPreviews.length > 0 ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {featuredMatchups.map((m) => {
-                  const slug = `${m.category.slug}--${m.toolA.slug}-vs-${m.toolB.slug}`
-                  return (
-                    <Card key={slug} className="transition-colors hover:bg-accent/50">
-                      <Link href={`/matches/${slug}`}>
-                        <CardContent className="p-4">
-                          <div className="mb-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {m.category.name}
-                            </Badge>
-                          </div>
-                          <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
-                              {m.toolA.logoUrl && (
-                                <AvatarImage src={m.toolA.logoUrl} alt={m.toolA.name} size={20} />
-                              )}
-                              <AvatarFallback className="text-[10px]">
-                                {m.toolA.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            {m.toolA.name}
-                            <span className="text-muted-foreground">vs</span>
-                            <Avatar className="h-5 w-5 bg-muted-foreground/25 ring-2 ring-muted-foreground/40">
-                              {m.toolB.logoUrl && (
-                                <AvatarImage src={m.toolB.logoUrl} alt={m.toolB.name} size={20} />
-                              )}
-                              <AvatarFallback className="text-[10px]">
-                                {m.toolB.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            {m.toolB.name}
-                          </div>
-                          {m.result.decisiveCaseCount > 0 ? (
-                            <PercentageBar
-                              valueA={m.result.aWins}
-                              valueB={m.result.bWins}
-                              labelA={m.toolA.name}
-                              labelB={m.toolB.name}
-                              size="sm"
-                            />
-                          ) : (
-                            <p className="text-xs text-muted-foreground">No decisive cases yet</p>
-                          )}
-                        </CardContent>
-                      </Link>
-                    </Card>
-                  )
-                })}
-              </div>
+              <HomepageRankingsPreview previews={rankingPreviews} />
               <div className="mt-3 text-center">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href="/matches" className="text-xs text-muted-foreground">
-                    View all matches &rarr;
+                  <Link
+                    href={`/rankings/${serverSettings.homepage.rankingPreview.groupSlug}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    View all other rankings &rarr;
                   </Link>
                 </Button>
               </div>
             </>
           ) : (
             <EmptyState
-              title="No benchmark matchups yet"
-              description="Head-to-head matchups come from recent manual match batches and benchmark data. Check back after benchmark runs or new manual matches complete."
+              title="No rankings yet"
+              description="Category rankings appear once published benchmark runs are available. Check back after the next benchmark cycle."
             />
           )}
         </section>

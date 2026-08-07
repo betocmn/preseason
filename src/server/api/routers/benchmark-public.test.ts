@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkCaseDecisions,
   benchmarkCaseResults,
@@ -557,6 +558,54 @@ describe('benchmark public routers', () => {
     })
 
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
+  })
+
+  it('returns curated homepage ranking previews in configured order', async () => {
+    const { authCategory, freshSeason, modelSnapshot, promptVersion, supabase } =
+      await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    const databaseCategory = first(
+      await db
+        .insert(subcategories)
+        .values({
+          categoryId: authCategory.categoryId,
+          name: 'Database',
+          slug: 'database',
+          displayOrder: 2,
+        })
+        .returning(),
+    )
+    await seedSeasonDecision({
+      db,
+      seasonId: freshSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: modelSnapshot.id,
+      categoryId: databaseCategory.id,
+      toolId: supabase?.id ?? '',
+      rawToolName: 'Supabase',
+      scheduledFor: '2026-01-01',
+    })
+
+    const caller = createTestCaller(null)
+    const previews = await caller.benchmarkRanking.listHomepagePreviews({
+      dateRange: 'all',
+      anchorDate: '2026-03-10',
+    })
+
+    expect(previews.map((preview) => preview.slug)).toEqual(['auth', 'database'])
+    expect(previews[0]?.groupSlug).toBe('devtools')
+    expect(previews[0]?.ranking?.items[0]?.toolSlug).toBe('clerk')
+    expect(previews[1]?.ranking?.items[0]?.toolSlug).toBe('supabase')
+    expect(previews[0]?.ranking?.items.length).toBeLessThanOrEqual(
+      serverSettings.homepage.rankingPreview.toolsPerCategory,
+    )
+
+    const recentPreviews = await caller.benchmarkRanking.listHomepagePreviews({
+      dateRange: '1m',
+      anchorDate: '2026-03-10',
+    })
+    expect(recentPreviews[0]?.ranking?.items[0]?.toolSlug).toBe('clerk')
+    expect(recentPreviews[1]?.ranking?.items).toEqual([])
   })
 
   it('uses an auto-published passing run without requiring publishRun', async () => {

@@ -51,11 +51,33 @@ const backgroundSmokePromptSelections = [
 // while the corpus is devtools-focused.
 const publicCategoryGroupSlugs: readonly string[] = ['devtools']
 
+// Curated subcategory order for the home rankings preview.
+const homepageRankingPreviewSubcategorySlugs: readonly string[] = [
+  'auth',
+  'backend-language',
+  'database',
+  'orm',
+  'jobs',
+  'email',
+  'payments',
+  'storage',
+  'hosting',
+  'analytics',
+  'llm-observability',
+  'llm-evals',
+]
+
 export const serverSettings = {
   homepage: {
     promptCarouselPageSize: 5,
     promptCarouselRevalidateSeconds: 3_600,
     promptCarouselSnapshotMaxRunIds: 1_000,
+    rankingPreview: {
+      groupSlug: 'devtools',
+      subcategorySlugs: homepageRankingPreviewSubcategorySlugs,
+      toolsPerCategory: 3,
+      revalidateSeconds: 3_600,
+    },
   },
   publicSite: {
     categoryGroupSlugs: publicCategoryGroupSlugs,
