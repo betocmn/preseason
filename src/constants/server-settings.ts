@@ -2,23 +2,12 @@ import type { PromptLevel } from '~/server/llm/prompts'
 
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
-const benchmarkNewRunIntervalHours = 3 * 24
 const benchmarkNewRunStartUtcHour = 12
-const benchmarkNewRunUtcWeekdays: readonly number[] = [1, 4]
+const benchmarkNewRunUtcMonthDays: readonly number[] = [5, 15, 25]
 const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
 const matchRequestTimeoutMs = 2 * 60 * 1000
-
-if (
-  benchmarkNewRunIntervalHours < 24 ||
-  !Number.isInteger(benchmarkNewRunIntervalHours) ||
-  benchmarkNewRunIntervalHours % 24 !== 0
-) {
-  throw new Error(
-    'benchmarkNewRunIntervalHours must be a whole-number multiple of 24 because benchmark runs are unique per UTC date.',
-  )
-}
 
 if (
   !Number.isInteger(benchmarkNewRunStartUtcHour) ||
@@ -29,13 +18,15 @@ if (
 }
 
 if (
-  benchmarkNewRunUtcWeekdays.length === 0 ||
-  new Set(benchmarkNewRunUtcWeekdays).size !== benchmarkNewRunUtcWeekdays.length ||
-  benchmarkNewRunUtcWeekdays.some(
-    (weekday) => !Number.isInteger(weekday) || weekday < 0 || weekday > 6,
+  benchmarkNewRunUtcMonthDays.length === 0 ||
+  new Set(benchmarkNewRunUtcMonthDays).size !== benchmarkNewRunUtcMonthDays.length ||
+  benchmarkNewRunUtcMonthDays.some(
+    (monthDay) => !Number.isInteger(monthDay) || monthDay < 1 || monthDay > 31,
   )
 ) {
-  throw new Error('benchmarkNewRunUtcWeekdays must contain unique UTC weekdays from 0 through 6.')
+  throw new Error(
+    'benchmarkNewRunUtcMonthDays must contain unique UTC month days from 1 through 31.',
+  )
 }
 
 const backgroundSmokePromptSelections = [
@@ -94,12 +85,9 @@ export const serverSettings = {
     // Keep this aligned with src/app/api/cron/benchmark-run/route.ts maxDuration.
     // Bound benchmark cron work so each invocation stays short and resumable.
     cronMaxDurationSeconds: benchmarkCronMaxDurationSeconds,
-    // Fresh benchmark runs start only after this many hours have elapsed since the
-    // latest run date for the active season.
-    newRunIntervalHours: benchmarkNewRunIntervalHours,
-    // Fresh benchmark runs open on the configured UTC weekdays at this UTC hour.
+    // Fresh benchmark runs open on configured UTC month days at this UTC hour.
     newRunStartUtcHour: benchmarkNewRunStartUtcHour,
-    newRunUtcWeekdays: benchmarkNewRunUtcWeekdays,
+    newRunUtcMonthDays: benchmarkNewRunUtcMonthDays,
     casesPerCronInvocation: 1,
     // Stop retrying a case after this many attempts to avoid burning API credits.
     maxCaseAttempts: 3,

@@ -1,11 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { benchmarkProtocols, benchmarkRuns, benchmarkSeasons } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
-import {
-  getNextEligibleBenchmarkRunAt,
-  monthsAgo,
-  resolveBenchmarkCronRunTarget,
-} from './benchmark'
+import { monthsAgo, resolveBenchmarkCronRunTarget } from './benchmark'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -65,29 +61,56 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
-  it('waits for the current day start hour before a season first run', async () => {
+  it('waits for the current calendar window before a season first run', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
     const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T03:00:00.000Z'),
+      now: new Date('2026-03-05T11:59:59.999Z'),
     })
 
     expect(earlyTarget).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      nextEligibleAt: '2026-03-26T12:00:00.000Z',
+      nextEligibleAt: '2026-03-05T12:00:00.000Z',
     })
 
     const dueTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
+      now: new Date('2026-03-05T12:00:00.000Z'),
     })
 
     expect(dueTarget).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-26',
+      scheduledFor: '2026-03-05',
+      source: 'today',
+    })
+  })
+
+  it('does not backfill a missed calendar window', async () => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    const missedWindowTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-06T12:00:00.000Z'),
+    })
+
+    expect(missedWindowTarget).toEqual({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      seasonId: season.id,
+      nextEligibleAt: '2026-03-15T12:00:00.000Z',
+    })
+
+    const nextWindowTarget = await resolveBenchmarkCronRunTarget(db, {
+      now: new Date('2026-03-15T12:00:00.000Z'),
+    })
+
+    expect(nextWindowTarget).toMatchObject({
+      kind: 'run',
+      seasonId: season.id,
+      scheduledFor: '2026-03-15',
       source: 'today',
     })
   })
@@ -97,24 +120,24 @@ describe('resolveBenchmarkCronRunTarget', () => {
     const season = await seedActiveBenchmarkSeason(db)
 
     await db.insert(benchmarkRuns).values([
-      { seasonId: season.id, scheduledFor: '2026-03-24', status: 'completed' },
-      { seasonId: season.id, scheduledFor: '2026-03-25', status: 'failed' },
-      { seasonId: season.id, scheduledFor: '2026-03-26', status: 'pending' },
+      { seasonId: season.id, scheduledFor: '2026-03-05', status: 'completed' },
+      { seasonId: season.id, scheduledFor: '2026-03-10', status: 'failed' },
+      { seasonId: season.id, scheduledFor: '2026-03-15', status: 'pending' },
     ])
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
+      now: new Date('2026-03-15T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-25',
+      scheduledFor: '2026-03-10',
       source: 'unfinished',
     })
   })
 
-  it('keeps an older healthy running run ahead of starting a new day', async () => {
+  it('keeps an older healthy running run ahead of starting a new calendar day', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
@@ -123,16 +146,16 @@ describe('resolveBenchmarkCronRunTarget', () => {
       .values([
         {
           seasonId: season.id,
-          scheduledFor: '2026-03-25',
+          scheduledFor: '2026-03-14',
           status: 'running',
-          startedAt: new Date('2026-03-25T00:00:00.000Z'),
+          startedAt: new Date('2026-03-14T00:00:00.000Z'),
           qcSummaryJson: {
-            lastHeartbeatAt: '2026-03-25T00:01:00.000Z',
+            lastHeartbeatAt: '2026-03-14T00:01:00.000Z',
           },
         },
         {
           seasonId: season.id,
-          scheduledFor: '2026-03-26',
+          scheduledFor: '2026-03-15',
           status: 'pending',
         },
       ])
@@ -143,7 +166,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     }
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
+      now: new Date('2026-03-15T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
@@ -155,7 +178,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
-  it('resumes a multi-day unfinished run instead of starting the next cadence run', async () => {
+  it('resumes a multi-day unfinished run instead of starting the next calendar run', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
@@ -163,7 +186,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
       .insert(benchmarkRuns)
       .values({
         seasonId: season.id,
-        scheduledFor: '2026-03-25',
+        scheduledFor: '2026-03-15',
         status: 'pending',
       })
       .returning({ id: benchmarkRuns.id, scheduledFor: benchmarkRuns.scheduledFor })
@@ -173,7 +196,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     }
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-04-12T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
@@ -185,24 +208,25 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
-  it('starts the next eligible run after the cadence window opens', async () => {
+  it('starts a fresh calendar run after an earlier manual run', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-23',
+      scheduledFor: '2026-03-14',
+      trigger: 'manual',
       status: 'completed',
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
+      now: new Date('2026-03-15T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-26',
+      scheduledFor: '2026-03-15',
       source: 'today',
     })
     if (target.kind !== 'run') {
@@ -211,60 +235,49 @@ describe('resolveBenchmarkCronRunTarget', () => {
     expect(target.runId).toBeUndefined()
   })
 
-  it('waits for the configured weekday start hour after the cadence window opens', async () => {
+  it('waits for the configured start hour of the next calendar window', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-23',
+      scheduledFor: '2026-03-05',
       status: 'completed',
     })
 
     const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T03:00:00.000Z'),
+      now: new Date('2026-03-15T03:00:00.000Z'),
     })
 
     expect(earlyTarget).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      latestScheduledFor: '2026-03-23',
-      nextEligibleAt: '2026-03-26T12:00:00.000Z',
-    })
-
-    const dueTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-26T12:00:00.000Z'),
-    })
-
-    expect(dueTarget).toMatchObject({
-      kind: 'run',
-      seasonId: season.id,
-      scheduledFor: '2026-03-26',
-      source: 'today',
+      latestScheduledFor: '2026-03-05',
+      nextEligibleAt: '2026-03-15T12:00:00.000Z',
     })
   })
 
-  it('waits for the configured cadence before starting a fresh run', async () => {
+  it('does not re-run a terminal benchmark created for the current calendar date', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-25',
+      scheduledFor: '2026-03-15',
       status: 'published',
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-25T12:00:00.000Z'),
+      now: new Date('2026-03-15T12:00:00.000Z'),
     })
 
     expect(target).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      latestScheduledFor: '2026-03-25',
-      nextEligibleAt: getNextEligibleBenchmarkRunAt('2026-03-25').toISOString(),
+      latestScheduledFor: '2026-03-15',
+      nextEligibleAt: '2026-03-25T12:00:00.000Z',
     })
   })
 })
