@@ -29,13 +29,13 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a twice-weekly cadence window opens for the newest active season | Every minute, with the app-level cadence guard opening fresh logical runs Mondays and Thursdays at 12:00 UTC | `* * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute, with the app-level cadence guard opening fresh logical runs on the 5th, 15th, and 25th at 12:00 UTC | `* * * * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Mondays and Thursdays at 12:00 UTC | `0 12 * * 1,4` |
 | `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 
 In practice:
 
-- Benchmark cron starts at most one fresh logical run per twice-weekly cadence window
+- Benchmark cron starts at most one fresh logical run per configured calendar window
   and otherwise resumes unfinished benchmark work across cron ticks and calendar days
 - Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the twice-weekly background dispatcher that keeps queued match batches moving
@@ -60,11 +60,11 @@ src/server/llm/match/parser.ts
 1. Cron authenticates with `Authorization: Bearer <CRON_SECRET>`.
 2. The route loads the newest `active` benchmark season.
 3. Benchmark cron targets the oldest unfinished run first and only starts a new
-   run when no unfinished work exists and
-   `serverSettings.benchmark.newRunIntervalHours` has elapsed since the latest
-   run date, then a configured UTC weekday/start-hour window has arrived. The
-   default is `72` hours with `serverSettings.benchmark.newRunUtcWeekdays = [1, 4]`
-   and `serverSettings.benchmark.newRunStartUtcHour = 12`.
+   run when no unfinished work exists and a configured UTC month-day/start-hour
+   window has arrived. The default is
+   `serverSettings.benchmark.newRunUtcMonthDays = [5, 15, 25]` and
+   `serverSettings.benchmark.newRunStartUtcHour = 12`. Missed calendar windows
+   are not backfilled.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that
    `(season, date)` pair.
 5. Run initialization is serialized with a Postgres advisory lock so snapshot
