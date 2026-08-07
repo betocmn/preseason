@@ -1,9 +1,11 @@
 export const revalidate = 3600 // 1 hour
 
 import { unstable_cache } from 'next/cache'
+import Link from 'next/link'
 import { EmptyState } from '~/components/public/empty-state'
 import { HomepageRankingsPreview } from '~/components/public/homepage-rankings-preview'
 import { PromptCarousel } from '~/components/public/prompt-carousel'
+import { Button } from '~/components/ui/button'
 import { serverSettings } from '~/constants/server-settings'
 import { deferToRequestWhenDatabaseUnavailable } from '~/server/prerender'
 import { publicApi } from '~/trpc/server'
@@ -69,7 +71,19 @@ export default async function HomePage() {
             <h2 className="text-base font-semibold">Top Devtool Rankings</h2>
           </div>
           {rankingPreviews.length > 0 ? (
-            <HomepageRankingsPreview previews={rankingPreviews} />
+            <>
+              <HomepageRankingsPreview previews={rankingPreviews} />
+              <div className="mt-3 text-center">
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    href={`/rankings/${serverSettings.homepage.rankingPreview.groupSlug}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    View all other rankings &rarr;
+                  </Link>
+                </Button>
+              </div>
+            </>
           ) : (
             <EmptyState
               title="No rankings yet"

@@ -22,7 +22,7 @@ export default function PublicLoading() {
               <div key={key} className="rounded-lg border p-4">
                 <Skeleton className="mb-4 h-5 w-32" />
                 <div className="space-y-2">
-                  {Array.from({ length: 5 }, (_, j) => `${key}-tool-${j}`).map((rowKey) => (
+                  {Array.from({ length: 3 }, (_, j) => `${key}-tool-${j}`).map((rowKey) => (
                     <div
                       key={rowKey}
                       className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2"
