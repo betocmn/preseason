@@ -12,26 +12,20 @@ describe('serverSettings.benchmark', () => {
     expect(serverSettings.benchmark.maxCaseAttempts).toBeGreaterThanOrEqual(2)
   })
 
-  it('starts fresh runs on whole-day cadence intervals', () => {
-    expect(serverSettings.benchmark.newRunIntervalHours).toBe(3 * 24)
-    expect(serverSettings.benchmark.newRunIntervalHours).toBeGreaterThanOrEqual(24)
-    expect(serverSettings.benchmark.newRunIntervalHours % 24).toBe(0)
-  })
-
   it('opens fresh benchmark runs at the configured UTC hour', () => {
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
     expect(serverSettings.benchmark.newRunStartUtcHour).toBeGreaterThanOrEqual(0)
     expect(serverSettings.benchmark.newRunStartUtcHour).toBeLessThanOrEqual(23)
   })
 
-  it('opens fresh benchmark runs on the configured UTC weekdays', () => {
-    expect(serverSettings.benchmark.newRunUtcWeekdays).toEqual([1, 4])
-    expect(new Set(serverSettings.benchmark.newRunUtcWeekdays).size).toBe(
-      serverSettings.benchmark.newRunUtcWeekdays.length,
+  it('opens fresh benchmark runs on unique configured UTC month days', () => {
+    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5, 15, 25])
+    expect(new Set(serverSettings.benchmark.newRunUtcMonthDays).size).toBe(
+      serverSettings.benchmark.newRunUtcMonthDays.length,
     )
-    for (const weekday of serverSettings.benchmark.newRunUtcWeekdays) {
-      expect(weekday).toBeGreaterThanOrEqual(0)
-      expect(weekday).toBeLessThanOrEqual(6)
+    for (const monthDay of serverSettings.benchmark.newRunUtcMonthDays) {
+      expect(monthDay).toBeGreaterThanOrEqual(1)
+      expect(monthDay).toBeLessThanOrEqual(31)
     }
   })
 })
