@@ -390,8 +390,9 @@ export async function prepareScoringContext(
   seasonId: string | undefined,
   windowType: WindowType,
   anchorDate: string,
+  startDate?: string,
 ): Promise<ScoringContext> {
-  const publishedRunIds = await getPublishedRunIds(db, seasonId, anchorDate)
+  const publishedRunIds = await getPublishedRunIds(db, seasonId, anchorDate, startDate)
   const runIds = sliceRunIdsForWindow(publishedRunIds, windowType)
   const weightConfigs =
     runIds.length > 0 ? await getWeightConfigsByRunIds(db, runIds) : new Map<string, WeightConfig>()

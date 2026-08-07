@@ -71,7 +71,11 @@ export function HomepageRankingsPreview({ previews }: HomepageRankingsPreviewPro
               )}
               <div className="pt-1">
                 <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link href={href} className="text-xs text-muted-foreground">
+                  <Link
+                    href={href}
+                    aria-label={`View ${preview.name} rankings`}
+                    className="text-xs text-muted-foreground"
+                  >
                     View more &rarr;
                   </Link>
                 </Button>

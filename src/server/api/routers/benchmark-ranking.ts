@@ -169,7 +169,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const preview = serverSettings.homepage.rankingPreview
       const anchorDate = input?.anchorDate ?? new Date().toISOString().slice(0, 10)
       const dateRange = input?.dateRange ?? 'all'
-      const { windowType, startDate, previousStartDate } = resolveDateRange(dateRange, anchorDate)
+      const { windowType, startDate } = resolveDateRange(dateRange, anchorDate)
 
       if (!serverSettings.publicSite.categoryGroupSlugs.includes(preview.groupSlug)) {
         return []
@@ -193,37 +193,59 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const ordered = preview.subcategorySlugs
         .map((slug) => bySlug.get(slug))
         .filter((row): row is NonNullable<typeof row> => row != null)
+      if (ordered.length === 0) {
+        return []
+      }
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input?.seasonId)
-
-      return Promise.all(
-        ordered.map(async (category) => {
-          const ranking = await computeCategoryRanking(ctx.db, {
-            categoryId: category.id,
-            seasonId,
-            windowType,
-            anchorDate,
-            startDate,
-            previousStartDate,
-            promptLevel: input?.promptLevel,
-            modelTier: input?.modelTier,
-            modelSnapshotId: input?.modelSnapshotId,
-          })
-
-          return {
-            slug: category.slug,
-            name: category.name,
-            groupSlug: preview.groupSlug,
-            ranking: ranking
-              ? {
-                  items: ranking.items.slice(0, preview.toolsPerCategory),
-                  totalEligibleDecisions: ranking.totalEligibleDecisions,
-                  meetsPublicationThreshold: ranking.meetsPublicationThreshold,
-                }
-              : null,
-          }
-        }),
+      const scoringCtx = await prepareScoringContext(
+        ctx.db,
+        seasonId,
+        windowType,
+        anchorDate,
+        startDate,
       )
+      const allDecisions = await fetchDecisions(
+        ctx.db,
+        scoringCtx.runIds,
+        ordered.map((category) => category.id),
+        {
+          promptLevel: input?.promptLevel,
+          modelTier: input?.modelTier,
+          modelSnapshotId: input?.modelSnapshotId,
+        },
+      )
+
+      const decisionsByCategory = new Map<string, DecisionRow[]>()
+      for (const decision of allDecisions) {
+        let decisions = decisionsByCategory.get(decision.categoryId)
+        if (!decisions) {
+          decisions = []
+          decisionsByCategory.set(decision.categoryId, decisions)
+        }
+        decisions.push(decision)
+      }
+
+      return ordered.map((category) => {
+        const ranking = rankFromDecisions(
+          decisionsByCategory.get(category.id) ?? [],
+          scoringCtx.weightConfigs,
+          category.id,
+          windowType,
+          anchorDate,
+        )
+
+        return {
+          slug: category.slug,
+          name: category.name,
+          groupSlug: preview.groupSlug,
+          ranking: {
+            items: ranking.items.slice(0, preview.toolsPerCategory),
+            totalEligibleDecisions: ranking.totalEligibleDecisions,
+            meetsPublicationThreshold: ranking.meetsPublicationThreshold,
+          },
+        }
+      })
     }),
 
   listIndexGroups: publicProcedure
