@@ -23,7 +23,8 @@ Preseason — Tracks what tools LLMs recommend for vibe-coding prompts. See `CLA
 - Place tests as colocated `*.test.ts` files next to implementation files
 - Use `src/test/` only for shared test infra/utilities; do not use `__test__` or `__tests__` folders in app code
 - English only — no i18n, plain strings in components
-- **Never** add AI attribution (e.g. `Co-Authored-By`) to git commit messages
+- **Never** add a `Co-authored-by`, `Co-Authored-By`, or any other co-author trailer to a Git commit message
+- **Never** credit, mention, or identify an AI system, model, or agent in Git commit messages, trailers, author/committer metadata, or branch names. This includes Claude, Codex, Cursor, Cursor Agent, Cursoragent, Grok, and any equivalent system.
 
 ### Constants
 
