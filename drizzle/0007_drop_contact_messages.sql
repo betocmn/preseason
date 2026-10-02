@@ -1,0 +1,1 @@
+DROP TABLE "preseason_contact_message" CASCADE;

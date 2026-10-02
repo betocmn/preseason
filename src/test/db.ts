@@ -58,7 +58,6 @@ export async function cleanTestDatabase(): Promise<void> {
   await db.delete(schema.benchmarkProtocols).where(drizzleSql`true`)
   await db.delete(schema.toolCandidates).where(drizzleSql`true`)
   await db.delete(schema.toolAliases).where(drizzleSql`true`)
-  await db.delete(schema.contactMessages).where(drizzleSql`true`)
   await db.delete(schema.comments).where(drizzleSql`true`)
   await db.delete(schema.criticProfiles).where(drizzleSql`true`)
   await db.delete(schema.toolCategories).where(drizzleSql`true`)
