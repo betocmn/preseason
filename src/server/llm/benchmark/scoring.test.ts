@@ -25,10 +25,10 @@ import {
   computeCategoryRanking,
   computeCategoryRankings,
   computeHeadToHead,
+  computeHeadToHeads,
   fetchDecisions,
   getWeightForTier,
   headToHeadFromDecisions,
-  headToHeadFromRanking,
   prepareScoringContext,
   rankFromDecisions,
   sliceRunIdsForWindow,
@@ -509,6 +509,48 @@ describe('computeCategoryRanking', () => {
         fixture.authCat.id,
       ),
     )
+
+    // Multiple pairs in the same category, reversed tools, and empty pairs must
+    // retain independent counts when the underlying history is scanned once.
+    const pairs = [
+      h2hFilters,
+      { ...h2hFilters, toolAId: fixture.supabase.id, toolBId: fixture.clerk.id },
+      {
+        categoryId: fixture.dbCat.id,
+        toolAId: fixture.drizzleTool.id,
+        toolBId: fixture.supabase.id,
+      },
+      { ...h2hFilters, toolBId: fixture.clerk.id },
+      { ...h2hFilters, categoryId: fixture.group.id },
+    ]
+    for (const selection of [
+      {},
+      {
+        modelSnapshotIds: [first(fixture.modelSnapshots).id],
+        promptLevel: 'beginner' as const,
+      },
+    ]) {
+      const selected = await fetchDecisions(db, context.runIds, categoryIds, selection)
+      const comparisons = await computeHeadToHeads(db, { ...filters, ...selection, pairs })
+      expect(comparisons).toEqual(
+        pairs.map((pair) =>
+          headToHeadFromDecisions(
+            selected.filter((row) => row.categoryId === pair.categoryId),
+            context.weightConfigs,
+            pair.toolAId,
+            pair.toolBId,
+            pair.categoryId,
+          ),
+        ),
+      )
+    }
+    expect(await computeHeadToHeads(db, { ...filters, pairs: [] })).toEqual([])
+    const beforePublication = await computeHeadToHeads(db, {
+      ...filters,
+      anchorDate: '2026-02-01',
+      pairs,
+    })
+    expect(beforePublication.every((result) => result.decisiveCaseCount === 0)).toBe(true)
   })
 
   it('excludes incomplete, unresolved, and invalid decisions from SQL summaries', async () => {
@@ -1482,60 +1524,5 @@ describe('computeHeadToHead', () => {
     expect(result.bWins).toBe(0)
     expect(result.decisiveCaseCount).toBe(0)
     expect(result.meetsPublicationThreshold).toBe(false)
-  })
-
-  it('derives the same totals from a ranking over the same runs', async () => {
-    const db = getTestDb()
-    const fixture = await seedScoringFixture(db)
-
-    // 4 Clerk, 2 Supabase, 2 Drizzle, 1 none
-    const toolIds = [
-      fixture.clerk.id,
-      fixture.clerk.id,
-      fixture.clerk.id,
-      fixture.clerk.id,
-      fixture.supabase.id,
-      fixture.supabase.id,
-      fixture.drizzleTool.id,
-      fixture.drizzleTool.id,
-    ]
-    await seedPublishedRun(
-      db,
-      fixture,
-      '2026-03-10',
-      fixture.caseRows.map((_, caseIndex) => {
-        const toolId = toolIds[caseIndex]
-        return toolId
-          ? { caseIndex, categoryId: fixture.authCat.id, decisionType: 'tool' as const, toolId }
-          : { caseIndex, categoryId: fixture.authCat.id, decisionType: 'none' as const }
-      }),
-    )
-
-    const window = {
-      seasonId: fixture.season.id,
-      windowType: 'trailing_28d' as const,
-      anchorDate: '2026-03-10',
-    }
-    const pair = { toolAId: fixture.clerk.id, toolBId: fixture.supabase.id }
-    const [ranking] = await computeCategoryRankings(db, {
-      ...window,
-      categoryIds: [fixture.authCat.id],
-    })
-    const expected = await computeHeadToHead(db, {
-      ...window,
-      ...pair,
-      categoryId: fixture.authCat.id,
-    })
-
-    expect([expected.aWins, expected.bWins, expected.abstains, expected.otherToolCount]).toEqual([
-      4, 2, 1, 2,
-    ])
-    expect(
-      headToHeadFromRanking(
-        requireValue(ranking, 'Expected an auth ranking'),
-        pair.toolAId,
-        pair.toolBId,
-      ),
-    ).toEqual({ ...expected, modelBreakdown: [], promptBreakdown: [] })
   })
 })

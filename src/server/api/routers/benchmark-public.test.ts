@@ -1695,7 +1695,7 @@ describe('benchmark public routers', () => {
     expect([featured[0]?.result.aWins, featured[0]?.result.bWins].sort()).toEqual([1, 2])
   })
 
-  it('derives featured benchmark comparisons from rankings without per-pair scans', async () => {
+  it('batches featured benchmark comparisons while preserving order and limit', async () => {
     const fixture = await seedBenchmarkPublicFixture()
     const db = getTestDb()
     const otherCategories = await db
@@ -1745,7 +1745,7 @@ describe('benchmark public routers', () => {
       ),
     )
 
-    const comparisons = vi.spyOn(scoring, 'computeHeadToHead')
+    const comparisons = vi.spyOn(scoring, 'computeHeadToHeads')
 
     try {
       const featured = await createTestCaller(null).benchmarkMatch.listFeatured({
@@ -1753,20 +1753,14 @@ describe('benchmark public routers', () => {
         limit: 2,
       })
 
-      expect(comparisons).not.toHaveBeenCalled()
+      expect(comparisons).toHaveBeenCalledTimes(1)
+      expect(comparisons.mock.calls[0]?.[1].pairs.map((pair) => pair.categoryId)).toEqual([
+        fixture.authCategory.id,
+        first(otherCategories).id,
+      ])
       expect(featured.map((entry) => entry.category.slug)).toEqual(['auth', 'database'])
       expect(featured.map((entry) => entry.result.decisiveCaseCount)).toEqual([2, 2])
       expect(featured.every((entry) => entry.status === 'active')).toBe(true)
-      for (const entry of featured) {
-        const expected = await scoring.computeHeadToHead(db, {
-          categoryId: entry.category.id,
-          toolAId: entry.toolA.id,
-          toolBId: entry.toolB.id,
-          windowType: 'season_to_date',
-          anchorDate: new Date().toISOString().slice(0, 10),
-        })
-        expect(entry.result).toEqual({ ...expected, modelBreakdown: [], promptBreakdown: [] })
-      }
     } finally {
       comparisons.mockRestore()
     }

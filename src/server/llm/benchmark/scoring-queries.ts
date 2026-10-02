@@ -111,19 +111,43 @@ export async function queryHeadToHeadAggregates(
   runIds: string[],
   filters: HeadToHeadFilters,
 ): Promise<HeadToHeadAggregate[]> {
-  if (!runIds.length) return []
+  const rows = await queryHeadToHeadBatchAggregates(db, runIds, [filters], filters)
+  return rows.map(({ pairIndex: _pairIndex, ...row }) => row)
+}
 
-  return db.execute<HeadToHeadAggregate>(sql`
-    with eligible as (${eligibleDecisions(runIds, [filters.categoryId], filters)}),
+export type HeadToHeadPair = Pick<HeadToHeadFilters, 'categoryId' | 'toolAId' | 'toolBId'>
+export type HeadToHeadBatchAggregate = HeadToHeadAggregate & { pairIndex: number }
+
+/** Scan published decisions once, even when a page compares many categories. */
+export async function queryHeadToHeadBatchAggregates(
+  db: DatabaseClient,
+  runIds: string[],
+  pairs: HeadToHeadPair[],
+  filters: DecisionFilters,
+): Promise<HeadToHeadBatchAggregate[]> {
+  if (!runIds.length || !pairs.length) return []
+
+  const pairValues = pairs.map(
+    (pair, index) =>
+      sql`(${index}::integer, ${pair.categoryId}::uuid, ${pair.toolAId}::uuid, ${pair.toolBId}::uuid)`,
+  )
+  const categoryIds = [...new Set(pairs.map((pair) => pair.categoryId))]
+
+  return db.execute<HeadToHeadBatchAggregate>(sql`
+    with eligible as (${eligibleDecisions(runIds, categoryIds, filters)}),
+    pairs(pair_index, category_id, tool_a_id, tool_b_id) as (values ${sql.join(pairValues, sql`, `)}),
     outcomes as (
-      select *, case
-        when tool_id = ${filters.toolAId} then 'a'
-        when tool_id = ${filters.toolBId} then 'b'
+      select eligible.*, pairs.pair_index, case
+        when tool_id = pairs.tool_a_id then 'a'
+        when tool_id = pairs.tool_b_id then 'b'
         when decision_type = 'none' then 'none'
         else 'other' end as outcome
       from eligible
+      join pairs on eligible.category_id = pairs.category_id
+        and pairs.tool_a_id <> pairs.tool_b_id
     )
-    select model_id as "modelId", model_name as "modelName", model_tier as "modelTier",
+    select pair_index as "pairIndex",
+      model_id as "modelId", model_name as "modelName", model_tier as "modelTier",
       prompt_id as "promptId", prompt_slug as "promptSlug", prompt_level as "promptLevel",
       count(*) filter (where outcome = 'a')::integer as "aWins",
       count(*) filter (where outcome = 'b')::integer as "bWins",
@@ -132,6 +156,10 @@ export async function queryHeadToHeadAggregates(
       coalesce(sum(weight) filter (where outcome = 'a'), 0) as "weightedAWins",
       coalesce(sum(weight) filter (where outcome = 'b'), 0) as "weightedBWins"
     from outcomes
-    group by grouping sets ((), (model_id, model_name, model_tier), (prompt_id, prompt_slug, prompt_level))
+    group by grouping sets (
+      (pair_index),
+      (pair_index, model_id, model_name, model_tier),
+      (pair_index, prompt_id, prompt_slug, prompt_level)
+    )
   `)
 }
