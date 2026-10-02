@@ -2,6 +2,7 @@
 
 import { Bot, CalendarRange, FlaskConical, Layers, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useCanonicalModelRange } from '~/components/public/use-canonical-model-range'
 import {
   Select,
   SelectContent,
@@ -22,12 +23,11 @@ type CategoryGroup = {
 type BenchmarkRankingFiltersProps = {
   groups: CategoryGroup[]
   modelFilters: ModelFilterCompany[]
-  archivedModelFilters?: ModelFilterCompany[]
   currentGroup?: string
   currentSub?: string
   currentPromptLevel?: string
   currentModelTier?: string
-  currentModelSnapshotId?: string
+  currentModelRangeId?: string
   basePath?: string
   showCategorySelect?: boolean
 }
@@ -35,31 +35,20 @@ type BenchmarkRankingFiltersProps = {
 export function BenchmarkRankingFilters({
   groups,
   modelFilters,
-  archivedModelFilters = [],
   currentGroup,
   currentSub,
   currentPromptLevel,
   currentModelTier,
-  currentModelSnapshotId,
+  currentModelRangeId,
   basePath = '/rankings',
   showCategorySelect = true,
 }: BenchmarkRankingFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  useCanonicalModelRange()
   const modelLookup = new Map(
-    [...modelFilters, ...archivedModelFilters].flatMap((company) =>
-      company.families.flatMap((family) =>
-        family.models.map((model) => [
-          model.id,
-          {
-            ...model,
-            company: company.name,
-            family: family.name,
-          },
-        ]),
-      ),
-    ),
+    modelFilters.flatMap((company) => company.ranges.map((range) => [range.id, range])),
   )
   const effectiveGroup = showCategorySelect
     ? (searchParams.get('category') ?? currentGroup)
@@ -67,17 +56,15 @@ export function BenchmarkRankingFilters({
   const effectiveSub = showCategorySelect ? (searchParams.get('sub') ?? currentSub) : currentSub
   const effectivePromptLevel = searchParams.get('promptLevel') ?? currentPromptLevel
   const effectiveModelTier = searchParams.get('modelTier') ?? currentModelTier
-  const modelSnapshotParam = searchParams.get('modelSnapshotId') ?? currentModelSnapshotId
+  const modelRangeParam = searchParams.get('modelRangeId') ?? currentModelRangeId
 
   const dateRangeParam = searchParams.get('dateRange')
   const effectiveDateRange =
     (['1m', '3m', '6m'] as const).find((r) => r === dateRangeParam) ?? 'all'
 
-  const normalizedModelSnapshotId =
-    modelSnapshotParam && modelLookup.has(modelSnapshotParam) ? modelSnapshotParam : undefined
-  const selectedModel = normalizedModelSnapshotId
-    ? modelLookup.get(normalizedModelSnapshotId)
-    : undefined
+  const normalizedModelRangeId =
+    modelRangeParam && modelLookup.has(modelRangeParam) ? modelRangeParam : undefined
+  const selectedModel = normalizedModelRangeId ? modelLookup.get(normalizedModelRangeId) : undefined
 
   function navigate(updates: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -232,52 +219,32 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={normalizedModelSnapshotId ?? 'all'}
+          value={normalizedModelRangeId ?? 'all'}
           onValueChange={(val) => {
-            navigate({ modelSnapshotId: val === 'all' ? undefined : val })
+            navigate({ modelRangeId: val === 'all' ? undefined : val, modelSnapshotId: undefined })
           }}
         >
           <SelectTrigger className="h-9 w-[260px] border-border/60 bg-background/80 text-sm">
             <span className="truncate">
-              {selectedModel
-                ? `${selectedModel.family} - ${selectedModel.version}`
-                : 'All Model Versions'}
+              {selectedModel?.label ??
+                (modelRangeParam ? 'Unknown Model Range' : 'All Model Ranges')}
             </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Model Versions</SelectItem>
+            <SelectItem value="all">All Model Ranges</SelectItem>
             {modelFilters.map((company, companyIndex) => (
               <SelectGroup key={company.name}>
                 {companyIndex > 0 && <SelectSeparator />}
                 <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-[#7da1ff] dark:text-[#93b0ff]">
                   {company.name}
                 </SelectLabel>
-                {company.families.flatMap((family) =>
-                  family.models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <span className="pl-2">{`${family.name} - ${model.version}`}</span>
-                    </SelectItem>
-                  )),
-                )}
+                {company.ranges.map((range) => (
+                  <SelectItem key={range.id} value={range.id}>
+                    <span className="pl-2">{range.label}</span>
+                  </SelectItem>
+                ))}
               </SelectGroup>
             ))}
-            {archivedModelFilters.length > 0 && (
-              <SelectGroup>
-                <SelectSeparator />
-                <SelectLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Archived
-                </SelectLabel>
-                {archivedModelFilters.flatMap((company) =>
-                  company.families.flatMap((family) =>
-                    family.models.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        <span className="pl-2">{`${company.name} · ${family.name} - ${model.version}`}</span>
-                      </SelectItem>
-                    )),
-                  ),
-                )}
-              </SelectGroup>
-            )}
           </SelectContent>
         </Select>
       </div>

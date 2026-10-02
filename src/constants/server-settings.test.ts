@@ -19,7 +19,7 @@ describe('serverSettings.benchmark', () => {
   })
 
   it('opens fresh benchmark runs on unique configured UTC month days', () => {
-    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5, 15, 25])
+    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5])
     expect(new Set(serverSettings.benchmark.newRunUtcMonthDays).size).toBe(
       serverSettings.benchmark.newRunUtcMonthDays.length,
     )

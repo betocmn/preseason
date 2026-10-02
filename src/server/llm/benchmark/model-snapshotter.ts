@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { serverSettings } from '~/constants/server-settings'
 import type * as schema from '~/server/db/schema'
 import { benchmarkModelSnapshots, llms } from '~/server/db/schema'
 import { classifyModelTier, extractModelFamilyKey } from '~/server/llm/benchmark/model-tier'
@@ -9,6 +10,18 @@ export type ModelSnapshotParams = {
   topP?: number | null
   maxTokens?: number | null
   seed?: number | null
+}
+
+export function resolveModelSnapshotParams(
+  modelId: string,
+  params: ModelSnapshotParams,
+): ModelSnapshotParams {
+  if (
+    serverSettings.benchmark.providerDefaultSamplingModelIds.includes(modelId.trim().toLowerCase())
+  ) {
+    return { ...params, temperature: null, topP: null }
+  }
+  return params
 }
 
 export function computeSnapshotKey(requestedModelId: string, params: ModelSnapshotParams): string {
@@ -37,6 +50,7 @@ export async function getOrCreateModelSnapshot(
     throw new Error(`LLM ${llmId} has no modelId`)
   }
 
+  params = resolveModelSnapshotParams(requestedModelId, params)
   const snapshotKey = computeSnapshotKey(requestedModelId, params)
   const tier = classifyModelTier(requestedModelId)
   const modelFamilyKey = extractModelFamilyKey(requestedModelId)

@@ -562,6 +562,139 @@ describe('benchmark public routers', () => {
     expect(result.ranking?.items[0]?.toolSlug).toBe('clerk')
   })
 
+  it('pools measured versions across seasons, converts legacy links, and never exposes version breakdowns', async () => {
+    const fixture = await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    const { modelSnapshot, freshSeason, promptVersion, authCategory, clerk } = fixture
+    await db
+      .update(benchmarkModelSnapshots)
+      .set({ requestedModelId: 'anthropic/claude-opus-4.6', modelVersion: '4.6' })
+      .where(eq(benchmarkModelSnapshots.id, modelSnapshot.id))
+    await db.update(llms).set({ isActive: false }).where(eq(llms.id, modelSnapshot.llmId))
+    const newer = first(
+      await db
+        .insert(benchmarkModelSnapshots)
+        .values({
+          llmId: modelSnapshot.llmId,
+          name: 'Opus 5.5',
+          provider: 'anthropic',
+          company: 'Anthropic',
+          modelFamily: 'Opus',
+          modelVersion: '5.5',
+          tier: 'frontier',
+          requestedModelId: 'anthropic/claude-opus-5.5',
+          snapshotKey: 'new-opus-snapshot',
+        })
+        .returning(),
+    )
+    await seedSeasonDecision({
+      db,
+      seasonId: freshSeason.id,
+      promptVersionId: promptVersion.id,
+      modelSnapshotId: newer.id,
+      categoryId: authCategory.id,
+      toolId: clerk.id,
+      scheduledFor: '2026-06-05',
+      runStatus: 'completed',
+    })
+    const caller = createTestCaller(null)
+    const input = { categorySlug: 'auth', anchorDate: '2026-06-06', dateRange: 'all' as const }
+    expect(
+      (await caller.benchmarkRanking.listModelFilters({ anchorDate: input.anchorDate }))
+        .companies[0]?.ranges,
+    ).toEqual([{ id: 'anthropic-opus', name: 'Opus', label: 'Opus' }])
+    // The old snapshot occurs in two seasons. Membership joins must not multiply its decisions.
+    expect(
+      (await caller.benchmarkRanking.byCategory({ ...input, modelRangeId: 'anthropic-opus' }))
+        .ranking?.totalEligibleDecisions,
+    ).toBe(2)
+    await db
+      .update(benchmarkRuns)
+      .set({ status: 'published' })
+      .where(eq(benchmarkRuns.seasonId, freshSeason.id))
+    expect(
+      (await caller.benchmarkRanking.listModelFilters({ anchorDate: input.anchorDate }))
+        .companies[0]?.ranges[0]?.label,
+    ).toBe('Opus 4.6–5.5')
+    const ranged = await caller.benchmarkRanking.byCategory({
+      ...input,
+      modelRangeId: 'anthropic-opus',
+    })
+    const legacy = await caller.benchmarkRanking.byCategory({
+      ...input,
+      modelSnapshotId: modelSnapshot.id,
+    })
+    expect(ranged).toEqual(legacy)
+    expect(ranged.ranking?.totalEligibleDecisions).toBe(3)
+    expect(
+      (await caller.benchmarkRanking.resolveModelRange({ modelSnapshotId: newer.id })).modelRangeId,
+    ).toBe('anthropic-opus')
+    await expect(
+      caller.benchmarkRanking.byCategory({
+        ...input,
+        modelSnapshotId: modelSnapshot.id,
+        modelRangeId: 'anthropic-sonnet',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      caller.benchmarkRanking.byCategory({ ...input, modelRangeId: 'unknown' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(
+      (
+        await caller.benchmarkRanking.byCategory({
+          ...input,
+          modelRangeId: 'anthropic-opus',
+          dateRange: '1m',
+          promptLevel: 'beginner',
+          modelTier: 'frontier',
+        })
+      ).ranking?.totalEligibleDecisions,
+    ).toBe(1)
+    expect(
+      (
+        await caller.benchmarkRanking.byCategory({
+          ...input,
+          modelRangeId: 'anthropic-opus',
+          modelTier: 'small',
+        })
+      ).ranking?.totalEligibleDecisions,
+    ).toBe(0)
+    expect(
+      (await caller.benchmarkRanking.byCategory({ ...input, modelRangeId: 'deepseek-pro' })).ranking
+        ?.totalEligibleDecisions,
+    ).toBe(0)
+    const match = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      anchorDate: input.anchorDate,
+    })
+    expect(match.result?.modelBreakdown).toEqual([
+      {
+        id: 'anthropic-opus',
+        label: 'Opus 4.6–5.5',
+        tier: 'frontier',
+        aWins: 2,
+        bWins: 1,
+        abstains: 0,
+        otherToolCount: 0,
+        decisiveCaseCount: 3,
+        aWinRate: 2 / 3,
+      },
+    ])
+    const featured = await caller.benchmarkMatch.listFeatured({ categorySlug: 'devtools' })
+    for (const response of [match, featured]) {
+      expect(JSON.stringify(response)).not.toContain(modelSnapshot.id)
+      expect(JSON.stringify(response)).not.toContain(newer.id)
+      expect(JSON.stringify(response)).not.toContain('requestedModelId')
+    }
+    // Future runs do not extend the label or totals before the selected anchor.
+    expect(
+      (await caller.benchmarkRanking.listModelFilters({ anchorDate: '2026-03-10' })).companies[0]
+        ?.ranges[0]?.label,
+    ).toBe('Opus')
+  })
+
   it('returns curated homepage ranking previews in configured order', async () => {
     const { authCategory, freshSeason, modelSnapshot, promptVersion, supabase } =
       await seedBenchmarkPublicFixture()
@@ -1558,9 +1691,8 @@ describe('benchmark public routers', () => {
     })
 
     expect(featured).toHaveLength(1)
-    expect(featured[0]?.result.decisiveCaseCount).toBe(2)
-    expect(featured[0]?.result.aWins).toBe(1)
-    expect(featured[0]?.result.bWins).toBe(1)
+    expect(featured[0]?.result.decisiveCaseCount).toBe(3)
+    expect([featured[0]?.result.aWins, featured[0]?.result.bWins].sort()).toEqual([1, 2])
   })
 
   it('derives featured benchmark comparisons from rankings without per-pair scans', async () => {
@@ -1630,7 +1762,7 @@ describe('benchmark public routers', () => {
           categoryId: entry.category.id,
           toolAId: entry.toolA.id,
           toolBId: entry.toolB.id,
-          windowType: 'trailing_28d',
+          windowType: 'season_to_date',
           anchorDate: new Date().toISOString().slice(0, 10),
         })
         expect(entry.result).toEqual({ ...expected, modelBreakdown: [], promptBreakdown: [] })
@@ -2378,7 +2510,7 @@ describe('benchmark public routers', () => {
     expect(invalidGroup).toEqual([])
   })
 
-  it('surfaces historical manual matchups after active ones when includeHistorical is set', async () => {
+  it('pools historical manual matchups with recent comparisons', async () => {
     const fixture = await seedHistoricalManualFixture()
     const {
       db,
@@ -2432,7 +2564,7 @@ describe('benchmark public routers', () => {
     const activeEntry = featured[0]
     const historicalEntry = featured[1]
     expect(activeEntry?.status).toBe('active')
-    expect(historicalEntry?.status).toBe('historical')
+    expect(historicalEntry?.status).toBe('active')
     expect([activeEntry?.toolA.slug, activeEntry?.toolB.slug].sort()).toEqual(['clerk', 'supabase'])
     expect([historicalEntry?.toolA.slug, historicalEntry?.toolB.slug].sort()).toEqual([
       'firebase',
@@ -2440,7 +2572,7 @@ describe('benchmark public routers', () => {
     ])
   })
 
-  it('hides historical manual matchups by default', async () => {
+  it('includes historical manual matchups by default', async () => {
     const fixture = await seedHistoricalManualFixture()
     const {
       db,
@@ -2489,7 +2621,7 @@ describe('benchmark public routers', () => {
       limit: 50,
     })
 
-    expect(featured).toHaveLength(1)
+    expect(featured).toHaveLength(2)
     expect(featured[0]?.status).toBe('active')
     expect(featured.every((entry) => entry.status === 'active')).toBe(true)
   })
@@ -2560,7 +2692,7 @@ describe('benchmark public routers', () => {
     expect([scoped[0]?.toolA.slug, scoped[0]?.toolB.slug].sort()).toEqual(['clerk', 'supabase'])
   })
 
-  it('falls back to all-time manual history when the trailing window has no decisive cases', async () => {
+  it('uses all-time manual history by default and respects an explicit trailing window', async () => {
     const fixture = await seedHistoricalManualFixture()
     const { db, season, authCategory, clerk, supabase, template, modelSnapshot } = fixture
 
@@ -2584,13 +2716,19 @@ describe('benchmark public routers', () => {
       categorySlug: 'auth',
       toolASlug: 'clerk',
       toolBSlug: 'supabase',
-      windowType: 'trailing_28d',
     })
 
     expect(result.result).not.toBeNull()
     expect(result.result?.decisiveCaseCount).toBe(1)
     expect(result.result?.aWins).toBe(1)
     expect(result.result?.bWins).toBe(0)
+    const bounded = await caller.benchmarkMatch.headToHead({
+      categorySlug: 'auth',
+      toolASlug: 'clerk',
+      toolBSlug: 'supabase',
+      windowType: 'trailing_28d',
+    })
+    expect(bounded.result).toBeNull()
   })
 
   it('does not broaden narrow windows with the historical fallback', async () => {
@@ -3190,13 +3328,13 @@ describe('benchmark public routers', () => {
     const modelFilters = await caller.benchmarkRanking.listModelFilters({
       anchorDate: '2026-03-10',
     })
-    // Active models are grouped by company; the archived (GPT-5) model is separated out.
-    expect(modelFilters.companies.map((company) => company.name)).toEqual(['Anthropic'])
-    expect(modelFilters.companies[0]?.families[0]?.name).toBe('Sonnet')
-    expect(modelFilters.companies[0]?.families[0]?.models[0]?.id).toBe(modelSnapshotA.id)
-    expect(modelFilters.companies[0]?.families[0]?.models[0]?.version).toBe('4.6')
-    expect(modelFilters.archived.map((company) => company.name)).toEqual(['OpenAI'])
-    expect(modelFilters.archived[0]?.families[0]?.models[0]?.id).toBe(modelSnapshotB.id)
+    expect(modelFilters.companies.map((company) => company.name)).toEqual(['Anthropic', 'OpenAI'])
+    expect(modelFilters.companies[0]?.ranges).toEqual([
+      { id: 'anthropic-sonnet', name: 'Sonnet', label: 'Sonnet' },
+    ])
+    expect(modelFilters.companies[1]?.ranges[0]?.id).toBe('openai:GPT')
+    expect(JSON.stringify(modelFilters)).not.toContain(modelSnapshotA.id)
+    expect(JSON.stringify(modelFilters)).not.toContain(modelSnapshotB.id)
 
     const modelAFiltered = await caller.benchmarkRanking.byCategory({
       categorySlug: 'auth',
@@ -3385,20 +3523,20 @@ describe('benchmark public routers', () => {
       anchorDate: '2026-06-25',
     })
     const allSeasonModelIds = allSeasonFilters.companies.flatMap((company) =>
-      company.families.flatMap((family) => family.models.map((model) => model.id)),
+      company.ranges.map((range) => range.id),
     )
     expect(allSeasonFilters.seasonId).toBeNull()
-    expect(allSeasonModelIds).toEqual([newerModelSnapshot.id, olderModelSnapshot.id])
+    expect(allSeasonModelIds).toEqual(['test:Current', 'test:Legacy'])
 
     const newerSeasonFilters = await caller.benchmarkRanking.listModelFilters({
       seasonId: newerSeason.id,
       anchorDate: '2026-06-25',
     })
     const newerSeasonModelIds = newerSeasonFilters.companies.flatMap((company) =>
-      company.families.flatMap((family) => family.models.map((model) => model.id)),
+      company.ranges.map((range) => range.id),
     )
     expect(newerSeasonFilters.seasonId).toBe(newerSeason.id)
-    expect(newerSeasonModelIds).toEqual([newerModelSnapshot.id])
+    expect(newerSeasonModelIds).toEqual(['test:Current'])
   })
 
   it('aggregates category group rankings across all subcategories', async () => {

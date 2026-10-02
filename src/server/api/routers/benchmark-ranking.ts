@@ -2,22 +2,13 @@ import { TRPCError } from '@trpc/server'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
-import type { ModelFilterCompany, ModelFilterFamily } from '~/lib/model-filters'
+import { anchorDateSchema, findBenchmarkSeasonId, monthsAgo } from '~/server/api/helpers/benchmark'
 import {
-  anchorDateSchema,
-  findBenchmarkSeasonId,
-  findPublishedBenchmarkSeasonIds,
-  monthsAgo,
-} from '~/server/api/helpers/benchmark'
+  listMeasuredModelRanges,
+  resolveModelRangeSelection,
+} from '~/server/api/helpers/model-ranges'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
-import {
-  benchmarkModelSnapshots,
-  benchmarkSeasonModels,
-  categories,
-  llms,
-  subcategories,
-  tools,
-} from '~/server/db/schema'
+import { categories, subcategories, tools } from '~/server/db/schema'
 import {
   computeCategoryGroupRanking,
   computeCategoryRanking,
@@ -27,7 +18,7 @@ import { promptLevelSchema } from '~/server/llm/prompts'
 
 const windowTypeSchema = z
   .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
-  .default('trailing_28d')
+  .default('season_to_date')
 
 // Public calendar date-range filter for the rankings page. Defaults to all time.
 const dateRangeSchema = z.enum(['all', '1m', '3m', '6m']).default('all')
@@ -63,64 +54,8 @@ const tierFiltersSchema = z.object({
   promptLevel: promptLevelSchema.optional(),
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
   modelSnapshotId: z.string().uuid().optional(),
+  modelRangeId: z.string().min(1).max(255).optional(),
 })
-
-type ModelFilterRow = {
-  modelSnapshotId: string
-  company: string
-  modelFamily: string
-  modelVersion: string
-  modelName: string
-}
-
-function groupModelFilterRows(rows: ModelFilterRow[]): ModelFilterCompany[] {
-  const companyMap = new Map<string, { name: string; families: Map<string, ModelFilterFamily> }>()
-  for (const row of rows) {
-    let company = companyMap.get(row.company)
-    if (!company) {
-      company = { name: row.company, families: new Map<string, ModelFilterFamily>() }
-      companyMap.set(row.company, company)
-    }
-
-    let family = company.families.get(row.modelFamily)
-    if (!family) {
-      family = { name: row.modelFamily, models: [] }
-      company.families.set(row.modelFamily, family)
-    }
-
-    family.models.push({
-      id: row.modelSnapshotId,
-      version: row.modelVersion,
-      name: row.modelName,
-    })
-  }
-
-  return Array.from(companyMap.values()).map((company) => ({
-    name: company.name,
-    families: Array.from(company.families.values()),
-  }))
-}
-
-async function resolveModelFilterSeasonIds(
-  db: Parameters<typeof findBenchmarkSeasonId>[0],
-  anchorDate: string,
-  seasonId?: string,
-) {
-  if (seasonId) {
-    const id = await findBenchmarkSeasonId(db, seasonId)
-    if (!id) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'seasonId must reference a benchmark season',
-      })
-    }
-    return { seasonId: id, seasonIds: [id] }
-  }
-  return {
-    seasonId: null,
-    seasonIds: await findPublishedBenchmarkSeasonIds(db, anchorDate),
-  }
-}
 
 /**
  * Resolve the season for public ranking reads. When an explicit `seasonId` is
@@ -195,6 +130,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input?.seasonId)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
       const summaries = await computeCategoryRankings(ctx.db, {
         categoryIds: ordered.map((category) => category.id),
         seasonId,
@@ -203,7 +139,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         startDate,
         promptLevel: input?.promptLevel,
         modelTier: input?.modelTier,
-        modelSnapshotId: input?.modelSnapshotId,
+        ...modelSelection,
       })
       const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
       return ordered.flatMap((category) => {
@@ -250,6 +186,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       })
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
 
       return Promise.all(
         groups.map(async (group) => {
@@ -271,7 +208,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
             previousStartDate,
             promptLevel: input.promptLevel,
             modelTier: input.modelTier,
-            modelSnapshotId: input.modelSnapshotId,
+            ...modelSelection,
           })
 
           return {
@@ -315,6 +252,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
 
       const ranking = await computeCategoryRanking(ctx.db, {
         categoryId: category.id,
@@ -325,7 +263,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         previousStartDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
-        modelSnapshotId: input.modelSnapshotId,
+        ...modelSelection,
       })
 
       return { category, ranking }
@@ -368,6 +306,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
 
       const ranking = await computeCategoryGroupRanking(ctx.db, {
         categoryGroupId: group.id,
@@ -379,7 +318,7 @@ export const benchmarkRankingRouter = createTRPCRouter({
         previousStartDate,
         promptLevel: input.promptLevel,
         modelTier: input.modelTier,
-        modelSnapshotId: input.modelSnapshotId,
+        ...modelSelection,
       })
 
       return { categoryGroup: group, ranking }
@@ -394,60 +333,38 @@ export const benchmarkRankingRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
-      const { seasonId, seasonIds } = await resolveModelFilterSeasonIds(
-        ctx.db,
-        anchorDate,
-        input.seasonId,
-      )
-
-      if (seasonIds.length === 0) {
-        return {
-          seasonId: null,
-          companies: [] as ModelFilterCompany[],
-          archived: [] as ModelFilterCompany[],
-        }
-      }
-
-      const rows = await ctx.db
-        .selectDistinct({
-          modelSnapshotId: benchmarkModelSnapshots.id,
-          company: benchmarkModelSnapshots.company,
-          modelFamily: benchmarkModelSnapshots.modelFamily,
-          modelVersion: benchmarkModelSnapshots.modelVersion,
-          modelName: benchmarkModelSnapshots.name,
-          isActive: llms.isActive,
-        })
-        .from(benchmarkSeasonModels)
-        .innerJoin(
-          benchmarkModelSnapshots,
-          eq(benchmarkSeasonModels.modelSnapshotId, benchmarkModelSnapshots.id),
-        )
-        .innerJoin(llms, eq(benchmarkModelSnapshots.llmId, llms.id))
-        .where(inArray(benchmarkSeasonModels.seasonId, seasonIds))
-        .orderBy(
-          asc(benchmarkModelSnapshots.company),
-          asc(benchmarkModelSnapshots.modelFamily),
-          asc(benchmarkModelSnapshots.modelVersion),
-          asc(benchmarkModelSnapshots.name),
-        )
-
+      const seasonId = await resolveRankingSeasonId(ctx.db, input.seasonId)
       return {
-        seasonId,
-        companies: groupModelFilterRows(rows.filter((row) => row.isActive)),
-        archived: groupModelFilterRows(rows.filter((row) => !row.isActive)),
+        seasonId: seasonId ?? null,
+        companies: await listMeasuredModelRanges(ctx.db, anchorDate, seasonId),
       }
+    }),
+
+  resolveModelRange: publicProcedure
+    .input(
+      z.object({
+        modelSnapshotId: z.string().uuid(),
+        modelRangeId: z.string().min(1).max(255).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const selection = await resolveModelRangeSelection(ctx.db, input)
+      return { modelRangeId: selection.modelRangeId }
     }),
 
   byTool: publicProcedure
     .input(
-      z.object({
-        toolSlug: z.string().min(1).max(255),
-        windowType: windowTypeSchema,
-        anchorDate: anchorDateSchema.optional(),
-      }),
+      z
+        .object({
+          toolSlug: z.string().min(1).max(255),
+          windowType: windowTypeSchema,
+          anchorDate: anchorDateSchema.optional(),
+        })
+        .merge(tierFiltersSchema),
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
 
       const tool = await ctx.db.query.tools.findFirst({
         where: eq(tools.slug, input.toolSlug),
@@ -470,6 +387,9 @@ export const benchmarkRankingRouter = createTRPCRouter({
         categoryIds,
         windowType: input.windowType,
         anchorDate,
+        ...modelSelection,
+        promptLevel: input.promptLevel,
+        modelTier: input.modelTier,
       })
       const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
 

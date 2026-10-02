@@ -100,17 +100,17 @@ describe('resolveBenchmarkCronRunTarget', () => {
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      nextEligibleAt: '2026-03-15T12:00:00.000Z',
+      nextEligibleAt: '2026-04-05T12:00:00.000Z',
     })
 
     const nextWindowTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(nextWindowTarget).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-15',
+      scheduledFor: '2026-04-05',
       source: 'today',
     })
   })
@@ -122,11 +122,11 @@ describe('resolveBenchmarkCronRunTarget', () => {
     await db.insert(benchmarkRuns).values([
       { seasonId: season.id, scheduledFor: '2026-03-05', status: 'completed' },
       { seasonId: season.id, scheduledFor: '2026-03-10', status: 'failed' },
-      { seasonId: season.id, scheduledFor: '2026-03-15', status: 'pending' },
+      { seasonId: season.id, scheduledFor: '2026-04-05', status: 'pending' },
     ])
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
@@ -138,7 +138,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
   })
 
   it.each([
-    { now: '2026-03-09T12:15:00.000Z', nextWindow: '2026-03-15T12:00:00.000Z' },
+    { now: '2026-03-09T12:15:00.000Z', nextWindow: '2026-04-05T12:00:00.000Z' },
     { now: '2026-03-29T12:15:00.000Z', nextWindow: '2026-04-05T12:00:00.000Z' },
   ])('resumes retries outside processing windows on $now without starting fresh runs', async ({
     now,
@@ -186,7 +186,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
         },
         {
           seasonId: season.id,
-          scheduledFor: '2026-03-15',
+          scheduledFor: '2026-04-05',
           status: 'pending',
         },
       ])
@@ -197,7 +197,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     }
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
@@ -217,7 +217,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
       .insert(benchmarkRuns)
       .values({
         seasonId: season.id,
-        scheduledFor: '2026-03-15',
+        scheduledFor: '2026-04-05',
         status: 'pending',
       })
       .returning({ id: benchmarkRuns.id, scheduledFor: benchmarkRuns.scheduledFor })
@@ -251,13 +251,13 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(target).toMatchObject({
       kind: 'run',
       seasonId: season.id,
-      scheduledFor: '2026-03-15',
+      scheduledFor: '2026-04-05',
       source: 'today',
     })
     if (target.kind !== 'run') {
@@ -277,7 +277,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
 
     const earlyTarget = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T03:00:00.000Z'),
+      now: new Date('2026-04-05T03:00:00.000Z'),
     })
 
     expect(earlyTarget).toEqual({
@@ -285,7 +285,7 @@ describe('resolveBenchmarkCronRunTarget', () => {
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
       latestScheduledFor: '2026-03-05',
-      nextEligibleAt: '2026-03-15T12:00:00.000Z',
+      nextEligibleAt: '2026-04-05T12:00:00.000Z',
     })
   })
 
@@ -295,20 +295,20 @@ describe('resolveBenchmarkCronRunTarget', () => {
 
     await db.insert(benchmarkRuns).values({
       seasonId: season.id,
-      scheduledFor: '2026-03-15',
+      scheduledFor: '2026-04-05',
       status: 'published',
     })
 
     const target = await resolveBenchmarkCronRunTarget(db, {
-      now: new Date('2026-03-15T12:00:00.000Z'),
+      now: new Date('2026-04-05T12:00:00.000Z'),
     })
 
     expect(target).toEqual({
       kind: 'idle',
       reason: 'waiting_for_next_run_window',
       seasonId: season.id,
-      latestScheduledFor: '2026-03-15',
-      nextEligibleAt: '2026-03-25T12:00:00.000Z',
+      latestScheduledFor: '2026-04-05',
+      nextEligibleAt: '2026-05-05T12:00:00.000Z',
     })
   })
 })

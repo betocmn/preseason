@@ -84,6 +84,29 @@ describe('public scoring cache', () => {
     expect(read).toHaveBeenCalledTimes(4)
   })
 
+  it('isolates range selections and refreshes measured labels on publication', async () => {
+    const read = vi.fn().mockResolvedValue('Opus')
+    await cachedPublicScoring(
+      applicationDb,
+      'ranking',
+      { modelRangeId: 'anthropic-opus', modelSnapshotIds: ['old'] },
+      read,
+    )
+    await cachedPublicScoring(
+      applicationDb,
+      'ranking',
+      { modelRangeId: 'anthropic-sonnet', modelSnapshotIds: ['other'] },
+      read,
+    )
+    await cachedPublicScoring(applicationDb, 'measured-model-ranges', {}, read)
+    expect(read).toHaveBeenCalledTimes(3)
+    invalidatePublicBenchmarkCache()
+    read.mockResolvedValue('Opus 4.6–5.5')
+    expect(await cachedPublicScoring(applicationDb, 'measured-model-ranges', {}, read)).toBe(
+      'Opus 4.6–5.5',
+    )
+  })
+
   it('does not cache transaction clients or local development reads', async () => {
     const read = vi.fn().mockResolvedValue({ count: 1 })
     await cachedPublicScoring({}, 'ranking', {}, read)

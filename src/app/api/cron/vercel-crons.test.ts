@@ -42,8 +42,8 @@ describe('vercel cron config', () => {
 
   it('runs benchmark, match, and tool review crons on the expected schedules', () => {
     expect(schedulesFor('/api/cron/benchmark-run')).toEqual([
-      '* * 5-8,15-18,25-28 * *',
-      `*/${serverSettings.benchmark.cronRecoveryIntervalMinutes} * 1-4,9-14,19-24,29-31 * *`,
+      '* * 5-8 * *',
+      `*/${serverSettings.benchmark.cronRecoveryIntervalMinutes} * 1-4,9-31 * *`,
     ])
     expect(schedulesFor('/api/cron/match-run')).toEqual(['0 12 * * 1,4'])
     expect(schedulesFor('/api/cron/tool-candidate-review')).toEqual(['0 * * * *'])
@@ -69,9 +69,9 @@ describe('vercel cron config', () => {
     const processingDays = serverSettings.benchmark.cronProcessingWindowDays
     const processingHours = processingDays * 24 - serverSettings.benchmark.newRunStartUtcHour
 
-    expect(benchmarkSchedules).toContain('* * 5-8,15-18,25-28 * *')
+    expect(benchmarkSchedules).toContain('* * 5-8 * *')
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
-    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5, 15, 25])
+    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5])
     expect(
       (processingHours * 60 * serverSettings.benchmark.casesPerCronInvocation) /
         benchmarkCronMinutes,

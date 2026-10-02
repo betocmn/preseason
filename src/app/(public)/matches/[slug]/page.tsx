@@ -310,8 +310,8 @@ export default async function MatchDetailPage({ params }: Props) {
         <div className="grid gap-6 lg:grid-cols-2">
           {result.modelBreakdown.length > 0 && (
             <BreakdownTable
-              title="Per-model breakdown"
-              label="Model"
+              title="Model range breakdown"
+              label="Model range"
               rows={result.modelBreakdown}
               toolAName={toolA.name}
               toolBName={toolB.name}
