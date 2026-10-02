@@ -1,6 +1,5 @@
 import { ArrowUpRight, Globe, MessageSquare } from 'lucide-react'
 import type { Metadata } from 'next'
-import { Card, CardContent } from '~/components/ui/card'
 
 export const metadata: Metadata = {
   title: 'Contact',
@@ -24,6 +23,21 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
+const contactLinks = [
+  {
+    href: 'https://x.com/betocmn',
+    title: '@betocmn',
+    description: 'DM me on X',
+    icon: 'x',
+  },
+  {
+    href: 'https://betocmn.com',
+    title: 'betocmn.com',
+    description: 'Visit my website',
+    icon: 'website',
+  },
+] as const
+
 export default function ContactPage() {
   return (
     <div className="container max-w-3xl py-12 md:py-16">
@@ -38,45 +52,24 @@ export default function ContactPage() {
       </div>
 
       <div className="mx-auto grid max-w-2xl gap-4 sm:grid-cols-2">
-        <Card>
-          <CardContent className="p-6 pt-6">
-            <a
-              href="https://x.com/betocmn"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-3 rounded-lg border p-4 transition-colors hover:border-foreground/20 hover:bg-accent"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-                <XIcon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">@betocmn</p>
-                <p className="text-xs text-muted-foreground">DM me on X</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
-            </a>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 pt-6">
-            <a
-              href="https://betocmn.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-3 rounded-lg border p-4 transition-colors hover:border-foreground/20 hover:bg-accent"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-                <Globe className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">betocmn.com</p>
-                <p className="text-xs text-muted-foreground">Visit my website</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
-            </a>
-          </CardContent>
-        </Card>
+        {contactLinks.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-3 rounded-lg border bg-card p-5 transition-colors hover:border-foreground/20 hover:bg-accent"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+              {link.icon === 'x' ? <XIcon className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{link.title}</p>
+              <p className="text-xs text-muted-foreground">{link.description}</p>
+            </div>
+            <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </a>
+        ))}
       </div>
     </div>
   )
