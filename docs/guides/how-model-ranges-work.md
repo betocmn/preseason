@@ -34,4 +34,6 @@ Activation locks the affected tables, rechecks the source fingerprint and prepar
 
 The protected `POST /api/benchmark-rollout` refreshes public caches after activation. It uses the existing `CRON_SECRET`. `GET` on the same route verifies the deployed runtime contract without changing data.
 
+Vercel Bot Protection remains set to Challenge. The `Benchmark rollout endpoint` firewall rule bypasses it only when Request Path equals `/api/benchmark-rollout`; other paths retain their protection. Both endpoint methods still require `CRON_SECRET` and reject unauthenticated requests with 401. Supply the deployed production credential through the process environment when it differs from the local development value, without changing `.env.local` or logging the credential.
+
 The next full benchmark starts on the 5th at 12:00 UTC. Vercel processes frequently on the 5th–8th and polls for recovery on other days. Match and candidate-review schedules are unchanged. The estimated full run costs about $13 using historical token counts; reasoning, retries, and repairs can change the actual cost.
