@@ -12,7 +12,6 @@ import * as schema from '~/server/db/schema'
 type TestDatabase = PostgresJsDatabase<typeof schema> & { $client: postgres.Sql }
 
 let container: StartedPostgreSqlContainer | null = null
-let databaseUrl: string | null = null
 let sql: postgres.Sql | null = null
 let testDb: TestDatabase | null = null
 
@@ -23,8 +22,8 @@ export async function setupTestDatabase(): Promise<TestDatabase> {
     .withPassword('test_password')
     .start()
 
-  databaseUrl = container.getConnectionUri()
-  sql = postgres(databaseUrl, { max: 1 })
+  const connectionString = container.getConnectionUri()
+  sql = postgres(connectionString, { max: 1 })
   testDb = drizzle(sql, { schema })
 
   await migrate(testDb, {
@@ -78,7 +77,6 @@ export async function teardownTestDatabase(): Promise<void> {
     await container.stop()
     container = null
   }
-  databaseUrl = null
   testDb = null
 }
 
@@ -87,13 +85,4 @@ export function getTestDb(): TestDatabase {
     throw new Error('Test database not initialized. Call setupTestDatabase() first.')
   }
   return testDb
-}
-
-export function createTestDatabaseClient(options: { max?: number } = {}): TestDatabase {
-  if (!databaseUrl) {
-    throw new Error('Test database not initialized. Call setupTestDatabase() first.')
-  }
-
-  const sqlClient = postgres(databaseUrl, { max: options.max ?? 1 })
-  return drizzle(sqlClient, { schema }) as TestDatabase
 }
