@@ -1,0 +1,2 @@
+CREATE INDEX "benchmark_case_decision_scoring_idx" ON "preseason_benchmark_case_decision" USING btree ("category_id","case_result_id","decision_type","tool_id") WHERE resolution_status = 'resolved' AND decision_type != 'invalid';--> statement-breakpoint
+CREATE INDEX "benchmark_case_result_scoring_idx" ON "preseason_benchmark_case_result" USING btree ("run_id","id","case_id") WHERE status = 'completed';

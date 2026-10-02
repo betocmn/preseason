@@ -622,6 +622,10 @@ export const benchmarkCaseResults = createTable(
     index('benchmark_case_result_run_status_started_idx').on(t.runId, t.status, t.startedAt),
     index('benchmark_case_result_case_id_idx').on(t.caseId),
     index('benchmark_case_result_season_id_idx').on(t.seasonId),
+    // Scoring only needs these IDs; avoid reading the stored response payloads.
+    index('benchmark_case_result_scoring_idx')
+      .on(t.runId, t.id, t.caseId)
+      .where(sql`status = 'completed'`),
   ],
 )
 
@@ -649,6 +653,10 @@ export const benchmarkCaseDecisions = createTable(
     index('benchmark_case_decision_category_type_idx').on(t.categoryId, t.decisionType),
     index('benchmark_case_decision_tool_id_idx').on(t.toolId),
     index('benchmark_case_decision_result_id_idx').on(t.caseResultId),
+    // Cover public scoring reads without fetching reasoning text from the heap.
+    index('benchmark_case_decision_scoring_idx')
+      .on(t.categoryId, t.caseResultId, t.decisionType, t.toolId)
+      .where(sql`resolution_status = 'resolved' AND decision_type != 'invalid'`),
     check(
       'benchmark_decision_tool_check',
       sql`decision_type != 'tool' OR tool_id IS NOT NULL OR resolution_status = 'unresolved_tool'`,
