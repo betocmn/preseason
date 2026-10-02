@@ -13,6 +13,7 @@ const serverSettingsMock = vi.hoisted(() => ({
 const dbMock = vi.hoisted(() => ({ __db: true }))
 const resolveBenchmarkCronRunTargetMock = vi.hoisted(() => vi.fn())
 const runBenchmarkMock = vi.hoisted(() => vi.fn())
+const refreshPublicBenchmarkCacheMock = vi.hoisted(() => vi.fn())
 
 vi.mock('~/env', () => ({
   env: envMock,
@@ -34,6 +35,10 @@ vi.mock('~/server/llm/benchmark/runner', () => ({
   runBenchmark: runBenchmarkMock,
 }))
 
+vi.mock('~/server/llm/benchmark/refresh-public-cache', () => ({
+  refreshPublicBenchmarkCache: refreshPublicBenchmarkCacheMock,
+}))
+
 import { GET, maxDuration } from './route'
 
 function makeRequest(
@@ -51,6 +56,7 @@ describe('GET /api/cron/benchmark-run', () => {
   beforeEach(() => {
     resolveBenchmarkCronRunTargetMock.mockReset()
     runBenchmarkMock.mockReset()
+    refreshPublicBenchmarkCacheMock.mockReset()
     envMock.CRON_SECRET = 'test-secret'
     serverSettingsMock.benchmark.casesPerCronInvocation = 1
   })
@@ -130,6 +136,7 @@ describe('GET /api/cron/benchmark-run', () => {
     expect(response.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(body.summary.hasRemainingWork).toBe(true)
+    expect(refreshPublicBenchmarkCacheMock).not.toHaveBeenCalled()
     expect(body.summary.scheduledFor).toBe('2026-03-25')
     expect(resolveBenchmarkCronRunTargetMock).toHaveBeenCalledWith(dbMock)
     expect(runBenchmarkMock).toHaveBeenCalledWith('season-1', '2026-03-25', {
@@ -171,6 +178,7 @@ describe('GET /api/cron/benchmark-run', () => {
     expect(response.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(body.summary.status).toBe('published')
+    expect(refreshPublicBenchmarkCacheMock).toHaveBeenCalledWith(dbMock)
     expect(body.summary.hasRemainingWork).toBe(false)
     expect(body.summary.scheduledFor).toBe('2026-03-26')
   })

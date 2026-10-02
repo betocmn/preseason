@@ -137,6 +137,37 @@ describe('resolveBenchmarkCronRunTarget', () => {
     })
   })
 
+  it.each([
+    { now: '2026-03-09T12:15:00.000Z', nextWindow: '2026-03-15T12:00:00.000Z' },
+    { now: '2026-03-29T12:15:00.000Z', nextWindow: '2026-04-05T12:00:00.000Z' },
+  ])('resumes retries outside processing windows on $now without starting fresh runs', async ({
+    now,
+    nextWindow,
+  }) => {
+    const db = getTestDb()
+    const season = await seedActiveBenchmarkSeason(db)
+
+    expect(await resolveBenchmarkCronRunTarget(db, { now: new Date(now) })).toMatchObject({
+      kind: 'idle',
+      reason: 'waiting_for_next_run_window',
+      nextEligibleAt: nextWindow,
+    })
+
+    const retryRun = first(
+      await db
+        .insert(benchmarkRuns)
+        .values({ seasonId: season.id, scheduledFor: '2026-03-05', status: 'pending' })
+        .returning(),
+    )
+
+    expect(await resolveBenchmarkCronRunTarget(db, { now: new Date(now) })).toMatchObject({
+      kind: 'run',
+      runId: retryRun.id,
+      scheduledFor: retryRun.scheduledFor,
+      source: 'unfinished',
+    })
+  })
+
   it('keeps an older healthy running run ahead of starting a new calendar day', async () => {
     const db = getTestDb()
     const season = await seedActiveBenchmarkSeason(db)

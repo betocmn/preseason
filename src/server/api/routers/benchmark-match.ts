@@ -18,15 +18,11 @@ import {
   tools,
 } from '~/server/db/schema'
 import {
+  computeCategoryRankings,
   computeHeadToHead,
-  type DecisionRow,
-  fetchDecisions,
   type HeadToHeadBreakdownEntry,
   type HeadToHeadResult,
-  headToHeadFromDecisions,
   type ModelTier,
-  prepareScoringContext,
-  rankFromDecisions,
   type WindowType,
   wilsonInterval,
 } from '~/server/llm/benchmark/scoring'
@@ -698,75 +694,63 @@ export const benchmarkMatchRouter = createTRPCRouter({
       // 2. Fill remaining slots with auto-generated benchmark matchups
       // ---------------------------------------------------------------
       if (matchups.length < limit) {
-        const scoringCtx = await prepareScoringContext(
-          ctx.db,
-          undefined,
-          'trailing_28d',
+        const summaries = await computeCategoryRankings(ctx.db, {
+          categoryIds: subs.map((sub) => sub.id),
+          windowType: 'trailing_28d',
           anchorDate,
+        })
+        const rankingsByCategory = new Map(
+          summaries.map((ranking) => [ranking.categoryId, ranking]),
         )
+        const pairs: Omit<MatchupEntry, 'result'>[] = []
+        for (const sub of subs) {
+          if (matchups.length + pairs.length >= limit) break
 
-        if (scoringCtx.runIds.length > 0) {
-          const allCategoryIds = subs.map((s) => s.id)
-          const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
+          const ranking = rankingsByCategory.get(sub.id)
+          if (!ranking) continue
 
-          const decisionsByCategory = new Map<string, DecisionRow[]>()
-          for (const d of allDecisions) {
-            let list = decisionsByCategory.get(d.categoryId)
-            if (!list) {
-              list = []
-              decisionsByCategory.set(d.categoryId, list)
-            }
-            list.push(d)
-          }
+          if (ranking.items.length < 2) continue
 
-          for (const sub of subs) {
-            if (matchups.length >= limit) break
+          const [top1, top2] = ranking.items
+          if (!top1 || !top2) continue
 
-            const catDecisions = decisionsByCategory.get(sub.id) ?? []
-            const ranking = rankFromDecisions(
-              catDecisions,
-              scoringCtx.weightConfigs,
-              sub.id,
-              'trailing_28d',
-              anchorDate,
-            )
+          const key = matchupKey(sub.id, top1.toolId, top2.toolId)
+          if (seenKeys.has(key)) continue
+          seenKeys.add(key)
 
-            if (ranking.items.length < 2) continue
-
-            const [top1, top2] = ranking.items
-            if (!top1 || !top2) continue
-
-            const key = matchupKey(sub.id, top1.toolId, top2.toolId)
-            if (seenKeys.has(key)) continue
-            seenKeys.add(key)
-
-            const result = headToHeadFromDecisions(
-              catDecisions,
-              scoringCtx.weightConfigs,
-              top1.toolId,
-              top2.toolId,
-              sub.id,
-            )
-
-            matchups.push({
-              category: sub,
-              toolA: {
-                id: top1.toolId,
-                name: top1.toolName,
-                slug: top1.toolSlug,
-                logoUrl: top1.toolLogoUrl,
-              },
-              toolB: {
-                id: top2.toolId,
-                name: top2.toolName,
-                slug: top2.toolSlug,
-                logoUrl: top2.toolLogoUrl,
-              },
-              result,
-              status: 'active',
-            })
-          }
+          pairs.push({
+            category: sub,
+            toolA: {
+              id: top1.toolId,
+              name: top1.toolName,
+              slug: top1.toolSlug,
+              logoUrl: top1.toolLogoUrl,
+            },
+            toolB: {
+              id: top2.toolId,
+              name: top2.toolName,
+              slug: top2.toolSlug,
+              logoUrl: top2.toolLogoUrl,
+            },
+            status: 'active',
+          })
         }
+
+        // Select and cap pairs first; cold-cache comparisons can then run concurrently
+        // while Promise.all preserves the category order after manual matchups.
+        const benchmarkMatchups = await Promise.all(
+          pairs.map(async (pair) => ({
+            ...pair,
+            result: await computeHeadToHead(ctx.db, {
+              categoryId: pair.category.id,
+              toolAId: pair.toolA.id,
+              toolBId: pair.toolB.id,
+              windowType: 'trailing_28d',
+              anchorDate,
+            }),
+          })),
+        )
+        matchups.push(...benchmarkMatchups)
       }
 
       // ---------------------------------------------------------------
@@ -815,23 +799,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
       const subs = tool.toolCategories.map((tc) => tc.category)
       if (subs.length === 0) return []
 
-      const scoringCtx = await prepareScoringContext(ctx.db, undefined, 'trailing_28d', anchorDate)
-      if (scoringCtx.runIds.length === 0) return []
+      const summaries = await computeCategoryRankings(ctx.db, {
+        categoryIds: subs.map((sub) => sub.id),
+        windowType: 'trailing_28d',
+        anchorDate,
+      })
+      const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
 
-      const allCategoryIds = subs.map((s) => s.id)
-      const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, allCategoryIds)
-
-      const decisionsByCategory = new Map<string, DecisionRow[]>()
-      for (const d of allDecisions) {
-        let list = decisionsByCategory.get(d.categoryId)
-        if (!list) {
-          list = []
-          decisionsByCategory.set(d.categoryId, list)
-        }
-        list.push(d)
-      }
-
-      type HeadToHeadResult = ReturnType<typeof headToHeadFromDecisions>
       const matchups: {
         category: { id: string; name: string; slug: string }
         toolA: { id: string; name: string; slug: string; logoUrl: string | null }
@@ -840,14 +814,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
       }[] = []
 
       for (const sub of subs) {
-        const catDecisions = decisionsByCategory.get(sub.id) ?? []
-        const ranking = rankFromDecisions(
-          catDecisions,
-          scoringCtx.weightConfigs,
-          sub.id,
-          'trailing_28d',
-          anchorDate,
-        )
+        const ranking = rankingsByCategory.get(sub.id)
+        if (!ranking) continue
 
         const toolIndex = ranking.items.findIndex((item) => item.toolId === tool.id)
         if (toolIndex === -1 || ranking.items.length < 2) continue
@@ -859,13 +827,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
         if (!rival || !thisToolEntry) continue
 
         // Always put this tool as toolA for consistent display
-        const result = headToHeadFromDecisions(
-          catDecisions,
-          scoringCtx.weightConfigs,
-          tool.id,
-          rival.toolId,
-          sub.id,
-        )
+        const result = await computeHeadToHead(ctx.db, {
+          categoryId: sub.id,
+          toolAId: tool.id,
+          toolBId: rival.toolId,
+          windowType: 'trailing_28d',
+          anchorDate,
+        })
 
         matchups.push({
           category: sub,

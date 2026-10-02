@@ -31,6 +31,7 @@ import {
 } from '~/server/db/schema'
 import { getOrCreateModelSnapshot } from '~/server/llm/benchmark/model-snapshotter'
 import { freezePromptVersion } from '~/server/llm/benchmark/prompt-freezer'
+import { refreshPublicBenchmarkCache } from '~/server/llm/benchmark/refresh-public-cache'
 
 /**
  * Extract snapshotCaseIds from a run's qcSummaryJson if available.
@@ -717,6 +718,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
           message: 'Run state changed concurrently; refresh and try again',
         })
       }
+      await refreshPublicBenchmarkCache(ctx.db)
       return updated
     }),
 
@@ -828,6 +830,7 @@ export const benchmarkAdminRouter = createTRPCRouter({
         return { retriedCount: retryableRows.length }
       })
 
+      if (run.status === 'published') await refreshPublicBenchmarkCache(ctx.db)
       return result
     }),
 

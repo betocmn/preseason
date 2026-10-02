@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
+import { serverSettings } from '~/constants/server-settings'
 import { api } from '~/trpc/server'
 import { PublishRunButton } from '../../_components/publish-run-button'
 import { RetryFailedButton } from '../../_components/retry-failed-button'
@@ -100,7 +101,12 @@ export default async function RunDetailPage({ params }: PageProps) {
             {run.status}
           </Badge>
           {canPublish && <PublishRunButton runId={run.id} />}
-          {canRetry && <RetryFailedButton runId={run.id} />}
+          {canRetry && (
+            <RetryFailedButton
+              runId={run.id}
+              recoveryIntervalMinutes={serverSettings.benchmark.cronRecoveryIntervalMinutes}
+            />
+          )}
         </div>
       </div>
 

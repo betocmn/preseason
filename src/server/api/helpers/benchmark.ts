@@ -250,6 +250,7 @@ export async function resolveBenchmarkCronRunTarget(
       ),
     )
     .orderBy(asc(benchmarkRuns.scheduledFor), asc(benchmarkRuns.createdAt), asc(benchmarkRuns.id))
+    .limit(1)
 
   const runToResume = unfinishedRuns[0]
 

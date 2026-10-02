@@ -21,10 +21,7 @@ import {
 import {
   computeCategoryGroupRanking,
   computeCategoryRanking,
-  type DecisionRow,
-  fetchDecisions,
-  prepareScoringContext,
-  rankFromDecisions,
+  computeCategoryRankings,
 } from '~/server/llm/benchmark/scoring'
 import { promptLevelSchema } from '~/server/llm/prompts'
 
@@ -198,42 +195,20 @@ export const benchmarkRankingRouter = createTRPCRouter({
       }
 
       const seasonId = await resolveRankingSeasonId(ctx.db, input?.seasonId)
-      const scoringCtx = await prepareScoringContext(
-        ctx.db,
+      const summaries = await computeCategoryRankings(ctx.db, {
+        categoryIds: ordered.map((category) => category.id),
         seasonId,
         windowType,
         anchorDate,
         startDate,
-      )
-      const allDecisions = await fetchDecisions(
-        ctx.db,
-        scoringCtx.runIds,
-        ordered.map((category) => category.id),
-        {
-          promptLevel: input?.promptLevel,
-          modelTier: input?.modelTier,
-          modelSnapshotId: input?.modelSnapshotId,
-        },
-      )
-
-      const decisionsByCategory = new Map<string, DecisionRow[]>()
-      for (const decision of allDecisions) {
-        let decisions = decisionsByCategory.get(decision.categoryId)
-        if (!decisions) {
-          decisions = []
-          decisionsByCategory.set(decision.categoryId, decisions)
-        }
-        decisions.push(decision)
-      }
-
-      return ordered.map((category) => {
-        const ranking = rankFromDecisions(
-          decisionsByCategory.get(category.id) ?? [],
-          scoringCtx.weightConfigs,
-          category.id,
-          windowType,
-          anchorDate,
-        )
+        promptLevel: input?.promptLevel,
+        modelTier: input?.modelTier,
+        modelSnapshotId: input?.modelSnapshotId,
+      })
+      const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
+      return ordered.flatMap((category) => {
+        const ranking = rankingsByCategory.get(category.id)
+        if (!ranking) return []
 
         return {
           slug: category.slug,
@@ -491,37 +466,18 @@ export const benchmarkRankingRouter = createTRPCRouter({
       const categoryIds = tool.toolCategories.map((tc) => tc.category.id)
       if (categoryIds.length === 0) return { rankings: [] }
 
-      const scoringCtx = await prepareScoringContext(
-        ctx.db,
-        undefined,
-        input.windowType,
+      const summaries = await computeCategoryRankings(ctx.db, {
+        categoryIds,
+        windowType: input.windowType,
         anchorDate,
-      )
-      if (scoringCtx.runIds.length === 0) return { rankings: [] }
-
-      const allDecisions = await fetchDecisions(ctx.db, scoringCtx.runIds, categoryIds)
-
-      const decisionsByCategory = new Map<string, DecisionRow[]>()
-      for (const d of allDecisions) {
-        let list = decisionsByCategory.get(d.categoryId)
-        if (!list) {
-          list = []
-          decisionsByCategory.set(d.categoryId, list)
-        }
-        list.push(d)
-      }
+      })
+      const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
 
       const rankings = tool.toolCategories
         .map((tc) => {
           const cat = tc.category
-          const catDecisions = decisionsByCategory.get(cat.id) ?? []
-          const ranking = rankFromDecisions(
-            catDecisions,
-            scoringCtx.weightConfigs,
-            cat.id,
-            input.windowType,
-            anchorDate,
-          )
+          const ranking = rankingsByCategory.get(cat.id)
+          if (!ranking) return null
 
           const toolIndex = ranking.items.findIndex((item) => item.toolId === tool.id)
           if (toolIndex === -1) return null

@@ -72,6 +72,8 @@ export const serverSettings = {
   },
   publicSite: {
     categoryGroupSlugs: publicCategoryGroupSlugs,
+    benchmarkCacheTag: 'public-benchmark-summaries',
+    benchmarkCacheRevalidateSeconds: 3_600,
   },
   contact: {
     maxSubmissionsPerIp: 3,
@@ -88,6 +90,10 @@ export const serverSettings = {
     // Fresh benchmark runs open on configured UTC month days at this UTC hour.
     newRunStartUtcHour: benchmarkNewRunStartUtcHour,
     newRunUtcMonthDays: benchmarkNewRunUtcMonthDays,
+    // vercel.json polls every minute on each start day and the following three UTC days.
+    cronProcessingWindowDays: 4,
+    // Keep retries and unfinished work moving between the main processing windows.
+    cronRecoveryIntervalMinutes: 15,
     casesPerCronInvocation: 1,
     // Stop retrying a case after this many attempts to avoid burning API credits.
     maxCaseAttempts: 3,

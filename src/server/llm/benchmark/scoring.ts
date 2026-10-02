@@ -14,6 +14,12 @@ import {
   tools,
 } from '~/server/db/schema'
 import type { PromptLevel } from '~/server/llm/prompts'
+import { cachedPublicScoring } from './public-cache'
+import {
+  queryHeadToHeadAggregates,
+  queryRankingAggregates,
+  type RankingAggregate,
+} from './scoring-queries'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
 
@@ -674,171 +680,66 @@ export async function computeCategoryGroupRanking(
   })
 }
 
-async function computeRankingForCategoryIds(
-  db: DatabaseClient,
-  filters: RankingFilters & {
-    categoryIds: string[]
-    resultCategoryId: string
-  },
-): Promise<CategoryRankingResult> {
-  const publishedRunIds = await getPublishedRunIds(
-    db,
-    filters.seasonId,
-    filters.anchorDate,
-    filters.startDate,
+type RankingTool = Pick<typeof tools.$inferSelect, 'id' | 'name' | 'slug' | 'logoUrl'>
+
+async function loadRankingTools(db: DatabaseClient, rows: RankingAggregate[]) {
+  const ids = [...new Set(rows.flatMap((row) => (row.toolId ? [row.toolId] : [])))]
+  const toolRows = ids.length
+    ? await db
+        .select({
+          id: tools.id,
+          name: tools.name,
+          slug: tools.slug,
+          logoUrl: tools.logoUrl,
+        })
+        .from(tools)
+        .where(inArray(tools.id, ids))
+    : []
+  return new Map(toolRows.map((tool) => [tool.id, tool]))
+}
+
+function rankingFromAggregates(
+  rows: RankingAggregate[],
+  toolDetails: Map<string, RankingTool>,
+  categoryId: string,
+  filters: RankingFilters,
+  previous: RankingAggregate[] = [],
+): CategoryRankingResult {
+  const total = rows.find((row) => row.isTotal === 1)
+  const totalEligible = total?.count ?? 0
+  const totalWeighted = total?.weight ?? 0
+  const totalModels = total?.models ?? 0
+  const totalPrompts = total?.prompts ?? 0
+  const previousWeight = previous.find((row) => row.isTotal === 1)?.weight ?? 0
+  const previousTools = new Map(
+    previous.filter((row) => row.toolId).map((row) => [row.toolId, row.weight]),
   )
-  const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
-
-  if (runIds.length === 0) {
-    return {
-      categoryId: filters.resultCategoryId,
-      windowType: filters.windowType,
-      anchorDate: filters.anchorDate,
-      items: [],
-      totalEligibleDecisions: 0,
-      totalDistinctModels: 0,
-      totalDistinctPrompts: 0,
-      meetsPublicationThreshold: false,
-    }
-  }
-
-  const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
-  const decisions = await queryDecisions(db, runIds, filters.categoryIds, {
-    promptLevel: filters.promptLevel,
-    modelTier: filters.modelTier,
-    modelSnapshotId: filters.modelSnapshotId,
+  const items = rows.flatMap((row): ToolRankingEntry[] => {
+    if (!row.toolId || row.isTotal) return []
+    const tool = toolDetails.get(row.toolId)
+    const rate = totalWeighted > 0 ? row.weight / totalWeighted : 0
+    const ci = wilsonInterval(row.count, totalEligible)
+    return [
+      {
+        toolId: row.toolId,
+        toolName: tool?.name ?? 'Unknown',
+        toolSlug: tool?.slug ?? 'unknown',
+        toolLogoUrl: tool?.logoUrl ?? null,
+        weightedSupport: row.weight,
+        weightedEligible: totalWeighted,
+        weightedSupportRate: rate,
+        rawSupportCount: row.count,
+        rawEligibleCount: totalEligible,
+        rawSupportRate: totalEligible > 0 ? row.count / totalEligible : 0,
+        modelCoverage: totalModels > 0 ? row.models / totalModels : 0,
+        promptCoverage: totalPrompts > 0 ? row.prompts / totalPrompts : 0,
+        ciLow: ci.low,
+        ciHigh: ci.high,
+        trend:
+          previousWeight > 0 ? rate - (previousTools.get(row.toolId) ?? 0) / previousWeight : 0,
+      },
+    ]
   })
-
-  // Default weight config for runs without one
-  const defaultWeight: WeightConfig = { frontierWeight: 1, midWeight: 1, smallWeight: 1 }
-
-  // Aggregate
-  const allModels = new Set<string>()
-  const allPrompts = new Set<string>()
-  let totalEligible = 0
-  let totalWeightedEligible = 0
-
-  type ToolAgg = {
-    toolId: string
-    toolName: string
-    toolSlug: string
-    toolLogoUrl: string | null
-    rawSupport: number
-    weightedSupport: number
-    models: Set<string>
-    prompts: Set<string>
-  }
-
-  const toolAggs = new Map<string, ToolAgg>()
-
-  for (const d of decisions) {
-    const wc = weightConfigs.get(d.runId) ?? defaultWeight
-    const weight = getWeightForTier(wc, d.modelTier)
-
-    allModels.add(d.modelSnapshotId)
-    allPrompts.add(d.promptVersionId)
-    totalEligible++
-    totalWeightedEligible += weight
-
-    if (d.decisionType === 'tool' && d.toolId) {
-      let agg = toolAggs.get(d.toolId)
-      if (!agg) {
-        agg = {
-          toolId: d.toolId,
-          toolName: d.toolName ?? 'Unknown',
-          toolSlug: d.toolSlug ?? 'unknown',
-          toolLogoUrl: d.toolLogoUrl,
-          rawSupport: 0,
-          weightedSupport: 0,
-          models: new Set(),
-          prompts: new Set(),
-        }
-        toolAggs.set(d.toolId, agg)
-      }
-      agg.rawSupport++
-      agg.weightedSupport += weight
-      agg.models.add(d.modelSnapshotId)
-      agg.prompts.add(d.promptVersionId)
-    }
-  }
-
-  // Compute trend from the previous window. For calendar date ranges the baseline is
-  // the preceding period [previousStartDate, startDate); otherwise it's the run-count
-  // window immediately before the current one. season_to_date (all time) has no baseline.
-  const trendMap = new Map<string, number>()
-  const previousRunIds =
-    filters.previousStartDate && filters.startDate
-      ? await getPublishedRunIdsBetween(
-          db,
-          filters.seasonId,
-          filters.previousStartDate,
-          filters.startDate,
-        )
-      : filters.windowType === 'season_to_date'
-        ? []
-        : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
-  let hasPreviousWindowTrendBaseline = false
-
-  if (previousRunIds.length > 0) {
-    const prevWeights = await getWeightConfigsByRunIds(db, previousRunIds)
-    const prevDecisions = await queryDecisions(db, previousRunIds, filters.categoryIds, {
-      promptLevel: filters.promptLevel,
-      modelTier: filters.modelTier,
-      modelSnapshotId: filters.modelSnapshotId,
-    })
-
-    let prevTotalWeighted = 0
-    const prevToolWeighted = new Map<string, number>()
-
-    for (const d of prevDecisions) {
-      const wc = prevWeights.get(d.runId) ?? defaultWeight
-      const weight = getWeightForTier(wc, d.modelTier)
-      prevTotalWeighted += weight
-      if (d.decisionType === 'tool' && d.toolId) {
-        prevToolWeighted.set(d.toolId, (prevToolWeighted.get(d.toolId) ?? 0) + weight)
-      }
-    }
-
-    if (prevTotalWeighted > 0) {
-      hasPreviousWindowTrendBaseline = true
-      for (const [toolId, ws] of prevToolWeighted) {
-        trendMap.set(toolId, ws / prevTotalWeighted)
-      }
-    }
-  }
-
-  const totalDistinctModels = allModels.size
-  const totalDistinctPrompts = allPrompts.size
-  const meetsThreshold =
-    totalEligible >= 100 && totalDistinctModels >= 3 && totalDistinctPrompts >= 3
-
-  const items: ToolRankingEntry[] = Array.from(toolAggs.values()).map((agg) => {
-    const weightedSupportRate =
-      totalWeightedEligible > 0 ? agg.weightedSupport / totalWeightedEligible : 0
-    const rawSupportRate = totalEligible > 0 ? agg.rawSupport / totalEligible : 0
-    const ci = wilsonInterval(agg.rawSupport, totalEligible)
-    const prevRate = trendMap.get(agg.toolId) ?? 0
-    const trend = hasPreviousWindowTrendBaseline ? weightedSupportRate - prevRate : 0
-
-    return {
-      toolId: agg.toolId,
-      toolName: agg.toolName,
-      toolSlug: agg.toolSlug,
-      toolLogoUrl: agg.toolLogoUrl,
-      weightedSupport: agg.weightedSupport,
-      weightedEligible: totalWeightedEligible,
-      weightedSupportRate,
-      rawSupportCount: agg.rawSupport,
-      rawEligibleCount: totalEligible,
-      rawSupportRate,
-      modelCoverage: totalDistinctModels > 0 ? agg.models.size / totalDistinctModels : 0,
-      promptCoverage: totalDistinctPrompts > 0 ? agg.prompts.size / totalDistinctPrompts : 0,
-      ciLow: ci.low,
-      ciHigh: ci.high,
-      trend,
-    }
-  })
-
   items.sort(
     (a, b) =>
       b.weightedSupportRate - a.weightedSupportRate ||
@@ -847,17 +748,78 @@ async function computeRankingForCategoryIds(
       a.toolName.localeCompare(b.toolName) ||
       a.toolId.localeCompare(b.toolId),
   )
-
   return {
-    categoryId: filters.resultCategoryId,
+    categoryId,
     windowType: filters.windowType,
     anchorDate: filters.anchorDate,
     items,
     totalEligibleDecisions: totalEligible,
-    totalDistinctModels,
-    totalDistinctPrompts,
-    meetsPublicationThreshold: meetsThreshold,
+    totalDistinctModels: totalModels,
+    totalDistinctPrompts: totalPrompts,
+    meetsPublicationThreshold: totalEligible >= 100 && totalModels >= 3 && totalPrompts >= 3,
   }
+}
+
+/** Batched category previews, without a trend baseline, matching rankFromDecisions. */
+export async function computeCategoryRankings(
+  db: DatabaseClient,
+  filters: RankingFilters & { categoryIds: string[] },
+): Promise<CategoryRankingResult[]> {
+  return cachedPublicScoring(db, 'categories', filters, async () => {
+    const publishedRunIds = await getPublishedRunIds(
+      db,
+      filters.seasonId,
+      filters.anchorDate,
+      filters.startDate,
+    )
+    const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
+    const rows = await queryRankingAggregates(db, runIds, filters.categoryIds, filters, true)
+    const toolDetails = await loadRankingTools(db, rows)
+    return filters.categoryIds.map((id) =>
+      rankingFromAggregates(
+        rows.filter((row) => row.categoryId === id),
+        toolDetails,
+        id,
+        filters,
+      ),
+    )
+  })
+}
+
+async function computeRankingForCategoryIds(
+  db: DatabaseClient,
+  filters: RankingFilters & { categoryIds: string[]; resultCategoryId: string },
+): Promise<CategoryRankingResult> {
+  return cachedPublicScoring(db, 'ranking', filters, async () => {
+    const publishedRunIds = await getPublishedRunIds(
+      db,
+      filters.seasonId,
+      filters.anchorDate,
+      filters.startDate,
+    )
+    const runIds = sliceRunIdsForWindow(publishedRunIds, filters.windowType)
+    const previousRunIds =
+      filters.previousStartDate && filters.startDate
+        ? await getPublishedRunIdsBetween(
+            db,
+            filters.seasonId,
+            filters.previousStartDate,
+            filters.startDate,
+          )
+        : filters.windowType === 'season_to_date'
+          ? []
+          : sliceRunIdsForWindow(publishedRunIds, filters.windowType, runIds.length)
+    const rows = await queryRankingAggregates(db, runIds, filters.categoryIds, filters, false)
+    const previous = await queryRankingAggregates(
+      db,
+      previousRunIds,
+      filters.categoryIds,
+      filters,
+      false,
+    )
+    const toolDetails = await loadRankingTools(db, rows)
+    return rankingFromAggregates(rows, toolDetails, filters.resultCategoryId, filters, previous)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -868,117 +830,75 @@ export async function computeHeadToHead(
   db: DatabaseClient,
   filters: HeadToHeadFilters,
 ): Promise<HeadToHeadResult> {
-  const runIds = await getRunIdsForWindow(
-    db,
-    filters.seasonId,
-    filters.windowType,
-    filters.anchorDate,
-  )
+  return cachedPublicScoring(db, 'head-to-head', filters, async () => {
+    const empty = headToHeadFromDecisions(
+      [],
+      new Map(),
+      filters.toolAId,
+      filters.toolBId,
+      filters.categoryId,
+    )
+    if (filters.toolAId === filters.toolBId) return empty
+    const runIds = await getRunIdsForWindow(
+      db,
+      filters.seasonId,
+      filters.windowType,
+      filters.anchorDate,
+    )
+    const rows = await queryHeadToHeadAggregates(db, runIds, filters)
+    const total = rows.find((row) => row.modelId === null && row.promptId === null)
+    if (!total) return empty
 
-  const empty: HeadToHeadResult = {
-    toolAId: filters.toolAId,
-    toolBId: filters.toolBId,
-    categoryId: filters.categoryId,
-    aWins: 0,
-    bWins: 0,
-    abstains: 0,
-    otherToolCount: 0,
-    decisiveCaseCount: 0,
-    aWinRate: 0,
-    bWinRate: 0,
-    ciLow: 0,
-    ciHigh: 0,
-    weightedAWins: 0,
-    weightedBWins: 0,
-    weightedAWinRate: 0,
-    modelBreakdown: [],
-    promptBreakdown: [],
-    meetsPublicationThreshold: false,
-  }
-
-  if (filters.toolAId === filters.toolBId) return empty
-  if (runIds.length === 0) return empty
-
-  const weightConfigs = await getWeightConfigsByRunIds(db, runIds)
-  const decisions = await queryDecisions(db, runIds, [filters.categoryId], {
-    promptLevel: filters.promptLevel,
-    modelTier: filters.modelTier,
-    modelSnapshotId: filters.modelSnapshotId,
-  })
-
-  const defaultWeight: WeightConfig = { frontierWeight: 1, midWeight: 1, smallWeight: 1 }
-
-  let aWins = 0
-  let bWins = 0
-  let abstains = 0
-  let otherToolCount = 0
-  let weightedAWins = 0
-  let weightedBWins = 0
-  const modelBreakdown = new Map<string, HeadToHeadBreakdownEntry>()
-  const promptBreakdown = new Map<string, HeadToHeadBreakdownEntry>()
-
-  for (const d of decisions) {
-    const wc = weightConfigs.get(d.runId) ?? defaultWeight
-    const weight = getWeightForTier(wc, d.modelTier)
-    const outcome = classifyHeadToHeadDecision(d, filters)
-
-    if (outcome === 'a') {
-      aWins++
-      weightedAWins += weight
-    } else if (outcome === 'b') {
-      bWins++
-      weightedBWins += weight
-    } else if (outcome === 'none') {
-      abstains++
-    } else {
-      otherToolCount++
+    const models = new Map<string, HeadToHeadBreakdownEntry>()
+    const prompts = new Map<string, HeadToHeadBreakdownEntry>()
+    for (const row of rows) {
+      const counts = {
+        aWins: row.aWins,
+        bWins: row.bWins,
+        abstains: row.abstains,
+        otherToolCount: row.otherToolCount,
+        decisiveCaseCount: 0,
+        aWinRate: 0,
+      }
+      if (row.modelId && row.modelName !== null && row.modelTier) {
+        models.set(row.modelId, {
+          ...counts,
+          id: row.modelId,
+          label: row.modelName,
+          tier: row.modelTier,
+        })
+      }
+      if (row.promptId && row.promptSlug !== null && row.promptLevel) {
+        prompts.set(row.promptId, {
+          ...counts,
+          id: row.promptId,
+          label: row.promptSlug,
+          tier: row.promptLevel,
+        })
+      }
     }
-
-    applyBreakdownOutcome(
-      getBreakdownEntry(modelBreakdown, {
-        id: d.modelSnapshotId,
-        label: d.modelName,
-        tier: d.modelTier,
-      }),
-      outcome,
-    )
-    applyBreakdownOutcome(
-      getBreakdownEntry(promptBreakdown, {
-        id: d.promptVersionId,
-        label: d.promptSlug,
-        tier: d.promptLevel,
-      }),
-      outcome,
-    )
-  }
-
-  const decisiveCaseCount = aWins + bWins
-  const aWinRate = decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0
-  const bWinRate = decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0
-  const ci = wilsonInterval(aWins, decisiveCaseCount)
-  const weightedDecisive = weightedAWins + weightedBWins
-  const weightedAWinRate = weightedDecisive > 0 ? weightedAWins / weightedDecisive : 0
-
-  return {
-    toolAId: filters.toolAId,
-    toolBId: filters.toolBId,
-    categoryId: filters.categoryId,
-    aWins,
-    bWins,
-    abstains,
-    otherToolCount,
-    decisiveCaseCount,
-    aWinRate,
-    bWinRate,
-    ciLow: ci.low,
-    ciHigh: ci.high,
-    weightedAWins,
-    weightedBWins,
-    weightedAWinRate,
-    modelBreakdown: finalizeBreakdown(modelBreakdown),
-    promptBreakdown: finalizeBreakdown(promptBreakdown),
-    meetsPublicationThreshold: decisiveCaseCount >= 30,
-  }
+    const decisiveCaseCount = total.aWins + total.bWins
+    const weightedDecisive = total.weightedAWins + total.weightedBWins
+    const ci = wilsonInterval(total.aWins, decisiveCaseCount)
+    return {
+      ...empty,
+      aWins: total.aWins,
+      bWins: total.bWins,
+      abstains: total.abstains,
+      otherToolCount: total.otherToolCount,
+      decisiveCaseCount,
+      aWinRate: decisiveCaseCount > 0 ? total.aWins / decisiveCaseCount : 0,
+      bWinRate: decisiveCaseCount > 0 ? total.bWins / decisiveCaseCount : 0,
+      ciLow: ci.low,
+      ciHigh: ci.high,
+      weightedAWins: total.weightedAWins,
+      weightedBWins: total.weightedBWins,
+      weightedAWinRate: weightedDecisive > 0 ? total.weightedAWins / weightedDecisive : 0,
+      modelBreakdown: finalizeBreakdown(models),
+      promptBreakdown: finalizeBreakdown(prompts),
+      meetsPublicationThreshold: decisiveCaseCount >= 30,
+    }
+  })
 }
 
 type HeadToHeadOutcome = 'a' | 'b' | 'none' | 'other'

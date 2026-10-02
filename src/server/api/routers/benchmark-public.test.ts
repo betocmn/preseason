@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { eq } from 'drizzle-orm'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serverSettings } from '~/constants/server-settings'
 import {
   benchmarkCaseDecisions,
@@ -21,6 +22,7 @@ import {
   subcategories,
   tools,
 } from '~/server/db/schema'
+import * as scoring from '~/server/llm/benchmark/scoring'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import { createTestCaller } from '~/test/trpc'
 
@@ -1559,6 +1561,95 @@ describe('benchmark public routers', () => {
     expect(featured[0]?.result.decisiveCaseCount).toBe(2)
     expect(featured[0]?.result.aWins).toBe(1)
     expect(featured[0]?.result.bWins).toBe(1)
+  })
+
+  it('loads featured benchmark comparisons concurrently while preserving order and limit', async () => {
+    const fixture = await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    const otherCategories = await db
+      .insert(subcategories)
+      .values([
+        {
+          categoryId: fixture.authCategory.categoryId,
+          name: 'Database',
+          slug: 'database',
+          displayOrder: 2,
+        },
+        {
+          categoryId: fixture.authCategory.categoryId,
+          name: 'Storage',
+          slug: 'storage',
+          displayOrder: 3,
+        },
+      ])
+      .returning()
+
+    await db
+      .update(benchmarkRuns)
+      .set({ scheduledFor: new Date().toISOString().slice(0, 10) })
+      .where(eq(benchmarkRuns.status, 'published'))
+    await db.insert(benchmarkPromptVersionCategories).values(
+      otherCategories.map((category) => ({
+        promptVersionId: fixture.promptVersion.id,
+        categoryId: category.id,
+        displayOrder: category.displayOrder,
+      })),
+    )
+    const decisions = await db
+      .select({
+        caseResultId: benchmarkCaseDecisions.caseResultId,
+        toolId: benchmarkCaseDecisions.toolId,
+      })
+      .from(benchmarkCaseDecisions)
+      .where(eq(benchmarkCaseDecisions.categoryId, fixture.authCategory.id))
+    await db.insert(benchmarkCaseDecisions).values(
+      otherCategories.flatMap((category) =>
+        decisions.map((decision) => ({
+          ...decision,
+          categoryId: category.id,
+          decisionType: 'tool' as const,
+          resolutionStatus: 'resolved' as const,
+        })),
+      ),
+    )
+
+    let releaseFirst = () => {}
+    const firstComparisonGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const completedCategoryIds: string[] = []
+    const computeHeadToHead = scoring.computeHeadToHead
+    const comparisons = vi
+      .spyOn(scoring, 'computeHeadToHead')
+      .mockImplementation(async (database, filters) => {
+        if (filters.categoryId === fixture.authCategory.id) await firstComparisonGate
+        const result = await computeHeadToHead(database, filters)
+        completedCategoryIds.push(filters.categoryId)
+        return result
+      })
+    const request = createTestCaller(null).benchmarkMatch.listFeatured({
+      categorySlug: 'devtools',
+      limit: 2,
+    })
+
+    try {
+      // The second comparison must finish even while the first is blocked.
+      await vi.waitFor(() => expect(completedCategoryIds).toEqual([first(otherCategories).id]))
+      releaseFirst()
+      const featured = await request
+
+      expect(comparisons).toHaveBeenCalledTimes(2)
+      expect(featured.map((entry) => entry.category.slug)).toEqual(['auth', 'database'])
+      expect(featured.map((entry) => entry.result.decisiveCaseCount)).toEqual([2, 2])
+      expect(featured.every((entry) => entry.status === 'active')).toBe(true)
+    } finally {
+      releaseFirst()
+      try {
+        await request
+      } finally {
+        comparisons.mockRestore()
+      }
+    }
   })
 
   it('prioritizes recent manual featured matchups ahead of benchmark rankings', async () => {
