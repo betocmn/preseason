@@ -108,6 +108,18 @@ export const serverSettings = {
       'anthropic/claude-opus-5.5',
       'anthropic/claude-sonnet-5.5',
     ] as readonly string[],
+    rangeRollout: {
+      version: 'continuous-ranges-v1',
+      productionUrl: 'https://preseason.ai',
+      estimatedRunCostUsd: 13,
+      sourceSeasonSlug: 'season-dev-3',
+      targetSeasonSlug: 'season-dev-4',
+      targetSeasonName: 'Season dev-4',
+      expectedPrompts: 60,
+      expectedModels: 20,
+      monthlyBudgetUsd: 20,
+      smokeMaxAgeMs: 24 * 60 * 60 * 1000,
+    },
     modelDefaults: {
       temperature: 0.2,
       topP: 1,
