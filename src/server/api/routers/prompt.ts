@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, inArray, isNotNull, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { serverSettings } from '~/constants/server-settings'
 import { requireRole } from '~/server/api/helpers/auth'
@@ -693,9 +693,11 @@ export const promptRouter = createTRPCRouter({
         ...(seasonId ? { seasonId } : {}),
       }
 
+      // EXISTS stops at each prompt version's first tool decision; a distinct join
+      // scans every decision, which timed out cold production builds.
       const orderedCandidates = (
         await ctx.db
-          .selectDistinct({
+          .select({
             pvId: benchmarkPromptVersions.id,
             slug: benchmarkPromptVersions.slug,
             level: benchmarkPromptVersions.level,
@@ -704,25 +706,31 @@ export const promptRouter = createTRPCRouter({
             promptDescription: prompts.description,
             createdAt: benchmarkPromptVersions.createdAt,
           })
-          .from(benchmarkCaseDecisions)
-          .innerJoin(
-            benchmarkCaseResults,
-            eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
-          )
-          .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
-          .innerJoin(
-            benchmarkPromptVersions,
-            eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
-          )
+          .from(benchmarkPromptVersions)
           .innerJoin(prompts, eq(benchmarkPromptVersions.promptId, prompts.id))
           .where(
             and(
-              seasonId ? eq(benchmarkCases.seasonId, seasonId) : undefined,
-              inArray(benchmarkCaseResults.runId, runIds),
-              eq(benchmarkCaseDecisions.decisionType, 'tool'),
-              isNotNull(benchmarkCaseDecisions.toolId),
               eq(prompts.isActive, true),
               eq(benchmarkPromptVersions.isActive, true),
+              exists(
+                ctx.db
+                  .select({ id: benchmarkCaseDecisions.id })
+                  .from(benchmarkCaseDecisions)
+                  .innerJoin(
+                    benchmarkCaseResults,
+                    eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
+                  )
+                  .innerJoin(benchmarkCases, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
+                  .where(
+                    and(
+                      eq(benchmarkCases.promptVersionId, benchmarkPromptVersions.id),
+                      seasonId ? eq(benchmarkCases.seasonId, seasonId) : undefined,
+                      inArray(benchmarkCaseResults.runId, runIds),
+                      eq(benchmarkCaseDecisions.decisionType, 'tool'),
+                      isNotNull(benchmarkCaseDecisions.toolId),
+                    ),
+                  ),
+              ),
             ),
           )
       ).sort((a, b) => comparePromptCandidates(a, b, anchorDate))

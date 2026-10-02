@@ -50,6 +50,13 @@
       "when": 1782215216298,
       "tag": "0006_add_devtools_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790913603751,
+      "tag": "0007_drop_contact_messages",
+      "breakpoints": true
     }
   ]
 }

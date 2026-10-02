@@ -3,7 +3,6 @@ import { benchmarkMatchRouter } from '~/server/api/routers/benchmark-match'
 import { benchmarkRankingRouter } from '~/server/api/routers/benchmark-ranking'
 import { categoryRouter } from '~/server/api/routers/category'
 import { commentRouter } from '~/server/api/routers/comment'
-import { contactRouter } from '~/server/api/routers/contact'
 import { criticRouter } from '~/server/api/routers/critic'
 import { llmRouter } from '~/server/api/routers/llm'
 import { matchRouter } from '~/server/api/routers/match'
@@ -23,7 +22,6 @@ export const appRouter = createTRPCRouter({
   match: matchRouter,
   critic: criticRouter,
   comment: commentRouter,
-  contact: contactRouter,
   user: userRouter,
 })
 

@@ -4,7 +4,6 @@ const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
 const benchmarkNewRunStartUtcHour = 12
 const benchmarkNewRunUtcMonthDays: readonly number[] = [5]
-const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
 const matchRequestTimeoutMs = 2 * 60 * 1000
@@ -74,13 +73,6 @@ export const serverSettings = {
     categoryGroupSlugs: publicCategoryGroupSlugs,
     benchmarkCacheTag: 'public-benchmark-summaries',
     benchmarkCacheRevalidateSeconds: 3_600,
-  },
-  contact: {
-    maxSubmissionsPerIp: 3,
-    rateLimitWindowMs: contactRateLimitWindowMs,
-    advisoryLockNamespace: 41_028,
-    // Default to trusting the single proxy directly in front of the app.
-    forwardedForTrustedProxyHops: 1,
   },
   benchmark: {
     promptContractVersion: '1.1',
