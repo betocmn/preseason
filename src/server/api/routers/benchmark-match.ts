@@ -22,6 +22,7 @@ import {
   computeHeadToHead,
   type HeadToHeadBreakdownEntry,
   type HeadToHeadResult,
+  headToHeadFromRanking,
   type ModelTier,
   type WindowType,
   wilsonInterval,
@@ -702,9 +703,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
         const rankingsByCategory = new Map(
           summaries.map((ranking) => [ranking.categoryId, ranking]),
         )
-        const pairs: Omit<MatchupEntry, 'result'>[] = []
         for (const sub of subs) {
-          if (matchups.length + pairs.length >= limit) break
+          if (matchups.length >= limit) break
 
           const ranking = rankingsByCategory.get(sub.id)
           if (!ranking) continue
@@ -718,7 +718,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
 
-          pairs.push({
+          matchups.push({
             category: sub,
             toolA: {
               id: top1.toolId,
@@ -732,25 +732,12 @@ export const benchmarkMatchRouter = createTRPCRouter({
               slug: top2.toolSlug,
               logoUrl: top2.toolLogoUrl,
             },
+            // Totals come from the ranking aggregate; a decision scan per pair overloaded
+            // the cold database while production builds prerendered /matches.
+            result: headToHeadFromRanking(ranking, top1.toolId, top2.toolId),
             status: 'active',
           })
         }
-
-        // Select and cap pairs first; cold-cache comparisons can then run concurrently
-        // while Promise.all preserves the category order after manual matchups.
-        const benchmarkMatchups = await Promise.all(
-          pairs.map(async (pair) => ({
-            ...pair,
-            result: await computeHeadToHead(ctx.db, {
-              categoryId: pair.category.id,
-              toolAId: pair.toolA.id,
-              toolBId: pair.toolB.id,
-              windowType: 'trailing_28d',
-              anchorDate,
-            }),
-          })),
-        )
-        matchups.push(...benchmarkMatchups)
       }
 
       // ---------------------------------------------------------------

@@ -28,6 +28,7 @@ import {
   fetchDecisions,
   getWeightForTier,
   headToHeadFromDecisions,
+  headToHeadFromRanking,
   prepareScoringContext,
   rankFromDecisions,
   sliceRunIdsForWindow,
@@ -1481,5 +1482,60 @@ describe('computeHeadToHead', () => {
     expect(result.bWins).toBe(0)
     expect(result.decisiveCaseCount).toBe(0)
     expect(result.meetsPublicationThreshold).toBe(false)
+  })
+
+  it('derives the same totals from a ranking over the same runs', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+
+    // 4 Clerk, 2 Supabase, 2 Drizzle, 1 none
+    const toolIds = [
+      fixture.clerk.id,
+      fixture.clerk.id,
+      fixture.clerk.id,
+      fixture.clerk.id,
+      fixture.supabase.id,
+      fixture.supabase.id,
+      fixture.drizzleTool.id,
+      fixture.drizzleTool.id,
+    ]
+    await seedPublishedRun(
+      db,
+      fixture,
+      '2026-03-10',
+      fixture.caseRows.map((_, caseIndex) => {
+        const toolId = toolIds[caseIndex]
+        return toolId
+          ? { caseIndex, categoryId: fixture.authCat.id, decisionType: 'tool' as const, toolId }
+          : { caseIndex, categoryId: fixture.authCat.id, decisionType: 'none' as const }
+      }),
+    )
+
+    const window = {
+      seasonId: fixture.season.id,
+      windowType: 'trailing_28d' as const,
+      anchorDate: '2026-03-10',
+    }
+    const pair = { toolAId: fixture.clerk.id, toolBId: fixture.supabase.id }
+    const [ranking] = await computeCategoryRankings(db, {
+      ...window,
+      categoryIds: [fixture.authCat.id],
+    })
+    const expected = await computeHeadToHead(db, {
+      ...window,
+      ...pair,
+      categoryId: fixture.authCat.id,
+    })
+
+    expect([expected.aWins, expected.bWins, expected.abstains, expected.otherToolCount]).toEqual([
+      4, 2, 1, 2,
+    ])
+    expect(
+      headToHeadFromRanking(
+        requireValue(ranking, 'Expected an auth ranking'),
+        pair.toolAId,
+        pair.toolBId,
+      ),
+    ).toEqual({ ...expected, modelBreakdown: [], promptBreakdown: [] })
   })
 })

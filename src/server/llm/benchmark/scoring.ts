@@ -901,6 +901,46 @@ export async function computeHeadToHead(
   })
 }
 
+/**
+ * Head-to-head totals from a ranking over the same runs and filters, so listings skip
+ * one decision scan per pair. Model and prompt breakdowns still need computeHeadToHead.
+ */
+export function headToHeadFromRanking(
+  ranking: CategoryRankingResult,
+  toolAId: string,
+  toolBId: string,
+): HeadToHeadResult {
+  const empty = headToHeadFromDecisions([], new Map(), toolAId, toolBId, ranking.categoryId)
+  if (toolAId === toolBId) return empty
+
+  const toolA = ranking.items.find((item) => item.toolId === toolAId)
+  const toolB = ranking.items.find((item) => item.toolId === toolBId)
+  const aWins = toolA?.rawSupportCount ?? 0
+  const bWins = toolB?.rawSupportCount ?? 0
+  const toolDecisions = ranking.items.reduce((sum, item) => sum + item.rawSupportCount, 0)
+  const weightedAWins = toolA?.weightedSupport ?? 0
+  const weightedBWins = toolB?.weightedSupport ?? 0
+  const decisiveCaseCount = aWins + bWins
+  const weightedDecisive = weightedAWins + weightedBWins
+  const ci = wilsonInterval(aWins, decisiveCaseCount)
+  return {
+    ...empty,
+    aWins,
+    bWins,
+    abstains: ranking.totalEligibleDecisions - toolDecisions,
+    otherToolCount: toolDecisions - decisiveCaseCount,
+    decisiveCaseCount,
+    aWinRate: decisiveCaseCount > 0 ? aWins / decisiveCaseCount : 0,
+    bWinRate: decisiveCaseCount > 0 ? bWins / decisiveCaseCount : 0,
+    ciLow: ci.low,
+    ciHigh: ci.high,
+    weightedAWins,
+    weightedBWins,
+    weightedAWinRate: weightedDecisive > 0 ? weightedAWins / weightedDecisive : 0,
+    meetsPublicationThreshold: decisiveCaseCount >= 30,
+  }
+}
+
 type HeadToHeadOutcome = 'a' | 'b' | 'none' | 'other'
 
 function classifyHeadToHeadDecision(
