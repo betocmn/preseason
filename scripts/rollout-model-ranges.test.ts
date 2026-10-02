@@ -249,6 +249,29 @@ describe('guarded range rollout', () => {
       await db.execute(sql`drop function reject_test_activation()`)
     }
   })
+  it('rejects changed inference settings even when a stored snapshot key was left untouched', async () => {
+    const { db } = await seedSource()
+    const dry = await rolloutModelRanges(db)
+    await rolloutModelRanges(db, {
+      mode: 'prepare',
+      expectedSourceFingerprint: dry.sourceFingerprint,
+    })
+    const snapshot = await db.query.benchmarkModelSnapshots.findFirst({
+      where: eq(schema.benchmarkModelSnapshots.requestedModelId, 'openai/gpt-6-astra'),
+    })
+    if (!snapshot) throw new Error('Missing prepared snapshot')
+    await db
+      .update(schema.benchmarkModelSnapshots)
+      .set({ maxTokens: 8192 })
+      .where(eq(schema.benchmarkModelSnapshots.id, snapshot.id))
+    await expect(
+      rolloutModelRanges(db, {
+        mode: 'activate',
+        expectedSourceFingerprint: dry.sourceFingerprint,
+      }),
+    ).rejects.toThrow('inference settings changed')
+  })
+
   it('refuses a changed prepared matrix and leaves the source active', async () => {
     const { db, season } = await seedSource()
     const dry = await rolloutModelRanges(db)

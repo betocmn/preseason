@@ -8,7 +8,9 @@ import { serverSettings } from '~/constants/server-settings'
 import * as schema from '~/server/db/schema'
 import {
   benchmarkCases,
-  type benchmarkModelSnapshots,
+  benchmarkModelSnapshots,
+  benchmarkPromptVersionCategories,
+  benchmarkPromptVersions,
   benchmarkProtocols,
   benchmarkRuns,
   benchmarkSeasonModels,
@@ -173,6 +175,30 @@ async function verifyTarget(database: Database, state: Awaited<ReturnType<typeof
     cases.length !== expectedCases.length
   )
     throw new Error('Prepared case matrix changed')
+  for (const row of models) {
+    const expected = state.models.find(
+      (model) => model.snapshotKey === row.modelSnapshot.snapshotKey,
+    )
+    const snapshot = row.modelSnapshot
+    if (
+      !expected ||
+      snapshot.requestedModelId !== expected.entry.modelId ||
+      snapshot.tier !== expected.entry.tier ||
+      snapshot.temperature !== (expected.params.temperature ?? null) ||
+      snapshot.topP !== (expected.params.topP ?? null) ||
+      snapshot.maxTokens !== (expected.params.maxTokens ?? null) ||
+      snapshot.seed !== (expected.params.seed ?? null) ||
+      (expected.previous && expected.previous.id !== snapshot.id)
+    )
+      throw new Error('Prepared inference settings changed')
+  }
+  if (target.status === 'draft') {
+    const [run, batch] = await Promise.all([
+      database.query.benchmarkRuns.findFirst({ where: eq(benchmarkRuns.seasonId, target.id) }),
+      database.query.matchBatches.findFirst({ where: eq(matchBatches.seasonId, target.id) }),
+    ])
+    if (run || batch) throw new Error('Prepared season already has work')
+  }
   return { promptCount: prompts.length, modelCount: models.length, caseCount: cases.length }
 }
 
@@ -188,7 +214,7 @@ export async function rolloutModelRanges(
     else {
       await tx.execute(sql`set local lock_timeout = '5s'`)
       await tx.execute(
-        sql`lock table ${benchmarkSeasons}, ${benchmarkSeasonPrompts}, ${benchmarkSeasonModels}, ${benchmarkCases}, ${benchmarkRuns}, ${matchBatches}, ${llms} in share row exclusive mode`,
+        sql`lock table ${benchmarkSeasons}, ${benchmarkSeasonPrompts}, ${benchmarkSeasonModels}, ${benchmarkCases}, ${benchmarkRuns}, ${matchBatches}, ${llms}, ${benchmarkModelSnapshots}, ${benchmarkProtocols}, ${benchmarkPromptVersions}, ${benchmarkPromptVersionCategories} in share row exclusive mode`,
       )
     }
     const state = await inspect(database)
