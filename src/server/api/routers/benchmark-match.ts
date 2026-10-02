@@ -702,8 +702,9 @@ export const benchmarkMatchRouter = createTRPCRouter({
         const rankingsByCategory = new Map(
           summaries.map((ranking) => [ranking.categoryId, ranking]),
         )
+        const pairs: Omit<MatchupEntry, 'result'>[] = []
         for (const sub of subs) {
-          if (matchups.length >= limit) break
+          if (matchups.length + pairs.length >= limit) break
 
           const ranking = rankingsByCategory.get(sub.id)
           if (!ranking) continue
@@ -717,15 +718,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
 
-          const result = await computeHeadToHead(ctx.db, {
-            categoryId: sub.id,
-            toolAId: top1.toolId,
-            toolBId: top2.toolId,
-            windowType: 'trailing_28d',
-            anchorDate,
-          })
-
-          matchups.push({
+          pairs.push({
             category: sub,
             toolA: {
               id: top1.toolId,
@@ -739,10 +732,25 @@ export const benchmarkMatchRouter = createTRPCRouter({
               slug: top2.toolSlug,
               logoUrl: top2.toolLogoUrl,
             },
-            result,
             status: 'active',
           })
         }
+
+        // Select and cap pairs first; cold-cache comparisons can then run concurrently
+        // while Promise.all preserves the category order after manual matchups.
+        const benchmarkMatchups = await Promise.all(
+          pairs.map(async (pair) => ({
+            ...pair,
+            result: await computeHeadToHead(ctx.db, {
+              categoryId: pair.category.id,
+              toolAId: pair.toolA.id,
+              toolBId: pair.toolB.id,
+              windowType: 'trailing_28d',
+              anchorDate,
+            }),
+          })),
+        )
+        matchups.push(...benchmarkMatchups)
       }
 
       // ---------------------------------------------------------------
