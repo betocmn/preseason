@@ -30,6 +30,7 @@ The deployed schedule lives in `vercel.json`.
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
 | `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute on the 5th–8th, 15th–18th, and 25th–28th; fresh runs open on the 5th, 15th, and 25th at 12:00 UTC | `* * 5-8,15-18,25-28 * *` |
+| `/api/cron/benchmark-run` | Resumes unfinished work and admin retries between processing windows | Every 15 minutes on the remaining UTC days | `*/15 * 1-4,9-14,19-24,29-31 * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Mondays and Thursdays at 12:00 UTC | `0 12 * * 1,4` |
 | `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 
@@ -39,9 +40,12 @@ In practice:
   and otherwise resumes unfinished benchmark work across cron ticks and calendar days
 - Each start has 84 hours of processing time (5,040 one-case invocations), enough
   for the reference 1,200-case run to use all three attempts with spare capacity
-- Outside those dates, automatic benchmark polling stops. Unfinished work resumes
-  at the next processing window; an authenticated manual invocation can resume it sooner
-- This schedules 17,280 invocations per month instead of 40,320–44,640, a 57–61% reduction.
+- Outside those dates, the same route polls every 15 minutes to resume unfinished
+  work, including admin retries. The two schedules cover every UTC day without
+  overlapping. Each invocation still processes one case, so larger retry queues
+  need multiple ticks to finish
+- This schedules 18,816–19,104 invocations per month instead of 40,320–44,640,
+  a 53–57% reduction depending on month length.
   The calendar guard still permits only three fresh runs per month
 - Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the twice-weekly background dispatcher that keeps queued match batches moving

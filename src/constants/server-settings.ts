@@ -90,8 +90,10 @@ export const serverSettings = {
     // Fresh benchmark runs open on configured UTC month days at this UTC hour.
     newRunStartUtcHour: benchmarkNewRunStartUtcHour,
     newRunUtcMonthDays: benchmarkNewRunUtcMonthDays,
-    // vercel.json polls on each start day and the following three UTC days.
+    // vercel.json polls every minute on each start day and the following three UTC days.
     cronProcessingWindowDays: 4,
+    // Keep retries and unfinished work moving between the main processing windows.
+    cronRecoveryIntervalMinutes: 15,
     casesPerCronInvocation: 1,
     // Stop retrying a case after this many attempts to avoid burning API credits.
     maxCaseAttempts: 3,
