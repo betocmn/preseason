@@ -29,8 +29,8 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute on the 5th–8th, 15th–18th, and 25th–28th; fresh runs open on the 5th, 15th, and 25th at 12:00 UTC | `* * 5-8,15-18,25-28 * *` |
-| `/api/cron/benchmark-run` | Resumes unfinished work and admin retries between processing windows | Every 15 minutes on the remaining UTC days | `*/15 * 1-4,9-14,19-24,29-31 * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute on the 5th–8th; fresh runs open on the 5th at 12:00 UTC | `* * 5-8 * *` |
+| `/api/cron/benchmark-run` | Resumes unfinished work and admin retries between processing windows | Every 15 minutes on the remaining UTC days | `*/15 * 1-4,9-31 * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Mondays and Thursdays at 12:00 UTC | `0 12 * * 1,4` |
 | `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 
@@ -44,9 +44,8 @@ In practice:
   work, including admin retries. The two schedules cover every UTC day without
   overlapping. Each invocation still processes one case, so larger retry queues
   need multiple ticks to finish
-- This schedules 18,816–19,104 invocations per month instead of 40,320–44,640,
-  a 53–57% reduction depending on month length.
-  The calendar guard still permits only three fresh runs per month
+- This schedules one fresh full-panel run per month. Remaining polling only
+  resumes unfinished work; it does not create extra runs.
 - Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the twice-weekly background dispatcher that keeps queued match batches moving
 
@@ -72,7 +71,7 @@ src/server/llm/match/parser.ts
 3. Benchmark cron targets the oldest unfinished run first and only starts a new
    run when no unfinished work exists and a configured UTC month-day/start-hour
    window has arrived. The default is
-   `serverSettings.benchmark.newRunUtcMonthDays = [5, 15, 25]` and
+   `serverSettings.benchmark.newRunUtcMonthDays = [5]` and
    `serverSettings.benchmark.newRunStartUtcHour = 12`. Missed calendar windows
    are not backfilled.
 4. `runBenchmark(seasonId, scheduledFor)` creates or reuses the run for that

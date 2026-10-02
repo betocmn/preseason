@@ -9,7 +9,7 @@ Once a season is frozen and activated:
 
 - the prompt set is locked
 - the model set is locked
-- cron adds benchmark runs against that same frozen panel on the 5th, 15th, and 25th of each month at 12:00 UTC
+- cron adds benchmark runs against that same frozen panel on the 5th of each month at 12:00 UTC
 
 ## Why Seasons Exist
 

@@ -3,6 +3,7 @@ import { llms } from '~/server/db/schema'
 import {
   computeSnapshotKey,
   getOrCreateModelSnapshot,
+  resolveModelSnapshotParams,
 } from '~/server/llm/benchmark/model-snapshotter'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 
@@ -242,5 +243,23 @@ describe('getOrCreateModelSnapshot', () => {
     expect(snapshot.modelVersion).toBe('3')
     expect(snapshot.requestedModelId).toBe('anthropic/claude-3-opus-20240229')
     expect(snapshot.modelFamilyKey).toBe('claude-3-opus')
+  })
+})
+
+describe('provider-default sampling', () => {
+  it.each([
+    'openai/gpt-6-astra',
+    'openai/gpt-6.1-sol',
+    'openai/gpt-6-luna',
+    'anthropic/claude-opus-5.5',
+    'anthropic/claude-sonnet-5.5',
+  ])('omits unsupported sampling for %s without changing the output ceiling', (modelId) => {
+    expect(
+      resolveModelSnapshotParams(modelId, { temperature: 0.2, topP: 1, maxTokens: 4096 }),
+    ).toEqual({ temperature: null, topP: null, maxTokens: 4096 })
+  })
+  it('preserves settings for existing models and repair workloads', () => {
+    const params = { temperature: 0, topP: 1, maxTokens: 700 }
+    expect(resolveModelSnapshotParams('openai/gpt-5.4-mini', params)).toEqual(params)
   })
 })

@@ -3,7 +3,7 @@ import type { PromptLevel } from '~/server/llm/prompts'
 const benchmarkCronMaxDurationSeconds = 800
 const benchmarkCaseClaimSafetyBufferMs = 2 * 60 * 1000
 const benchmarkNewRunStartUtcHour = 12
-const benchmarkNewRunUtcMonthDays: readonly number[] = [5, 15, 25]
+const benchmarkNewRunUtcMonthDays: readonly number[] = [5]
 const contactRateLimitWindowMs = 60 * 60 * 1000
 const matchCronInvocationSafetyBufferMs = 60 * 1000
 const openRouterRequestTimeoutMs = 5 * 60 * 1000
@@ -90,7 +90,7 @@ export const serverSettings = {
     // Fresh benchmark runs open on configured UTC month days at this UTC hour.
     newRunStartUtcHour: benchmarkNewRunStartUtcHour,
     newRunUtcMonthDays: benchmarkNewRunUtcMonthDays,
-    // vercel.json polls every minute on each start day and the following three UTC days.
+    // vercel.json polls every minute on the 5th and the following three UTC days.
     cronProcessingWindowDays: 4,
     // Keep retries and unfinished work moving between the main processing windows.
     cronRecoveryIntervalMinutes: 15,
@@ -100,6 +100,14 @@ export const serverSettings = {
     // Do not reclaim an in-flight case before the benchmark worker itself can time out.
     caseClaimStaleAfterMs:
       benchmarkCronMaxDurationSeconds * 1000 + benchmarkCaseClaimSafetyBufferMs,
+    // These releases use provider-default sampling and reasoning.
+    providerDefaultSamplingModelIds: [
+      'openai/gpt-6-astra',
+      'openai/gpt-6.1-sol',
+      'openai/gpt-6-luna',
+      'anthropic/claude-opus-5.5',
+      'anthropic/claude-sonnet-5.5',
+    ] as readonly string[],
     modelDefaults: {
       temperature: 0.2,
       topP: 1,
