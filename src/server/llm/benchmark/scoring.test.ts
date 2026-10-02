@@ -25,6 +25,7 @@ import {
   computeCategoryRanking,
   computeCategoryRankings,
   computeHeadToHead,
+  computeHeadToHeads,
   fetchDecisions,
   getWeightForTier,
   headToHeadFromDecisions,
@@ -508,6 +509,48 @@ describe('computeCategoryRanking', () => {
         fixture.authCat.id,
       ),
     )
+
+    // Multiple pairs in the same category, reversed tools, and empty pairs must
+    // retain independent counts when the underlying history is scanned once.
+    const pairs = [
+      h2hFilters,
+      { ...h2hFilters, toolAId: fixture.supabase.id, toolBId: fixture.clerk.id },
+      {
+        categoryId: fixture.dbCat.id,
+        toolAId: fixture.drizzleTool.id,
+        toolBId: fixture.supabase.id,
+      },
+      { ...h2hFilters, toolBId: fixture.clerk.id },
+      { ...h2hFilters, categoryId: fixture.group.id },
+    ]
+    for (const selection of [
+      {},
+      {
+        modelSnapshotIds: [first(fixture.modelSnapshots).id],
+        promptLevel: 'beginner' as const,
+      },
+    ]) {
+      const selected = await fetchDecisions(db, context.runIds, categoryIds, selection)
+      const comparisons = await computeHeadToHeads(db, { ...filters, ...selection, pairs })
+      expect(comparisons).toEqual(
+        pairs.map((pair) =>
+          headToHeadFromDecisions(
+            selected.filter((row) => row.categoryId === pair.categoryId),
+            context.weightConfigs,
+            pair.toolAId,
+            pair.toolBId,
+            pair.categoryId,
+          ),
+        ),
+      )
+    }
+    expect(await computeHeadToHeads(db, { ...filters, pairs: [] })).toEqual([])
+    const beforePublication = await computeHeadToHeads(db, {
+      ...filters,
+      anchorDate: '2026-02-01',
+      pairs,
+    })
+    expect(beforePublication.every((result) => result.decisiveCaseCount === 0)).toBe(true)
   })
 
   it('excludes incomplete, unresolved, and invalid decisions from SQL summaries', async () => {

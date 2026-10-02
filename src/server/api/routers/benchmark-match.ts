@@ -21,6 +21,7 @@ import {
 import {
   computeCategoryRankings,
   computeHeadToHead,
+  computeHeadToHeads,
   type HeadToHeadBreakdownEntry,
   type HeadToHeadResult,
   type ModelTier,
@@ -687,21 +688,19 @@ export const benchmarkMatchRouter = createTRPCRouter({
           })
         }
 
-        // Select and cap pairs first; cold-cache comparisons can then run concurrently
-        // while Promise.all preserves the category order after manual matchups.
-        const benchmarkMatchups = await Promise.all(
-          pairs.map(async (pair) => ({
-            ...pair,
-            result: await computeHeadToHead(ctx.db, {
-              categoryId: pair.category.id,
-              toolAId: pair.toolA.id,
-              toolBId: pair.toolB.id,
-              windowType: 'season_to_date',
-              anchorDate,
-            }),
+        const results = await computeHeadToHeads(ctx.db, {
+          pairs: pairs.map((pair) => ({
+            categoryId: pair.category.id,
+            toolAId: pair.toolA.id,
+            toolBId: pair.toolB.id,
           })),
-        )
-        matchups.push(...benchmarkMatchups)
+          windowType: 'season_to_date',
+          anchorDate,
+        })
+        for (const [index, pair] of pairs.entries()) {
+          const result = results[index]
+          if (result) matchups.push({ ...pair, result })
+        }
       }
 
       // ---------------------------------------------------------------
@@ -765,12 +764,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       })
       const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
 
-      const matchups: {
-        category: { id: string; name: string; slug: string }
-        toolA: { id: string; name: string; slug: string; logoUrl: string | null }
-        toolB: { id: string; name: string; slug: string; logoUrl: string | null }
-        result: HeadToHeadResult
-      }[] = []
+      const pairs: Omit<MatchupEntry, 'result' | 'status'>[] = []
 
       for (const sub of subs) {
         const ranking = rankingsByCategory.get(sub.id)
@@ -786,15 +780,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         if (!rival || !thisToolEntry) continue
 
         // Always put this tool as toolA for consistent display
-        const result = await computeHeadToHead(ctx.db, {
-          categoryId: sub.id,
-          toolAId: tool.id,
-          toolBId: rival.toolId,
-          windowType: 'season_to_date',
-          anchorDate,
-        })
-
-        matchups.push({
+        pairs.push({
           category: sub,
           toolA: {
             id: tool.id,
@@ -808,9 +794,22 @@ export const benchmarkMatchRouter = createTRPCRouter({
             slug: rival.toolSlug,
             logoUrl: rival.toolLogoUrl,
           },
-          result,
         })
       }
+
+      const comparisons = await computeHeadToHeads(ctx.db, {
+        pairs: pairs.map((pair) => ({
+          categoryId: pair.category.id,
+          toolAId: pair.toolA.id,
+          toolBId: pair.toolB.id,
+        })),
+        windowType: 'season_to_date',
+        anchorDate,
+      })
+      const matchups = pairs.flatMap((pair, index) => {
+        const result = comparisons[index]
+        return result ? [{ ...pair, result }] : []
+      })
 
       // Sort by decisive case count descending, take limit
       matchups.sort((a, b) => b.result.decisiveCaseCount - a.result.decisiveCaseCount)
