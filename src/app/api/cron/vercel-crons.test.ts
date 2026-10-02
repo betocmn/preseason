@@ -38,25 +38,34 @@ describe('vercel cron config', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * 5-8,15-18,25-28 * *')
     expect(cronByPath.get('/api/cron/match-run')).toBe('0 12 * * 1,4')
     expect(cronByPath.get('/api/cron/tool-candidate-review')).toBe('0 * * * *')
   })
 
-  it('keeps enough benchmark cron capacity to drain the reference run before the next calendar window', () => {
+  it('keeps capacity for every reference case to use its retry budget within the processing window', () => {
     const config = readCronConfig()
     const cronByPath = new Map((config.crons ?? []).map((cron) => [cron.path, cron.schedule]))
     const benchmarkCronMinutes = 1
     const referenceBenchmarkCaseCount = 1_200
-    const shortestBenchmarkWindowGapDays = 8
+    const processingDays = serverSettings.benchmark.cronProcessingWindowDays
+    const processingHours = processingDays * 24 - serverSettings.benchmark.newRunStartUtcHour
 
-    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * * * *')
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe('* * 5-8,15-18,25-28 * *')
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
     expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5, 15, 25])
     expect(
-      (shortestBenchmarkWindowGapDays * 24 * 60 * serverSettings.benchmark.casesPerCronInvocation) /
+      (processingHours * 60 * serverSettings.benchmark.casesPerCronInvocation) /
         benchmarkCronMinutes,
-    ).toBeGreaterThan(referenceBenchmarkCaseCount)
+    ).toBeGreaterThan(referenceBenchmarkCaseCount * serverSettings.benchmark.maxCaseAttempts)
+
+    const dayRanges = serverSettings.benchmark.newRunUtcMonthDays.map(
+      (day) => `${day}-${day + processingDays - 1}`,
+    )
+    expect(cronByPath.get('/api/cron/benchmark-run')).toBe(`* * ${dayRanges.join(',')} * *`)
+    expect(
+      Math.max(...serverSettings.benchmark.newRunUtcMonthDays) + processingDays - 1,
+    ).toBeLessThanOrEqual(28)
   })
 
   it('keeps match cron on the expected bounded dispatcher cadence', () => {

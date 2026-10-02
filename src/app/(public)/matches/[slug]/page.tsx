@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table'
+import { getMatchMetadata } from '~/server/public-metadata'
 import { publicApi } from '~/trpc/server'
 
 type Props = {
@@ -117,8 +118,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const parsed = parseMatchSlug(slug)
   if (!parsed) return { title: 'Match Not Found' }
 
-  const caller = await publicApi()
-  const data = await caller.benchmarkMatch.headToHead(parsed)
+  const data = await getMatchMetadata(parsed)
 
   if (!data.toolA || !data.toolB) return { title: 'Match Not Found' }
 

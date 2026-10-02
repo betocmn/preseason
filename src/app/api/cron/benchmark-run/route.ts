@@ -4,6 +4,7 @@ import { env } from '~/env'
 import { isCronRequestAuthorized } from '~/lib/cron-auth'
 import { resolveBenchmarkCronRunTarget } from '~/server/api/helpers/benchmark'
 import { db } from '~/server/db'
+import { refreshPublicBenchmarkCache } from '~/server/llm/benchmark/refresh-public-cache'
 import { runBenchmark } from '~/server/llm/benchmark/runner'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +40,8 @@ export async function GET(request: Request) {
       database: db,
       maxCases: serverSettings.benchmark.casesPerCronInvocation,
     })
+
+    if (summary.status === 'published') await refreshPublicBenchmarkCache(db)
 
     return NextResponse.json({ ok: true, summary })
   } catch (error) {

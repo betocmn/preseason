@@ -29,7 +29,7 @@ The deployed schedule lives in `vercel.json`.
 
 | Route | What runs | When | Cron |
 | --- | --- | --- | --- |
-| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute, with the app-level cadence guard opening fresh logical runs on the 5th, 15th, and 25th at 12:00 UTC | `* * * * *` |
+| `/api/cron/benchmark-run` | Resumes oldest unfinished benchmark work or starts a fresh run when a calendar window opens for the newest active season | Every minute on the 5th–8th, 15th–18th, and 25th–28th; fresh runs open on the 5th, 15th, and 25th at 12:00 UTC | `* * 5-8,15-18,25-28 * *` |
 | `/api/cron/match-run` | Claims the next pending, failed, or stale running match batch and executes it | Mondays and Thursdays at 12:00 UTC | `0 12 * * 1,4` |
 | `/api/cron/tool-candidate-review` | Reviews pending unknown tool candidates from benchmark decisions | Hourly | `0 * * * *` |
 
@@ -37,6 +37,12 @@ In practice:
 
 - Benchmark cron starts at most one fresh logical run per configured calendar window
   and otherwise resumes unfinished benchmark work across cron ticks and calendar days
+- Each start has 84 hours of processing time (5,040 one-case invocations), enough
+  for the reference 1,200-case run to use all three attempts with spare capacity
+- Outside those dates, automatic benchmark polling stops. Unfinished work resumes
+  at the next processing window; an authenticated manual invocation can resume it sooner
+- This schedules 17,280 invocations per month instead of 40,320–44,640, a 57–61% reduction.
+  The calendar guard still permits only three fresh runs per month
 - Benchmark invocations are expected to overlap and safely claim different cases
 - Match cron is the twice-weekly background dispatcher that keeps queued match batches moving
 
@@ -115,7 +121,7 @@ same date resumes the existing run instead of creating duplicates.
 
 `runBenchmark` can reclaim a stale `running` case row after
 `serverSettings.benchmark.caseClaimStaleAfterMs` elapses. The default is
-`11` minutes, chosen to sit just beyond the benchmark route's `600s`
+`15 minutes 20 seconds`, chosen to sit beyond the benchmark route's `800s`
 `maxDuration`. Claim-token guarded writes prevent stale workers from writing
 terminal results after another worker has reclaimed the case.
 
@@ -140,6 +146,15 @@ heuristic fallback path in production.
 ### Auto-Publication
 
 Completing a passing run publishes it automatically after QC review succeeds.
+The cron route and admin publication refresh the shared public scoring cache and
+warm default all-time rankings. Retrying a published run also refreshes the cache
+so withdrawn results no longer contribute. A cache failure is logged without
+failing a completed run; summaries have an hourly expiry as a fallback.
+
+Ranking and comparison queries aggregate decisions inside Postgres. Database
+responses contain tool totals and model/prompt breakdowns, not historical decision
+rows. Social preview images and page titles use separate small metadata queries.
+None of this removes existing benchmark history or reduces existing disk storage.
 
 ## Stored Data
 

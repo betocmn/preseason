@@ -9,6 +9,7 @@ import { BenchmarkRankingFilters } from '~/components/public/benchmark-ranking-f
 import { RankingDetailContent } from '~/components/public/ranking-detail-content'
 import { SidebarLayout } from '~/components/public/sidebar-layout'
 import { deferToRequestWhenDatabaseUnavailable, hasBuildDatabaseAccess } from '~/server/prerender'
+import { getRankingGroupMetadata } from '~/server/public-metadata'
 import { publicApi } from '~/trpc/server'
 
 type Props = {
@@ -24,15 +25,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const { slug } = await params
-  const caller = await publicApi()
-  const data = await caller.benchmarkRanking.byCategoryGroup({ groupSlug: slug })
+  const categoryGroup = await getRankingGroupMetadata(slug)
 
-  if (!data.categoryGroup) {
+  if (!categoryGroup) {
     return { title: 'Category Not Found' }
   }
 
-  const title = `${data.categoryGroup.name} Rankings`
-  const description = `Benchmark rankings for tools in the ${data.categoryGroup.name} category.`
+  const title = `${categoryGroup.name} Rankings`
+  const description = `Benchmark rankings for tools in the ${categoryGroup.name} category.`
   const imagePath = `/rankings/${encodeURIComponent(slug)}/opengraph-image`
   return {
     title,

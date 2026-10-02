@@ -1,6 +1,6 @@
 import { createOgImage, OG_CONTENT_TYPE, OG_SIZE } from '~/lib/og'
 import { isPromptLevel } from '~/server/llm/prompts'
-import { publicApi } from '~/trpc/server'
+import { getPromptMetadata } from '~/server/public-metadata'
 
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
@@ -17,8 +17,8 @@ export default async function Image({
   }
 
   try {
-    const caller = await publicApi()
-    const prompt = await caller.prompt.getBySlug({ slug, level })
+    const prompt = await getPromptMetadata(slug, level)
+    if (!prompt) return createOgImage('Prompt', 'Preseason')
     return createOgImage(prompt.title, prompt.description ?? 'Vibe-coding prompt benchmark')
   } catch {
     return createOgImage('Prompt', 'Preseason')

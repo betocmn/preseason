@@ -1,5 +1,5 @@
 import { createOgImage, OG_CONTENT_TYPE, OG_SIZE } from '~/lib/og'
-import { publicApi } from '~/trpc/server'
+import { getMatchMetadata } from '~/server/public-metadata'
 
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
@@ -30,8 +30,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   }
 
   try {
-    const caller = await publicApi()
-    const data = await caller.benchmarkMatch.headToHead(parsed)
+    const data = await getMatchMetadata(parsed)
     if (!data.toolA || !data.toolB) {
       return createOgImage('Match', 'Preseason')
     }
