@@ -293,7 +293,10 @@ async function seedSeasonDecision(args: {
     scheduledFor = '2026-03-10',
   } = args
 
-  await db.insert(benchmarkSeasonPrompts).values({ seasonId, promptVersionId })
+  await db
+    .insert(benchmarkSeasonPrompts)
+    .values({ seasonId, promptVersionId })
+    .onConflictDoNothing()
   await db.insert(benchmarkSeasonModels).values({ seasonId, modelSnapshotId })
 
   const benchmarkCase = first(
@@ -741,6 +744,71 @@ describe('benchmark public routers', () => {
     })
     expect(recentPreviews[0]?.ranking?.items[0]?.toolSlug).toBe('clerk')
     expect(recentPreviews[1]?.ranking?.items).toEqual([])
+  })
+
+  it('filters homepage and detailed rankings to the union of selected model ranges', async () => {
+    const { authCategory, freshSeason, modelSnapshot, promptVersion, supabase } =
+      await seedBenchmarkPublicFixture()
+    const db = getTestDb()
+    await db
+      .update(benchmarkModelSnapshots)
+      .set({ requestedModelId: 'anthropic/claude-opus-4.6' })
+      .where(eq(benchmarkModelSnapshots.id, modelSnapshot.id))
+    for (const [index, modelId] of [
+      'deepseek/deepseek-v4-pro-0813',
+      'google/gemini-3.8-flash',
+    ].entries()) {
+      const snapshot = first(
+        await db
+          .insert(benchmarkModelSnapshots)
+          .values({
+            llmId: modelSnapshot.llmId,
+            name: modelId,
+            provider: 'openrouter',
+            company: 'Test',
+            modelFamily: 'Test',
+            modelVersion: '1',
+            tier: 'frontier',
+            requestedModelId: modelId,
+            snapshotKey: `range-selection-${index}`,
+          })
+          .returning(),
+      )
+      await seedSeasonDecision({
+        db,
+        seasonId: freshSeason.id,
+        promptVersionId: promptVersion.id,
+        modelSnapshotId: snapshot.id,
+        categoryId: authCategory.id,
+        toolId: supabase?.id,
+        scheduledFor: `2026-06-0${index + 1}`,
+      })
+    }
+    const caller = createTestCaller(null)
+    const input = { dateRange: 'all' as const, anchorDate: '2026-06-03' }
+    const selection = {
+      ...input,
+      modelRangeIds: ['anthropic-opus', 'deepseek-pro', 'anthropic-opus'],
+    }
+    const all = await caller.benchmarkRanking.listHomepagePreviews(input)
+    const selected = await caller.benchmarkRanking.listHomepagePreviews(selection)
+    const detail = await caller.benchmarkRanking.byCategory({ ...selection, categorySlug: 'auth' })
+    expect(all[0]?.ranking?.totalEligibleDecisions).toBe(4)
+    expect(selected[0]?.ranking?.totalEligibleDecisions).toBe(3)
+    expect(detail.ranking?.totalEligibleDecisions).toBe(3)
+    expect(
+      (await caller.benchmarkRanking.listHomepagePreviews({ ...input, modelRangeIds: [] }))[0]
+        ?.ranking?.totalEligibleDecisions,
+    ).toBe(0)
+    await expect(
+      caller.benchmarkRanking.listHomepagePreviews({ ...input, modelRangeIds: ['unknown'] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      caller.benchmarkRanking.listHomepagePreviews({
+        ...selection,
+        modelRangeId: 'anthropic-opus',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
   it('uses an auto-published passing run without requiring publishRun', async () => {

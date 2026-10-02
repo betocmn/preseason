@@ -57,6 +57,10 @@ export function BenchmarkRankingFilters({
   const effectivePromptLevel = searchParams.get('promptLevel') ?? currentPromptLevel
   const effectiveModelTier = searchParams.get('modelTier') ?? currentModelTier
   const modelRangeParam = searchParams.get('modelRangeId') ?? currentModelRangeId
+  const selectedRangeIds = searchParams.getAll('modelRangeIds')
+  const selectedRangesLabel = selectedRangeIds
+    .map((id) => modelLookup.get(id)?.label ?? 'Unknown range')
+    .join(', ')
 
   const dateRangeParam = searchParams.get('dateRange')
   const effectiveDateRange =
@@ -219,19 +223,30 @@ export function BenchmarkRankingFilters({
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-muted-foreground" />
         <Select
-          value={normalizedModelRangeId ?? 'all'}
+          value={selectedRangeIds.length ? 'multiple' : (normalizedModelRangeId ?? 'all')}
           onValueChange={(val) => {
-            navigate({ modelRangeId: val === 'all' ? undefined : val, modelSnapshotId: undefined })
+            navigate({
+              modelRangeId: val === 'all' ? undefined : val,
+              modelSnapshotId: undefined,
+              modelRangeIds: undefined,
+            })
           }}
         >
           <SelectTrigger className="h-9 w-[260px] border-border/60 bg-background/80 text-sm">
-            <span className="truncate">
-              {selectedModel?.label ??
-                (modelRangeParam ? 'Unknown Model Range' : 'All Model Ranges')}
+            <span className="truncate" title={selectedRangesLabel || undefined}>
+              {selectedRangeIds.length
+                ? `${selectedRangeIds.length} selected model ranges`
+                : (selectedModel?.label ??
+                  (modelRangeParam ? 'Unknown Model Range' : 'All Model Ranges'))}
             </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Model Ranges</SelectItem>
+            {selectedRangeIds.length > 0 && (
+              <SelectItem value="multiple" disabled>
+                {selectedRangeIds.length} selected model ranges
+              </SelectItem>
+            )}
             {modelFilters.map((company, companyIndex) => (
               <SelectGroup key={company.name}>
                 {companyIndex > 0 && <SelectSeparator />}

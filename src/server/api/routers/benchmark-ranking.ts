@@ -55,6 +55,10 @@ const tierFiltersSchema = z.object({
   modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
   modelSnapshotId: z.string().uuid().optional(),
   modelRangeId: z.string().min(1).max(255).optional(),
+  modelRangeIds: z
+    .array(z.string().min(1).max(255))
+    .max(serverSettings.publicSite.maxModelRangeSelections)
+    .optional(),
 })
 
 /**

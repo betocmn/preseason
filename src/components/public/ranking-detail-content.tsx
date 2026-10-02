@@ -31,6 +31,7 @@ export function RankingDetailContent(props: RankingDetailContentProps) {
     !!filters.promptLevel ||
     !!filters.modelTier ||
     filters.modelRangeId !== undefined ||
+    filters.modelRangeIds !== undefined ||
     filters.modelSnapshotId !== undefined ||
     !!filters.dateRange
 

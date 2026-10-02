@@ -71,6 +71,7 @@ export const serverSettings = {
   },
   publicSite: {
     categoryGroupSlugs: publicCategoryGroupSlugs,
+    maxModelRangeSelections: 64,
     benchmarkCacheTag: 'public-benchmark-summaries',
     benchmarkCacheRevalidateSeconds: 3_600,
   },

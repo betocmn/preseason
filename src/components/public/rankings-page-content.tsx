@@ -26,6 +26,7 @@ export function RankingsPageContent({ initialGroups }: RankingsPageContentProps)
     !!filters.promptLevel ||
     !!filters.modelTier ||
     filters.modelRangeId !== undefined ||
+    filters.modelRangeIds !== undefined ||
     filters.modelSnapshotId !== undefined ||
     !!filters.dateRange
   const isGroup = !!filters.category && !filters.sub
@@ -36,6 +37,7 @@ export function RankingsPageContent({ initialGroups }: RankingsPageContentProps)
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
       modelRangeId: filters.modelRangeId,
+      modelRangeIds: filters.modelRangeIds,
       dateRange: filters.dateRange,
     },
     { enabled: showIndex && hasModelFilters },
@@ -48,6 +50,7 @@ export function RankingsPageContent({ initialGroups }: RankingsPageContentProps)
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
       modelRangeId: filters.modelRangeId,
+      modelRangeIds: filters.modelRangeIds,
       dateRange: filters.dateRange,
     },
     { enabled: !showIndex && isGroup },
@@ -60,6 +63,7 @@ export function RankingsPageContent({ initialGroups }: RankingsPageContentProps)
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
       modelRangeId: filters.modelRangeId,
+      modelRangeIds: filters.modelRangeIds,
       dateRange: filters.dateRange,
     },
     { enabled: !showIndex && !!filters.sub },

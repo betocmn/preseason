@@ -15,6 +15,9 @@ export function rankingFiltersFromSearchParams(searchParams: URLSearchParams) {
     modelTier: (['frontier', 'mid', 'small'] as const).find((value) => value === modelTier),
     dateRange: (['1m', '3m', '6m'] as const).find((value) => value === dateRange),
     modelRangeId: searchParams.get('modelRangeId') ?? undefined,
+    modelRangeIds: searchParams.has('modelRangeIds')
+      ? searchParams.getAll('modelRangeIds')
+      : undefined,
     modelSnapshotId: searchParams.get('modelSnapshotId') ?? undefined,
   }
 }
