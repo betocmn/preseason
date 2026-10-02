@@ -1695,7 +1695,7 @@ describe('benchmark public routers', () => {
     expect([featured[0]?.result.aWins, featured[0]?.result.bWins].sort()).toEqual([1, 2])
   })
 
-  it('loads featured benchmark comparisons concurrently while preserving order and limit', async () => {
+  it('batches featured benchmark comparisons while preserving order and limit', async () => {
     const fixture = await seedBenchmarkPublicFixture()
     const db = getTestDb()
     const otherCategories = await db
@@ -1745,42 +1745,24 @@ describe('benchmark public routers', () => {
       ),
     )
 
-    let releaseFirst = () => {}
-    const firstComparisonGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve
-    })
-    const completedCategoryIds: string[] = []
-    const computeHeadToHead = scoring.computeHeadToHead
-    const comparisons = vi
-      .spyOn(scoring, 'computeHeadToHead')
-      .mockImplementation(async (database, filters) => {
-        if (filters.categoryId === fixture.authCategory.id) await firstComparisonGate
-        const result = await computeHeadToHead(database, filters)
-        completedCategoryIds.push(filters.categoryId)
-        return result
-      })
-    const request = createTestCaller(null).benchmarkMatch.listFeatured({
-      categorySlug: 'devtools',
-      limit: 2,
-    })
+    const comparisons = vi.spyOn(scoring, 'computeHeadToHeads')
 
     try {
-      // The second comparison must finish even while the first is blocked.
-      await vi.waitFor(() => expect(completedCategoryIds).toEqual([first(otherCategories).id]))
-      releaseFirst()
-      const featured = await request
+      const featured = await createTestCaller(null).benchmarkMatch.listFeatured({
+        categorySlug: 'devtools',
+        limit: 2,
+      })
 
-      expect(comparisons).toHaveBeenCalledTimes(2)
+      expect(comparisons).toHaveBeenCalledTimes(1)
+      expect(comparisons.mock.calls[0]?.[1].pairs.map((pair) => pair.categoryId)).toEqual([
+        fixture.authCategory.id,
+        first(otherCategories).id,
+      ])
       expect(featured.map((entry) => entry.category.slug)).toEqual(['auth', 'database'])
       expect(featured.map((entry) => entry.result.decisiveCaseCount)).toEqual([2, 2])
       expect(featured.every((entry) => entry.status === 'active')).toBe(true)
     } finally {
-      releaseFirst()
-      try {
-        await request
-      } finally {
-        comparisons.mockRestore()
-      }
+      comparisons.mockRestore()
     }
   })
 

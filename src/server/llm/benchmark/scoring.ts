@@ -16,7 +16,10 @@ import {
 import type { PromptLevel } from '~/server/llm/prompts'
 import { cachedPublicScoring } from './public-cache'
 import {
+  type HeadToHeadAggregate,
+  type HeadToHeadPair,
   queryHeadToHeadAggregates,
+  queryHeadToHeadBatchAggregates,
   queryRankingAggregates,
   type RankingAggregate,
 } from './scoring-queries'
@@ -860,59 +863,95 @@ export async function computeHeadToHead(
       filters.anchorDate,
     )
     const rows = await queryHeadToHeadAggregates(db, runIds, filters)
-    const total = rows.find((row) => row.modelId === null && row.promptId === null)
-    if (!total) return empty
-
-    const models = new Map<string, HeadToHeadBreakdownEntry>()
-    const prompts = new Map<string, HeadToHeadBreakdownEntry>()
-    for (const row of rows) {
-      const counts = {
-        aWins: row.aWins,
-        bWins: row.bWins,
-        abstains: row.abstains,
-        otherToolCount: row.otherToolCount,
-        decisiveCaseCount: 0,
-        aWinRate: 0,
-      }
-      if (row.modelId && row.modelName !== null && row.modelTier) {
-        models.set(row.modelId, {
-          ...counts,
-          id: row.modelId,
-          label: row.modelName,
-          tier: row.modelTier,
-        })
-      }
-      if (row.promptId && row.promptSlug !== null && row.promptLevel) {
-        prompts.set(row.promptId, {
-          ...counts,
-          id: row.promptId,
-          label: row.promptSlug,
-          tier: row.promptLevel,
-        })
-      }
-    }
-    const decisiveCaseCount = total.aWins + total.bWins
-    const weightedDecisive = total.weightedAWins + total.weightedBWins
-    const ci = wilsonInterval(total.aWins, decisiveCaseCount)
-    return {
-      ...empty,
-      aWins: total.aWins,
-      bWins: total.bWins,
-      abstains: total.abstains,
-      otherToolCount: total.otherToolCount,
-      decisiveCaseCount,
-      aWinRate: decisiveCaseCount > 0 ? total.aWins / decisiveCaseCount : 0,
-      bWinRate: decisiveCaseCount > 0 ? total.bWins / decisiveCaseCount : 0,
-      ciLow: ci.low,
-      ciHigh: ci.high,
-      weightedAWins: total.weightedAWins,
-      weightedBWins: total.weightedBWins,
-      weightedAWinRate: weightedDecisive > 0 ? total.weightedAWins / weightedDecisive : 0,
-      modelBreakdown: finalizeBreakdown(models),
-      promptBreakdown: finalizeBreakdown(prompts),
-      meetsPublicationThreshold: decisiveCaseCount >= 30,
-    }
+    return headToHeadFromAggregates(rows, filters)
   })
+}
+
+export async function computeHeadToHeads(
+  db: DatabaseClient,
+  filters: Omit<HeadToHeadFilters, keyof HeadToHeadPair> & { pairs: HeadToHeadPair[] },
+): Promise<HeadToHeadResult[]> {
+  if (!filters.pairs.length) return []
+  return cachedPublicScoring(db, 'head-to-head-batch', filters, async () => {
+    const runIds = await getRunIdsForWindow(
+      db,
+      filters.seasonId,
+      filters.windowType,
+      filters.anchorDate,
+    )
+    const rows = await queryHeadToHeadBatchAggregates(db, runIds, filters.pairs, filters)
+    return filters.pairs.map((pair, index) =>
+      headToHeadFromAggregates(
+        rows.filter((row) => row.pairIndex === index),
+        pair,
+      ),
+    )
+  })
+}
+
+function headToHeadFromAggregates(
+  rows: HeadToHeadAggregate[],
+  filters: HeadToHeadPair,
+): HeadToHeadResult {
+  const empty = headToHeadFromDecisions(
+    [],
+    new Map(),
+    filters.toolAId,
+    filters.toolBId,
+    filters.categoryId,
+  )
+  const total = rows.find((row) => row.modelId === null && row.promptId === null)
+  if (!total) return empty
+
+  const models = new Map<string, HeadToHeadBreakdownEntry>()
+  const prompts = new Map<string, HeadToHeadBreakdownEntry>()
+  for (const row of rows) {
+    const counts = {
+      aWins: row.aWins,
+      bWins: row.bWins,
+      abstains: row.abstains,
+      otherToolCount: row.otherToolCount,
+      decisiveCaseCount: 0,
+      aWinRate: 0,
+    }
+    if (row.modelId && row.modelName !== null && row.modelTier) {
+      models.set(row.modelId, {
+        ...counts,
+        id: row.modelId,
+        label: row.modelName,
+        tier: row.modelTier,
+      })
+    }
+    if (row.promptId && row.promptSlug !== null && row.promptLevel) {
+      prompts.set(row.promptId, {
+        ...counts,
+        id: row.promptId,
+        label: row.promptSlug,
+        tier: row.promptLevel,
+      })
+    }
+  }
+  const decisiveCaseCount = total.aWins + total.bWins
+  const weightedDecisive = total.weightedAWins + total.weightedBWins
+  const ci = wilsonInterval(total.aWins, decisiveCaseCount)
+  return {
+    ...empty,
+    aWins: total.aWins,
+    bWins: total.bWins,
+    abstains: total.abstains,
+    otherToolCount: total.otherToolCount,
+    decisiveCaseCount,
+    aWinRate: decisiveCaseCount > 0 ? total.aWins / decisiveCaseCount : 0,
+    bWinRate: decisiveCaseCount > 0 ? total.bWins / decisiveCaseCount : 0,
+    ciLow: ci.low,
+    ciHigh: ci.high,
+    weightedAWins: total.weightedAWins,
+    weightedBWins: total.weightedBWins,
+    weightedAWinRate: weightedDecisive > 0 ? total.weightedAWins / weightedDecisive : 0,
+    modelBreakdown: finalizeBreakdown(models),
+    promptBreakdown: finalizeBreakdown(prompts),
+    meetsPublicationThreshold: decisiveCaseCount >= 30,
+  }
 }
 
 type HeadToHeadOutcome = 'a' | 'b' | 'none' | 'other'
