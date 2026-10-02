@@ -5,7 +5,7 @@ import { getBenchmarkRunWindowAtOrAfter } from './benchmark'
 describe('benchmark run cadence helpers', () => {
   it('uses the configured UTC month days and start hour', () => {
     expect(serverSettings.benchmark.newRunStartUtcHour).toBe(12)
-    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5, 15, 25])
+    expect(serverSettings.benchmark.newRunUtcMonthDays).toEqual([5])
 
     expect(getBenchmarkRunWindowAtOrAfter(new Date('2026-03-05T11:59:59.999Z')).toISOString()).toBe(
       '2026-03-05T12:00:00.000Z',
@@ -14,11 +14,11 @@ describe('benchmark run cadence helpers', () => {
       '2026-03-05T12:00:00.000Z',
     )
     expect(getBenchmarkRunWindowAtOrAfter(new Date('2026-03-05T12:00:00.001Z')).toISOString()).toBe(
-      '2026-03-15T12:00:00.000Z',
+      '2026-04-05T12:00:00.000Z',
     )
   })
 
-  it('uses the intentional 8- to 11-day month-boundary gaps', () => {
+  it('advances to the next month after the monthly window', () => {
     expect(getBenchmarkRunWindowAtOrAfter(new Date('2026-02-25T12:00:00.001Z')).toISOString()).toBe(
       '2026-03-05T12:00:00.000Z',
     )

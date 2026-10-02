@@ -51,8 +51,6 @@ export default async function SubcategoryRankingPage({ params }: Props) {
     caller.benchmarkRanking.listModelFilters({}),
   ])
   const modelFilters = modelFiltersData.companies
-  const archivedModelFilters = modelFiltersData.archived
-  const allModelFilters = [...modelFilters, ...archivedModelFilters]
   const data = await caller.benchmarkRanking.byCategory({
     categorySlug: subSlug,
   })
@@ -79,7 +77,6 @@ export default async function SubcategoryRankingPage({ params }: Props) {
         <BenchmarkRankingFilters
           groups={groups}
           modelFilters={modelFilters}
-          archivedModelFilters={archivedModelFilters}
           currentGroup={slug}
           currentSub={subSlug}
           basePath={`/rankings/${slug}/${subSlug}`}
@@ -89,12 +86,7 @@ export default async function SubcategoryRankingPage({ params }: Props) {
       <Suspense
         fallback={<p className="mt-6 text-sm text-muted-foreground">Loading rankings...</p>}
       >
-        <RankingDetailContent
-          initialData={data}
-          kind="subcategory"
-          modelFilters={allModelFilters}
-          slug={subSlug}
-        />
+        <RankingDetailContent initialData={data} kind="subcategory" slug={subSlug} />
       </Suspense>
     </SidebarLayout>
   )

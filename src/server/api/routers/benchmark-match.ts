@@ -8,6 +8,7 @@ import {
   findBenchmarkSeasonId,
   findPublicManualBenchmarkSeasonIds,
 } from '~/server/api/helpers/benchmark'
+import { publicRangeResults } from '~/server/api/helpers/model-ranges'
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc'
 import type { db as DatabaseInstance } from '~/server/db'
 import {
@@ -200,7 +201,7 @@ async function buildManualHeadToHead(
   ]
 
   if (scope?.anchorDate) {
-    const bounds = getManualWindowBounds(scope.windowType ?? 'trailing_28d', scope.anchorDate)
+    const bounds = getManualWindowBounds(scope.windowType ?? 'season_to_date', scope.anchorDate)
     conditions.push(lt(matchBatches.createdAt, bounds.endExclusive))
     if (bounds.startInclusive) {
       conditions.push(gte(matchBatches.createdAt, bounds.startInclusive))
@@ -443,51 +444,6 @@ async function collectManualMatchups(args: {
   }
 }
 
-/**
- * Returns a head-to-head result, falling back to a `season_to_date` manual
- * aggregate when the primary result has no decisive cases. This lets the match
- * detail page surface historical data for pairs that no longer have activity
- * within the requested trailing window.
- */
-async function resolveHeadToHeadWithHistoricalFallback(
-  database: typeof DatabaseInstance,
-  args: {
-    categoryId: string
-    toolAId: string
-    toolBId: string
-    seasonIds: string[]
-    primary: HeadToHeadResult | null
-    windowType: WindowType
-    anchorDate: string
-    promptLevel?: PromptLevel
-    modelTier?: ModelTier
-  },
-): Promise<HeadToHeadResult | null> {
-  if (args.primary && args.primary.decisiveCaseCount > 0) return args.primary
-  // Only broaden to all-time history for the default trailing_28d window.
-  // Narrower windows (run_day, trailing_7d) are explicit dated requests and
-  // should return null/zero when nothing happened in that span; season_to_date
-  // already covers the full season so no fallback is needed.
-  if (args.windowType !== 'trailing_28d') return args.primary
-  if (args.seasonIds.length === 0) return args.primary
-
-  const historical = await buildManualHeadToHead(
-    database,
-    args.categoryId,
-    args.toolAId,
-    args.toolBId,
-    {
-      seasonIds: args.seasonIds,
-      windowType: 'season_to_date',
-      anchorDate: args.anchorDate,
-      promptLevel: args.promptLevel,
-      modelTier: args.modelTier,
-    },
-  )
-
-  return historical && historical.decisiveCaseCount > 0 ? historical : args.primary
-}
-
 export const benchmarkMatchRouter = createTRPCRouter({
   headToHead: publicProcedure
     .input(
@@ -499,7 +455,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
           seasonId: z.string().uuid().optional(),
           windowType: z
             .enum(['run_day', 'trailing_7d', 'trailing_28d', 'season_to_date'])
-            .default('trailing_28d'),
+            .default('season_to_date'),
           anchorDate: anchorDateSchema.optional(),
           promptLevel: promptLevelSchema.optional(),
           modelTier: z.enum(['frontier', 'mid', 'small']).optional(),
@@ -564,7 +520,8 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       // If benchmark data has decisive cases, use it
       if (benchmarkResult.decisiveCaseCount > 0) {
-        return { category, toolA, toolB, result: benchmarkResult }
+        const [result] = await publicRangeResults(ctx.db, [benchmarkResult], anchorDate)
+        return { category, toolA, toolB, result: result ?? null }
       }
 
       // Otherwise, fall back to manual match batch data
@@ -579,19 +536,13 @@ export const benchmarkMatchRouter = createTRPCRouter({
         modelTier: input.modelTier,
       })
 
-      const result = await resolveHeadToHeadWithHistoricalFallback(ctx.db, {
-        categoryId: category.id,
-        toolAId: toolA.id,
-        toolBId: toolB.id,
-        seasonIds: manualSeasonIds,
-        primary: manualResult,
-        windowType: input.windowType,
+      const [result] = await publicRangeResults(
+        ctx.db,
+        manualResult ? [manualResult] : [],
         anchorDate,
-        promptLevel: input.promptLevel,
-        modelTier: input.modelTier,
-      })
+      )
 
-      return { category, toolA, toolB, result }
+      return { category, toolA, toolB, result: result ?? null }
     }),
 
   listFeatured: publicProcedure
@@ -668,7 +619,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
         subs = publicGroups.flatMap((g) => g.subcategories)
       }
 
-      const windowBounds = getManualWindowBounds('trailing_28d', anchorDate)
+      const windowBounds = getManualWindowBounds('season_to_date', anchorDate)
       const eligibleManualSeasonIds = await findPublicManualBenchmarkSeasonIds(ctx.db, anchorDate)
       const scopedSubcategoryIds = subs.map((sub) => sub.id)
 
@@ -696,7 +647,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
       if (matchups.length < limit) {
         const summaries = await computeCategoryRankings(ctx.db, {
           categoryIds: subs.map((sub) => sub.id),
-          windowType: 'trailing_28d',
+          windowType: 'season_to_date',
           anchorDate,
         })
         const rankingsByCategory = new Map(
@@ -745,7 +696,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
               categoryId: pair.category.id,
               toolAId: pair.toolA.id,
               toolBId: pair.toolB.id,
-              windowType: 'trailing_28d',
+              windowType: 'season_to_date',
               anchorDate,
             }),
           })),
@@ -773,7 +724,15 @@ export const benchmarkMatchRouter = createTRPCRouter({
         })
       }
 
-      return matchups
+      const results = await publicRangeResults(
+        ctx.db,
+        matchups.map((matchup) => matchup.result),
+        anchorDate,
+      )
+      return matchups.map((matchup, index) => ({
+        ...matchup,
+        result: results[index] ?? { ...matchup.result, modelBreakdown: [] },
+      }))
     }),
 
   listByTool: publicProcedure
@@ -801,7 +760,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       const summaries = await computeCategoryRankings(ctx.db, {
         categoryIds: subs.map((sub) => sub.id),
-        windowType: 'trailing_28d',
+        windowType: 'season_to_date',
         anchorDate,
       })
       const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
@@ -831,7 +790,7 @@ export const benchmarkMatchRouter = createTRPCRouter({
           categoryId: sub.id,
           toolAId: tool.id,
           toolBId: rival.toolId,
-          windowType: 'trailing_28d',
+          windowType: 'season_to_date',
           anchorDate,
         })
 
@@ -855,6 +814,15 @@ export const benchmarkMatchRouter = createTRPCRouter({
 
       // Sort by decisive case count descending, take limit
       matchups.sort((a, b) => b.result.decisiveCaseCount - a.result.decisiveCaseCount)
-      return matchups.slice(0, input.limit)
+      const selected = matchups.slice(0, input.limit)
+      const results = await publicRangeResults(
+        ctx.db,
+        selected.map((matchup) => matchup.result),
+        anchorDate,
+      )
+      return selected.map((matchup, index) => ({
+        ...matchup,
+        result: results[index] ?? { ...matchup.result, modelBreakdown: [] },
+      }))
     }),
 })

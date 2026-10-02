@@ -13,7 +13,10 @@ import {
 import type { HeadToHeadFilters, ScoringFilters } from './scoring'
 
 type DatabaseClient = PostgresJsDatabase<typeof schema>
-type DecisionFilters = Pick<ScoringFilters, 'promptLevel' | 'modelTier' | 'modelSnapshotId'>
+type DecisionFilters = Pick<
+  ScoringFilters,
+  'promptLevel' | 'modelTier' | 'modelSnapshotId' | 'modelSnapshotIds'
+>
 
 // Keep history inside Postgres. Only aggregate counts/coverage leave the database.
 function eligibleDecisions(runIds: string[], categoryIds: string[], filters: DecisionFilters) {
@@ -50,6 +53,9 @@ function eligibleDecisions(runIds: string[], categoryIds: string[], filters: Dec
       filters.promptLevel ? eq(benchmarkPromptVersions.level, filters.promptLevel) : undefined,
       filters.modelTier ? eq(benchmarkModelSnapshots.tier, filters.modelTier) : undefined,
       filters.modelSnapshotId ? eq(benchmarkModelSnapshots.id, filters.modelSnapshotId) : undefined,
+      filters.modelSnapshotIds
+        ? inArray(benchmarkModelSnapshots.id, filters.modelSnapshotIds)
+        : undefined,
     )}
   `
 }

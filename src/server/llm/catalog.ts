@@ -31,11 +31,12 @@ export type LlmCatalogEntry = {
   modelVersion: string
   modelId: string
   tier: ModelTier
+  range: { id: string; name: string; version: string; order: number }
   /**
    * Superseded models are kept in the catalog (never deleted) so their historical
    * benchmark data keeps counting. Archived entries seed with `isActive = false`,
    * which excludes them from new benchmark seasons while preserving past results,
-   * and surfaces them under the "Archived" group in the model-version dropdown.
+   * and keeps them in their public model range.
    */
   archived?: boolean
 }
@@ -111,6 +112,138 @@ export const PROVIDER_REGISTRY: Record<CatalogProviderId, ProviderConfig> = {
 
 export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
   {
+    name: 'GPT 6 Astra',
+    slug: 'gpt-6-astra',
+    provider: 'openai',
+    company: 'OpenAI',
+    modelFamily: 'GPT',
+    modelVersion: '6 Astra',
+    modelId: 'openai/gpt-6-astra',
+    tier: 'frontier',
+    range: { id: 'openai-gpt', name: 'GPT', version: '6 Astra', order: 3 },
+  },
+  {
+    name: 'GPT 6.1 Sol',
+    slug: 'gpt-6-1-sol',
+    provider: 'openai',
+    company: 'OpenAI',
+    modelFamily: 'GPT Coding',
+    modelVersion: '6.1 Sol',
+    modelId: 'openai/gpt-6.1-sol',
+    tier: 'frontier',
+    range: { id: 'openai-coding', name: 'GPT Coding', version: '6.1 Sol', order: 2 },
+  },
+  {
+    name: 'GPT 6 Luna',
+    slug: 'gpt-6-luna',
+    provider: 'openai',
+    company: 'OpenAI',
+    modelFamily: 'GPT Mini',
+    modelVersion: '6 Luna',
+    modelId: 'openai/gpt-6-luna',
+    tier: 'mid',
+    range: { id: 'openai-mini', name: 'GPT Mini', version: '6 Luna', order: 2 },
+  },
+  {
+    name: 'Claude Opus 5.5',
+    slug: 'claude-opus-5-5',
+    provider: 'anthropic',
+    company: 'Anthropic',
+    modelFamily: 'Opus',
+    modelVersion: '5.5',
+    modelId: 'anthropic/claude-opus-5.5',
+    tier: 'frontier',
+    range: { id: 'anthropic-opus', name: 'Opus', version: '5.5', order: 3 },
+  },
+  {
+    name: 'Claude Sonnet 5.5',
+    slug: 'claude-sonnet-5-5',
+    provider: 'anthropic',
+    company: 'Anthropic',
+    modelFamily: 'Sonnet',
+    modelVersion: '5.5',
+    modelId: 'anthropic/claude-sonnet-5.5',
+    tier: 'frontier',
+    range: { id: 'anthropic-sonnet', name: 'Sonnet', version: '5.5', order: 2 },
+  },
+  {
+    name: 'Gemini 3.1 Pro Preview',
+    slug: 'gemini-3-1-pro-preview',
+    provider: 'google',
+    company: 'Google',
+    modelFamily: 'Gemini Pro',
+    modelVersion: '3.1 Preview',
+    modelId: 'google/gemini-3.1-pro-preview',
+    tier: 'frontier',
+    range: { id: 'google-pro', name: 'Gemini Pro', version: '3.1 Preview', order: 2 },
+  },
+  {
+    name: 'Gemini 3.8 Flash',
+    slug: 'gemini-3-8-flash',
+    provider: 'google',
+    company: 'Google',
+    modelFamily: 'Gemini Flash',
+    modelVersion: '3.8',
+    modelId: 'google/gemini-3.8-flash',
+    tier: 'small',
+    range: { id: 'google-flash', name: 'Gemini Flash', version: '3.8', order: 3 },
+  },
+  {
+    name: 'DeepSeek V4 Pro 0813',
+    slug: 'deepseek-v4-pro-0813',
+    provider: 'deepseek',
+    company: 'DeepSeek',
+    modelFamily: 'DeepSeek Pro',
+    modelVersion: '4 Pro 0813',
+    modelId: 'deepseek/deepseek-v4-pro-0813',
+    tier: 'frontier',
+    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4 0813', order: 2 },
+  },
+  {
+    name: 'DeepSeek V4.1 Flash',
+    slug: 'deepseek-v4-1-flash',
+    provider: 'deepseek',
+    company: 'DeepSeek',
+    modelFamily: 'DeepSeek Flash',
+    modelVersion: '4.1 Flash',
+    modelId: 'deepseek/deepseek-v4.1-flash',
+    tier: 'mid',
+    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4.1', order: 3 },
+  },
+  {
+    name: 'GLM 5.3',
+    slug: 'glm-5-3',
+    provider: 'zai',
+    company: 'Z.ai',
+    modelFamily: 'GLM',
+    modelVersion: '5.3',
+    modelId: 'z-ai/glm-5.3',
+    tier: 'frontier',
+    range: { id: 'zai-glm', name: 'GLM', version: '5.3', order: 3 },
+  },
+  {
+    name: 'MiMo V2.6 Pro',
+    slug: 'mimo-v2-6-pro',
+    provider: 'xiaomi',
+    company: 'Xiaomi',
+    modelFamily: 'MiMo V2',
+    modelVersion: '2.6 Pro',
+    modelId: 'xiaomi/mimo-v2.6-pro',
+    tier: 'frontier',
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.6', order: 3 },
+  },
+  {
+    name: 'Kimi K3',
+    slug: 'kimi-k3',
+    provider: 'moonshotai',
+    company: 'MoonshotAI',
+    modelFamily: 'Kimi K',
+    modelVersion: '3',
+    modelId: 'moonshotai/kimi-k3',
+    tier: 'frontier',
+    range: { id: 'moonshot-kimi', name: 'Kimi', version: '3', order: 3 },
+  },
+  {
     name: 'GPT 5.5',
     slug: 'gpt-5-5',
     provider: 'openai',
@@ -119,6 +252,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.5',
     modelId: 'openai/gpt-5.5',
     tier: 'frontier',
+    range: { id: 'openai-gpt', name: 'GPT', version: '5.5', order: 2 },
+    archived: true,
   },
   {
     name: 'GPT 5.4',
@@ -129,6 +264,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.4',
     modelId: 'openai/gpt-5.4',
     tier: 'frontier',
+    range: { id: 'openai-gpt', name: 'GPT', version: '5.4', order: 1 },
     archived: true,
   },
   {
@@ -140,6 +276,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.4',
     modelId: 'openai/gpt-5.4-mini',
     tier: 'mid',
+    range: { id: 'openai-mini', name: 'GPT Mini', version: '5.4 Mini', order: 1 },
+    archived: true,
   },
   {
     name: 'GPT 5.3 Codex',
@@ -150,6 +288,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.3',
     modelId: 'openai/gpt-5.3-codex',
     tier: 'frontier',
+    range: { id: 'openai-coding', name: 'GPT Coding', version: '5.3 Codex', order: 1 },
+    archived: true,
   },
   {
     name: 'Claude Opus 4.8',
@@ -160,6 +300,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4.8',
     modelId: 'anthropic/claude-opus-4.8',
     tier: 'frontier',
+    range: { id: 'anthropic-opus', name: 'Opus', version: '4.8', order: 2 },
+    archived: true,
   },
   {
     name: 'Claude Opus 4.6',
@@ -170,6 +312,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4.6',
     modelId: 'anthropic/claude-opus-4.6',
     tier: 'frontier',
+    range: { id: 'anthropic-opus', name: 'Opus', version: '4.6', order: 1 },
     archived: true,
   },
   {
@@ -181,6 +324,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4.6',
     modelId: 'anthropic/claude-sonnet-4.6',
     tier: 'frontier',
+    range: { id: 'anthropic-sonnet', name: 'Sonnet', version: '4.6', order: 1 },
+    archived: true,
   },
   {
     name: 'Claude Haiku 4.5',
@@ -191,6 +336,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4.5',
     modelId: 'anthropic/claude-haiku-4.5',
     tier: 'small',
+    range: { id: 'anthropic-haiku', name: 'Haiku', version: '4.5', order: 1 },
   },
   {
     name: 'Gemini 2.5 Pro',
@@ -201,6 +347,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.5',
     modelId: 'google/gemini-2.5-pro',
     tier: 'frontier',
+    range: { id: 'google-pro', name: 'Gemini Pro', version: '2.5', order: 1 },
+    archived: true,
   },
   {
     name: 'Gemini 3.5 Flash',
@@ -211,6 +359,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '3.5',
     modelId: 'google/gemini-3.5-flash',
     tier: 'small',
+    range: { id: 'google-flash', name: 'Gemini Flash', version: '3.5', order: 2 },
+    archived: true,
   },
   {
     name: 'Gemini 2.5 Flash',
@@ -221,6 +371,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.5',
     modelId: 'google/gemini-2.5-flash',
     tier: 'small',
+    range: { id: 'google-flash', name: 'Gemini Flash', version: '2.5', order: 1 },
     archived: true,
   },
   {
@@ -232,6 +383,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4',
     modelId: 'meta-llama/llama-4-maverick',
     tier: 'frontier',
+    range: { id: 'meta-maverick', name: 'Llama Maverick', version: '4', order: 1 },
   },
   {
     name: 'Llama 4 Scout',
@@ -242,6 +394,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4',
     modelId: 'meta-llama/llama-4-scout',
     tier: 'small',
+    range: { id: 'meta-scout', name: 'Llama Scout', version: '4', order: 1 },
   },
   {
     name: 'Mistral Small 4',
@@ -252,6 +405,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4',
     modelId: 'mistralai/mistral-small-2603',
     tier: 'mid',
+    range: { id: 'mistral-small', name: 'Mistral Small', version: '4', order: 1 },
   },
   {
     name: 'Devstral 2 2512',
@@ -262,6 +416,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2 2512',
     modelId: 'mistralai/devstral-2512',
     tier: 'mid',
+    range: { id: 'mistral-devstral', name: 'Devstral', version: '2 2512', order: 1 },
   },
   {
     name: 'DeepSeek V4 Pro',
@@ -272,6 +427,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4 Pro',
     modelId: 'deepseek/deepseek-v4-pro',
     tier: 'frontier',
+    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4', order: 1 },
+    archived: true,
   },
   {
     name: 'DeepSeek V4 Flash',
@@ -282,6 +439,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4 Flash',
     modelId: 'deepseek/deepseek-v4-flash',
     tier: 'mid',
+    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4', order: 2 },
+    archived: true,
   },
   {
     name: 'DeepSeek V3.2',
@@ -292,6 +451,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '3.2',
     modelId: 'deepseek/deepseek-v3.2',
     tier: 'mid',
+    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '3.2', order: 1 },
     archived: true,
   },
   {
@@ -303,6 +463,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '0528',
     modelId: 'deepseek/deepseek-r1-0528',
     tier: 'frontier',
+    range: { id: 'deepseek-r1', name: 'DeepSeek R1', version: '0528', order: 1 },
   },
   {
     name: 'GLM 5.2',
@@ -313,6 +474,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.2',
     modelId: 'z-ai/glm-5.2',
     tier: 'frontier',
+    range: { id: 'zai-glm', name: 'GLM', version: '5.2', order: 2 },
+    archived: true,
   },
   {
     name: 'GLM 5 Turbo',
@@ -323,6 +486,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5 Turbo',
     modelId: 'z-ai/glm-5-turbo',
     tier: 'frontier',
+    range: { id: 'zai-glm', name: 'GLM', version: '5 Turbo', order: 1 },
     archived: true,
   },
   {
@@ -334,6 +498,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '3',
     modelId: 'minimax/minimax-m3',
     tier: 'frontier',
+    range: { id: 'minimax-m', name: 'MiniMax M', version: '3', order: 2 },
   },
   {
     name: 'MiniMax M2.7',
@@ -344,6 +509,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.7',
     modelId: 'minimax/minimax-m2.7',
     tier: 'frontier',
+    range: { id: 'minimax-m', name: 'MiniMax M', version: '2.7', order: 1 },
     archived: true,
   },
   {
@@ -355,6 +521,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.5 Pro',
     modelId: 'xiaomi/mimo-v2.5-pro',
     tier: 'frontier',
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.5', order: 2 },
+    archived: true,
   },
   {
     name: 'MiMo V2 Pro',
@@ -365,6 +533,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: 'Pro',
     modelId: 'xiaomi/mimo-v2-pro',
     tier: 'frontier',
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2', order: 1 },
     archived: true,
   },
   {
@@ -376,6 +545,8 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.7 Code',
     modelId: 'moonshotai/kimi-k2.7-code',
     tier: 'frontier',
+    range: { id: 'moonshot-kimi', name: 'Kimi', version: '2.7 Code', order: 2 },
+    archived: true,
   },
   {
     name: 'Kimi K2.5',
@@ -386,6 +557,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.5',
     modelId: 'moonshotai/kimi-k2.5',
     tier: 'frontier',
+    range: { id: 'moonshot-kimi', name: 'Kimi', version: '2.5', order: 1 },
     archived: true,
   },
   {
@@ -397,6 +569,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: 'Next',
     modelId: 'qwen/qwen3-coder-next',
     tier: 'mid',
+    range: { id: 'qwen-coder', name: 'Qwen Coder', version: 'Next', order: 1 },
   },
 ]
 

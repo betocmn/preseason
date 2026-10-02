@@ -31,6 +31,8 @@ export type WindowType = 'run_day' | 'trailing_7d' | 'trailing_28d' | 'season_to
 export type ModelTier = 'frontier' | 'mid' | 'small'
 type ModelSelectionFilters = {
   modelSnapshotId?: string
+  modelSnapshotIds?: string[]
+  modelRangeId?: string
 }
 
 // Calendar date-range bounds for the public "last month / 3 / 6 / all time" filter.
@@ -324,6 +326,8 @@ async function queryDecisions(
     promptLevel?: PromptLevel
     modelTier?: ModelTier
     modelSnapshotId?: string
+    modelSnapshotIds?: string[]
+    modelRangeId?: string
   },
 ): Promise<DecisionRow[]> {
   if (runIds.length === 0 || categoryIds.length === 0) return []
@@ -344,6 +348,10 @@ async function queryDecisions(
   }
   if (filters.modelSnapshotId) {
     conditions.push(eq(benchmarkModelSnapshots.id, filters.modelSnapshotId))
+  }
+
+  if (filters.modelSnapshotIds) {
+    conditions.push(inArray(benchmarkModelSnapshots.id, filters.modelSnapshotIds))
   }
 
   const rows = await db
@@ -413,6 +421,8 @@ export async function fetchDecisions(
     promptLevel?: PromptLevel
     modelTier?: ModelTier
     modelSnapshotId?: string
+    modelSnapshotIds?: string[]
+    modelRangeId?: string
   },
 ): Promise<DecisionRow[]> {
   return queryDecisions(db, runIds, categoryIds, filters ?? {})
@@ -654,6 +664,8 @@ export async function computeCategoryRanking(
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
     modelSnapshotId: filters.modelSnapshotId,
+    modelSnapshotIds: filters.modelSnapshotIds,
+    modelRangeId: filters.modelRangeId,
     startDate: filters.startDate,
     previousStartDate: filters.previousStartDate,
   })
@@ -675,6 +687,8 @@ export async function computeCategoryGroupRanking(
     promptLevel: filters.promptLevel,
     modelTier: filters.modelTier,
     modelSnapshotId: filters.modelSnapshotId,
+    modelSnapshotIds: filters.modelSnapshotIds,
+    modelRangeId: filters.modelRangeId,
     startDate: filters.startDate,
     previousStartDate: filters.previousStartDate,
   })
