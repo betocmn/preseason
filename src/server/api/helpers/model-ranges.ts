@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, eq, inArray, lte, ne } from 'drizzle-orm'
+import { and, eq, inArray, lte, ne, sql } from 'drizzle-orm'
 import type { ModelFilterCompany } from '~/lib/model-filters'
 import type { db } from '~/server/db'
 import {
@@ -57,26 +57,30 @@ export async function findMeasuredModelSnapshots(
         modelVersion: benchmarkModelSnapshots.modelVersion,
       })
       .from(benchmarkModelSnapshots)
-      .innerJoin(benchmarkCases, eq(benchmarkCases.modelSnapshotId, benchmarkModelSnapshots.id))
-      .innerJoin(benchmarkCaseResults, eq(benchmarkCaseResults.caseId, benchmarkCases.id))
-      .innerJoin(benchmarkRuns, eq(benchmarkCaseResults.runId, benchmarkRuns.id))
-      .innerJoin(benchmarkSeasons, eq(benchmarkRuns.seasonId, benchmarkSeasons.id))
-      .innerJoin(benchmarkProtocols, eq(benchmarkSeasons.protocolId, benchmarkProtocols.id))
-      .innerJoin(
-        benchmarkCaseDecisions,
-        eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
-      )
-      .where(
-        and(
+      // A scalar subquery with LIMIT stops at the first valid measurement for each
+      // snapshot instead of sorting every historical category decision for DISTINCT.
+      .where(sql`(
+        select ${benchmarkCaseResults.id}
+        from ${benchmarkCases}
+        join ${benchmarkCaseResults} on ${benchmarkCaseResults.caseId} = ${benchmarkCases.id}
+        join ${benchmarkRuns} on ${benchmarkCaseResults.runId} = ${benchmarkRuns.id}
+        join ${benchmarkSeasons} on ${benchmarkRuns.seasonId} = ${benchmarkSeasons.id}
+        join ${benchmarkProtocols} on ${benchmarkSeasons.protocolId} = ${benchmarkProtocols.id}
+        where ${and(
+          eq(benchmarkCases.modelSnapshotId, benchmarkModelSnapshots.id),
           eq(benchmarkProtocols.mode, 'benchmark'),
           eq(benchmarkRuns.status, 'published'),
           lte(benchmarkRuns.scheduledFor, anchorDate),
           seasonId ? eq(benchmarkRuns.seasonId, seasonId) : undefined,
           eq(benchmarkCaseResults.status, 'completed'),
+        )}
+        and exists (select 1 from ${benchmarkCaseDecisions} where ${and(
+          eq(benchmarkCaseDecisions.caseResultId, benchmarkCaseResults.id),
           eq(benchmarkCaseDecisions.resolutionStatus, 'resolved'),
           ne(benchmarkCaseDecisions.decisionType, 'invalid'),
-        ),
-      ),
+        )})
+        limit 1
+      ) is not null`),
   )
 }
 

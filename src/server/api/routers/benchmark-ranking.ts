@@ -354,14 +354,17 @@ export const benchmarkRankingRouter = createTRPCRouter({
 
   byTool: publicProcedure
     .input(
-      z.object({
-        toolSlug: z.string().min(1).max(255),
-        windowType: windowTypeSchema,
-        anchorDate: anchorDateSchema.optional(),
-      }),
+      z
+        .object({
+          toolSlug: z.string().min(1).max(255),
+          windowType: windowTypeSchema,
+          anchorDate: anchorDateSchema.optional(),
+        })
+        .merge(tierFiltersSchema),
     )
     .query(async ({ ctx, input }) => {
       const anchorDate = input.anchorDate ?? new Date().toISOString().slice(0, 10)
+      const modelSelection = await resolveModelRangeSelection(ctx.db, input)
 
       const tool = await ctx.db.query.tools.findFirst({
         where: eq(tools.slug, input.toolSlug),
@@ -384,6 +387,9 @@ export const benchmarkRankingRouter = createTRPCRouter({
         categoryIds,
         windowType: input.windowType,
         anchorDate,
+        ...modelSelection,
+        promptLevel: input.promptLevel,
+        modelTier: input.modelTier,
       })
       const rankingsByCategory = new Map(summaries.map((ranking) => [ranking.categoryId, ranking]))
 

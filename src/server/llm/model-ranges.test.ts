@@ -42,7 +42,7 @@ describe('model ranges', () => {
   })
 
   it('uses the product-line name for a single measured version', () => {
-    expect(summarizeModelRanges([snapshot('gpt-6-luna')])[0]?.label).toBe('GPT Mini / Luna')
+    expect(summarizeModelRanges([snapshot('gpt-6-luna')])[0]?.label).toBe('GPT Mini')
   })
 
   it('isolates custom families by provider and naturally orders versions', () => {

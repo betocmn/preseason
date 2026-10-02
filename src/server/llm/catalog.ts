@@ -142,7 +142,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '6 Luna',
     modelId: 'openai/gpt-6-luna',
     tier: 'mid',
-    range: { id: 'openai-mini', name: 'GPT Mini / Luna', version: '6 Luna', order: 2 },
+    range: { id: 'openai-mini', name: 'GPT Mini', version: '6 Luna', order: 2 },
   },
   {
     name: 'Claude Opus 5.5',
@@ -197,7 +197,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4 Pro 0813',
     modelId: 'deepseek/deepseek-v4-pro-0813',
     tier: 'frontier',
-    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4 Pro 0813', order: 2 },
+    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4 0813', order: 2 },
   },
   {
     name: 'DeepSeek V4.1 Flash',
@@ -208,7 +208,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4.1 Flash',
     modelId: 'deepseek/deepseek-v4.1-flash',
     tier: 'mid',
-    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4.1 Flash', order: 3 },
+    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4.1', order: 3 },
   },
   {
     name: 'GLM 5.3',
@@ -230,7 +230,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.6 Pro',
     modelId: 'xiaomi/mimo-v2.6-pro',
     tier: 'frontier',
-    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.6 Pro', order: 3 },
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.6', order: 3 },
   },
   {
     name: 'Kimi K3',
@@ -276,7 +276,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '5.4',
     modelId: 'openai/gpt-5.4-mini',
     tier: 'mid',
-    range: { id: 'openai-mini', name: 'GPT Mini / Luna', version: '5.4 Mini', order: 1 },
+    range: { id: 'openai-mini', name: 'GPT Mini', version: '5.4 Mini', order: 1 },
     archived: true,
   },
   {
@@ -427,7 +427,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4 Pro',
     modelId: 'deepseek/deepseek-v4-pro',
     tier: 'frontier',
-    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4 Pro', order: 1 },
+    range: { id: 'deepseek-pro', name: 'DeepSeek Pro', version: '4', order: 1 },
     archived: true,
   },
   {
@@ -439,7 +439,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '4 Flash',
     modelId: 'deepseek/deepseek-v4-flash',
     tier: 'mid',
-    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4 Flash', order: 2 },
+    range: { id: 'deepseek-flash', name: 'DeepSeek Flash', version: '4', order: 2 },
     archived: true,
   },
   {
@@ -521,7 +521,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: '2.5 Pro',
     modelId: 'xiaomi/mimo-v2.5-pro',
     tier: 'frontier',
-    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.5 Pro', order: 2 },
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2.5', order: 2 },
     archived: true,
   },
   {
@@ -533,7 +533,7 @@ export const CURATED_LLM_CATALOG: LlmCatalogEntry[] = [
     modelVersion: 'Pro',
     modelId: 'xiaomi/mimo-v2-pro',
     tier: 'frontier',
-    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2 Pro', order: 1 },
+    range: { id: 'xiaomi-mimo-pro', name: 'MiMo Pro', version: '2', order: 1 },
     archived: true,
   },
   {
