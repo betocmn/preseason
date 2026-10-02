@@ -1,5 +1,5 @@
 import { createOgImage, OG_CONTENT_TYPE, OG_SIZE } from '~/lib/og'
-import { publicApi } from '~/trpc/server'
+import { getRankingCategoryMetadata } from '~/server/public-metadata'
 
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
@@ -12,15 +12,14 @@ export default async function Image({
   const { slug, subSlug } = await params
 
   try {
-    const caller = await publicApi()
-    const data = await caller.benchmarkRanking.byCategory({ categorySlug: subSlug })
+    const category = await getRankingCategoryMetadata(slug, subSlug)
 
-    if (!data.category || data.category.categoryGroup.slug !== slug) {
+    if (!category) {
       return createOgImage('Rankings', 'Preseason')
     }
 
     return createOgImage(
-      `${data.category.name} Rankings`,
+      `${category.name} Rankings`,
       'Benchmark rankings powered by LLM recommendations',
     )
   } catch {

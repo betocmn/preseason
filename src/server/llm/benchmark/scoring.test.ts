@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   benchmarkCaseDecisions,
@@ -20,12 +21,19 @@ import {
 } from '~/server/db/schema'
 import { cleanTestDatabase, getTestDb, setupTestDatabase, teardownTestDatabase } from '~/test/db'
 import {
+  computeCategoryGroupRanking,
   computeCategoryRanking,
+  computeCategoryRankings,
   computeHeadToHead,
+  fetchDecisions,
   getWeightForTier,
+  headToHeadFromDecisions,
+  prepareScoringContext,
+  rankFromDecisions,
   sliceRunIdsForWindow,
   wilsonInterval,
 } from './scoring'
+import { queryHeadToHeadAggregates, queryRankingAggregates } from './scoring-queries'
 
 function first<T>(rows: T[]): T {
   const row = rows[0]
@@ -413,6 +421,150 @@ describe('computeCategoryRanking', () => {
 
   beforeEach(async () => {
     await cleanTestDatabase()
+  })
+
+  it('returns compact summaries with the same scores and coverage across repeated history', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+    for (let day = 1; day <= 20; day++) {
+      await seedPublishedRun(
+        db,
+        fixture,
+        `2026-03-${String(day).padStart(2, '0')}`,
+        fixture.caseRows.flatMap((_, caseIndex) => [
+          {
+            caseIndex,
+            categoryId: fixture.authCat.id,
+            decisionType: caseIndex % 3 === 0 ? ('none' as const) : ('tool' as const),
+            toolId: caseIndex % 3 === 1 ? fixture.clerk.id : fixture.supabase.id,
+          },
+          {
+            caseIndex,
+            categoryId: fixture.dbCat.id,
+            decisionType: 'tool' as const,
+            toolId: fixture.drizzleTool.id,
+          },
+        ]),
+      )
+    }
+    const filters = {
+      seasonId: fixture.season.id,
+      windowType: 'season_to_date' as const,
+      anchorDate: '2026-03-20',
+    }
+    const categoryIds = [fixture.authCat.id, fixture.dbCat.id]
+    const context = await prepareScoringContext(
+      db,
+      filters.seasonId,
+      filters.windowType,
+      filters.anchorDate,
+    )
+    const decisions = await fetchDecisions(db, context.runIds, categoryIds)
+    const aggregates = await queryRankingAggregates(db, context.runIds, categoryIds, {}, false)
+    expect(decisions).toHaveLength(360)
+    expect(aggregates).toHaveLength(5)
+    expect(JSON.stringify(aggregates).length).toBeLessThan(JSON.stringify(decisions).length / 100)
+    expect(
+      await computeCategoryGroupRanking(db, {
+        ...filters,
+        categoryIds,
+        categoryGroupId: fixture.group.id,
+      }),
+    ).toEqual(
+      rankFromDecisions(
+        decisions,
+        context.weightConfigs,
+        fixture.group.id,
+        filters.windowType,
+        filters.anchorDate,
+      ),
+    )
+    const batch = await computeCategoryRankings(db, { ...filters, categoryIds })
+    for (const ranking of batch) {
+      expect(ranking).toEqual(
+        rankFromDecisions(
+          decisions.filter((row) => row.categoryId === ranking.categoryId),
+          context.weightConfigs,
+          ranking.categoryId,
+          filters.windowType,
+          filters.anchorDate,
+        ),
+      )
+    }
+    const h2hFilters = {
+      ...filters,
+      categoryId: fixture.authCat.id,
+      toolAId: fixture.clerk.id,
+      toolBId: fixture.supabase.id,
+    }
+    const h2hRows = await queryHeadToHeadAggregates(db, context.runIds, h2hFilters)
+    expect(h2hRows).toHaveLength(7) // overall + 3 models + 3 prompts, independent of run count
+    expect(await computeHeadToHead(db, h2hFilters)).toEqual(
+      headToHeadFromDecisions(
+        decisions.filter((row) => row.categoryId === fixture.authCat.id),
+        context.weightConfigs,
+        fixture.clerk.id,
+        fixture.supabase.id,
+        fixture.authCat.id,
+      ),
+    )
+  })
+
+  it('excludes incomplete, unresolved, and invalid decisions from SQL summaries', async () => {
+    const db = getTestDb()
+    const fixture = await seedScoringFixture(db)
+    const { caseResults } = await seedPublishedRun(db, fixture, '2026-03-10', [
+      {
+        caseIndex: 0,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.clerk.id,
+      },
+      {
+        caseIndex: 1,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.supabase.id,
+      },
+      { caseIndex: 2, categoryId: fixture.authCat.id, decisionType: 'none' },
+      {
+        caseIndex: 3,
+        categoryId: fixture.authCat.id,
+        decisionType: 'tool',
+        toolId: fixture.supabase.id,
+      },
+    ])
+    await db
+      .update(benchmarkCaseResults)
+      .set({ status: 'failed' })
+      .where(eq(benchmarkCaseResults.id, at(caseResults, 1).id))
+    await db
+      .update(benchmarkCaseDecisions)
+      .set({ decisionType: 'invalid' })
+      .where(
+        and(
+          eq(benchmarkCaseDecisions.caseResultId, at(caseResults, 2).id),
+          eq(benchmarkCaseDecisions.categoryId, fixture.authCat.id),
+        ),
+      )
+    await db
+      .update(benchmarkCaseDecisions)
+      .set({ resolutionStatus: 'unresolved' })
+      .where(eq(benchmarkCaseDecisions.caseResultId, at(caseResults, 3).id))
+    const filters = {
+      categoryId: fixture.authCat.id,
+      windowType: 'season_to_date' as const,
+      anchorDate: '2026-03-10',
+    }
+    const ranking = await computeCategoryRanking(db, filters)
+    expect(ranking.totalEligibleDecisions).toBe(1)
+    expect(ranking.items.map((row) => row.toolId)).toEqual([fixture.clerk.id])
+    const h2h = await computeHeadToHead(db, {
+      ...filters,
+      toolAId: fixture.clerk.id,
+      toolBId: fixture.supabase.id,
+    })
+    expect([h2h.aWins, h2h.bWins, h2h.abstains, h2h.otherToolCount]).toEqual([1, 0, 0, 0])
   })
 
   it('returns empty results when no published runs exist', async () => {

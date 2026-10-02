@@ -20,14 +20,17 @@ export default async function HomePage() {
   const getCachedPrompts = unstable_cache(
     async () => caller.prompt.listWithTopTools({ limit: pageSize, offset: 0, anchorDate: today }),
     ['homepage-prompts', today],
-    { revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds },
+    {
+      revalidate: serverSettings.homepage.promptCarouselRevalidateSeconds,
+      tags: [serverSettings.publicSite.benchmarkCacheTag],
+    },
   )
 
   const getCachedRankingPreviews = unstable_cache(
     async () =>
       caller.benchmarkRanking.listHomepagePreviews({ dateRange: 'all', anchorDate: today }),
     ['homepage-ranking-previews', today],
-    { revalidate: rankingPreviewRevalidate },
+    { revalidate: rankingPreviewRevalidate, tags: [serverSettings.publicSite.benchmarkCacheTag] },
   )
 
   const [promptsResult, rankingPreviews] = await Promise.all([
