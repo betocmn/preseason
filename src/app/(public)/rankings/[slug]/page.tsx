@@ -51,8 +51,6 @@ export default async function CategoryGroupRankingPage({ params }: Props) {
     caller.benchmarkRanking.listModelFilters({}),
   ])
   const modelFilters = modelFiltersData.companies
-  const archivedModelFilters = modelFiltersData.archived
-  const allModelFilters = [...modelFilters, ...archivedModelFilters]
 
   const data = await caller.benchmarkRanking.byCategoryGroup({
     groupSlug: slug,
@@ -77,7 +75,6 @@ export default async function CategoryGroupRankingPage({ params }: Props) {
         <BenchmarkRankingFilters
           groups={groups}
           modelFilters={modelFilters}
-          archivedModelFilters={archivedModelFilters}
           currentGroup={slug}
           basePath={`/rankings/${slug}`}
           showCategorySelect={false}
@@ -86,12 +83,7 @@ export default async function CategoryGroupRankingPage({ params }: Props) {
       <Suspense
         fallback={<p className="mt-6 text-sm text-muted-foreground">Loading rankings...</p>}
       >
-        <RankingDetailContent
-          initialData={data}
-          kind="group"
-          modelFilters={allModelFilters}
-          slug={slug}
-        />
+        <RankingDetailContent initialData={data} kind="group" slug={slug} />
       </Suspense>
     </SidebarLayout>
   )

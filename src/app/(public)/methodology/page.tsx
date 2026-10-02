@@ -140,8 +140,12 @@ export default function MethodologyPage() {
 
         <Section title="Scope and Filters">
           <P>
-            Public rankings can be filtered by prompting level, model tier, and specific frozen
-            model version. By default, public reads resolve against the latest published season.
+            Public results pool all published benchmark seasons by default. Filters for dates,
+            prompting level, and model tier narrow that history. Model filters follow stable product
+            lines across releases, including archived versions. Labels span the oldest and newest
+            measured versions; a line with one measured version shows its name only. A new release
+            extends its range after valid results are published. Exact versions and settings remain
+            frozen internally for auditability.
           </P>
           <P>
             That makes the benchmark useful for questions like &ldquo;what do frontier models prefer

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { EmptyState } from '~/components/public/empty-state'
 import { resolveFilteredQuery } from '~/components/public/ranking-query-state'
 import { RankingTable } from '~/components/public/ranking-table'
-import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
+import { rankingFiltersFromSearchParams } from '~/lib/model-filters'
 import type { AppRouter } from '~/server/api/root'
 import { api } from '~/trpc/react'
 
@@ -16,43 +16,23 @@ type RankingDetailContentProps =
   | {
       initialData: GroupRankingResult
       kind: 'group'
-      modelFilters: ModelFilterCompany[]
       slug: string
     }
   | {
       initialData: CategoryRankingResult
       kind: 'subcategory'
-      modelFilters: ModelFilterCompany[]
       slug: string
     }
 
-function normalizeRankingFilters(
-  searchParams: URLSearchParams,
-  modelFilters: ModelFilterCompany[],
-) {
-  const promptLevel = searchParams.get('promptLevel') ?? undefined
-  const modelTier = searchParams.get('modelTier') ?? undefined
-  const modelSnapshotId = searchParams.get('modelSnapshotId') ?? undefined
-  const dateRange = searchParams.get('dateRange') ?? undefined
-
-  return {
-    promptLevel: (['beginner', 'intermediate', 'advanced'] as const).find(
-      (tier) => tier === promptLevel,
-    ),
-    modelTier: (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier),
-    modelSnapshotId: normalizeModelSnapshotId(modelFilters, modelSnapshotId),
-    dateRange: (['1m', '3m', '6m'] as const).find((range) => range === dateRange),
-  }
-}
-
 export function RankingDetailContent(props: RankingDetailContentProps) {
   const searchParams = useSearchParams()
-  const filters = normalizeRankingFilters(
-    new URLSearchParams(searchParams.toString()),
-    props.modelFilters,
-  )
+  const filters = rankingFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
   const hasFilters =
-    !!filters.promptLevel || !!filters.modelTier || !!filters.modelSnapshotId || !!filters.dateRange
+    !!filters.promptLevel ||
+    !!filters.modelTier ||
+    filters.modelRangeId !== undefined ||
+    filters.modelSnapshotId !== undefined ||
+    !!filters.dateRange
 
   const groupQuery = api.benchmarkRanking.byCategoryGroup.useQuery(
     {

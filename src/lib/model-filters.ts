@@ -1,32 +1,27 @@
-export type ModelFilterModel = {
-  id: string
-  version: string
-  name: string
-}
-
-export type ModelFilterFamily = {
-  name: string
-  models: ModelFilterModel[]
-}
-
 export type ModelFilterCompany = {
   name: string
-  families: ModelFilterFamily[]
+  ranges: { id: string; name: string; label: string }[]
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-export function normalizeModelSnapshotId(
-  companies: ModelFilterCompany[],
-  modelSnapshotId?: string,
-) {
-  if (!modelSnapshotId || !UUID_REGEX.test(modelSnapshotId)) return undefined
-
-  const allModelIds = new Set(
-    companies.flatMap((company) =>
-      company.families.flatMap((family) => family.models.map((model) => model.id)),
+/** Keep model selections intact so invalid or conflicting links produce an error, not unfiltered data. */
+export function rankingFiltersFromSearchParams(searchParams: URLSearchParams) {
+  const promptLevel = searchParams.get('promptLevel')
+  const modelTier = searchParams.get('modelTier')
+  const dateRange = searchParams.get('dateRange')
+  return {
+    promptLevel: (['beginner', 'intermediate', 'advanced'] as const).find(
+      (value) => value === promptLevel,
     ),
-  )
+    modelTier: (['frontier', 'mid', 'small'] as const).find((value) => value === modelTier),
+    dateRange: (['1m', '3m', '6m'] as const).find((value) => value === dateRange),
+    modelRangeId: searchParams.get('modelRangeId') ?? undefined,
+    modelSnapshotId: searchParams.get('modelSnapshotId') ?? undefined,
+  }
+}
 
-  return allModelIds.has(modelSnapshotId) ? modelSnapshotId : undefined
+export function canonicalModelRangeSearch(searchParams: URLSearchParams, modelRangeId: string) {
+  const params = new URLSearchParams(searchParams)
+  params.delete('modelSnapshotId')
+  params.set('modelRangeId', modelRangeId)
+  return params.toString()
 }

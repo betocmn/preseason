@@ -5,47 +5,29 @@ import { EmptyState } from '~/components/public/empty-state'
 import { RankingIndex } from '~/components/public/ranking-index'
 import { resolveFilteredQuery } from '~/components/public/ranking-query-state'
 import { RankingTable } from '~/components/public/ranking-table'
-import { type ModelFilterCompany, normalizeModelSnapshotId } from '~/lib/model-filters'
+import { rankingFiltersFromSearchParams } from '~/lib/model-filters'
 import { api, type RouterOutputs } from '~/trpc/react'
 
 type RankingIndexGroup = RouterOutputs['benchmarkRanking']['listIndexGroups'][number]
 
 type RankingsPageContentProps = {
   initialGroups: RankingIndexGroup[]
-  modelFilters: ModelFilterCompany[]
 }
 
-function normalizeRankingFilters(
-  searchParams: URLSearchParams,
-  modelFilters: ModelFilterCompany[],
-) {
-  const category = searchParams.get('category') ?? undefined
-  const sub = searchParams.get('sub') ?? undefined
-  const promptLevel = searchParams.get('promptLevel') ?? undefined
-  const modelTier = searchParams.get('modelTier') ?? undefined
-  const modelSnapshotId = searchParams.get('modelSnapshotId') ?? undefined
-  const safeStr = (value: string | undefined) =>
-    value && value.length >= 1 && value.length <= 100 ? value : undefined
-
-  return {
-    category: safeStr(category),
-    sub: safeStr(sub),
-    promptLevel: (['beginner', 'intermediate', 'advanced'] as const).find(
-      (tier) => tier === promptLevel,
-    ),
-    modelTier: (['frontier', 'mid', 'small'] as const).find((tier) => tier === modelTier),
-    modelSnapshotId: normalizeModelSnapshotId(modelFilters, modelSnapshotId),
-  }
-}
-
-export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPageContentProps) {
+export function RankingsPageContent({ initialGroups }: RankingsPageContentProps) {
   const searchParams = useSearchParams()
-  const filters = normalizeRankingFilters(
-    new URLSearchParams(searchParams.toString()),
-    modelFilters,
-  )
+  const filters = {
+    ...rankingFiltersFromSearchParams(new URLSearchParams(searchParams.toString())),
+    category: searchParams.get('category') ?? undefined,
+    sub: searchParams.get('sub') ?? undefined,
+  }
   const showIndex = !filters.category && !filters.sub
-  const hasModelFilters = !!filters.promptLevel || !!filters.modelTier || !!filters.modelSnapshotId
+  const hasModelFilters =
+    !!filters.promptLevel ||
+    !!filters.modelTier ||
+    filters.modelRangeId !== undefined ||
+    filters.modelSnapshotId !== undefined ||
+    !!filters.dateRange
   const isGroup = !!filters.category && !filters.sub
 
   const indexQuery = api.benchmarkRanking.listIndexGroups.useQuery(
@@ -53,6 +35,8 @@ export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPag
       promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
+      modelRangeId: filters.modelRangeId,
+      dateRange: filters.dateRange,
     },
     { enabled: showIndex && hasModelFilters },
   )
@@ -63,6 +47,8 @@ export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPag
       promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
+      modelRangeId: filters.modelRangeId,
+      dateRange: filters.dateRange,
     },
     { enabled: !showIndex && isGroup },
   )
@@ -73,6 +59,8 @@ export function RankingsPageContent({ initialGroups, modelFilters }: RankingsPag
       promptLevel: filters.promptLevel,
       modelTier: filters.modelTier,
       modelSnapshotId: filters.modelSnapshotId,
+      modelRangeId: filters.modelRangeId,
+      dateRange: filters.dateRange,
     },
     { enabled: !showIndex && !!filters.sub },
   )
