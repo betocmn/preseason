@@ -54,7 +54,7 @@ export function HomepageRankings({
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="homepage-rankings-heading" className="text-lg font-semibold">
-              The devtools LLMs recommend most
+              Devtool rankings, based on LLM recommendations
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Ranked by how often the selected LLMs recommend each tool. All time.
