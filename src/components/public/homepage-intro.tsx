@@ -5,11 +5,8 @@ export function HomepageIntro() {
   return (
     <section className="mb-5 flex flex-col sm:mb-7 justify-between gap-5 lg:flex-row lg:items-end">
       <div>
-        <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-primary">
-          The LLM devtool leaderboard
-        </p>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-          The devtools <span className="text-primary">AI chooses.</span>
+          The devtools AI chooses.
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           We give LLMs the same app-building prompts, then rank the tools they recommend.

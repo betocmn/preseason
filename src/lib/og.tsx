@@ -47,7 +47,7 @@ export async function createHomepageOgImage(format: 'square' | 'wide') {
           }}
         >
           <span>The devtools</span>
-          <span style={{ color: '#8aafff' }}>AI chooses.</span>
+          <span>AI chooses.</span>
         </div>
         <span style={{ fontSize: square ? 23 : 28, color: '#a3acbc' }}>
           LLM recommendations, ranked.
