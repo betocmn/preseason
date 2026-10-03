@@ -1,8 +1,9 @@
-import { createOgImage, OG_CONTENT_TYPE, OG_SIZE } from '~/lib/og'
+import { createHomepageOgImage, OG_CONTENT_TYPE, OG_SQUARE_SIZE } from '~/lib/og'
 
-export const size = OG_SIZE
+export const size = OG_SQUARE_SIZE
 export const contentType = OG_CONTENT_TYPE
+export const alt = 'Preseason — The devtools AI chooses.'
 
-export default async function Image() {
-  return createOgImage(undefined, 'Track what tools LLMs recommend for vibe-coding prompts')
+export default function Image() {
+  return createHomepageOgImage('square')
 }

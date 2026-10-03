@@ -12,6 +12,7 @@ describe('HomepageRankingsPreview', () => {
     vi.stubGlobal('React', React)
     const html = renderToStaticMarkup(
       React.createElement(HomepageRankingsPreview, {
+        queryString: 'modelRangeIds=anthropic-opus&modelRangeIds=openai-gpt',
         previews: [
           { slug: 'auth', name: 'Authentication', groupSlug: 'devtools', ranking: null },
           { slug: 'database', name: 'Database', groupSlug: 'devtools', ranking: null },
@@ -21,5 +22,8 @@ describe('HomepageRankingsPreview', () => {
 
     expect(html).toContain('aria-label="View Authentication rankings"')
     expect(html).toContain('aria-label="View Database rankings"')
+    expect(html).toContain(
+      '/rankings/devtools/auth?modelRangeIds=anthropic-opus&amp;modelRangeIds=openai-gpt',
+    )
   })
 })

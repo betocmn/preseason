@@ -11,6 +11,7 @@ describe('public range URLs', () => {
     expect(canonical.get('sub')).toBe('auth')
     expect(rankingFiltersFromSearchParams(canonical)).toEqual({
       modelRangeId: 'openai-coding',
+      modelRangeIds: undefined,
       modelSnapshotId: undefined,
       dateRange: '3m',
       promptLevel: 'beginner',
@@ -24,5 +25,13 @@ describe('public range URLs', () => {
         new URLSearchParams('modelRangeId=bad&modelSnapshotId=not-a-uuid'),
       ),
     ).toMatchObject({ modelRangeId: 'bad', modelSnapshotId: 'not-a-uuid' })
+  })
+  it('preserves every selected range when opening the full rankings', () => {
+    const filters = rankingFiltersFromSearchParams(
+      new URLSearchParams('modelRangeIds=anthropic-opus&modelRangeIds=openai-gpt&dateRange=3m'),
+    )
+    expect(filters.modelRangeIds).toEqual(['anthropic-opus', 'openai-gpt'])
+    expect(filters.modelRangeId).toBeUndefined()
+    expect(filters.dateRange).toBe('3m')
   })
 })

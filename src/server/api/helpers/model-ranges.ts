@@ -19,10 +19,30 @@ import { getModelRange, summarizeModelRanges } from '~/server/llm/model-ranges'
 /** Resolve membership from immutable recorded IDs, independent of activation and season joins. */
 export async function resolveModelRangeSelection(
   database: typeof db,
-  input?: { modelRangeId?: string; modelSnapshotId?: string },
+  input?: { modelRangeId?: string; modelSnapshotId?: string; modelRangeIds?: string[] },
 ) {
-  if (!input?.modelRangeId && !input?.modelSnapshotId) return {}
+  if (!input?.modelRangeId && !input?.modelSnapshotId && input?.modelRangeIds === undefined)
+    return {}
   const snapshots = await database.query.benchmarkModelSnapshots.findMany()
+  if (input.modelRangeIds !== undefined) {
+    if (input.modelRangeId || input.modelSnapshotId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Conflicting model selections' })
+    }
+    const knownRanges = new Set([
+      ...snapshots.map((snapshot) => getModelRange(snapshot).id),
+      ...CURATED_LLM_CATALOG.map((entry) => entry.range.id),
+    ])
+    if (input.modelRangeIds.some((id) => !knownRanges.has(id))) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown modelRangeId' })
+    }
+    const selected = new Set(input.modelRangeIds)
+    return {
+      modelSnapshotIds: snapshots
+        .filter((snapshot) => selected.has(getModelRange(snapshot).id))
+        .map((snapshot) => snapshot.id)
+        .sort(),
+    }
+  }
   const legacy = input.modelSnapshotId
     ? snapshots.find((snapshot) => snapshot.id === input.modelSnapshotId)
     : undefined
