@@ -1,6 +1,8 @@
 # Preseason favicon concepts
 
-Three proposed treatments of the existing Preseason script logo. Open `index.html`
+**Selected: 01 / Signature.** The approved mark is now in `public/favicon/favicon.svg`.
+
+Three treatments of the existing Preseason script logo. Open `index.html`
 in a browser to compare them beside the existing wordmark, in brand color and white,
 and at an actual 16 px tab size. The buttons change this preview page's favicon.
 To view over HTTP, serve a directory containing both this folder and the referenced
@@ -21,8 +23,10 @@ silhouettes also work in one color, as shown in the preview. SVGs have transpare
 backgrounds and no font or external image dependencies. The logo in the preview
 is the actual existing asset, not a replacement wordmark.
 
-These are design options awaiting a choice. The application's active favicon,
-manifest, metadata, wordmark, and social images are untouched. Once a direction
-is chosen, adapt it to the SVG, ICO, PNG, Apple touch icon, and manifest icon sizes,
-with a final optical adjustment at 16 px. Review social artwork with the same mark
-as part of the asset rollout.
+The approved mark is used in the SVG favicon, the transparent 96 px PNG, and the
+16, 32, 48, and 64 px ICO frames. The 180 px Apple touch icon has an opaque charcoal
+background with a centered mark at 74% of the canvas width. The 192 and 512 px
+maskable manifest icons use the same background with the mark at 64%, keeping the
+silhouette inside the central safe circle. Raster assets are rendered from the
+production SVG. The shared social image renderer reads that SVG directly, so the
+homepage, Twitter, and page-specific social previews use the same approved mark.

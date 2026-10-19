@@ -9,8 +9,8 @@ for (const button of buttons) {
     if (!favicon || !status || !icon || !name) return
 
     favicon.setAttribute('href', `./${icon}`)
-    document.title = `${name} — Preseason favicon`
-    status.textContent = `${name} is in this browser tab. Tell me your choice in our conversation.`
+    document.title = `${name} | Preseason favicon`
+    status.textContent = `${name} is in this browser tab. Signature is the selected direction.`
 
     for (const other of buttons) {
       const active = other === button
