@@ -25,46 +25,46 @@ export const metadata: Metadata = {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'),
   ),
   title: {
-    default: 'Preseason — The devtools AI chooses',
+    default: 'Preseason | The devtools AI chooses',
     template: '%s | Preseason',
   },
   description: siteDescription,
   openGraph: {
     type: 'website',
     siteName: 'Preseason',
-    title: 'Preseason — The devtools AI chooses',
+    title: 'Preseason | The devtools AI chooses',
     description: siteDescription,
     images: [
       {
         url: '/opengraph-image',
         width: 600,
         height: 600,
-        alt: 'Preseason — The devtools AI chooses.',
+        alt: 'Preseason. The devtools AI chooses.',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Preseason — The devtools AI chooses',
+    title: 'Preseason | The devtools AI chooses',
     description: siteDescription,
     images: [
       {
         url: '/twitter-image',
         width: 1200,
         height: 630,
-        alt: 'Preseason — LLM recommendations, ranked.',
+        alt: 'Preseason. LLM recommendations, ranked.',
       },
     ],
   },
   icons: {
     icon: [
-      { url: '/favicon/favicon.svg?v=2', sizes: 'any', type: 'image/svg+xml' },
-      { url: '/favicon/favicon-96x96.png?v=2', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon/favicon.svg?v=3', sizes: 'any', type: 'image/svg+xml' },
+      { url: '/favicon/favicon-96x96.png?v=3', sizes: '96x96', type: 'image/png' },
     ],
-    shortcut: ['/favicon/favicon.ico?v=2'],
-    apple: [{ url: '/favicon/apple-touch-icon.png?v=2', sizes: '180x180' }],
+    shortcut: ['/favicon/favicon.ico?v=3'],
+    apple: [{ url: '/favicon/apple-touch-icon.png?v=3', sizes: '180x180' }],
   },
-  manifest: '/favicon/site.webmanifest',
+  manifest: '/favicon/site.webmanifest?v=3',
   appleWebApp: {
     title: 'Preseason',
   },
