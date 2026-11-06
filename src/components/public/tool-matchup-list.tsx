@@ -41,7 +41,7 @@ export function ToolMatchupList({ matchups }: ToolMatchupListProps) {
 
             return (
               <Card key={slug} className="transition-colors hover:bg-accent/50">
-                <Link href={`/matches/${slug}`}>
+                <Link href={`/matches/${slug}`} prefetch={false}>
                   <CardContent className="p-4">
                     <div className="mb-2">
                       <Badge variant="secondary" className="text-xs">

@@ -74,6 +74,11 @@ export const serverSettings = {
     maxModelRangeSelections: 64,
     benchmarkCacheTag: 'public-benchmark-summaries',
     benchmarkCacheRevalidateSeconds: 3_600,
+    headToHeadMinimumDecisiveCases: 30,
+    toolPage: {
+      windowType: 'trailing_28d' as const,
+      matchupLimit: 6,
+    },
   },
   benchmark: {
     promptContractVersion: '1.1',
