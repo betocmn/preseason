@@ -26,6 +26,7 @@ export function ToolBadge({
   const badgeContent = (
     <Link
       href={`/tools/${slug}`}
+      prefetch={false}
       title={name}
       className={cn(
         'inline-flex max-w-full min-w-0 items-center gap-1.5 font-medium hover:underline',

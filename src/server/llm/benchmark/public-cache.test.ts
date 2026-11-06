@@ -54,10 +54,35 @@ describe('public scoring cache', () => {
         read,
       ),
     ).toEqual({ count: 2 })
-    expect(unstableCacheMock).toHaveBeenLastCalledWith(read, expect.any(Array), {
+    expect(unstableCacheMock).toHaveBeenLastCalledWith(expect.any(Function), expect.any(Array), {
       revalidate: serverSettings.publicSite.benchmarkCacheRevalidateSeconds,
       tags: [serverSettings.publicSite.benchmarkCacheTag],
     })
+  })
+
+  it('shares concurrent cold reads and retries after a failed refresh', async () => {
+    let release: (value: number) => void = () => {}
+    const result = new Promise<number>((resolve) => {
+      release = resolve
+    })
+    const read = vi.fn(() => result)
+    const first = cachedPublicScoring(applicationDb, 'ranking', { category: 'auth' }, read)
+    const second = cachedPublicScoring(applicationDb, 'ranking', { category: 'auth' }, read)
+    await Promise.resolve()
+    expect(read).toHaveBeenCalledOnce()
+    release(42)
+    expect(await Promise.all([first, second])).toEqual([42, 42])
+
+    invalidatePublicBenchmarkCache()
+    const refresh = vi.fn().mockRejectedValueOnce(new Error('Database unavailable'))
+    await expect(
+      cachedPublicScoring(applicationDb, 'ranking', { category: 'auth' }, refresh),
+    ).rejects.toThrow('Database unavailable')
+    refresh.mockResolvedValueOnce(43)
+    expect(await cachedPublicScoring(applicationDb, 'ranking', { category: 'auth' }, refresh)).toBe(
+      43,
+    )
+    expect(refresh).toHaveBeenCalledTimes(2)
   })
 
   it('isolates categories, filters and calculation types', async () => {
@@ -82,6 +107,12 @@ describe('public scoring cache', () => {
       read,
     )
     expect(read).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not reuse summaries from an older calculation after the code changes', async () => {
+    const inputs = { category: 'auth' }
+    expect(await cachedPublicScoring(applicationDb, 'ranking', inputs, async () => 1)).toBe(1)
+    expect(await cachedPublicScoring(applicationDb, 'ranking', inputs, async () => 2)).toBe(2)
   })
 
   it('isolates range selections and refreshes measured labels on publication', async () => {

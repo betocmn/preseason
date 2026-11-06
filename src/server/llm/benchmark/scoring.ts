@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { serverSettings } from '~/constants/server-settings'
 import type * as schema from '~/server/db/schema'
 import {
   benchmarkCaseDecisions,
@@ -646,7 +647,8 @@ export function headToHeadFromDecisions(
     weightedAWinRate,
     modelBreakdown: finalizeBreakdown(modelBreakdownMap),
     promptBreakdown: finalizeBreakdown(promptBreakdownMap),
-    meetsPublicationThreshold: decisiveCaseCount >= 30,
+    meetsPublicationThreshold:
+      decisiveCaseCount >= serverSettings.publicSite.headToHeadMinimumDecisiveCases,
   }
 }
 
@@ -950,7 +952,8 @@ function headToHeadFromAggregates(
     weightedAWinRate: weightedDecisive > 0 ? total.weightedAWins / weightedDecisive : 0,
     modelBreakdown: finalizeBreakdown(models),
     promptBreakdown: finalizeBreakdown(prompts),
-    meetsPublicationThreshold: decisiveCaseCount >= 30,
+    meetsPublicationThreshold:
+      decisiveCaseCount >= serverSettings.publicSite.headToHeadMinimumDecisiveCases,
   }
 }
 
